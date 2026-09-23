@@ -1,0 +1,114 @@
+# Google models (AI Studio / Gemini API). Provider model ids and costs change often: verify before use.
+- id: nano-banana-pro
+  name: Nano Banana Pro
+  maker: Google
+  kind: image
+  family: gemini-image
+  summary: Gemini 3 Pro Image. High-res covers and spreads, edits, multilingual in-art text; up to 5 character references.
+  uses: [covers, spreads_4k, edits]
+  capabilities:
+    tasks: [generate, edit, sheet]
+    refs: true
+    max_refs: 5
+    edit: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    aspect_ratios: ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"]
+    max_resolution: 4096
+    languages: [en, ja, ko, zh, es, fr, de]
+  licence: {id: google-genai-terms, commercial: true, note: Outputs carry a SynthID watermark.}
+  hardware: {local: false}
+  providers:
+    - {provider: openrouter, model_id: google/gemini-3-pro-image-preview, price: {unit: per_image, usd: 0.13}, seconds: 22, notes: verify before use}
+    - {provider: google, model_id: gemini-3-pro-image-preview, price: {unit: per_image, usd: 0.134}, seconds: 20, notes: "2K output; 4K costs more; verify before use"}
+    - {provider: fal, model_id: fal-ai/nano-banana-pro, price: {unit: per_image, usd: 0.15}, seconds: 22, notes: verify before use}
+  scores: {panel: 87, cover: 95, edit: 90, text_in_art: 90, character_consistency: 88, speed: 45}
+  ratings: [all, teen]
+  release: "2025-11"
+  verify: Checked Sep 2026 against secondary sources; verify ids and costs before use.
+- id: nano-banana-2
+  name: Nano Banana 2
+  maker: Google
+  kind: image
+  family: gemini-image
+  summary: Gemini 3.1 Flash Image. Fast drafts and batches; 1:8 and 8:1 ratios suit webtoon strips; up to 14 references.
+  uses: [drafts, batches, webtoon_strips]
+  capabilities:
+    tasks: [generate, edit, sheet]
+    refs: true
+    max_refs: 14
+    edit: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    tall_strips: true
+    aspect_ratios: ["1:1", "2:3", "3:2", "9:16", "16:9", "1:4", "4:1", "1:8", "8:1"]
+    max_resolution: 4096
+  licence: {id: google-genai-terms, commercial: true, note: Outputs carry a SynthID watermark.}
+  hardware: {local: false}
+  providers:
+    - {provider: google, model_id: gemini-3.1-flash-image-preview, price: {unit: per_image, usd: 0.045}, seconds: 8, notes: verify before use}
+    - {provider: openrouter, model_id: google/gemini-3.1-flash-image-preview, price: {unit: per_image, usd: 0.045}, seconds: 9, notes: verify before use}
+    - {provider: fal, model_id: fal-ai/nano-banana-2, price: {unit: per_image, usd: 0.05}, seconds: 9, notes: verify before use}
+  scores: {panel: 80, cover: 78, edit: 82, text_in_art: 80, character_consistency: 84, speed: 85}
+  ratings: [all, teen]
+  release: "2026-02"
+  verify: Checked Sep 2026 against secondary sources; verify ids and costs before use.
+- id: gemini-3-pro
+  name: Gemini 3 Pro
+  maker: Google
+  kind: text
+  summary: Long-context script work, translation and continuity checks.
+  uses: [script, translation, continuity]
+  capabilities:
+    tasks: [text, translate]
+    context: 1000000
+    languages: [en, ja, ko, zh, es, fr, de, pt, hi]
+  licence: {id: google-genai-terms, commercial: true}
+  hardware: {local: false}
+  providers:
+    - {provider: google, model_id: gemini-3-pro-preview, price: {unit: per_1k_tokens, usd: 0.002, usd_out: 0.012}, seconds: 10, notes: verify before use}
+    - {provider: openrouter, model_id: google/gemini-3-pro-preview, price: {unit: per_1k_tokens, usd: 0.002, usd_out: 0.012}, seconds: 11, notes: verify before use}
+  scores: {text: 89, speed: 55}
+  ratings: [all, teen, mature]
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: gemini-3-flash
+  name: Gemini 3 Flash
+  maker: Google
+  kind: text
+  summary: Fast, low-cost text for alt-text, glossary checks and routing intent.
+  uses: [alt_text, routing_intent, translation]
+  capabilities:
+    tasks: [text, translate]
+    context: 1000000
+    languages: [en, ja, ko, zh, es, fr, de, pt]
+  licence: {id: google-genai-terms, commercial: true}
+  hardware: {local: false}
+  providers:
+    - {provider: google, model_id: gemini-3-flash-preview, price: {unit: per_1k_tokens, usd: 0.0003, usd_out: 0.0025}, seconds: 3, notes: "a free tier exists with rate limits; verify before use"}
+    - {provider: openrouter, model_id: google/gemini-3-flash-preview, price: {unit: per_1k_tokens, usd: 0.0003, usd_out: 0.0025}, seconds: 4, notes: verify before use}
+  scores: {text: 80, speed: 90}
+  ratings: [all, teen, mature]
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: veo-3.1
+  name: Veo 3.1
+  maker: Google
+  kind: video
+  summary: Panel-to-clip animation with native audio for Animate mode.
+  uses: [animate_clips]
+  capabilities:
+    tasks: [video]
+    refs: true
+    max_refs: 3
+    aspect_ratios: ["9:16", "16:9"]
+    max_seconds: 8
+    max_resolution: 1920
+  licence: {id: google-genai-terms, commercial: true, note: Outputs carry a SynthID watermark.}
+  hardware: {local: false}
+  providers:
+    - {provider: google, model_id: veo-3.1-generate-preview, price: {unit: per_second, usd: 0.40}, seconds: 12, notes: "with audio; veo-3.1-fast is cheaper; verify before use"}
+    - {provider: fal, model_id: fal-ai/veo3.1/image-to-video, price: {unit: per_second, usd: 0.40}, seconds: 12, notes: verify before use}
+  scores: {panel: 92, speed: 30}
+  ratings: [all, teen]
+  verify: Checked Sep 2026; verify ids and costs before use.

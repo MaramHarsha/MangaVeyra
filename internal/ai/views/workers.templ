@@ -1,0 +1,168 @@
+package views
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// WorkersPage is "Local worker → Add worker": worker tokens and the command to start a worker.
+templ WorkersPage(v WorkersView) {
+	<div class="mv-wizard">
+		@ui.PageHead(i18n.T(ctx, "ai.workers.title"), i18n.T(ctx, "ai.workers.sub"), nil)
+		<div class="mv-wizard__grid">
+			<div class="mv-stack mv-wizard__main">
+				if v.NewToken != "" {
+					<section class="mv-box mv-box--pad mv-box--success mv-stack mv-stack--sm" aria-labelledby="wk-new">
+						<strong id="wk-new">{ i18n.T(ctx, "ai.workers.created", "name", v.NewName) }</strong>
+						<p class="mv-small mv-muted">{ i18n.T(ctx, "ai.workers.once") }</p>
+						@ui.Field(ui.FieldProps{ID: "wk-token", Label: i18n.T(ctx, "ai.workers.token")}) {
+							@ui.Input(ui.InputProps{ID: "wk-token", Value: v.NewToken, ReadOnly: true, Class: "mv-mono mv-mono--plain mv-select-all", Autocomplete: "off"})
+						}
+						@cmdBlock("wk-docker", i18n.T(ctx, "ai.workers.docker"), v.Docker)
+						@cmdBlock("wk-pip", i18n.T(ctx, "ai.workers.pip"), v.Pip)
+						@cmdBlock("wk-compose", i18n.T(ctx, "ai.workers.compose"), v.Compose)
+					</section>
+				}
+				<form class="mv-box mv-box--pad mv-stack mv-stack--sm" method="post" action="/models/workers/new">
+					<strong class="mv-small">{ i18n.T(ctx, "ai.workers.add") }</strong>
+					@ui.Field(ui.FieldProps{ID: "wk-name", Label: i18n.T(ctx, "ai.workers.name"), Hint: i18n.T(ctx, "ai.workers.name_hint"), Error: v.Error}) {
+						@ui.Input(ui.InputProps{ID: "wk-name", Name: "name", Placeholder: "studio-pc", MaxLength: 80, Required: true, Invalid: v.Error != "", Described: true})
+					}
+					<div class="mv-row mv-row--end">
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "key"}) {
+							{ i18n.T(ctx, "ai.workers.create") }
+						}
+					</div>
+				</form>
+				<section class="mv-stack mv-stack--sm" aria-labelledby="wk-list">
+					<h2 class="mv-section-head__title" id="wk-list">{ i18n.T(ctx, "ai.workers.registered") }</h2>
+					if len(v.Workers) == 0 {
+						<p class="mv-small mv-muted">{ i18n.T(ctx, "ai.workers.none") }</p>
+					}
+					<ul class="mv-list-plain mv-box" role="list" hidden?={ len(v.Workers) == 0 }>
+						for _, w := range v.Workers {
+							<li class="mv-served__row mv-workerrow">
+								if w.Status == "online" {
+									@ui.StatusBadge(ui.StatusOnline, i18n.T(ctx, "ai.worker.online"))
+								} else if w.Status == "draining" {
+									@ui.Badge(ui.ToneWarning, "player-pause", i18n.T(ctx, "ai.worker.draining"))
+								} else {
+									@ui.StatusBadge(ui.StatusOffline, i18n.T(ctx, "ai.worker.offline"))
+								}
+								<span class="mv-stack mv-stack--xs mv-grow">
+									<strong class="mv-small">{ w.Name }</strong>
+									<span class="mv-meta mv-muted">{ w.Detail }</span>
+									if w.Models != "" {
+										<span class="mv-meta mv-faint">{ w.Models }</span>
+									}
+								</span>
+								<span class="mv-meta mv-faint">{ w.Version }</span>
+							</li>
+						}
+					</ul>
+				</section>
+				<section class="mv-stack mv-stack--sm" aria-labelledby="wk-tokens">
+					<h2 class="mv-section-head__title" id="wk-tokens">{ i18n.T(ctx, "ai.workers.tokens") }</h2>
+					if len(v.Tokens) == 0 {
+						<p class="mv-small mv-muted">{ i18n.T(ctx, "ai.workers.no_tokens") }</p>
+					}
+					<ul class="mv-list-plain mv-box" role="list" hidden?={ len(v.Tokens) == 0 }>
+						for _, t := range v.Tokens {
+							<li class="mv-served__row">
+								@ui.Icon("key", 16)
+								<span class="mv-stack mv-stack--xs mv-grow">
+									<strong class="mv-small">{ t.Name }</strong>
+									<span class="mv-meta mv-faint">{ t.Prefix }… · { t.Created } · { t.LastUsed }</span>
+								</span>
+								<form method="post" action={ templ.SafeURL("/models/workers/tokens/" + t.ID + "/revoke") }>
+									@ui.Button(ui.ButtonProps{Variant: ui.DangerOutline, Size: ui.SM, Type: "submit"}) {
+										{ i18n.T(ctx, "ai.workers.revoke") }
+										<span class="mv-sr-only">{ t.Name }</span>
+									}
+								</form>
+							</li>
+						}
+					</ul>
+				</section>
+			</div>
+			<aside class="mv-stack mv-wizard__aside">
+				@ui.Notice(ui.ToneInfo, "cpu") {
+					<span class="mv-small">{ i18n.T(ctx, "ai.workers.aside") }</span>
+				}
+				if v.Models != "" {
+					<section class="mv-box mv-box--pad mv-stack mv-stack--xs">
+						<strong class="mv-small">{ i18n.T(ctx, "ai.workers.local_set") }</strong>
+						<span class="mv-small mv-muted">{ v.Models }</span>
+						<a class="mv-small" href="/models/local">{ i18n.T(ctx, "ai.workers.change_set") }</a>
+					</section>
+				}
+			</aside>
+		</div>
+	</div>
+}
+
+templ cmdBlock(id, label, cmd string) {
+	<div class="mv-field">
+		<label class="mv-field__label" for={ id }><span>{ label }</span></label>
+		<textarea class="mv-textarea mv-cmd mv-select-all" id={ id } readonly rows="4" spellcheck="false">{ cmd }</textarea>
+	</div>
+}
+
+// LocalPage is the recommended local model set sized to the workers' VRAM.
+templ LocalPage(v LocalView) {
+	<div class="mv-wizard">
+		@ui.PageHead(i18n.T(ctx, "ai.local.title"), v.GPU, nil)
+		if !v.HasWorker {
+			@ui.Notice(ui.ToneWarning, "cpu-off") {
+				<span class="mv-small">{ i18n.T(ctx, "ai.local.no_worker") }</span>
+				<a class="mv-small" href="/models/workers/new">{ i18n.T(ctx, "ai.local.add_worker") }</a>
+			}
+		}
+		if v.Saved {
+			@ui.Notice(ui.ToneSuccess, "circle-check") {
+				<span class="mv-small">{ i18n.T(ctx, "ai.local.saved") }</span>
+			}
+		}
+		<form class="mv-wizard__grid" method="post" action="/models/local">
+			<div class="mv-stack mv-wizard__main">
+				<ul class="mv-list-plain mv-box" role="list">
+					for _, m := range v.Models {
+						<li class="mv-served__row">
+							if v.IsAdmin {
+								@ui.Checkbox(ui.CheckProps{Name: "model", Value: m.ID, Checked: m.Chosen, Label: m.Name, Disabled: !m.Fits})
+							} else {
+								<strong class="mv-small">{ m.Name }</strong>
+							}
+							<span class="mv-meta mv-faint mv-grow">{ m.Detail } · { m.Licence }</span>
+							if m.Installed {
+								@ui.Badge(ui.ToneSuccess, "circle-check", i18n.T(ctx, "ai.local.installed"))
+							} else if m.Recommended {
+								@ui.Badge(ui.ToneAccent, "star", i18n.T(ctx, "ai.local.recommended"))
+							} else if !m.Fits {
+								@ui.Badge(ui.ToneMuted, "cpu-off", i18n.T(ctx, "ai.local.too_big"))
+							}
+						</li>
+					}
+				</ul>
+			</div>
+			<aside class="mv-stack mv-wizard__aside">
+				<section class="mv-box mv-box--pad mv-stack mv-stack--sm">
+					<strong class="mv-small">{ i18n.T(ctx, "ai.local.download", "size", v.DownloadGB) }</strong>
+					<p class="mv-small mv-muted">{ i18n.T(ctx, "ai.local.how") }</p>
+					@cmdBlock("local-cmd", i18n.T(ctx, "ai.local.command"), v.Command)
+				</section>
+				if v.IsAdmin {
+					<div class="mv-row mv-row--end">
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "download"}) {
+							if v.Recommended {
+								{ i18n.T(ctx, "ai.local.save") }
+							} else {
+								{ i18n.T(ctx, "ai.local.save_set") }
+							}
+						}
+					</div>
+				}
+			</aside>
+		</form>
+	</div>
+}

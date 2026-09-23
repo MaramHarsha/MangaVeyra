@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
@@ -49,6 +50,33 @@ func (c Compute) Load() float64 {
 		l = 1
 	}
 	return l
+}
+
+// ComputeExtra is what the AI module adds to the compute meter: remote spend
+// on the member's own keys this month (against the limit), the queue ETA and
+// this week's GPU time, already translated. Empty strings are left out.
+type ComputeExtra struct {
+	Remote  string
+	ETA     string
+	WeekGPU string
+}
+
+// ComputeExtender is provided by the ai module (core.Provide[web.ComputeExtender]).
+type ComputeExtender interface {
+	ComputeExtra(ctx context.Context, userID string) ComputeExtra
+}
+
+// computeExtra returns the AI module's additions (zero without the module).
+func (u *UI) computeExtra(ctx context.Context) ComputeExtra {
+	ext, ok := core.Use[ComputeExtender](u.d)
+	if !ok {
+		return ComputeExtra{}
+	}
+	id := ""
+	if usr := core.UserFrom(ctx); usr != nil {
+		id = usr.ID
+	}
+	return ext.ComputeExtra(ctx, id)
 }
 
 type computeCache struct {
@@ -139,6 +167,9 @@ func (u *UI) meter(ctx context.Context) *ui.MeterProps {
 		m.Title = i18n.T(ctx, "meter.title_workers", "count", c.WorkersOnline, "jobs", busy)
 	default:
 		m.Title = i18n.T(ctx, "meter.title_none", "jobs", busy)
+	}
+	if ex := u.computeExtra(ctx); busy > 0 && ex.ETA != "" {
+		m.Title += " · " + ex.ETA
 	}
 	return m
 }

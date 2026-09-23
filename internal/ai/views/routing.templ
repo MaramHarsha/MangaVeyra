@@ -1,0 +1,201 @@
+package views
+
+import (
+	"context"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+var modes = []string{"balanced", "best", "fastest", "local_only", "free_only"}
+
+func modeOptions(ctx context.Context) []ui.Option {
+	out := make([]ui.Option, 0, len(modes))
+	for _, m := range modes {
+		out = append(out, ui.Option{Value: m, Label: i18n.T(ctx, "ai.mode."+m)})
+	}
+	return out
+}
+
+// RoutingPage is G11 Model routing.
+templ RoutingPage(v RoutingView) {
+	<div class="mv-routing">
+		<header class="mv-pagehead">
+			<div class="mv-pagehead__text">
+				<h1 class="mv-pagehead__title">{ i18n.T(ctx, "ai.routing.title") }</h1>
+				<span class="mv-pagehead__sub">{ i18n.T(ctx, "ai.routing.sub") }</span>
+			</div>
+			<form class="mv-pagehead__actions mv-routing__mode" method="post" action={ templ.SafeURL(v.ModeAction) } { autosave(v.ModeAction)... }>
+				@ui.Segmented(ui.SegmentedProps{Name: "mode", Value: v.Mode, Options: modeOptions(ctx), Label: i18n.T(ctx, "ai.routing.mode")})
+				@noscriptSave()
+			</form>
+		</header>
+		if v.ModeNote != "" {
+			<p class="mv-small mv-muted mv-routing__note">{ v.ModeNote }</p>
+		}
+		<div class="mv-routing__grid">
+			<section class="mv-box mv-routing__decisions" aria-labelledby="mv-dec-title">
+				<h2 class="mv-routing__boxhead" id="mv-dec-title">{ i18n.T(ctx, "ai.routing.recent") }</h2>
+				if len(v.Decisions) == 0 {
+					@ui.State(ui.StateProps{SFX: "シーン…", JP: true, SFXSize: "sm", Title: i18n.T(ctx, "ai.routing.empty.title"), Body: i18n.T(ctx, "ai.routing.empty.body")}) {
+						@ui.LinkButton("/studio", ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Icon: "sparkles"}) {
+							{ i18n.T(ctx, "ai.routing.empty.action") }
+						}
+					}
+				} else {
+					<ol class="mv-list-plain" role="list">
+						for _, d := range v.Decisions {
+							<li class="mv-decision">
+								<details>
+									<summary class="mv-decision__sum">
+										<span class="mv-decision__ctx">{ d.Context }</span>
+										<span class="mv-decision__body">
+											<strong>{ d.Pick }</strong>
+											<span class="mv-muted">{ d.Why }</span>
+										</span>
+										if d.Status == "failed" {
+											@ui.StatusBadge(ui.StatusFailed, i18n.T(ctx, "ai.decision.failed"))
+										}
+									</summary>
+									<div class="mv-decision__more">
+										<span class="mv-meta mv-faint">{ d.When }</span>
+										for _, w := range d.Warnings {
+											<span class="mv-small mv-warn-text">
+												@ui.Icon("alert-triangle", 14)
+												{ w }
+											</span>
+										}
+										if len(d.Alts) > 0 {
+											<span class="mv-label-mono">{ i18n.T(ctx, "ai.decision.alternatives") }</span>
+											<ul class="mv-list-plain mv-small">
+												for _, a := range d.Alts {
+													<li>{ a }</li>
+												}
+											</ul>
+										}
+										if len(d.Skipped) > 0 {
+											<span class="mv-label-mono">{ i18n.T(ctx, "ai.decision.skipped") }</span>
+											<ul class="mv-list-plain mv-small mv-muted">
+												for _, s := range d.Skipped {
+													<li>{ s }</li>
+												}
+											</ul>
+										}
+									</div>
+								</details>
+							</li>
+						}
+					</ol>
+				}
+			</section>
+			<div class="mv-stack mv-routing__side">
+				<section class="mv-box mv-box--pad mv-routing__pins" aria-labelledby="mv-pins-title">
+					<h2 class="mv-routing__boxtitle" id="mv-pins-title">{ i18n.T(ctx, "ai.routing.pins") }</h2>
+					if len(v.Pins) == 0 {
+						<p class="mv-small mv-muted">{ i18n.T(ctx, "ai.routing.pins_empty") }</p>
+					}
+					<ul class="mv-list-plain" role="list">
+						for _, p := range v.Pins {
+							<li class="mv-pinrow">
+								<span class="mv-muted">{ p.Scope }</span>
+								<span class="mv-pinrow__target">{ p.Target }</span>
+								if p.CanDelete {
+									<form method="post" action={ templ.SafeURL("/models/routing/pins/" + p.ID + "/delete") }>
+										@ui.Button(ui.ButtonProps{Variant: ui.IconOnly, Size: ui.SM, Type: "submit", Icon: "x", Label: i18n.T(ctx, "ai.routing.unpin", "scope", p.Scope)})
+									</form>
+								}
+							</li>
+						}
+					</ul>
+					if v.CanPin {
+						<details class="mv-pinadd" open?={ len(v.Errors) > 0 }>
+							<summary class="mv-btn mv-btn--quiet mv-btn--sm">
+								@ui.Icon("pin", 16)
+								{ i18n.T(ctx, "ai.routing.add_pin") }
+							</summary>
+							<form class="mv-stack mv-stack--sm mv-pinadd__form" method="post" action="/models/routing/pins">
+								<div class="mv-grid-2">
+									@ui.Field(ui.FieldProps{ID: "pin-scope", Label: i18n.T(ctx, "ai.pin.scope")}) {
+										@ui.Select(ui.SelectProps{ID: "pin-scope", Name: "scope_kind", Options: v.PinScopes})
+									}
+									@ui.Field(ui.FieldProps{ID: "pin-id", Label: i18n.T(ctx, "ai.pin.scope_id"), Hint: i18n.T(ctx, "ai.pin.scope_id_hint"), Error: v.Errors["scope_id"]}) {
+										@ui.Input(ui.InputProps{ID: "pin-id", Name: "scope_id", MaxLength: 120, Invalid: v.Errors["scope_id"] != ""})
+									}
+									@ui.Field(ui.FieldProps{ID: "pin-label", Label: i18n.T(ctx, "ai.pin.label"), Aside: i18n.T(ctx, "ai.optional")}) {
+										@ui.Input(ui.InputProps{ID: "pin-label", Name: "label", MaxLength: 120, Placeholder: i18n.T(ctx, "ai.pin.label_ph")})
+									}
+									@ui.Field(ui.FieldProps{ID: "pin-task", Label: i18n.T(ctx, "ai.pin.task")}) {
+										@ui.Select(ui.SelectProps{ID: "pin-task", Name: "task", Options: v.PinTasks})
+									}
+									@ui.Field(ui.FieldProps{ID: "pin-model", Label: i18n.T(ctx, "ai.pin.model"), Error: v.Errors["model_id"]}) {
+										@ui.Select(ui.SelectProps{ID: "pin-model", Name: "model_id", Options: v.PinModels, Invalid: v.Errors["model_id"] != ""})
+									}
+									@ui.Field(ui.FieldProps{ID: "pin-mode", Label: i18n.T(ctx, "ai.pin.mode"), Hint: i18n.T(ctx, "ai.pin.mode_hint")}) {
+										@ui.Select(ui.SelectProps{ID: "pin-mode", Name: "mode", Options: v.PinModes})
+									}
+								</div>
+								<div class="mv-row mv-row--end">
+									@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Type: "submit", Icon: "pin"}) {
+										{ i18n.T(ctx, "ai.routing.pin") }
+									}
+								</div>
+							</form>
+						</details>
+					}
+				</section>
+				<section class="mv-box mv-box--pad mv-routing__guards" id="guards" aria-labelledby="mv-guards-title">
+					<h2 class="mv-routing__boxtitle" id="mv-guards-title">{ i18n.T(ctx, "ai.routing.guards") }</h2>
+					<form class="mv-stack mv-stack--sm" method="post" action="/models/routing/guards" { guardAttrs(v.IsAdmin)... }>
+						@guardRow("g-licence", "licence_guard", i18n.T(ctx, "ai.guard.licence"), v.LicenceGuard, !v.IsAdmin)
+						@guardRow("g-limit", "limit_on", i18n.T(ctx, "ai.guard.limit", "limit", v.LimitUSD), v.LimitOn, !v.IsAdmin)
+						if v.IsAdmin {
+							<details class="mv-guard__edit" open?={ v.Errors["limit_usd"] != "" }>
+								<summary class="mv-small">{ i18n.T(ctx, "ai.guard.edit_limits") }</summary>
+							<div class="mv-grid-2 mv-guard__limits">
+								@ui.Field(ui.FieldProps{ID: "g-limit-usd", Label: i18n.T(ctx, "ai.guard.limit_server"), Error: v.Errors["limit_usd"]}) {
+									@ui.InputGroup("$", v.Errors["limit_usd"] != "") {
+										@ui.Input(ui.InputProps{ID: "g-limit-usd", Name: "limit_usd", Value: v.LimitUSD, Inputmode: "decimal", Invalid: v.Errors["limit_usd"] != ""})
+									}
+								}
+								@ui.Field(ui.FieldProps{ID: "g-user-limit", Label: i18n.T(ctx, "ai.guard.limit_member"), Hint: i18n.T(ctx, "ai.guard.limit_member_hint")}) {
+									@ui.InputGroup("$", false) {
+										@ui.Input(ui.InputProps{ID: "g-user-limit", Name: "user_limit_usd", Value: v.UserLimitUSD, Inputmode: "decimal"})
+									}
+								}
+							</div>
+							<span class="mv-small mv-faint">{ v.SpentLine }</span>
+							</details>
+						}
+						@guardRow("g-learn", "learn", i18n.T(ctx, "ai.guard.learn"), v.Learn, !v.IsAdmin)
+						@guardRow("g-users", "users_may_add", i18n.T(ctx, "ai.guard.users"), v.UsersMayAdd, !v.IsAdmin)
+						if v.IsAdmin {
+							<noscript>
+								<div class="mv-row mv-row--end">
+									@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Type: "submit"}) {
+										{ i18n.T(ctx, "ai.save") }
+									}
+								</div>
+							</noscript>
+						} else {
+							<p class="mv-small mv-faint">{ i18n.T(ctx, "ai.guard.admin_only") }</p>
+						}
+					</form>
+				</section>
+			</div>
+		</div>
+	</div>
+}
+
+func guardAttrs(admin bool) templ.Attributes {
+	if !admin {
+		return templ.Attributes{}
+	}
+	return templ.Attributes{"hx-post": "/models/routing/guards", "hx-trigger": "change delay:400ms", "hx-swap": "none"}
+}
+
+templ guardRow(id, name, label string, on, disabled bool) {
+	<div class="mv-guard">
+		<label class="mv-guard__label" for={ id }>{ label }</label>
+		@ui.Toggle(ui.ToggleProps{ID: id, Name: name, Checked: on, Disabled: disabled})
+	</div>
+}

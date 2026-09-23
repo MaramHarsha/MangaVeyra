@@ -88,10 +88,17 @@ func (u *UI) computeView(ctx context.Context) dashboard.ComputeView {
 		v.Queue = i18n.T(ctx, "dash.compute.queue_value", "queued", c.Queued, "running", c.Running)
 	}
 	v.Workers = i18n.T(ctx, "dash.compute.workers_value", "online", c.WorkersOnline, "total", c.WorkersTotal)
-	if inst.LocalOnly {
+	ex := u.computeExtra(ctx)
+	switch {
+	case inst.LocalOnly:
 		v.Remote = i18n.T(ctx, "dash.compute.remote_local_only")
-	} else {
+	case ex.Remote != "":
+		v.Remote = ex.Remote
+	default:
 		v.Remote = i18n.T(ctx, "dash.compute.remote_none")
+	}
+	if busy > 0 && ex.ETA != "" {
+		v.Queue += " · " + ex.ETA
 	}
 	state := i18n.T(ctx, "workers.status.offline")
 	if v.Online {

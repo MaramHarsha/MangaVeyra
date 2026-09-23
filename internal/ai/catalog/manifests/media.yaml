@@ -1,0 +1,137 @@
+# Video (Animate mode), voice, OCR and upscale models. Verify ids and costs before use.
+- id: kling-3-turbo
+  name: Kling 3.0 Turbo
+  maker: Kuaishou
+  kind: video
+  summary: Fast image-to-video clips for Animate mode.
+  uses: [animate_clips]
+  capabilities:
+    tasks: [video]
+    refs: true
+    max_refs: 1
+    aspect_ratios: ["9:16", "16:9", "1:1"]
+    max_seconds: 10
+    max_resolution: 1920
+  licence: {id: kling-terms, commercial: true}
+  hardware: {local: false}
+  providers:
+    - {provider: fal, model_id: fal-ai/kling-video/v3/turbo/image-to-video, price: {unit: per_second, usd: 0.07}, seconds: 6, notes: verify before use}
+    - {provider: replicate, model_id: kwaivgi/kling-v3-turbo, price: {unit: per_second, usd: 0.08}, seconds: 8, notes: verify before use}
+  scores: {panel: 84, speed: 70}
+  ratings: [all, teen]
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: seedance-2.5
+  name: Seedance 2.5
+  maker: ByteDance
+  kind: video
+  summary: Multi-shot clips that keep character detail.
+  uses: [animate_clips]
+  capabilities:
+    tasks: [video]
+    refs: true
+    max_refs: 4
+    aspect_ratios: ["9:16", "16:9", "1:1"]
+    max_seconds: 12
+    max_resolution: 1920
+  licence: {id: bytedance-terms, commercial: true}
+  hardware: {local: false}
+  providers:
+    - {provider: fal, model_id: fal-ai/bytedance/seedance/v2.5/pro/image-to-video, price: {unit: per_second, usd: 0.10}, seconds: 8, notes: verify before use}
+    - {provider: replicate, model_id: bytedance/seedance-2.5-pro, price: {unit: per_second, usd: 0.10}, seconds: 10, notes: verify before use}
+  scores: {panel: 88, speed: 55}
+  ratings: [all, teen]
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: runway-gen-4.5
+  name: Runway Gen-4.5
+  maker: Runway
+  kind: video
+  summary: Controlled camera moves over panels.
+  uses: [animate_clips]
+  capabilities:
+    tasks: [video]
+    refs: true
+    max_refs: 1
+    aspect_ratios: ["9:16", "16:9"]
+    max_seconds: 10
+    max_resolution: 1920
+  licence: {id: runway-terms, commercial: true}
+  hardware: {local: false}
+  providers:
+    - {provider: replicate, model_id: runwayml/gen-4.5, price: {unit: per_second, usd: 0.12}, seconds: 12, notes: verify before use}
+  scores: {panel: 86, speed: 40}
+  ratings: [all, teen]
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: wan-3
+  name: Wan 3.0
+  maker: Alibaba Wan
+  kind: video
+  summary: Open-weight image-to-video; runs locally on large GPUs or through aggregators.
+  uses: [animate_clips]
+  capabilities:
+    tasks: [video]
+    refs: true
+    max_refs: 1
+    aspect_ratios: ["9:16", "16:9", "1:1"]
+    max_seconds: 8
+    max_resolution: 1280
+  licence: {id: apache-2.0, commercial: true, note: Check the licence shipped with the weights.}
+  hardware: {vram_gb: 48, min_vram_gb: 24, local: true, download_gb: 60}
+  providers:
+    - {provider: local_worker, model_id: wan-3, seconds: 45}
+    - {provider: fal, model_id: fal-ai/wan/v3/image-to-video, price: {unit: per_second, usd: 0.05}, seconds: 9, notes: verify before use}
+    - {provider: replicate, model_id: wan-video/wan-3-i2v, price: {unit: per_second, usd: 0.06}, seconds: 12, notes: verify before use}
+  scores: {panel: 80, speed: 45}
+  ratings: [all, teen, mature]
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: kokoro-82m
+  name: Kokoro 82M
+  maker: hexgrad
+  kind: voice
+  summary: Small open-weight text-to-speech that runs on CPU or GPU.
+  uses: [voices]
+  capabilities:
+    tasks: [voice]
+    max_seconds: 600
+    languages: [en, ja, zh, es, fr, hi, it, pt]
+  licence: {id: apache-2.0, commercial: true}
+  hardware: {vram_gb: 1, local: true, download_gb: 0.4}
+  providers:
+    - {provider: local_worker, model_id: kokoro-82m, seconds: 0.2}
+    - {provider: replicate, model_id: jaaari/kokoro-82m, price: {unit: per_second, usd: 0.0002}, seconds: 0.3, notes: verify before use}
+  scores: {text: 70, speed: 95}
+  ratings: [all, teen, mature, adult]
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: manga-ocr
+  name: Manga OCR
+  maker: Community
+  kind: ocr
+  summary: Reads vertical and horizontal Japanese text in speech bubbles; any worker with an OCR engine can run it.
+  uses: [bubble_text, import]
+  capabilities:
+    tasks: [ocr]
+    languages: [ja, en]
+  licence: {id: apache-2.0, commercial: true}
+  hardware: {vram_gb: 1, local: true, any_worker: true, download_gb: 0.5}
+  providers:
+    - {provider: local_worker, model_id: manga-ocr, seconds: 1}
+  scores: {text: 85, speed: 90}
+  ratings: [all, teen, mature, adult]
+  verify: Worker OCR engine; configured on the worker.
+- id: real-esrgan-anime
+  name: Real-ESRGAN Anime
+  maker: Community
+  kind: upscale
+  summary: 2× and 4× upscaling tuned for line art and screentone.
+  uses: [upscale]
+  capabilities:
+    tasks: [upscale]
+    max_resolution: 8192
+  licence: {id: bsd-3-clause, commercial: true}
+  hardware: {vram_gb: 2, local: true, any_worker: true, download_gb: 0.1}
+  providers:
+    - {provider: local_worker, model_id: real-esrgan-anime, seconds: 3}
+    - {provider: replicate, model_id: nightmareai/real-esrgan, price: {unit: per_image, usd: 0.002}, seconds: 4, notes: verify before use}
+    - {provider: fal, model_id: fal-ai/esrgan, price: {unit: per_megapixel, usd: 0.001}, seconds: 3, notes: verify before use}
+  scores: {panel: 80, speed: 85}
+  ratings: [all, teen, mature, adult]
+  verify: Checked Sep 2026; verify ids and costs before use.

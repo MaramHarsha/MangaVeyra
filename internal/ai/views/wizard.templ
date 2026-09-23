@@ -1,0 +1,636 @@
+package views
+
+import (
+	"context"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// ChooserPage lists every provider kind (the "Add provider" entry point).
+templ ChooserPage(named, custom []KindChoice, canWorker bool, next string) {
+	<div class="mv-wizard">
+		@ui.PageHead(i18n.T(ctx, "ai.chooser.title"), i18n.T(ctx, "ai.chooser.sub"), nil)
+		<section class="mv-stack mv-stack--sm" aria-labelledby="mv-ch-named">
+			<h2 class="mv-section-head__title" id="mv-ch-named">{ i18n.T(ctx, "ai.chooser.named") }</h2>
+			<ul class="mv-kindgrid mv-list-plain" role="list">
+				if canWorker {
+					<li>
+						<a class="mv-provcard mv-provcard--tall" href="/models/workers/new">
+							@ui.Icon("cpu", 24)
+							<span class="mv-provcard__text">
+								<strong class="mv-provcard__name">{ i18n.T(ctx, "ai.kind.local_worker") }</strong>
+								<span class="mv-provcard__sub">{ i18n.T(ctx, "ai.kinddesc.local_worker") }</span>
+							</span>
+							@ui.Icon("chevron-right", 18)
+						</a>
+					</li>
+				}
+				for _, k := range named {
+					<li>
+						<a class="mv-provcard mv-provcard--tall" href={ templ.URL(k.Href) }>
+							@ui.Icon(k.Icon, 24)
+							<span class="mv-provcard__text">
+								<strong class="mv-provcard__name">{ k.Name }</strong>
+								<span class="mv-provcard__sub">{ k.Desc }</span>
+							</span>
+							@ui.Icon("chevron-right", 18)
+						</a>
+					</li>
+				}
+			</ul>
+		</section>
+		<section class="mv-stack mv-stack--sm" aria-labelledby="mv-ch-custom">
+			<h2 class="mv-section-head__title" id="mv-ch-custom">{ i18n.T(ctx, "ai.chooser.custom") }</h2>
+			<ul class="mv-kindgrid mv-list-plain" role="list">
+				for _, k := range custom {
+					<li>
+						<a class="mv-provcard mv-provcard--tall mv-provcard--dashed" href={ templ.URL(k.Href) }>
+							@ui.Icon(k.Icon, 24)
+							<span class="mv-provcard__text">
+								<strong class="mv-provcard__name">{ k.Name }</strong>
+								<span class="mv-provcard__sub">{ k.Desc }</span>
+							</span>
+							@ui.Icon("chevron-right", 18)
+						</a>
+					</li>
+				}
+			</ul>
+		</section>
+	</div>
+}
+
+// WizardPage is G12: connect → test → describe → route.
+templ WizardPage(v WizardView) {
+	<div class="mv-wizard">
+		@ui.PageHead(v.Title, v.Sub, nil)
+		@ui.Steps(i18n.T(ctx, "ai.wizard.steps"), v.Steps)
+		if v.FormErr != "" {
+			@ui.Notice(ui.ToneError, "alert-triangle") {
+				{ v.FormErr }
+			}
+		}
+		switch v.Step {
+			case StepTest:
+				@testStep(v)
+			case StepDescribe:
+				@describeStep(v)
+			case StepRoute:
+				@routeStep(v)
+			default:
+				@connectStep(v)
+		}
+	</div>
+}
+
+templ typeSwitch(v WizardView) {
+	if v.Custom {
+		<div class="mv-field">
+			<span class="mv-field__label" id="conn-type-label"><span>{ i18n.T(ctx, "ai.wizard.type") }</span></span>
+			<nav class="mv-seg mv-seg--full" aria-labelledby="conn-type-label">
+				for _, t := range v.Types {
+					<a
+						class="mv-seg__item"
+						href={ templ.URL(t.Href) }
+						if t.Current {
+							aria-current="true"
+						}
+					>{ t.Name }</a>
+				}
+			</nav>
+		</div>
+	}
+}
+
+templ connectStep(v WizardView) {
+	<div class="mv-wizard__grid">
+		<form class="mv-stack mv-wizard__main" method="post" action={ templ.SafeURL("/models/providers/new/connect?id=" + v.ID + "&next=" + v.Next) } enctype="multipart/form-data">
+			<input type="hidden" name="kind" value={ v.Kind }/>
+			@typeSwitch(v)
+			@ui.Field(ui.FieldProps{ID: "p-name", Label: i18n.T(ctx, "ai.wizard.name"), Error: v.Errors["name"]}) {
+				@ui.Input(ui.InputProps{ID: "p-name", Name: "name", Value: v.Name, MaxLength: 80, Placeholder: v.KindName, Invalid: v.Errors["name"] != ""})
+			}
+			if v.NeedsURL || v.Kind == "huggingface" {
+				@ui.Field(ui.FieldProps{ID: "p-url", Label: urlLabel(ctx, v.Kind), Hint: v.URLHint, Error: v.Errors["base_url"], Aside: urlAside(ctx, v)}) {
+					@ui.Input(ui.InputProps{ID: "p-url", Name: "base_url", Type: "url", Value: v.BaseURL, Placeholder: urlPlaceholder(v.Kind), Required: v.NeedsURL, Invalid: v.Errors["base_url"] != "", Described: v.URLHint != "", Autocomplete: "off"})
+				}
+			}
+			if v.NeedsKey {
+				@ui.Field(ui.FieldProps{ID: "p-key", Label: keyLabel(ctx, v), Aside: keyAside(ctx, v), Hint: keyHint(ctx, v), Error: v.Errors["key"]}) {
+					@ui.Input(ui.InputProps{ID: "p-key", Name: "key", Type: "password", Autocomplete: "new-password", Placeholder: keyPlaceholder(ctx, v), Invalid: v.Errors["key"] != "", Described: true})
+				}
+			}
+			switch v.Kind {
+				case "comfyui":
+					@ui.Field(ui.FieldProps{ID: "p-workflow", Label: i18n.T(ctx, "ai.wizard.workflow"), Hint: i18n.T(ctx, "ai.wizard.workflow_hint"), Error: v.Errors["workflow"]}) {
+						if v.WorkflowName != "" {
+							<div class="mv-filechip">
+								@ui.Icon("file-code", 16)
+								<span>{ v.WorkflowName } · { i18n.T(ctx, "ai.wizard.nodes", "count", v.WorkflowNodes) }</span>
+							</div>
+						}
+						<input class="mv-input mv-input--file" type="file" id="p-workflow" name="workflow" accept=".json,application/json" aria-describedby="p-workflow-hint"/>
+					}
+				case "http":
+					@httpFields(v)
+				case "openai_compatible":
+					@ui.Field(ui.FieldProps{ID: "p-model", Label: i18n.T(ctx, "ai.wizard.model_id"), Hint: i18n.T(ctx, "ai.wizard.model_id_hint"), Error: v.Errors["model_id"]}) {
+						@ui.Input(ui.InputProps{ID: "p-model", Name: "model_id", Value: v.ModelID, Placeholder: "meta-llama/Llama-3.3-70B-Instruct", Described: true})
+					}
+				case "huggingface":
+					@ui.Field(ui.FieldProps{ID: "p-hf", Label: i18n.T(ctx, "ai.wizard.hf_model"), Hint: i18n.T(ctx, "ai.wizard.hf_model_hint"), Error: v.Errors["model_id"]}) {
+						@ui.Input(ui.InputProps{ID: "p-hf", Name: "model_id", Value: v.ModelID, Placeholder: "Qwen/Qwen-Image", Required: true, Described: true, Invalid: v.Errors["model_id"] != ""})
+					}
+			}
+			if len(v.ScopeOptions) > 1 {
+				@ui.Field(ui.FieldProps{ID: "p-scope", Label: i18n.T(ctx, "ai.wizard.scope")}) {
+					@ui.Segmented(ui.SegmentedProps{Name: "scope", Value: v.Scope, Options: v.ScopeOptions, Label: i18n.T(ctx, "ai.wizard.scope")})
+				}
+			}
+			<div class="mv-row mv-row--end mv-wizard__foot">
+				@ui.LinkButton(backHref(v.Next), ui.ButtonProps{Variant: ui.Ghost}) {
+					{ i18n.T(ctx, "ai.back") }
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "arrow-right"}) {
+					{ i18n.T(ctx, "ai.wizard.next_test") }
+				}
+			</div>
+		</form>
+		<aside class="mv-stack mv-wizard__aside">
+			<section class="mv-box mv-box--pad mv-stack mv-stack--sm">
+				<strong class="mv-small">{ i18n.T(ctx, "ai.wizard.what_next") }</strong>
+				<ol class="mv-wizard__list mv-small mv-muted">
+					<li>{ i18n.T(ctx, "ai.wizard.what.test") }</li>
+					<li>{ i18n.T(ctx, "ai.wizard.what.describe") }</li>
+					<li>{ i18n.T(ctx, "ai.wizard.what.route") }</li>
+				</ol>
+			</section>
+			@ui.Notice(ui.ToneInfo, "lock") {
+				<span class="mv-small">{ i18n.T(ctx, "ai.wizard.key_note") }</span>
+			}
+			if v.Kind == "comfyui" || v.Kind == "ollama" || v.Kind == "openai_compatible" {
+				@ui.Notice(ui.ToneNeutral, "network") {
+					<span class="mv-small">{ i18n.T(ctx, "ai.wizard.private_note") }</span>
+				}
+			}
+			if v.KeyURL != "" {
+				<a class="mv-small" href={ templ.URL(v.KeyURL) } rel="noopener noreferrer" target="_blank">
+					{ i18n.T(ctx, "ai.wizard.get_key", "name", v.KindName) }
+					@ui.Icon("external-link", 14)
+				</a>
+			}
+		</aside>
+	</div>
+}
+
+templ httpFields(v WizardView) {
+	<div class="mv-grid-2">
+		@ui.Field(ui.FieldProps{ID: "h-auth", Label: i18n.T(ctx, "ai.http.auth_header")}) {
+			@ui.Input(ui.InputProps{ID: "h-auth", Name: "auth_header", Value: v.AuthHeader, Placeholder: "Authorization"})
+		}
+		@ui.Field(ui.FieldProps{ID: "h-prefix", Label: i18n.T(ctx, "ai.http.auth_prefix")}) {
+			@ui.Input(ui.InputProps{ID: "h-prefix", Name: "auth_prefix", Value: v.AuthPrefix, Placeholder: "Bearer "})
+		}
+	</div>
+	@ui.Field(ui.FieldProps{ID: "h-body", Label: i18n.T(ctx, "ai.http.body"), Hint: i18n.T(ctx, "ai.http.body_hint"), Error: v.Errors["body_template"]}) {
+		@ui.Textarea(ui.TextareaProps{ID: "h-body", Name: "body_template", Value: v.BodyTemplate, Rows: 5, Class: "mv-mono mv-mono--plain", Invalid: v.Errors["body_template"] != ""})
+	}
+	<div class="mv-grid-2">
+		@ui.Field(ui.FieldProps{ID: "h-path", Label: i18n.T(ctx, "ai.http.result_path"), Hint: i18n.T(ctx, "ai.http.result_path_hint"), Error: v.Errors["result_path"]}) {
+			@ui.Input(ui.InputProps{ID: "h-path", Name: "result_path", Value: v.ResultPath, Placeholder: "data.0.b64_json", Required: true, Invalid: v.Errors["result_path"] != ""})
+		}
+		@ui.Field(ui.FieldProps{ID: "h-type", Label: i18n.T(ctx, "ai.http.result_type")}) {
+			@ui.Select(ui.SelectProps{ID: "h-type", Name: "result_type", Value: v.ResultType, Options: []ui.Option{
+				{Value: "auto", Label: i18n.T(ctx, "ai.http.type.auto")}, {Value: "url", Label: i18n.T(ctx, "ai.http.type.url")}, {Value: "base64", Label: i18n.T(ctx, "ai.http.type.base64")}}})
+		}
+	</div>
+	@ui.Field(ui.FieldProps{ID: "h-mode", Label: i18n.T(ctx, "ai.http.mode")}) {
+		@ui.Segmented(ui.SegmentedProps{Name: "mode", Value: v.Mode, Label: i18n.T(ctx, "ai.http.mode"), Options: []ui.Option{
+			{Value: "sync", Label: i18n.T(ctx, "ai.http.mode.sync")}, {Value: "poll", Label: i18n.T(ctx, "ai.http.mode.poll")}}})
+	}
+	<details class="mv-wizard__poll" open?={ v.Mode == "poll" }>
+		<summary class="mv-small">{ i18n.T(ctx, "ai.http.poll") }</summary>
+		<div class="mv-grid-2">
+			@ui.Field(ui.FieldProps{ID: "h-id", Label: i18n.T(ctx, "ai.http.id_path")}) {
+				@ui.Input(ui.InputProps{ID: "h-id", Name: "id_path", Value: v.IDPath, Placeholder: "id"})
+			}
+			@ui.Field(ui.FieldProps{ID: "h-status", Label: i18n.T(ctx, "ai.http.status_path")}) {
+				@ui.Input(ui.InputProps{ID: "h-status", Name: "status_path", Value: v.StatusPath, Placeholder: "status"})
+			}
+		</div>
+		@ui.Field(ui.FieldProps{ID: "h-poll", Label: i18n.T(ctx, "ai.http.poll_url"), Error: v.Errors["poll_url"]}) {
+			@ui.Input(ui.InputProps{ID: "h-poll", Name: "poll_url", Value: v.PollURL, Placeholder: "https://api.example.org/v1/jobs/{{id}}"})
+		}
+		@ui.Field(ui.FieldProps{ID: "h-done", Label: i18n.T(ctx, "ai.http.done_values")}) {
+			@ui.Input(ui.InputProps{ID: "h-done", Name: "done_values", Value: v.DoneValues, Placeholder: "succeeded, completed"})
+		}
+	</details>
+}
+
+templ testStep(v WizardView) {
+	<div class="mv-wizard__grid">
+		<div class="mv-stack mv-wizard__main">
+			@typeSwitchStatic(v)
+			<dl class="mv-summary">
+				for _, kv := range v.Summary {
+					<div class="mv-summary__row">
+						<dt>{ kv[0] }</dt>
+						<dd>{ kv[1] }</dd>
+					</div>
+				}
+			</dl>
+			if len(v.Mapping) > 0 {
+				<form class="mv-stack mv-stack--sm" method="post" action={ templ.SafeURL("/models/providers/new/mapping?id=" + v.ID + "&next=" + v.Next) }>
+					<strong class="mv-small">{ i18n.T(ctx, "ai.wizard.map") }</strong>
+					for _, m := range v.Mapping {
+						if !m.More {
+							@mapRow(m)
+						}
+					}
+					<details class="mv-wizard__poll">
+						<summary class="mv-small">{ i18n.T(ctx, "ai.wizard.map_more") }</summary>
+						<div class="mv-stack mv-stack--sm">
+							for _, m := range v.Mapping {
+								if m.More {
+									@mapRow(m)
+								}
+							}
+						</div>
+					</details>
+					<div class="mv-row mv-row--end">
+						@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Type: "submit", Icon: "device-floppy"}) {
+							{ i18n.T(ctx, "ai.wizard.save_map") }
+						}
+					</div>
+				</form>
+			}
+			<a class="mv-small" href={ v.Href(StepConnect) }>
+				@ui.Icon("pencil", 14)
+				{ i18n.T(ctx, "ai.wizard.edit_connection") }
+			</a>
+		</div>
+		<div class="mv-stack mv-wizard__aside">
+			<div id="test-result">
+				@TestCard(v)
+			</div>
+			if v.Manage {
+				@manageBox(v)
+			}
+			<div class="mv-row mv-row--end mv-row--wrap mv-wizard__foot">
+				<form class="mv-row mv-row--sm mv-row--wrap" method="post" action={ templ.SafeURL("/models/providers/new/test?id=" + v.ID + "&next=" + v.Next) } hx-post={ "/models/providers/new/test?id=" + v.ID + "&next=" + v.Next } hx-target="#test-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+					@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Type: "submit", Icon: "player-play"}) {
+						if v.Test.Ran {
+							{ i18n.T(ctx, "ai.wizard.retest") }
+						} else {
+							{ i18n.T(ctx, "ai.wizard.run_test") }
+						}
+					}
+					if v.BothModes {
+						@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Type: "submit", Icon: "photo", Attrs: templ.Attributes{"name": "mode", "value": "image"}}) {
+							{ i18n.T(ctx, "ai.wizard.test_image") }
+						}
+					}
+				</form>
+				@ui.LinkButton(string(v.Href(StepConnect)), ui.ButtonProps{Variant: ui.Ghost}) {
+					{ i18n.T(ctx, "ai.back") }
+				}
+				@ui.LinkButton(string(v.Href(StepDescribe)), ui.ButtonProps{Variant: ui.Primary, Icon: "arrow-right"}) {
+					{ i18n.T(ctx, "ai.wizard.next_describe") }
+				}
+			</div>
+		</div>
+	</div>
+}
+
+// manageBox turns a provider off or on, approves a private address or removes it.
+templ manageBox(v WizardView) {
+	<section class="mv-box mv-box--pad mv-stack mv-stack--sm" aria-labelledby="mv-manage">
+		<strong class="mv-small" id="mv-manage">{ i18n.T(ctx, "ai.manage.title") }</strong>
+		<div class="mv-row mv-row--wrap mv-row--sm">
+			<form method="post" action={ templ.SafeURL("/models/providers/" + v.ID + "/toggle") }>
+				if v.Enabled {
+					@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Type: "submit", Icon: "player-pause"}) {
+						{ i18n.T(ctx, "ai.manage.off") }
+					}
+				} else {
+					<input type="hidden" name="enabled" value="on"/>
+					@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Type: "submit", Icon: "player-play"}) {
+						{ i18n.T(ctx, "ai.manage.on") }
+					}
+				}
+			</form>
+			if v.NeedsApproval {
+				<form method="post" action={ templ.SafeURL("/models/providers/" + v.ID + "/approve") }>
+					@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Type: "submit", Icon: "shield-check"}) {
+						{ i18n.T(ctx, "ai.manage.approve") }
+					}
+				</form>
+			}
+			<details class="mv-wizard__poll">
+				<summary class="mv-small">{ i18n.T(ctx, "ai.manage.remove") }</summary>
+				<form class="mv-stack mv-stack--sm" method="post" action={ templ.SafeURL("/models/providers/" + v.ID + "/delete") }>
+					<p class="mv-small mv-muted">{ i18n.T(ctx, "ai.manage.remove_note") }</p>
+					@ui.Button(ui.ButtonProps{Variant: ui.Danger, Size: ui.SM, Type: "submit", Icon: "trash"}) {
+						{ i18n.T(ctx, "ai.manage.remove_confirm") }
+					}
+				</form>
+			</details>
+		</div>
+	</section>
+}
+
+templ mapRow(m MapRow) {
+	<div class="mv-maprow">
+		<label class="mv-badge mv-badge--text mv-maprow__field" for={ "map-" + m.Field }>{ m.Label }</label>
+		@ui.Select(ui.SelectProps{ID: "map-" + m.Field, Name: "map_" + m.Field, Value: m.Value, Options: m.Options})
+	</div>
+}
+
+templ typeSwitchStatic(v WizardView) {
+	if v.Custom {
+		<div class="mv-field">
+			<span class="mv-field__label"><span>{ i18n.T(ctx, "ai.wizard.type") }</span></span>
+			<div class="mv-seg mv-seg--full" role="list">
+				for _, t := range v.Types {
+					<span
+						class="mv-seg__item"
+						role="listitem"
+						if t.Current {
+							aria-current="true"
+						}
+					>{ t.Name }</span>
+				}
+			</div>
+		</div>
+	}
+}
+
+// TestCard is the test result: image or text, status, time and cost.
+templ TestCard(v WizardView) {
+	<section class="mv-stack mv-stack--sm" aria-live="polite">
+		<strong class="mv-small">{ i18n.T(ctx, "ai.test.title") }</strong>
+		if v.Test.ImageURL != "" {
+			<figure class="mv-testimg">
+				<img src={ v.Test.ImageURL } alt={ v.Test.Caption } loading="lazy"/>
+				<figcaption class="mv-testimg__cap">{ v.Test.Caption }</figcaption>
+			</figure>
+		} else if v.Test.Text != "" {
+			<blockquote class="mv-box mv-box--pad mv-testtext">{ v.Test.Text }</blockquote>
+		} else {
+			@ui.ToneBox(v.Test.Placehold, "", "mv-testimg mv-testimg--empty")
+		}
+		<div class="mv-grid-3 mv-teststats">
+			<div class="mv-box mv-teststat">
+				<span>{ i18n.T(ctx, "ai.test.status") }</span>
+				if !v.Test.Ran {
+					<strong class="mv-muted">{ v.Test.Status }</strong>
+				} else if v.Test.OK {
+					<strong class="mv-ok-text">
+						@ui.Icon("circle-check", 16)
+						{ v.Test.Status }
+					</strong>
+				} else {
+					<strong class="mv-err-text">
+						@ui.Icon("alert-triangle", 16)
+						{ v.Test.Status }
+					</strong>
+				}
+			</div>
+			<div class="mv-box mv-teststat">
+				<span>{ i18n.T(ctx, "ai.test.time") }</span>
+				<strong>{ v.Test.Time }</strong>
+			</div>
+			<div class="mv-box mv-teststat">
+				<span>{ i18n.T(ctx, "ai.test.cost") }</span>
+				<strong>{ v.Test.Cost }</strong>
+			</div>
+		</div>
+		if v.Test.Message != "" {
+			<p class={ "mv-small", ui.If(!v.Test.OK, "mv-err-text"), ui.If(v.Test.OK, "mv-muted") }>{ v.Test.Message }</p>
+		}
+	</section>
+}
+
+templ describeStep(v WizardView) {
+	<form class="mv-wizard__grid" method="post" action={ templ.SafeURL("/models/providers/new/describe?id=" + v.ID + "&next=" + v.Next) } enctype="multipart/form-data">
+		<div class="mv-stack mv-wizard__main">
+			if len(v.Served) > 0 {
+				<section class="mv-stack mv-stack--sm">
+					<strong class="mv-small">{ i18n.T(ctx, "ai.describe.served", "name", v.KindName) }</strong>
+					<ul class="mv-list-plain mv-served" role="list">
+						for _, m := range v.Served {
+							<li class="mv-served__row">
+								@ui.Icon("circle-check", 16)
+								<span class="mv-grow">{ m.Name }</span>
+								<span class="mv-meta mv-faint">{ m.Detail }</span>
+							</li>
+						}
+					</ul>
+					<p class="mv-small mv-muted">{ i18n.T(ctx, "ai.describe.served_note") }</p>
+				</section>
+			}
+			if len(v.Discovered) > 0 {
+				<section class="mv-stack mv-stack--sm">
+					<strong class="mv-small">{ i18n.T(ctx, "ai.describe.discovered") }</strong>
+					<p class="mv-small mv-muted">{ i18n.T(ctx, "ai.describe.discovered_note") }</p>
+					<ul class="mv-list-plain mv-served" role="list">
+						for _, m := range v.Discovered {
+							<li class="mv-served__row">
+								@ui.Checkbox(ui.CheckProps{Name: "add_model", Value: m.ID, Checked: m.Checked, Label: m.Name})
+								<span class="mv-meta mv-faint mv-ml-auto">{ m.Detail }</span>
+							</li>
+						}
+					</ul>
+				</section>
+			} else if v.DiscoverError != "" {
+				@ui.Notice(ui.ToneWarning, "alert-triangle") {
+					<span class="mv-small">{ v.DiscoverError }</span>
+				}
+			}
+			if v.Custom {
+				<section class="mv-stack">
+					<div class="mv-grid-2">
+						@ui.Field(ui.FieldProps{ID: "d-name", Label: i18n.T(ctx, "ai.describe.name"), Error: v.Errors["name"]}) {
+							@ui.Input(ui.InputProps{ID: "d-name", Name: "model_name", Value: v.DescName, MaxLength: 80, Required: true, Invalid: v.Errors["name"] != ""})
+						}
+						@ui.Field(ui.FieldProps{ID: "d-id", Label: i18n.T(ctx, "ai.describe.id"), Hint: i18n.T(ctx, "ai.describe.id_hint"), Error: v.Errors["model_id"]}) {
+							@ui.Input(ui.InputProps{ID: "d-id", Name: "catalog_id", Value: v.DescModelID, MaxLength: 80, Required: true, Invalid: v.Errors["model_id"] != "", Described: true})
+						}
+						@ui.Field(ui.FieldProps{ID: "d-kind", Label: i18n.T(ctx, "ai.describe.kind")}) {
+							@ui.Select(ui.SelectProps{ID: "d-kind", Name: "model_kind", Value: v.DescKind, Options: v.KindOptions})
+						}
+						@ui.Field(ui.FieldProps{ID: "d-cost", Label: i18n.T(ctx, "ai.describe.cost"), Hint: i18n.T(ctx, "ai.describe.cost_hint"), Aside: i18n.T(ctx, "ai.optional")}) {
+							@ui.InputGroup("$", false) {
+								@ui.Input(ui.InputProps{ID: "d-cost", Name: "cost_per_image", Value: v.CostPerImage, Inputmode: "decimal", Described: true})
+							}
+						}
+					</div>
+					<fieldset class="mv-field mv-capset">
+						<legend class="mv-field__label"><span>{ i18n.T(ctx, "ai.describe.tasks") }</span></legend>
+						<div class="mv-capgrid">
+							for _, c := range v.TaskFields {
+								@ui.Checkbox(ui.CheckProps{Name: "task", Value: c.Name, Checked: c.Checked, Label: c.Label})
+							}
+						</div>
+						if v.Errors["tasks"] != "" {
+							<span class="mv-field__error" role="alert">
+								@ui.Icon("alert-triangle", 14)
+								<span>{ v.Errors["tasks"] }</span>
+							</span>
+						}
+					</fieldset>
+					<fieldset class="mv-field mv-capset">
+						<legend class="mv-field__label"><span>{ i18n.T(ctx, "ai.describe.caps") }</span></legend>
+						<div class="mv-capgrid">
+							for _, c := range v.CapFields {
+								@ui.Checkbox(ui.CheckProps{Name: "cap", Value: c.Name, Checked: c.Checked, Label: c.Label})
+							}
+						</div>
+					</fieldset>
+					<div class="mv-grid-3">
+						@ui.Field(ui.FieldProps{ID: "d-refs", Label: i18n.T(ctx, "ai.describe.max_refs")}) {
+							@ui.Input(ui.InputProps{ID: "d-refs", Name: "max_refs", Value: v.MaxRefs, Inputmode: "numeric"})
+						}
+						@ui.Field(ui.FieldProps{ID: "d-res", Label: i18n.T(ctx, "ai.describe.max_res")}) {
+							@ui.Input(ui.InputProps{ID: "d-res", Name: "max_resolution", Value: v.MaxRes, Inputmode: "numeric"})
+						}
+						@ui.Field(ui.FieldProps{ID: "d-lic", Label: i18n.T(ctx, "ai.describe.licence")}) {
+							@ui.Input(ui.InputProps{ID: "d-lic", Name: "licence_id", Value: v.LicenceID, Placeholder: "apache-2.0"})
+						}
+					</div>
+					@ui.Checkbox(ui.CheckProps{Name: "commercial", Checked: v.Commercial, Label: i18n.T(ctx, "ai.describe.commercial"), AlignStart: true})
+					<details class="mv-wizard__poll">
+						<summary class="mv-small">{ i18n.T(ctx, "ai.describe.import") }</summary>
+						@ui.Field(ui.FieldProps{ID: "d-manifest", Label: i18n.T(ctx, "ai.describe.manifest"), Hint: i18n.T(ctx, "ai.describe.manifest_hint"), Error: v.Errors["manifest"]}) {
+							@ui.Textarea(ui.TextareaProps{ID: "d-manifest", Name: "manifest", Value: v.Manifest, Rows: 6, Class: "mv-mono mv-mono--plain", Invalid: v.Errors["manifest"] != ""})
+						}
+					</details>
+				</section>
+			}
+		</div>
+		<aside class="mv-stack mv-wizard__aside">
+			@ui.Notice(ui.ToneInfo, "route") {
+				<span class="mv-small">{ i18n.T(ctx, "ai.describe.aside") }</span>
+			}
+			<div class="mv-row mv-row--end mv-wizard__foot">
+				@ui.LinkButton(string(v.Href(StepTest)), ui.ButtonProps{Variant: ui.Ghost}) {
+					{ i18n.T(ctx, "ai.back") }
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "arrow-right"}) {
+					{ i18n.T(ctx, "ai.wizard.next_route") }
+				}
+			</div>
+		</aside>
+	</form>
+}
+
+templ routeStep(v WizardView) {
+	<form class="mv-wizard__grid" method="post" action={ templ.SafeURL("/models/providers/new/route?id=" + v.ID + "&next=" + v.Next) }>
+		<div class="mv-stack mv-wizard__main">
+			<section class="mv-box mv-box--pad mv-stack mv-stack--sm">
+				<strong>{ i18n.T(ctx, "ai.route.joins", "name", v.Name) }</strong>
+				if len(v.RouteModels) > 0 {
+					<ul class="mv-list-plain mv-served" role="list">
+						for _, m := range v.RouteModels {
+							<li class="mv-served__row">
+								@ui.Icon("circle-check", 16)
+								<span>{ m }</span>
+							</li>
+						}
+					</ul>
+				}
+				<p class="mv-small mv-muted">{ v.Explain }</p>
+			</section>
+			if len(v.PinScopes) > 0 {
+				<fieldset class="mv-field">
+					<legend class="mv-field__label"><span>{ i18n.T(ctx, "ai.route.pin") }</span><span class="mv-field__aside">{ i18n.T(ctx, "ai.optional") }</span></legend>
+					<div class="mv-grid-2">
+						@ui.Select(ui.SelectProps{ID: "r-scope", Name: "pin_scope", Options: v.PinScopes, Attrs: templ.Attributes{"aria-label": i18n.T(ctx, "ai.pin.scope")}})
+						@ui.Select(ui.SelectProps{ID: "r-task", Name: "pin_task", Options: v.PinTasks, Attrs: templ.Attributes{"aria-label": i18n.T(ctx, "ai.pin.task")}})
+					</div>
+				</fieldset>
+			}
+		</div>
+		<aside class="mv-stack mv-wizard__aside">
+			@ui.Notice(ui.ToneSuccess, "circle-check") {
+				<span class="mv-small">{ i18n.T(ctx, "ai.route.aside") }</span>
+			}
+			<div class="mv-row mv-row--end mv-wizard__foot">
+				@ui.LinkButton(string(v.Href(StepDescribe)), ui.ButtonProps{Variant: ui.Ghost}) {
+					{ i18n.T(ctx, "ai.back") }
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "check"}) {
+					{ i18n.T(ctx, "ai.route.finish") }
+				}
+			</div>
+		</aside>
+	</form>
+}
+
+func backHref(next string) string {
+	if next != "" {
+		return next
+	}
+	return "/models"
+}
+
+func urlLabel(ctx context.Context, kind string) string {
+	switch kind {
+	case "comfyui":
+		return i18n.T(ctx, "ai.wizard.url.comfyui")
+	case "huggingface":
+		return i18n.T(ctx, "ai.wizard.url.huggingface")
+	case "http":
+		return i18n.T(ctx, "ai.wizard.url.http")
+	}
+	return i18n.T(ctx, "ai.wizard.url")
+}
+
+func urlAside(ctx context.Context, v WizardView) string {
+	if !v.NeedsURL {
+		return i18n.T(ctx, "ai.optional")
+	}
+	return ""
+}
+
+func urlPlaceholder(kind string) string {
+	switch kind {
+	case "comfyui":
+		return "http://192.168.1.40:8188"
+	case "ollama":
+		return "http://localhost:11434"
+	case "huggingface":
+		return "https://xyz.endpoints.huggingface.cloud"
+	case "http":
+		return "https://api.example.org/v1/generate"
+	}
+	return "http://localhost:8000/v1"
+}
+
+func keyLabel(ctx context.Context, v WizardView) string {
+	if v.Kind == "huggingface" {
+		return i18n.T(ctx, "ai.wizard.token")
+	}
+	return i18n.T(ctx, "ai.wizard.key")
+}
+
+func keyAside(ctx context.Context, v WizardView) string {
+	if v.NeedsURL {
+		return i18n.T(ctx, "ai.optional")
+	}
+	return ""
+}
+
+func keyHint(ctx context.Context, v WizardView) string {
+	if v.KeyHint != "" {
+		return i18n.T(ctx, "ai.wizard.key_saved", "hint", v.KeyHint)
+	}
+	return i18n.T(ctx, "ai.wizard.key_hint")
+}
+
+func keyPlaceholder(ctx context.Context, v WizardView) string {
+	if v.KeyHint != "" {
+		return "•••• " + v.KeyHint
+	}
+	return ""
+}

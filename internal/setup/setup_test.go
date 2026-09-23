@@ -135,9 +135,12 @@ func TestModelsStepDetectsGPUAndUsesHook(t *testing.T) {
 	r := c.Get("/setup/models")
 	contains(t, r, "NVIDIA RTX 4090 · 24 GB detected", "Qwen-Image Edit, FLUX.2 [klein], Illustrious XL · 41 GB download", "Install recommended")
 
-	core.Provide[setup.ModelStep](ta.Deps, fakeStep{})
-	r = c.Get("/setup/models")
-	contains(t, r, "Local ComfyUI", "Connected", "Testing…", "Tiny model")
+	// The ai module fills the hook: connect links come back to this step.
+	contains(t, r, "/models/providers/new?kind=openrouter&amp;next=/setup/models")
+	if _, ok := core.Use[setup.ModelStep](ta.Deps); !ok {
+		t.Fatal("the ai module should provide the model step")
+	}
+	var _ setup.ModelStep = fakeStep{}
 }
 
 type fakeStep struct{}

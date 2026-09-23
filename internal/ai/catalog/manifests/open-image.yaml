@@ -1,0 +1,518 @@
+# Open-weight image models. They run in the local worker (the worker: section tells it how) and are also served
+# by aggregators. VRAM figures are for bf16 weights; quantised builds need less. Verify ids and costs before use.
+- id: flux2-dev
+  name: FLUX.2 [dev]
+  maker: Black Forest Labs
+  kind: image
+  family: flux2
+  summary: 32B. Best open-weight quality; non-commercial licence, so private or non-commercial series only.
+  uses: [private_series_only]
+  capabilities:
+    tasks: [generate, edit, sheet]
+    refs: true
+    max_refs: 6
+    lora: true
+    edit: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    aspect_ratios: ["1:1", "2:3", "3:2", "9:16", "16:9", "1:4"]
+    max_resolution: 2048
+    pose: true
+    controlnet: true
+  licence: {id: flux-dev-non-commercial, commercial: false, note: "FLUX [dev] Non-Commercial License: outputs may not be used commercially without a separate licence."}
+  hardware: {vram_gb: 24, min_vram_gb: 16, local: true, download_gb: 64}
+  providers:
+    - {provider: local_worker, model_id: flux2-dev, seconds: 35}
+    - {provider: fal, model_id: fal-ai/flux-2, price: {unit: per_image, usd: 0.03}, seconds: 8, notes: verify before use}
+    - {provider: replicate, model_id: black-forest-labs/flux-2-dev, price: {unit: per_image, usd: 0.03}, seconds: 12, notes: verify before use}
+    - {provider: runware, model_id: "bfl:flux-2@dev", price: {unit: per_image, usd: 0.02}, seconds: 7, notes: verify before use}
+  scores: {panel: 86, cover: 88, edit: 80, text_in_art: 80, character_consistency: 82, speed: 55}
+  ratings: [all, teen, mature]
+  release: "2025-11"
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: flux2-klein
+  name: FLUX.2 [klein]
+  maker: Black Forest Labs
+  kind: image
+  family: flux2
+  summary: 4B. Low-latency drafts, thumbnails and inpainting on consumer GPUs.
+  uses: [drafts, inpainting]
+  capabilities:
+    tasks: [generate, edit, inpaint, sheet]
+    refs: true
+    max_refs: 4
+    lora: true
+    edit: true
+    inpaint: true
+    bw_screentone: true
+    colour: true
+    aspect_ratios: ["1:1", "2:3", "3:2", "9:16", "16:9", "1:4"]
+    max_resolution: 1536
+    pose: true
+  licence: {id: apache-2.0, commercial: true}
+  hardware: {vram_gb: 13, min_vram_gb: 8, local: true, download_gb: 9}
+  providers:
+    - {provider: local_worker, model_id: flux2-klein, seconds: 6}
+    - {provider: fal, model_id: fal-ai/flux-2/klein, price: {unit: per_megapixel, usd: 0.005}, seconds: 2, notes: verify before use}
+    - {provider: together, model_id: black-forest-labs/FLUX.2-klein, price: {unit: per_megapixel, usd: 0.004}, seconds: 2, notes: verify before use}
+  scores: {panel: 70, cover: 62, edit: 72, text_in_art: 55, character_consistency: 70, speed: 95}
+  ratings: [all, teen, mature, adult]
+  release: "2026-01"
+  verify: Checked Sep 2026; verify ids and costs before use.
+  worker:
+    diffusers:
+      repo: black-forest-labs/FLUX.2-klein-4B
+      family: auto
+      dtype: bfloat16
+      default_steps: 4
+      default_guidance: 1.0
+      job_types: [image.generate, character.sheet]
+- id: qwen-image
+  name: Qwen-Image
+  maker: Alibaba Qwen
+  kind: image
+  family: qwen-image
+  summary: 20B. Reads and renders text in art (English and Chinese) well.
+  uses: [text_in_art, signs]
+  capabilities:
+    tasks: [generate]
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    aspect_ratios: ["1:1", "2:3", "3:2", "3:4", "9:16", "16:9"]
+    max_resolution: 2048
+    languages: [en, zh]
+  licence: {id: apache-2.0, commercial: true}
+  hardware: {vram_gb: 24, min_vram_gb: 8, local: true, download_gb: 41}
+  providers:
+    - {provider: local_worker, model_id: qwen-image, seconds: 38}
+    - {provider: fal, model_id: fal-ai/qwen-image, price: {unit: per_megapixel, usd: 0.02}, seconds: 8, notes: verify before use}
+    - {provider: replicate, model_id: qwen/qwen-image, price: {unit: per_image, usd: 0.025}, seconds: 12, notes: verify before use}
+    - {provider: together, model_id: Qwen/Qwen-Image, price: {unit: per_megapixel, usd: 0.02}, seconds: 9, notes: verify before use}
+    - {provider: huggingface, model_id: Qwen/Qwen-Image, seconds: 30, notes: "inference endpoint; billed by the endpoint's GPU time"}
+  scores: {panel: 78, cover: 76, edit: 40, text_in_art: 90, character_consistency: 70, speed: 50}
+  ratings: [all, teen, mature, adult]
+  release: "2025-08"
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: qwen-image-edit
+  name: Qwen-Image Edit
+  maker: Alibaba Qwen
+  kind: image
+  family: qwen-image
+  summary: Instruction edits, text in art and layer edits; accepts a character reference sheet.
+  uses: [edits, text_in_art, layers]
+  capabilities:
+    tasks: [edit, inpaint, sheet]
+    refs: true
+    max_refs: 3
+    edit: true
+    inpaint: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    aspect_ratios: ["1:1", "2:3", "3:2", "3:4", "9:16", "16:9"]
+    max_resolution: 2048
+    languages: [en, zh]
+  licence: {id: apache-2.0, commercial: true}
+  hardware: {vram_gb: 24, min_vram_gb: 8, local: true, download_gb: 25}
+  providers:
+    - {provider: local_worker, model_id: qwen-image-edit, seconds: 40}
+    - {provider: fal, model_id: fal-ai/qwen-image-edit, price: {unit: per_megapixel, usd: 0.03}, seconds: 10, notes: verify before use}
+    - {provider: replicate, model_id: qwen/qwen-image-edit, price: {unit: per_image, usd: 0.03}, seconds: 14, notes: verify before use}
+  scores: {panel: 75, cover: 70, edit: 91, text_in_art: 89, character_consistency: 84, speed: 48}
+  ratings: [all, teen, mature, adult]
+  release: "2025-08"
+  verify: Checked Sep 2026; verify ids and costs before use.
+  worker:
+    diffusers:
+      repo: Qwen/Qwen-Image-Edit
+      family: qwen-image
+      dtype: bfloat16
+      edit: instruct
+      offload_mode: sequential
+      default_steps: 40
+      default_guidance: 4.0
+      job_types: [image.edit]
+- id: qwen-image-layered
+  name: Qwen-Image Layered
+  maker: Alibaba Qwen
+  kind: image
+  family: qwen-image
+  summary: Decomposes an image into editable layers; maps directly to layered panels.
+  uses: [layers]
+  capabilities:
+    tasks: [generate, edit]
+    edit: true
+    layered: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    max_resolution: 1536
+  licence: {id: apache-2.0, commercial: true}
+  hardware: {vram_gb: 24, min_vram_gb: 12, local: true, download_gb: 41}
+  providers:
+    - {provider: local_worker, model_id: qwen-image-layered, seconds: 55}
+    - {provider: fal, model_id: fal-ai/qwen-image-layered, price: {unit: per_image, usd: 0.05}, seconds: 16, notes: verify before use}
+  scores: {panel: 72, cover: 60, edit: 86, text_in_art: 84, character_consistency: 75, speed: 35}
+  ratings: [all, teen, mature, adult]
+  release: "2025-12"
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: qwen-image-2
+  name: Qwen-Image 2.0
+  maker: Alibaba Qwen
+  kind: image
+  family: qwen-image
+  summary: 7B unified generate-and-edit model; about 16 GB quantised.
+  uses: [general_panels, edits]
+  capabilities:
+    tasks: [generate, edit, inpaint]
+    refs: true
+    max_refs: 3
+    edit: true
+    inpaint: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    max_resolution: 2048
+  licence: {id: apache-2.0, commercial: true, note: Check the licence file shipped with the weights.}
+  hardware: {vram_gb: 16, min_vram_gb: 10, local: true, download_gb: 16}
+  providers:
+    - {provider: local_worker, model_id: qwen-image-2, seconds: 22}
+    - {provider: fal, model_id: fal-ai/qwen-image-2, price: {unit: per_megapixel, usd: 0.02}, seconds: 6, notes: verify before use}
+  scores: {panel: 80, cover: 76, edit: 85, text_in_art: 88, character_consistency: 78, speed: 65}
+  ratings: [all, teen, mature, adult]
+  release: "2026-05"
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: qwen-image-2.1
+  name: Qwen-Image 2.1
+  maker: Alibaba Qwen
+  kind: image
+  family: qwen-image
+  summary: Released 20 Sep 2026; reported as non-commercial, so the licence guard treats it that way until verified.
+  uses: [private_series_only]
+  capabilities:
+    tasks: [generate, edit, inpaint]
+    refs: true
+    max_refs: 3
+    edit: true
+    inpaint: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    max_resolution: 2048
+  licence: {id: qwen-research, commercial: false, note: Reported as non-commercial at release; check the licence shipped with the weights.}
+  hardware: {vram_gb: 16, min_vram_gb: 10, local: true, download_gb: 16}
+  providers:
+    - {provider: local_worker, model_id: qwen-image-2.1, seconds: 22}
+  scores: {panel: 83, cover: 80, edit: 87, text_in_art: 90, character_consistency: 80, speed: 65}
+  ratings: [all, teen, mature, adult]
+  release: "2026-09-20"
+  verify: New release; licence and ids not yet verified.
+- id: z-image-turbo
+  name: Z-Image-Turbo
+  maker: Tongyi-MAI
+  kind: image
+  summary: 6B. Near-instant previews with bilingual text.
+  uses: [previews, drafts]
+  capabilities:
+    tasks: [generate]
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    max_resolution: 2048
+    languages: [en, zh]
+  licence: {id: apache-2.0, commercial: true}
+  hardware: {vram_gb: 16, min_vram_gb: 13, local: true, download_gb: 12}
+  providers:
+    - {provider: local_worker, model_id: z-image-turbo, seconds: 4}
+    - {provider: fal, model_id: fal-ai/z-image/turbo, price: {unit: per_megapixel, usd: 0.005}, seconds: 2, notes: verify before use}
+    - {provider: runware, model_id: "tongyi:z-image@turbo", price: {unit: per_image, usd: 0.003}, seconds: 2, notes: verify before use}
+  scores: {panel: 74, cover: 68, edit: 30, text_in_art: 78, character_consistency: 62, speed: 94}
+  ratings: [all, teen, mature, adult]
+  release: "2025-11"
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: hunyuan-image-3
+  name: HunyuanImage 3.0
+  maker: Tencent
+  kind: image
+  summary: 80B MoE. Long, knowledge-heavy prompts on server-class hardware.
+  uses: [knowledge_heavy_prompts]
+  capabilities:
+    tasks: [generate]
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    max_resolution: 2048
+    languages: [en, zh]
+  licence: {id: tencent-hunyuan-community, commercial: true, note: "Community licence with conditions (territory and user-count limits); check before commercial use."}
+  hardware: {vram_gb: 160, min_vram_gb: 80, local: true, download_gb: 170}
+  providers:
+    - {provider: local_worker, model_id: hunyuan-image-3, seconds: 90}
+    - {provider: fal, model_id: fal-ai/hunyuan-image/v3, price: {unit: per_megapixel, usd: 0.1}, seconds: 20, notes: verify before use}
+    - {provider: replicate, model_id: tencent/hunyuan-image-3, price: {unit: per_image, usd: 0.08}, seconds: 25, notes: verify before use}
+  scores: {panel: 85, cover: 87, edit: 30, text_in_art: 84, character_consistency: 72, speed: 20}
+  ratings: [all, teen]
+  release: "2025-09"
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: glm-image
+  name: GLM-Image
+  maker: Zhipu
+  kind: image
+  summary: Typography alternative with a permissive licence.
+  uses: [typography]
+  capabilities:
+    tasks: [generate]
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    max_resolution: 2048
+    languages: [en, zh]
+  licence: {id: mit, commercial: true}
+  hardware: {vram_gb: 24, min_vram_gb: 16, local: true, download_gb: 32}
+  providers:
+    - {provider: local_worker, model_id: glm-image, seconds: 30}
+    - {provider: fal, model_id: fal-ai/glm-image, price: {unit: per_image, usd: 0.03}, seconds: 10, notes: verify before use}
+  scores: {panel: 72, cover: 74, edit: 30, text_in_art: 88, character_consistency: 60, speed: 50}
+  ratings: [all, teen, mature, adult]
+  release: "2026-01"
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: hidream-o1
+  name: HiDream-O1
+  maker: HiDream
+  kind: image
+  summary: Typography and poster layouts with an MIT licence.
+  uses: [typography]
+  capabilities:
+    tasks: [generate, edit]
+    edit: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    max_resolution: 2048
+  licence: {id: mit, commercial: true}
+  hardware: {vram_gb: 24, min_vram_gb: 16, local: true, download_gb: 35}
+  providers:
+    - {provider: local_worker, model_id: hidream-o1, seconds: 32}
+    - {provider: fal, model_id: fal-ai/hidream-o1, price: {unit: per_megapixel, usd: 0.03}, seconds: 11, notes: verify before use}
+  scores: {panel: 76, cover: 78, edit: 70, text_in_art: 86, character_consistency: 66, speed: 48}
+  ratings: [all, teen, mature, adult]
+  release: "2026-03"
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: sd35-large
+  name: Stable Diffusion 3.5 Large
+  maker: Stability AI
+  kind: image
+  family: sd3
+  summary: The largest LoRA and ControlNet ecosystem.
+  uses: [loras, controlnet]
+  capabilities:
+    tasks: [generate, edit, inpaint]
+    lora: true
+    edit: true
+    inpaint: true
+    bw_screentone: true
+    colour: true
+    max_resolution: 1536
+    pose: true
+    controlnet: true
+  licence: {id: stability-community, commercial: true, note: Free for commercial use under US$1M annual revenue; above that an enterprise licence is needed.}
+  hardware: {vram_gb: 18, min_vram_gb: 10, local: true, download_gb: 16}
+  providers:
+    - {provider: local_worker, model_id: sd35-large, seconds: 20}
+    - {provider: replicate, model_id: stability-ai/stable-diffusion-3.5-large, price: {unit: per_image, usd: 0.065}, seconds: 10, notes: verify before use}
+    - {provider: fal, model_id: fal-ai/stable-diffusion-v35-large, price: {unit: per_megapixel, usd: 0.065}, seconds: 6, notes: verify before use}
+  scores: {panel: 70, cover: 68, edit: 66, text_in_art: 60, character_consistency: 72, speed: 65}
+  ratings: [all, teen, mature, adult]
+  release: "2024-10"
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: sana
+  name: Sana 1.5
+  maker: NVIDIA
+  kind: image
+  summary: Low-VRAM machines and laptops.
+  uses: [low_vram]
+  capabilities:
+    tasks: [generate]
+    bw_screentone: true
+    colour: true
+    max_resolution: 4096
+  licence: {id: nvidia-open-model, commercial: true, note: Check the model card for the current terms.}
+  hardware: {vram_gb: 8, min_vram_gb: 6, local: true, download_gb: 9}
+  providers:
+    - {provider: local_worker, model_id: sana, seconds: 5}
+    - {provider: fal, model_id: fal-ai/sana, price: {unit: per_megapixel, usd: 0.001}, seconds: 2, notes: verify before use}
+  scores: {panel: 60, cover: 58, edit: 20, text_in_art: 40, character_consistency: 55, speed: 92}
+  ratings: [all, teen, mature, adult]
+  release: "2025-03"
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: illustrious-xl
+  name: Illustrious XL
+  maker: OnomaAI Research
+  kind: image
+  family: sdxl
+  summary: Anime and manga linework with a huge character-LoRA library; the default base for Character Lock training.
+  uses: [character_lock, anime_linework]
+  capabilities:
+    tasks: [generate, edit, inpaint, sheet, train]
+    refs: true
+    max_refs: 4
+    lora: true
+    edit: true
+    inpaint: true
+    bw_screentone: true
+    colour: true
+    max_resolution: 1536
+    pose: true
+    controlnet: true
+  licence: {id: fair-ai-public-1.0-sd, commercial: true, note: "Fair AI Public License: outputs may be used commercially; derivatives of the weights must stay open."}
+  hardware: {vram_gb: 10, min_vram_gb: 6, local: true, download_gb: 7}
+  providers:
+    - {provider: local_worker, model_id: illustrious-xl, seconds: 12}
+    - {provider: runware, model_id: "civitai:795765@889818", price: {unit: per_image, usd: 0.002}, seconds: 3, notes: verify before use}
+  scores: {panel: 78, cover: 70, edit: 70, text_in_art: 30, character_consistency: 92, speed: 80}
+  ratings: [all, teen, mature, adult]
+  release: "2024-09"
+  verify: Checked Sep 2026; verify ids and costs before use.
+  worker:
+    diffusers:
+      repo: OnomaAIResearch/Illustrious-xl-early-release-v0
+      family: sdxl
+      controlnet_openpose: xinsir/controlnet-openpose-sdxl-1.0
+      controlnet_lineart: xinsir/controlnet-scribble-sdxl-1.0
+      ip_adapter: {repo: h94/IP-Adapter, subfolder: sdxl_models, weight_name: ip-adapter_sdxl.bin, scale: 0.6}
+      scheduler: euler_a
+      default_steps: 28
+      default_guidance: 6.0
+      prompt_suffix: "masterpiece, best quality"
+      negative_prefix: "worst quality, low quality"
+      trainable: true
+- id: noobai-xl
+  name: NoobAI XL 1.1
+  maker: Laxhar Dream Lab
+  kind: image
+  family: sdxl
+  summary: Anime and illustration linework on SDXL.
+  uses: [anime_linework]
+  capabilities:
+    tasks: [generate, edit, inpaint, sheet, train]
+    lora: true
+    edit: true
+    inpaint: true
+    bw_screentone: true
+    colour: true
+    max_resolution: 1536
+    pose: true
+    controlnet: true
+  licence: {id: fair-ai-public-1.0-sd, commercial: true, note: "Fair AI Public License: outputs may be used commercially; derivatives of the weights must stay open."}
+  hardware: {vram_gb: 10, min_vram_gb: 6, local: true, download_gb: 7}
+  providers:
+    - {provider: local_worker, model_id: noobai-xl, seconds: 12}
+  scores: {panel: 77, cover: 70, edit: 68, text_in_art: 28, character_consistency: 88, speed: 80}
+  ratings: [all, teen, mature, adult]
+  release: "2025-01"
+  verify: Checked Sep 2026.
+  worker:
+    diffusers:
+      repo: Laxhar/noobai-XL-1.1
+      family: sdxl
+      controlnet_openpose: xinsir/controlnet-openpose-sdxl-1.0
+      scheduler: euler_a
+      default_steps: 28
+      default_guidance: 5.0
+      prompt_suffix: "masterpiece, best quality, newest"
+      negative_prefix: "worst quality, low quality, old, early"
+      trainable: true
+- id: animagine-xl-4
+  name: Animagine XL 4.0
+  maker: Cagliostro Research Lab
+  kind: image
+  family: sdxl
+  summary: Anime-style SDXL fine-tune.
+  uses: [anime_linework]
+  capabilities:
+    tasks: [generate, edit, inpaint, sheet, train]
+    lora: true
+    edit: true
+    inpaint: true
+    bw_screentone: true
+    colour: true
+    max_resolution: 1536
+    pose: true
+    controlnet: true
+  licence: {id: creativeml-openrail-plus-plus-m, commercial: true, note: Use-based restrictions of the OpenRAIL licence apply.}
+  hardware: {vram_gb: 10, min_vram_gb: 5, local: true, download_gb: 7}
+  providers:
+    - {provider: local_worker, model_id: animagine-xl-4, seconds: 12}
+    - {provider: replicate, model_id: cjwbw/animagine-xl-4.0, price: {unit: per_image, usd: 0.006}, seconds: 8, notes: verify before use}
+  scores: {panel: 75, cover: 72, edit: 66, text_in_art: 25, character_consistency: 84, speed: 80}
+  ratings: [all, teen, mature, adult]
+  release: "2025-01"
+  verify: Checked Sep 2026; verify ids and costs before use.
+  worker:
+    diffusers:
+      repo: cagliostrolab/animagine-xl-4.0
+      family: sdxl
+      controlnet_openpose: xinsir/controlnet-openpose-sdxl-1.0
+      controlnet_lineart: xinsir/controlnet-scribble-sdxl-1.0
+      scheduler: euler_a
+      default_steps: 28
+      default_guidance: 5.0
+      prompt_suffix: "masterpiece, high score, great score, absurdres"
+      negative_prefix: "lowres, bad anatomy, bad hands, worst quality, low score, bad score, average score"
+      trainable: true
+- id: sdxl-base
+  name: Stable Diffusion XL 1.0
+  maker: Stability AI
+  kind: image
+  family: sdxl
+  summary: The reference SDXL checkpoint; a neutral base for LoRAs.
+  uses: [loras]
+  capabilities:
+    tasks: [generate, edit, inpaint, sheet, train]
+    lora: true
+    edit: true
+    inpaint: true
+    colour: true
+    bw_screentone: true
+    max_resolution: 1536
+    pose: true
+    controlnet: true
+  licence: {id: creativeml-openrail-plus-plus-m, commercial: true}
+  hardware: {vram_gb: 10, min_vram_gb: 5, local: true, download_gb: 7}
+  providers:
+    - {provider: local_worker, model_id: sdxl-base, seconds: 12}
+  scores: {panel: 60, cover: 58, edit: 58, text_in_art: 20, character_consistency: 70, speed: 78}
+  ratings: [all, teen, mature, adult]
+  release: "2023-07"
+  verify: Stable release.
+  worker:
+    diffusers:
+      repo: stabilityai/stable-diffusion-xl-base-1.0
+      family: sdxl
+      variant: fp16
+      controlnet_openpose: xinsir/controlnet-openpose-sdxl-1.0
+      controlnet_lineart: xinsir/controlnet-scribble-sdxl-1.0
+      default_steps: 30
+      default_guidance: 6.5
+      trainable: true
+- id: diffsensei
+  name: DiffSensei
+  maker: Research (CVPR 2025)
+  kind: image
+  summary: Black-and-white manga panels with multi-character control.
+  uses: [bw_manga_panels, multi_character]
+  capabilities:
+    tasks: [generate]
+    refs: true
+    max_refs: 4
+    bw_screentone: true
+    max_resolution: 1024
+  licence: {id: research, commercial: false, note: Research release; check the repository licence before commercial use.}
+  hardware: {vram_gb: 24, min_vram_gb: 24, local: true, download_gb: 30}
+  providers:
+    - {provider: local_worker, model_id: diffsensei, seconds: 45}
+  scores: {panel: 72, cover: 50, edit: 20, text_in_art: 10, character_consistency: 86, speed: 40}
+  ratings: [all, teen, mature]
+  release: "2025-06"
+  verify: Research code; verify the licence before use.

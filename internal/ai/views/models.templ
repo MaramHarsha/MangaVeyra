@@ -1,0 +1,222 @@
+package views
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// autosave posts the form on every change (a <noscript> button covers no-JS).
+func autosave(action string) templ.Attributes {
+	return templ.Attributes{"hx-post": action, "hx-trigger": "change", "hx-swap": "none"}
+}
+
+templ noscriptSave() {
+	<noscript>
+		@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Type: "submit"}) {
+			{ i18n.T(ctx, "ai.save") }
+		}
+	</noscript>
+}
+
+func statusTone(s string) (ui.Tone, string) {
+	switch s {
+	case "ready":
+		return ui.ToneSuccess, ""
+	case "licence":
+		return ui.ToneWarning, "alert-triangle"
+	case "placeholder":
+		return ui.ToneMuted, "square-dot"
+	case "disabled":
+		return ui.ToneMuted, "circle-off"
+	case "vram":
+		return ui.ToneWarning, "cpu-off"
+	}
+	return ui.ToneMuted, "plug-connected-x"
+}
+
+// ModelsPage is G2 Models & providers (desktop) and G2m (mobile) in one DOM.
+templ ModelsPage(v ModelsView) {
+	<div class="mv-models">
+		<header class="mv-pagehead mv-models__head">
+			<div class="mv-pagehead__text">
+				<h1 class="mv-pagehead__title">{ i18n.T(ctx, "ai.models.title") }</h1>
+				<span class="mv-pagehead__sub">{ i18n.T(ctx, "ai.models.sub", "host", v.Host) }</span>
+			</div>
+			if v.CanAdd {
+				<div class="mv-pagehead__actions mv-hide-mobile">
+					@ui.LinkButton("/models/providers/new/connect?kind=openai_compatible", ui.ButtonProps{Variant: ui.Secondary, Icon: "plus"}) {
+						{ i18n.T(ctx, "ai.models.add_custom") }
+					}
+					@ui.LinkButton("/models/providers/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plug"}) {
+						{ i18n.T(ctx, "ai.models.add_provider") }
+					}
+				</div>
+				<a class="mv-iconlink mv-models__add mv-show-mobile" href="/models/providers/new" aria-label={ i18n.T(ctx, "ai.models.add_provider") }>
+					@ui.Icon("plus", 24)
+				</a>
+			}
+		</header>
+		if len(v.Problems) > 0 && v.IsAdmin {
+			@ui.Notice(ui.ToneWarning, "alert-triangle") {
+				<strong>{ i18n.T(ctx, "ai.models.problems") }</strong>
+				<ul class="mv-list-plain mv-small">
+					for _, p := range v.Problems {
+						<li class="mv-mono mv-mono--plain">{ p }</li>
+					}
+				</ul>
+			}
+		}
+		<ul class="mv-provcards mv-list-plain" role="list" aria-label={ i18n.T(ctx, "ai.models.providers") }>
+			for _, c := range v.Cards {
+				<li>
+					<a class="mv-provcard" href={ templ.URL(c.Href) }>
+						@ui.Icon(c.Icon, 24)
+						<span class="mv-provcard__text">
+							<strong class="mv-provcard__name">{ c.Name }</strong>
+							<span class="mv-provcard__sub">{ c.Sub }</span>
+						</span>
+						<span class={ "mv-dot", "mv-dot--" + c.State } aria-hidden="true"></span>
+						<span class="mv-sr-only">{ c.StateText }</span>
+					</a>
+				</li>
+			}
+		</ul>
+		<div class="mv-models__mobile mv-show-mobile">
+			<a class="mv-listrow" href="/models/routing">
+				<span class="mv-listrow__label">{ i18n.T(ctx, "ai.models.m.mode") }</span>
+				<span class="mv-listrow__value">{ v.ModeLabel }</span>
+				@ui.Icon("chevron-right", 18)
+			</a>
+			<a class="mv-listrow" href="/models/routing#guards">
+				<span class="mv-listrow__label">{ i18n.T(ctx, "ai.models.m.limit") }</span>
+				<span class="mv-listrow__value">{ v.LimitLabel }</span>
+				@ui.Icon("chevron-right", 18)
+			</a>
+			if v.IsAdmin {
+				<form class="mv-listrow" method="post" action="/models/local-only" { autosave("/models/local-only")... }>
+					<label class="mv-listrow__label mv-listrow__label--strong" for="m-local-only">{ i18n.T(ctx, "ai.models.m.local_only") }</label>
+					@ui.Toggle(ui.ToggleProps{ID: "m-local-only", Name: "local_only", Checked: v.LocalOnly})
+					@noscriptSave()
+				</form>
+			} else {
+				<div class="mv-listrow">
+					<span class="mv-listrow__label mv-listrow__label--strong">{ i18n.T(ctx, "ai.models.m.local_only") }</span>
+					if v.LocalOnly {
+						@ui.Badge(ui.ToneSuccess, "lock", i18n.T(ctx, "ai.on"))
+					} else {
+						@ui.Badge(ui.ToneMuted, "", i18n.T(ctx, "ai.off"))
+					}
+				</div>
+			}
+		</div>
+		if v.OnlyPlaceholder {
+			@ui.Notice(ui.ToneInfo, "square-dot") {
+				<span class="mv-small">{ i18n.T(ctx, "ai.models.only_placeholder") }</span>
+				if v.IsAdmin {
+					<a class="mv-small" href="/models/workers/new">{ i18n.T(ctx, "ai.local.add_worker") }</a>
+				}
+			}
+		}
+		<div class="mv-models__catalog">
+			<div class="mv-row mv-row--between mv-row--wrap">
+				@ui.SegmentedLinks(i18n.T(ctx, "ai.models.kinds"), v.Tabs)
+				if v.AllCount > len(v.Rows) || v.ShowAll {
+					<a class="mv-small" href={ templ.URL(v.AllHref) }>
+						if v.ShowAll {
+							{ i18n.T(ctx, "ai.models.show_available") }
+						} else {
+							{ i18n.T(ctx, "ai.models.show_all", "count", v.AllCount) }
+						}
+					</a>
+				}
+			</div>
+			if v.Empty {
+				@ui.State(ui.StateProps{SFX: "シーン…", JP: true, Title: i18n.T(ctx, "ai.models.empty.title"), Body: i18n.T(ctx, "ai.models.empty.body"), Boxed: true}) {
+					if v.CanAdd {
+						@ui.LinkButton("/models/providers/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plug"}) {
+							{ i18n.T(ctx, "ai.models.add_provider") }
+						}
+					}
+				}
+			} else {
+				<div class="mv-mtable" role="table" aria-label={ i18n.T(ctx, "ai.models.table") }>
+					<div class="mv-mtable__head" role="row">
+						<span role="columnheader">{ i18n.T(ctx, "ai.models.col.model") }</span>
+						<span role="columnheader">{ i18n.T(ctx, "ai.models.col.provider") }</span>
+						<span role="columnheader">{ i18n.T(ctx, "ai.models.col.uses") }</span>
+						<span role="columnheader">{ i18n.T(ctx, "ai.models.col.status") }</span>
+						<span role="columnheader">{ i18n.T(ctx, "ai.models.col.cost") }</span>
+						<span role="columnheader">{ i18n.T(ctx, "ai.models.col.on") }</span>
+					</div>
+					for _, r := range v.Rows {
+						@modelRow(r)
+					}
+				</div>
+			}
+		</div>
+		if v.IsAdmin && len(v.Changes) > 0 {
+			<section class="mv-box mv-box--pad mv-stack mv-stack--sm" aria-labelledby="mv-changes-title">
+				<div class="mv-row mv-row--between">
+					<h2 class="mv-section-head__title" id="mv-changes-title">{ i18n.T(ctx, "ai.changes.title") }</h2>
+					if v.NewCount > 0 {
+						<form method="post" action="/models/changes/ack">
+							@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit", Icon: "checks"}) {
+								{ i18n.T(ctx, "ai.changes.ack") }
+							}
+						</form>
+					}
+				</div>
+				<p class="mv-small mv-muted">{ i18n.T(ctx, "ai.changes.sub") }</p>
+				<ul class="mv-list-plain mv-changes" role="list">
+					for _, c := range v.Changes {
+						<li class="mv-changes__row">
+							switch c.Change {
+								case "added":
+									@ui.Badge(ui.ToneSuccess, "plus", c.Text)
+								case "removed":
+									@ui.Badge(ui.ToneError, "minus", c.Text)
+								default:
+									@ui.Badge(ui.ToneInfo, "refresh", c.Text)
+							}
+							<strong class="mv-small">{ c.Name }</strong>
+							if c.New {
+								@ui.Badge(ui.ToneNew, "", i18n.T(ctx, "ai.changes.new"))
+							}
+							<span class="mv-meta mv-faint mv-ml-auto">{ c.When }</span>
+						</li>
+					}
+				</ul>
+			</section>
+		}
+	</div>
+}
+
+templ modelRow(r ModelRow) {
+	<div class={ "mv-mtable__row", ui.If(!r.Enabled, "is-off") } role="row" id={ "model-" + r.ID }>
+		<span class="mv-mtable__name" role="cell">
+			<strong>{ r.Name }</strong>
+			if r.Custom {
+				@ui.Badge(ui.ToneMuted, "", i18n.T(ctx, "ai.models.custom"))
+			}
+		</span>
+		<span class="mv-mtable__muted" role="cell">{ r.Provider }</span>
+		<span class="mv-mtable__muted" role="cell">{ r.Uses }</span>
+		<span role="cell">
+			{{ tone, icon := statusTone(r.Status) }}
+			<span class="mv-mtable__status" title={ r.Note }>
+				@ui.Badge(tone, icon, r.StatusText)
+			</span>
+		</span>
+		<span class="mv-mtable__cost" role="cell">{ r.Cost }</span>
+		<span role="cell" class="mv-mtable__on">
+			if r.CanToggle {
+				<form method="post" action={ templ.SafeURL("/models/models/" + r.ID + "/toggle") } { autosave("/models/models/" + r.ID + "/toggle")... }>
+					@ui.Toggle(ui.ToggleProps{Name: "enabled", Checked: r.Enabled, AriaLabel: i18n.T(ctx, "ai.models.toggle", "name", r.Name)})
+					@noscriptSave()
+				</form>
+			} else {
+				@ui.Toggle(ui.ToggleProps{Checked: r.Enabled, Disabled: true, AriaLabel: i18n.T(ctx, "ai.models.toggle", "name", r.Name)})
+			}
+		</span>
+	</div>
+}

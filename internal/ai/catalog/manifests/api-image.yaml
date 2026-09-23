@@ -1,0 +1,147 @@
+# API-only image models from xAI, Microsoft, ByteDance and Black Forest Labs. Direct vendor keys work where an
+# adapter exists (xAI); the others are reached through aggregators. Verify ids and costs before use.
+- id: grok-imagine-image-2
+  name: Grok Imagine Image 2.0
+  maker: xAI
+  kind: image
+  summary: General panels; #2 on the llm-stats blind-vote leaderboard (Sep 2026).
+  uses: [general_panels]
+  capabilities:
+    tasks: [generate, edit]
+    refs: true
+    max_refs: 3
+    edit: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    aspect_ratios: ["1:1", "2:3", "3:2", "9:16", "16:9"]
+    max_resolution: 2048
+  licence: {id: xai-terms, commercial: true}
+  hardware: {local: false}
+  providers:
+    - {provider: xai, model_id: grok-imagine-image-2, price: {unit: per_image, usd: 0.07}, seconds: 10, notes: verify before use}
+    - {provider: openrouter, model_id: x-ai/grok-imagine-image-2, price: {unit: per_image, usd: 0.07}, seconds: 11, notes: verify before use}
+  scores: {panel: 89, cover: 86, edit: 80, text_in_art: 85, character_consistency: 78, speed: 70}
+  ratings: [all, teen, mature]
+  release: "2026-07"
+  verify: Checked Sep 2026 against secondary sources; verify ids and costs before use.
+- id: mai-image-2.5
+  name: MAI-Image-2.5
+  maker: Microsoft
+  kind: image
+  summary: General panels; #3 on the llm-stats blind-vote leaderboard (Sep 2026).
+  uses: [general_panels]
+  capabilities:
+    tasks: [generate]
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    aspect_ratios: ["1:1", "2:3", "3:2"]
+    max_resolution: 2048
+  licence: {id: microsoft-terms, commercial: true}
+  hardware: {local: false}
+  providers:
+    - {provider: openrouter, model_id: microsoft/mai-image-2.5, price: {unit: per_image, usd: 0.05}, seconds: 12, notes: verify before use}
+    - {provider: fal, model_id: fal-ai/mai-image-2.5, price: {unit: per_image, usd: 0.05}, seconds: 12, notes: verify before use}
+  scores: {panel: 88, cover: 85, edit: 40, text_in_art: 82, character_consistency: 70, speed: 65}
+  ratings: [all, teen]
+  release: "2026-08"
+  verify: Checked Sep 2026 against secondary sources; verify ids and costs before use.
+- id: seedream-4.5
+  name: Seedream 4.5
+  maker: ByteDance
+  kind: image
+  summary: Signs, posters and dense text; multi-image edits that keep reference details. Up to 4K.
+  uses: [signs_posters, dense_text, multi_image_edits]
+  capabilities:
+    tasks: [generate, edit, sheet]
+    refs: true
+    max_refs: 10
+    edit: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    aspect_ratios: ["1:1", "2:3", "3:2", "3:4", "9:16", "16:9", "21:9"]
+    max_resolution: 4096
+  licence: {id: bytedance-terms, commercial: true}
+  hardware: {local: false}
+  providers:
+    - {provider: fal, model_id: fal-ai/bytedance/seedream/v4.5/text-to-image, price: {unit: per_image, usd: 0.04}, seconds: 14, notes: verify before use}
+    - {provider: replicate, model_id: bytedance/seedream-4.5, price: {unit: per_image, usd: 0.04}, seconds: 18, notes: verify before use}
+    - {provider: openrouter, model_id: bytedance/seedream-4.5, price: {unit: per_image, usd: 0.04}, seconds: 15, notes: verify before use}
+    - {provider: runware, model_id: "bytedance:seedream@4.5", price: {unit: per_image, usd: 0.035}, seconds: 12, notes: verify before use}
+  scores: {panel: 84, cover: 88, edit: 86, text_in_art: 92, character_consistency: 84, speed: 60}
+  ratings: [all, teen]
+  release: "2025-12"
+  verify: Checked Sep 2026 against secondary sources; verify ids and costs before use.
+- id: flux2-pro
+  name: FLUX.2 [pro]
+  maker: Black Forest Labs
+  kind: image
+  family: flux2
+  summary: Cinematic splash pages and a broad stylistic range.
+  uses: [splash_pages, cinematic]
+  capabilities:
+    tasks: [generate, edit, sheet]
+    refs: true
+    max_refs: 8
+    edit: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    aspect_ratios: ["1:1", "2:3", "3:2", "9:16", "16:9", "1:4"]
+    max_resolution: 2048
+  licence: {id: bfl-api-terms, commercial: true}
+  hardware: {local: false}
+  providers:
+    - {provider: fal, model_id: fal-ai/flux-2-pro, price: {unit: per_megapixel, usd: 0.03}, seconds: 9, notes: verify before use}
+    - {provider: replicate, model_id: black-forest-labs/flux-2-pro, price: {unit: per_image, usd: 0.045}, seconds: 12, notes: verify before use}
+    - {provider: together, model_id: black-forest-labs/FLUX.2-pro, price: {unit: per_megapixel, usd: 0.03}, seconds: 10, notes: verify before use}
+    - {provider: openrouter, model_id: black-forest-labs/flux.2-pro, price: {unit: per_megapixel, usd: 0.03}, seconds: 10, notes: verify before use}
+    - {provider: runware, model_id: "bfl:flux-2@pro", price: {unit: per_megapixel, usd: 0.028}, seconds: 8, notes: verify before use}
+  scores: {panel: 87, cover: 90, edit: 83, text_in_art: 82, character_consistency: 83, speed: 70}
+  ratings: [all, teen]
+  release: "2025-11"
+  verify: Checked Sep 2026 against secondary sources; verify ids and costs before use.
+- id: flux2-flex
+  name: FLUX.2 [flex]
+  maker: Black Forest Labs
+  kind: image
+  family: flux2
+  summary: Adjustable steps and guidance for typography-heavy splash pages.
+  uses: [splash_pages, typography]
+  capabilities:
+    tasks: [generate, edit]
+    refs: true
+    max_refs: 8
+    edit: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    aspect_ratios: ["1:1", "2:3", "3:2", "9:16", "16:9"]
+    max_resolution: 2048
+  licence: {id: bfl-api-terms, commercial: true}
+  hardware: {local: false}
+  providers:
+    - {provider: fal, model_id: fal-ai/flux-2-flex, price: {unit: per_megapixel, usd: 0.06}, seconds: 16, notes: verify before use}
+    - {provider: replicate, model_id: black-forest-labs/flux-2-flex, price: {unit: per_image, usd: 0.08}, seconds: 18, notes: verify before use}
+  scores: {panel: 86, cover: 91, edit: 84, text_in_art: 88, character_consistency: 82, speed: 50}
+  ratings: [all, teen]
+  release: "2025-11"
+  verify: Checked Sep 2026 against secondary sources; verify ids and costs before use.
+- id: grok-4
+  name: Grok 4
+  maker: xAI
+  kind: text
+  summary: Script and dialogue drafting.
+  uses: [script]
+  capabilities:
+    tasks: [text, translate]
+    context: 256000
+  licence: {id: xai-terms, commercial: true}
+  hardware: {local: false}
+  providers:
+    - {provider: xai, model_id: grok-4, price: {unit: per_1k_tokens, usd: 0.003, usd_out: 0.015}, seconds: 12, notes: verify before use}
+  scores: {text: 85, speed: 50}
+  ratings: [all, teen, mature]
+  verify: Checked Sep 2026; verify ids and costs before use.

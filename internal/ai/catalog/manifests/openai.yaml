@@ -1,0 +1,90 @@
+# OpenAI models. Provider model ids and costs change often: verify before use.
+- id: gpt-image-2
+  name: GPT Image 2
+  maker: OpenAI
+  kind: image
+  family: gpt-image
+  summary: Complex multi-character scenes and text inside the art. Led the llm-stats blind-vote leaderboard in Sep 2026.
+  uses: [complex_scenes, covers, text_in_art]
+  capabilities:
+    tasks: [generate, edit, inpaint, sheet]
+    refs: true
+    max_refs: 10
+    edit: true
+    inpaint: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    aspect_ratios: ["1:1", "2:3", "3:2"]
+    max_resolution: 2048
+  licence: {id: openai-terms, commercial: true, note: Outputs owned by the user under the OpenAI terms of use.}
+  hardware: {local: false}
+  providers:
+    - {provider: openai, model_id: gpt-image-2, price: {unit: per_image, usd: 0.16}, seconds: 28, notes: "medium quality 1024×1536; verify before use"}
+    - {provider: openrouter, model_id: openai/gpt-image-2, price: {unit: per_image, usd: 0.17}, seconds: 30, notes: verify before use}
+    - {provider: fal, model_id: fal-ai/gpt-image-2, price: {unit: per_image, usd: 0.17}, seconds: 30, notes: verify before use}
+  scores: {panel: 88, cover: 92, edit: 86, text_in_art: 93, character_consistency: 82, speed: 35}
+  ratings: [all, teen]
+  release: "2026-04"
+  verify: Checked Sep 2026 against secondary sources; verify ids and costs before use.
+- id: gpt-image-2.5
+  name: GPT Image 2.5
+  maker: OpenAI
+  kind: image
+  family: gpt-image
+  summary: Released 8 Sep 2026. The Flare variant is faster, Sunburst is tuned for edits.
+  uses: [complex_scenes, covers, text_in_art]
+  capabilities:
+    tasks: [generate, edit, inpaint, sheet]
+    refs: true
+    max_refs: 16
+    edit: true
+    inpaint: true
+    text_in_art: true
+    bw_screentone: true
+    colour: true
+    aspect_ratios: ["1:1", "2:3", "3:2", "9:16", "16:9"]
+    max_resolution: 3072
+  licence: {id: openai-terms, commercial: true, note: Outputs owned by the user under the OpenAI terms of use.}
+  hardware: {local: false}
+  providers:
+    - {provider: openai, model_id: gpt-image-2.5, price: {unit: per_image, usd: 0.18}, seconds: 24, notes: "Sunburst quality; gpt-image-2.5-flare is faster; verify before use"}
+    - {provider: openrouter, model_id: openai/gpt-image-2.5, price: {unit: per_image, usd: 0.19}, seconds: 26, notes: verify before use}
+  scores: {panel: 91, cover: 94, edit: 90, text_in_art: 95, character_consistency: 86, speed: 40}
+  ratings: [all, teen]
+  release: "2026-09-08"
+  verify: Checked Sep 2026 against secondary sources; verify ids and costs before use.
+- id: gpt-5
+  name: GPT-5
+  maker: OpenAI
+  kind: text
+  summary: Script drafting, translation and alt-text.
+  uses: [script, translation, alt_text]
+  capabilities:
+    tasks: [text, translate]
+    context: 400000
+    languages: [en, ja, ko, zh, es, fr, de, pt]
+  licence: {id: openai-terms, commercial: true}
+  hardware: {local: false}
+  providers:
+    - {provider: openai, model_id: gpt-5, price: {unit: per_1k_tokens, usd: 0.00125, usd_out: 0.01}, seconds: 12, notes: verify before use}
+    - {provider: openrouter, model_id: openai/gpt-5, price: {unit: per_1k_tokens, usd: 0.00125, usd_out: 0.01}, seconds: 13, notes: verify before use}
+  scores: {text: 90, speed: 50}
+  ratings: [all, teen, mature]
+  verify: Checked Sep 2026; verify ids and costs before use.
+- id: gpt-4o-mini-tts
+  name: GPT-4o mini TTS
+  maker: OpenAI
+  kind: voice
+  summary: Character voices for Animate mode with steerable delivery.
+  uses: [voices]
+  capabilities:
+    tasks: [voice]
+    max_seconds: 600
+    languages: [en, ja, ko, zh, es, fr, de]
+  licence: {id: openai-terms, commercial: true, note: Tell readers the voices are AI-generated.}
+  hardware: {local: false}
+  providers:
+    - {provider: openai, model_id: gpt-4o-mini-tts, price: {unit: per_second, usd: 0.00025}, seconds: 0.3, notes: "about $0.015 per minute of audio; verify before use"}
+  scores: {text: 75, speed: 80}
+  verify: Checked Sep 2026; verify ids and costs before use.
