@@ -1,0 +1,374 @@
+package studio
+
+import (
+	"strings"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// SettingPage is C5: locations, props and style references reused across panels.
+templ SettingPage(v SettingView) {
+	<header class="mv-pagehead mv-pagehead--compact">
+		<div class="mv-pagehead__text">
+			<h1 class="mv-pagehead__title">{ i18n.T(ctx, "studio.setting.title", "title", v.Project.Title) }</h1>
+			<span class="mv-pagehead__sub">{ i18n.T(ctx, "studio.setting.sub") }</span>
+		</div>
+		if v.Access.Can(EditSetting) {
+			<div class="mv-pagehead__actions">
+				@ui.LinkButton("?kind="+v.Kind+"&edit=new#setting-form", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					{ i18n.T(ctx, "studio.setting.add") }
+				}
+			</div>
+		}
+	</header>
+	@ProjectTabs(v.Project, "setting")
+	@ui.SegmentedLinks(i18n.T(ctx, "studio.setting.kinds"), []ui.SegLink{
+		{Href: "?kind=location", Label: i18n.T(ctx, "studio.setting.tab.location", "count", v.Counts[SettingLocation]), Current: v.Kind == SettingLocation},
+		{Href: "?kind=prop", Label: i18n.T(ctx, "studio.setting.tab.prop", "count", v.Counts[SettingProp]), Current: v.Kind == SettingProp},
+		{Href: "?kind=style", Label: i18n.T(ctx, "studio.setting.tab.style", "count", v.Counts[SettingStyle]), Current: v.Kind == SettingStyle},
+	})
+	if v.New || v.Edit != nil {
+		@settingForm(v)
+	}
+	if len(v.Items) == 0 && !v.New {
+		@EmptyState("シーン…", i18n.T(ctx, "studio.setting.empty."+v.Kind), i18n.T(ctx, "studio.setting.empty_body"), true) {
+			if v.Access.Can(EditSetting) {
+				@ui.LinkButton("?kind="+v.Kind+"&edit=new#setting-form", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					{ i18n.T(ctx, "studio.setting.add_kind."+v.Kind) }
+				}
+			}
+		}
+	} else {
+		<div class="mv-grid-4 mv-sgrid">
+			for _, it := range v.Items {
+				<article class="mv-scard2">
+					@Thumb(v.URLs[it.AssetID], i18n.T(ctx, "studio.setting.ref."+it.Kind), "mv-scard2__art")
+					<div class="mv-scard2__body">
+						<div class="mv-row mv-row--between">
+							<strong class="mv-scard2__name">{ it.Name }</strong>
+							if v.Access.Can(EditSetting) {
+								<a class="mv-iconlink" href={ templ.URL("?kind=" + it.Kind + "&edit=" + it.ID + "#setting-form") } aria-label={ i18n.T(ctx, "studio.setting.edit", "name", it.Name) }>
+									@ui.Icon("pencil", 16)
+								</a>
+							}
+						</div>
+						<span class="mv-small mv-muted">{ usageLine(ctx, v.Usage[it.ID]) }</span>
+						if it.Description != "" {
+							<span class="mv-small mv-muted mv-scard2__desc">{ it.Description }</span>
+						}
+						if it.Data.V.TrackTimeOfDay {
+							@ui.Badge(ui.ToneInfo, "clock", i18n.T(ctx, "studio.setting.time_tracked"))
+						}
+					</div>
+				</article>
+			}
+		</div>
+	}
+}
+
+templ settingForm(v SettingView) {
+	<form class="mv-box mv-box--pad mv-stack" id="setting-form" method="post" enctype="multipart/form-data" action={ templ.URL(settingAction(v)) }>
+		<div class="mv-row mv-row--between">
+			<strong>
+				if v.Edit != nil {
+					{ i18n.T(ctx, "studio.setting.edit", "name", v.Edit.Name) }
+				} else {
+					{ i18n.T(ctx, "studio.setting.add_kind."+v.Kind) }
+				}
+			</strong>
+			@ui.LinkButton("?kind="+v.Kind, ui.ButtonProps{Variant: ui.IconOnly, Size: ui.SM, Icon: "x", Label: i18n.T(ctx, "ui.close")})
+		</div>
+		<input type="hidden" name="kind" value={ v.Kind }/>
+		<div class="mv-grid-2">
+			@ui.Field(ui.FieldProps{ID: "set-name", Label: i18n.T(ctx, "studio.setting.name"), Error: v.Errors["name"]}) {
+				@ui.Input(ui.InputProps{ID: "set-name", Name: "name", Value: editField(v, "name"), Required: true, MaxLength: 120, Invalid: v.Errors["name"] != "", Autofocus: true})
+			}
+			@ui.Field(ui.FieldProps{ID: "set-tags", Label: i18n.T(ctx, "studio.setting.tags"), Aside: i18n.T(ctx, "studio.form.optional"), Hint: i18n.T(ctx, "studio.setting.tags_hint")}) {
+				@ui.Input(ui.InputProps{ID: "set-tags", Name: "tags", Value: editField(v, "tags"), MaxLength: 300, Described: true})
+			}
+		</div>
+		@ui.Field(ui.FieldProps{ID: "set-desc", Label: i18n.T(ctx, "studio.setting.description")}) {
+			@ui.Textarea(ui.TextareaProps{ID: "set-desc", Name: "description", Value: editField(v, "description"), Rows: 3, Placeholder: i18n.T(ctx, "studio.setting.description_ph."+v.Kind)})
+		}
+		<div class="mv-grid-2">
+			@ui.Field(ui.FieldProps{ID: "set-image", Label: i18n.T(ctx, "studio.setting.image"), Hint: i18n.T(ctx, "studio.upload.hint_one"), Error: v.Errors["image"]}) {
+				<input class="mv-input mv-file" id="set-image" type="file" name="image" accept="image/png,image/jpeg,image/webp"/>
+			}
+			@ui.Field(ui.FieldProps{ID: "set-notes", Label: i18n.T(ctx, "studio.setting.notes"), Aside: i18n.T(ctx, "studio.form.optional")}) {
+				@ui.Input(ui.InputProps{ID: "set-notes", Name: "notes", Value: editField(v, "notes"), MaxLength: 1000, Placeholder: i18n.T(ctx, "studio.setting.notes_ph")})
+			}
+		</div>
+		if v.Kind == SettingLocation {
+			@ui.Checkbox(ui.CheckProps{ID: "set-track", Name: "track_time", Checked: v.Edit != nil && v.Edit.Data.V.TrackTimeOfDay, Label: i18n.T(ctx, "studio.setting.track_time")})
+		}
+		if v.Edit != nil && v.Edit.AssetID != "" {
+			@ui.Checkbox(ui.CheckProps{ID: "set-remove", Name: "remove_image", Label: i18n.T(ctx, "studio.setting.remove_image")})
+		}
+		<div class="mv-row mv-row--between mv-row--wrap">
+			if v.Edit != nil {
+				<button class="mv-btn mv-btn--danger-outline mv-btn--sm" type="submit" formaction={ templ.URL("/studio/p/" + v.Project.ID + "/setting/" + v.Edit.ID + "/delete") } formnovalidate>
+					@ui.Icon("trash", 16)
+					{ i18n.T(ctx, "studio.setting.delete") }
+				</button>
+			} else {
+				<span></span>
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "check"}) {
+				{ i18n.T(ctx, "studio.save") }
+			}
+		</div>
+	</form>
+}
+
+// AllSettingPage lists every project's setting (sidebar "Setting").
+templ AllSettingPage(v AllSettingView) {
+	@ui.PageHead(i18n.T(ctx, "nav.setting"), i18n.T(ctx, "studio.setting.all_sub"), nil)
+	if len(v.Projects) == 0 {
+		@EmptyState("シーン…", i18n.T(ctx, "dash.empty.title"), i18n.T(ctx, "studio.chars.no_projects"), true) {
+			@ui.LinkButton("/studio/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				{ i18n.T(ctx, "nav.new_manga") }
+			}
+		}
+	} else {
+		<div class="mv-prows">
+			for _, p := range v.Projects {
+				<a class="mv-prow" href={ templ.URL("/studio/p/" + p.ID + "/setting") }>
+					@ui.Icon("world", 22)
+					<span class="mv-prow__text">
+						<strong>{ p.Title }</strong>
+						<span>{ i18n.T(ctx, "studio.setting.counts", "locations", v.Counts[p.ID][SettingLocation], "props", v.Counts[p.ID][SettingProp], "styles", v.Counts[p.ID][SettingStyle]) }</span>
+					</span>
+					@ui.Icon("chevron-right", 20)
+				</a>
+			}
+		</div>
+	}
+}
+
+// ProjectSettingsPage edits the project, its routing, members & roles and the danger zone.
+templ ProjectSettingsPage(v ProjectSettingsView) {
+	@ui.PageHead(i18n.T(ctx, "studio.settings.title", "title", v.Project.Title), i18n.T(ctx, "studio.settings.sub"), nil)
+	@ProjectTabs(v.Project, "settings")
+	if v.Project.Status == ProjectArchived {
+		@ui.Notice(ui.ToneWarning, "archive") {
+			{ i18n.T(ctx, "studio.settings.archived_notice") }
+		}
+	}
+	<div class="mv-psettings">
+		<form class="mv-box mv-box--pad mv-stack" method="post" action={ templ.URL("/studio/p/" + v.Project.ID + "/settings") }>
+			<h2 class="mv-box__title">{ i18n.T(ctx, "studio.settings.general") }</h2>
+			<fieldset class="mv-stack mv-psettings__fields" disabled?={ !v.Access.Can(EditProject) }>
+				<div class="mv-grid-2">
+					@ui.Field(ui.FieldProps{ID: "ps-title", Label: i18n.T(ctx, "studio.settings.project_title"), Error: v.Errors["title"]}) {
+						@ui.Input(ui.InputProps{ID: "ps-title", Name: "title", Value: v.Project.Title, Required: true, MaxLength: 120, Invalid: v.Errors["title"] != ""})
+					}
+					@ui.Field(ui.FieldProps{ID: "ps-lang", Label: i18n.T(ctx, "studio.settings.language")}) {
+						@ui.Select(ui.SelectProps{ID: "ps-lang", Name: "language", Value: v.Project.Language, Options: languageOptions(ctx, v.Project.Language)})
+					}
+				</div>
+				@ui.Field(ui.FieldProps{ID: "ps-premise", Label: i18n.T(ctx, "studio.wizard.step.premise")}) {
+					@ui.Textarea(ui.TextareaProps{ID: "ps-premise", Name: "premise", Value: v.Project.Premise, Rows: 3, MaxLength: 2000})
+				}
+				<div class="mv-grid-3">
+					@ui.Field(ui.FieldProps{ID: "ps-format", Label: i18n.T(ctx, "studio.wizard.step.format"), Error: v.Errors["format"]}) {
+						@ui.Select(ui.SelectProps{ID: "ps-format", Name: "format", Value: v.Project.Format, Options: formatSelect(ctx)})
+					}
+					@ui.Field(ui.FieldProps{ID: "ps-style", Label: i18n.T(ctx, "studio.wizard.step.style"), Error: v.Errors["style"]}) {
+						@ui.Select(ui.SelectProps{ID: "ps-style", Name: "style", Value: v.Project.Style, Options: styleSelect(ctx)})
+					}
+					@ui.Field(ui.FieldProps{ID: "ps-size", Label: i18n.T(ctx, "studio.wizard.format.page_size")}) {
+						@ui.Select(ui.SelectProps{ID: "ps-size", Name: "page_size", Value: v.Project.PageSize, Options: pageSizeOptions()})
+					}
+				</div>
+				<div class="mv-grid-2">
+					@ui.Field(ui.FieldProps{ID: "ps-chapters", Label: i18n.T(ctx, "studio.wizard.format.chapters"), Error: v.Errors["chapters_planned"]}) {
+						@ui.Input(ui.InputProps{ID: "ps-chapters", Name: "chapters_planned", Type: "number", Value: itoa(v.Project.ChaptersPlanned), Attrs: attrs("min", "0", "max", "500")})
+					}
+					@ui.Field(ui.FieldProps{ID: "ps-pages", Label: i18n.T(ctx, "studio.wizard.format.pages")}) {
+						@ui.Input(ui.InputProps{ID: "ps-pages", Name: "pages_per_chapter", Value: v.Project.PagesPerChapter, MaxLength: 20})
+					}
+				</div>
+				<fieldset class="mv-field">
+					<legend class="mv-field__label">{ i18n.T(ctx, "studio.settings.visibility") }</legend>
+					<div class="mv-choices mv-choices--2">
+						for _, vis := range []string{VisibilityPrivate, VisibilityPublic} {
+							<label class="mv-choice">
+								<input type="radio" name="visibility" value={ vis } checked?={ v.Project.Visibility == vis }/>
+								@ui.Icon(visIcon(vis), 22)
+								<span>
+									<span class="mv-choice__title">{ i18n.T(ctx, "studio.visibility."+vis) }</span>
+									<span class="mv-choice__desc">{ i18n.T(ctx, "studio.visibility."+vis+".desc") }</span>
+								</span>
+							</label>
+						}
+					</div>
+					<span class="mv-field__hint">{ i18n.T(ctx, "studio.settings.visibility_hint") }</span>
+				</fieldset>
+				<h2 class="mv-box__title">{ i18n.T(ctx, "studio.settings.routing") }</h2>
+				@ui.Field(ui.FieldProps{ID: "ps-routing", Label: i18n.T(ctx, "studio.settings.routing_mode"), Hint: i18n.T(ctx, "studio.settings.routing_hint")}) {
+					@ui.Select(ui.SelectProps{ID: "ps-routing", Name: "routing_mode", Value: v.Project.RoutingMode, Options: routingOptions(ctx)})
+				}
+				<div class="mv-stack mv-stack--xs">
+					<span class="mv-field__label">{ i18n.T(ctx, "studio.settings.pins") }</span>
+					if len(v.Pins) == 0 {
+						<span class="mv-small mv-muted">{ i18n.T(ctx, "studio.settings.no_pins") }</span>
+					}
+					for _, pin := range v.Pins {
+						@ui.KV(pin.Task, joinDot(pin.ModelID, pin.ProviderID))
+					}
+					<a class="mv-small" href={ templ.URL("/models/routing?project=" + v.Project.ID) }>{ i18n.T(ctx, "studio.settings.manage_pins") }</a>
+				</div>
+				if v.Extra != nil {
+					@v.Extra
+				}
+				if v.Access.Can(EditProject) {
+					<div class="mv-row mv-row--end">
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "check"}) {
+							{ i18n.T(ctx, "studio.save") }
+						}
+					</div>
+				}
+			</fieldset>
+		</form>
+		<section class="mv-box mv-box--pad mv-stack" id="members">
+			<h2 class="mv-box__title">{ i18n.T(ctx, "studio.members.title") }</h2>
+			<ul class="mv-members mv-list-plain">
+				for _, mem := range v.Members {
+					@memberRow(v, mem)
+				}
+			</ul>
+			if v.Access.Can(EditMembers) {
+				<form class="mv-stack mv-stack--sm mv-members__invite" method="post" action={ templ.URL("/studio/p/" + v.Project.ID + "/settings/members") }>
+					<strong class="mv-small">{ i18n.T(ctx, "studio.members.invite") }</strong>
+					<div class="mv-grid-3">
+						@ui.Field(ui.FieldProps{ID: "inv-user", Label: i18n.T(ctx, "studio.members.username"), Error: v.Invite["username"]}) {
+							@ui.InputGroup("@", v.Invite["username"] != "") {
+								@ui.Input(ui.InputProps{ID: "inv-user", Name: "username", Required: true, MaxLength: 40, Autocomplete: "off", Invalid: v.Invite["username"] != ""})
+							}
+						}
+						@ui.Field(ui.FieldProps{ID: "inv-role", Label: i18n.T(ctx, "studio.members.role"), Error: v.Invite["role"]}) {
+							@ui.Select(ui.SelectProps{ID: "inv-role", Name: "role", Value: RoleWriter, Options: memberRoleOptions(ctx)})
+						}
+						@ui.Field(ui.FieldProps{ID: "inv-pages", Label: i18n.T(ctx, "studio.members.pages"), Aside: i18n.T(ctx, "studio.form.optional"), Error: v.Invite["pages"]}) {
+							@ui.Input(ui.InputProps{ID: "inv-pages", Name: "pages", MaxLength: 40, Placeholder: "1–20", Invalid: v.Invite["pages"] != ""})
+						}
+					</div>
+					<div class="mv-row mv-row--between mv-row--wrap">
+						@ui.Checkbox(ui.CheckProps{ID: "inv-letter", Name: "lettering_only", Label: i18n.T(ctx, "studio.members.lettering_only")})
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "user-plus"}) {
+							{ i18n.T(ctx, "studio.members.add") }
+						}
+					</div>
+				</form>
+			}
+		</section>
+		if v.Access.IsOwner() && !v.Access.Actor.IsAgent() {
+			<section class="mv-box mv-box--danger mv-box--pad mv-stack">
+				<h2 class="mv-box__title">{ i18n.T(ctx, "studio.settings.danger") }</h2>
+				<div class="mv-setrow">
+					<div class="mv-setrow__text">
+						<span class="mv-setrow__title">
+							if v.Project.Status == ProjectArchived {
+								{ i18n.T(ctx, "studio.settings.restore") }
+							} else {
+								{ i18n.T(ctx, "studio.settings.archive") }
+							}
+						</span>
+						<span class="mv-setrow__desc">{ i18n.T(ctx, "studio.settings.archive_desc") }</span>
+					</div>
+					<form class="mv-setrow__control" method="post" action={ templ.URL("/studio/p/" + v.Project.ID + "/settings/archive") }>
+						if v.Project.Status == ProjectArchived {
+							<input type="hidden" name="archive" value="0"/>
+							@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Type: "submit", Icon: "archive-off", Size: ui.SM}) {
+								{ i18n.T(ctx, "studio.settings.restore") }
+							}
+						} else {
+							<input type="hidden" name="archive" value="1"/>
+							@ui.Button(ui.ButtonProps{Variant: ui.DangerOutline, Type: "submit", Icon: "archive", Size: ui.SM}) {
+								{ i18n.T(ctx, "studio.settings.archive") }
+							}
+						}
+					</form>
+				</div>
+				<form class="mv-stack mv-stack--sm" method="post" action={ templ.URL("/studio/p/" + v.Project.ID + "/settings/delete") }>
+					<span class="mv-setrow__title">{ i18n.T(ctx, "studio.settings.delete") }</span>
+					<span class="mv-small mv-muted">{ i18n.T(ctx, "studio.settings.delete_desc", "title", v.Project.Title) }</span>
+					<div class="mv-row mv-row--sm mv-row--wrap">
+						<label class="mv-sr-only" for="del-confirm">{ i18n.T(ctx, "studio.settings.delete_confirm") }</label>
+						@ui.Input(ui.InputProps{ID: "del-confirm", Name: "confirm", Required: true, Autocomplete: "off", Placeholder: v.Project.Title, Invalid: v.Errors["confirm"] != ""})
+						@ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit", Icon: "trash", Size: ui.SM}) {
+							{ i18n.T(ctx, "studio.settings.delete_button") }
+						}
+					</div>
+					if v.Errors["confirm"] != "" {
+						<span class="mv-field__error" role="alert">
+							@ui.Icon("alert-triangle", 14)
+							<span>{ v.Errors["confirm"] }</span>
+						</span>
+					}
+				</form>
+			</section>
+		} else if !v.Access.IsOwner() {
+			<form class="mv-box mv-box--pad mv-row mv-row--between" method="post" action={ templ.URL("/studio/p/" + v.Project.ID + "/settings/members/" + v.Access.Actor.UserID + "/delete") }>
+				<span class="mv-small">{ i18n.T(ctx, "studio.members.leave_desc") }</span>
+				@ui.Button(ui.ButtonProps{Variant: ui.DangerOutline, Type: "submit", Icon: "logout", Size: ui.SM}) {
+					{ i18n.T(ctx, "studio.members.leave") }
+				}
+			</form>
+		}
+	</div>
+}
+
+templ memberRow(v ProjectSettingsView, mem Member) {
+	<li class="mv-member">
+		@ui.Avatar(ui.AvatarProps{Name: mem.Name(), Key: mem.UserID, Size: "md"})
+		<span class="mv-member__who">
+			<strong>{ mem.Name() }</strong>
+			<span class="mv-small mv-muted">{ "@" + mem.Username }</span>
+		</span>
+		if mem.Role == RoleOwner || !v.Access.Can(EditMembers) {
+			<span class="mv-member__role">
+				@ui.Badge(roleTone(mem.Role), roleIcon(mem.Role), i18n.T(ctx, "studio.role."+mem.Role))
+				if scopeLine(ctx, mem.Scope.V) != "" {
+					<span class="mv-small mv-muted">{ scopeLine(ctx, mem.Scope.V) }</span>
+				}
+			</span>
+		} else {
+			<form class="mv-member__form" method="post" action={ templ.URL("/studio/p/" + v.Project.ID + "/settings/members/" + mem.UserID) }>
+				@ui.Select(ui.SelectProps{ID: "role-" + mem.UserID, Name: "role", Value: mem.Role, Options: memberRoleOptions(ctx), Attrs: attrs("aria-label", i18n.T(ctx, "studio.members.role_of", "name", mem.Name()))})
+				@ui.Input(ui.InputProps{ID: "pages-" + mem.UserID, Name: "pages", Value: mem.Scope.V.Pages, MaxLength: 40, Placeholder: i18n.T(ctx, "studio.members.all_pages"), Class: "mv-member__pages",
+					Attrs: attrs("aria-label", i18n.T(ctx, "studio.members.pages_of", "name", mem.Name()))})
+				@ui.Checkbox(ui.CheckProps{ID: "letter-" + mem.UserID, Name: "lettering_only", Checked: contains(mem.Scope.V.Layers, LayerLettering), Label: i18n.T(ctx, "studio.members.lettering_short")})
+				@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Type: "submit", Icon: "check", Label: i18n.T(ctx, "studio.members.save_of", "name", mem.Name())})
+			</form>
+			<form method="post" action={ templ.URL("/studio/p/" + v.Project.ID + "/settings/members/" + mem.UserID + "/delete") }>
+				@ui.Button(ui.ButtonProps{Variant: ui.IconOnly, Size: ui.SM, Type: "submit", Icon: "user-minus", Label: i18n.T(ctx, "studio.members.remove", "name", mem.Name()), Tip: i18n.T(ctx, "studio.members.remove", "name", mem.Name())})
+			</form>
+		}
+	</li>
+}
+
+func settingAction(v SettingView) string {
+	if v.Edit != nil {
+		return "/studio/p/" + v.Project.ID + "/setting/" + v.Edit.ID
+	}
+	return "/studio/p/" + v.Project.ID + "/setting"
+}
+
+func editField(v SettingView, f string) string {
+	if v.Edit == nil {
+		return ""
+	}
+	switch f {
+	case "name":
+		return v.Edit.Name
+	case "tags":
+		return strings.Join(v.Edit.Tags.V, ", ")
+	case "description":
+		return v.Edit.Description
+	case "notes":
+		return v.Edit.Data.V.Notes
+	}
+	return ""
+}

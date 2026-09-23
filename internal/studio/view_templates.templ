@@ -1,0 +1,245 @@
+package studio
+
+import (
+	"strconv"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// TemplatesPage is B4: story and layout templates, character and style packs.
+templ TemplatesPage(v TemplatesView) {
+	<header class="mv-pagehead mv-pagehead--compact">
+		<div class="mv-pagehead__text">
+			<h1 class="mv-pagehead__title">{ i18n.T(ctx, "nav.templates") }</h1>
+			<span class="mv-pagehead__sub">{ i18n.T(ctx, "studio.tpl.sub") }</span>
+		</div>
+		<div class="mv-pagehead__actions">
+			@importPackButton(false)
+			<span class="mv-show-mobile">
+				@importPackButton(true)
+			</span>
+		</div>
+	</header>
+	<div class="mv-hide-mobile">
+		@ui.SegmentedLinks(i18n.T(ctx, "studio.tpl.tabs"), templateTabs(ctx, v))
+	</div>
+	<div class="mv-show-mobile">
+		<nav class="mv-seg mv-seg--full" aria-label={ i18n.T(ctx, "studio.tpl.tabs") }>
+			for _, t := range mobileTemplateTabs(ctx, v) {
+				<a
+					class="mv-seg__item mv-seg__item--lg"
+					href={ templ.URL(t.Href) }
+					if t.Current {
+						aria-current="true"
+					}
+				>{ t.Label }</a>
+			}
+		</nav>
+	</div>
+	switch v.Tab {
+		case TabStory:
+			<div class="mv-grid-5 mv-tgrid">
+				for _, t := range v.Stories {
+					@StoryCard(t)
+				}
+			</div>
+		case TabLayout:
+			<div class="mv-grid-5 mv-tgrid">
+				for _, t := range v.Layouts {
+					@LayoutCard(t)
+				}
+			</div>
+		default:
+			if len(v.Packs) == 0 {
+				@EmptyState("HMMM…", i18n.T(ctx, "studio.tpl.no_packs"), i18n.T(ctx, "studio.tpl.no_packs_body"), false) {
+					@ui.LinkButton("/studio/templates/import?kind="+packKind(v.Tab), ui.ButtonProps{Variant: ui.Primary, Icon: "package-import"}) {
+						{ i18n.T(ctx, "studio.tpl.import_pack") }
+					}
+				}
+			} else {
+				<div class="mv-grid-4">
+					for _, p := range v.Packs {
+						<article class="mv-box mv-box--pad mv-pack">
+							<span class="mv-label-mono">{ upper(p.Kind) } · v{ p.Version }</span>
+							<strong>{ p.Name }</strong>
+							<span class="mv-small mv-muted">{ p.Author } · { p.Licence }</span>
+							if p.Verified {
+								@ui.Badge(ui.ToneSuccess, "rosette-discount-check", i18n.T(ctx, "studio.tpl.signed"))
+							}
+						</article>
+					}
+				</div>
+			}
+	}
+}
+
+templ importPackButton(icon bool) {
+	if icon {
+		@ui.LinkButton("/studio/templates/import", ui.ButtonProps{Variant: ui.IconOnly, Icon: "package-import", Label: i18n.T(ctx, "studio.tpl.import_pack")})
+	} else {
+		<span class="mv-hide-mobile">
+			@ui.LinkButton("/studio/templates/import", ui.ButtonProps{Variant: ui.Secondary, Icon: "package-import"}) {
+				{ i18n.T(ctx, "studio.tpl.import_pack") }
+			}
+		</span>
+	}
+}
+
+// LayoutCard shows a layout's real panel geometry.
+templ LayoutCard(t LayoutTemplate) {
+	<a class="mv-tcard" href={ templ.URL("/studio/templates/" + t.ID) }>
+		<div class="mv-tcard__art">
+			@LayoutSVG(t, "mv-tcard__svg")
+			<span class="mv-tone__label">LAYOUT · { layoutBadge(t) }</span>
+		</div>
+		<span class="mv-tcard__body">
+			<strong>{ t.Name }</strong>
+			<span>{ t.Description }</span>
+		</span>
+		@ui.Icon("chevron-right", 20)
+	</a>
+}
+
+// StoryCard shows a story structure as arc bars.
+templ StoryCard(t StoryTemplate) {
+	<a class="mv-tcard" href={ templ.URL("/studio/templates/" + t.ID) }>
+		<div class="mv-tcard__art mv-tcard__art--story">
+			<div class="mv-arcbars" aria-hidden="true">
+				for _, a := range t.Arcs {
+					<span class="mv-arcbars__bar" style={ "flex-grow:" + strconv.Itoa(max(a.Chapters, 1)) }>
+						<span>{ a.Title }</span>
+					</span>
+				}
+			</div>
+			<span class="mv-tone__label">STORY · { t.Badge }</span>
+		</div>
+		<span class="mv-tcard__body">
+			<strong>{ t.Name }</strong>
+			<span>{ t.Description }</span>
+		</span>
+		@ui.Icon("chevron-right", 20)
+	</a>
+}
+
+// LayoutSVG draws the pages of a layout template with screentone panels.
+templ LayoutSVG(t LayoutTemplate, class string) {
+	if len(t.Pages) > 1 {
+		<svg class={ class } viewBox={ "0 0 " + strconv.Itoa(106*len(t.Pages)-6) + " 141" } role="img" aria-label={ t.Name } preserveAspectRatio="xMidYMid meet">
+			for i, p := range t.Pages {
+				<g transform={ "translate(" + strconv.Itoa(i*106) + " 0)" }>
+					@pageGeometry(p, 141)
+				</g>
+			}
+		</svg>
+	} else if t.Vertical {
+		<svg class={ class } viewBox="0 0 100 160" role="img" aria-label={ t.Name } preserveAspectRatio="xMidYMid meet">
+			if len(t.Pages) > 0 {
+				@pageGeometry(t.Pages[0], 160)
+			}
+		</svg>
+	} else {
+		<svg class={ class } viewBox="0 0 100 141" role="img" aria-label={ t.Name } preserveAspectRatio="xMidYMid meet">
+			if len(t.Pages) > 0 {
+				@pageGeometry(t.Pages[0], 141)
+			}
+		</svg>
+	}
+}
+
+templ pageGeometry(polys []Polygon, h float64) {
+	<rect x="0" y="0" width="100" height={ ftoa(h) } class="mv-geo__page"></rect>
+	for i, p := range polys {
+		<polygon points={ polyPoints(p, h) } class="mv-geo__panel"></polygon>
+		<text x={ ftoa(centroidX(p)) } y={ ftoa(centroidY(p) * h / 100) } class="mv-geo__num">{ strconv.Itoa(i + 1) }</text>
+	}
+}
+
+// TemplateDetail shows one template with its actions.
+templ TemplateDetail(v TemplateView) {
+	if v.Layout != nil {
+		@ui.PageHead(v.Layout.Name, v.Layout.Description, nil)
+		<div class="mv-tdetail">
+			<div class="mv-box mv-tdetail__art">
+				@LayoutSVG(*v.Layout, "mv-tdetail__svg")
+			</div>
+			<div class="mv-stack">
+				<span class="mv-label-mono">LAYOUT · { layoutBadge(*v.Layout) }</span>
+				if len(v.Layout.ID) > 5 && v.Layout.ID[:5] == "grid:" {
+					<form class="mv-row mv-row--sm mv-row--wrap" method="get" action="/studio/templates/builtin:grid_3x3">
+						@ui.Field(ui.FieldProps{ID: "grid-rows", Label: i18n.T(ctx, "studio.tpl.rows")}) {
+							@ui.Input(ui.InputProps{ID: "grid-rows", Name: "rows", Type: "number", Value: strconv.Itoa(v.Rows), Attrs: attrs("min", "1", "max", "8")})
+						}
+						@ui.Field(ui.FieldProps{ID: "grid-cols", Label: i18n.T(ctx, "studio.tpl.cols")}) {
+							@ui.Input(ui.InputProps{ID: "grid-cols", Name: "cols", Type: "number", Value: strconv.Itoa(v.Cols), Attrs: attrs("min", "1", "max", "6")})
+						}
+						@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Type: "submit", Icon: "refresh", Class: "mv-tdetail__gridbtn"}) {
+							{ i18n.T(ctx, "studio.tpl.update_grid") }
+						}
+					</form>
+				}
+				@ui.LinkButton("/studio/new?template="+v.Layout.ID, ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					{ i18n.T(ctx, "studio.tpl.new_from") }
+				}
+				<form class="mv-box mv-box--pad mv-stack mv-stack--sm" method="post" action={ templ.URL("/studio/templates/" + v.Layout.ID + "/apply") }>
+					<strong class="mv-small">{ i18n.T(ctx, "studio.tpl.apply_title") }</strong>
+					if len(v.Pages) == 0 {
+						<p class="mv-small mv-muted">{ i18n.T(ctx, "studio.tpl.apply_none") }</p>
+					} else {
+						@ui.Field(ui.FieldProps{ID: "apply-page", Label: i18n.T(ctx, "studio.tpl.apply_page"), Hint: i18n.T(ctx, "studio.tpl.apply_hint")}) {
+							@ui.Select(ui.SelectProps{ID: "apply-page", Name: "page", Options: pageChoiceOptions(ctx, v.Pages)})
+						}
+						if len(v.Layout.Pages) > 1 {
+							@ui.Field(ui.FieldProps{ID: "apply-index", Label: i18n.T(ctx, "studio.tpl.spread_side")}) {
+								@ui.Select(ui.SelectProps{ID: "apply-index", Name: "index", Options: spreadOptions(ctx, len(v.Layout.Pages))})
+							}
+						}
+						@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Type: "submit", Icon: "layout-board"}) {
+							{ i18n.T(ctx, "studio.tpl.apply") }
+						}
+					}
+				</form>
+				if v.Own {
+					<form method="post" action={ templ.URL("/studio/templates/" + v.Layout.ID + "/delete") }>
+						@ui.Button(ui.ButtonProps{Variant: ui.DangerOutline, Type: "submit", Icon: "trash", Size: ui.SM}) {
+							{ i18n.T(ctx, "studio.tpl.delete") }
+						}
+					</form>
+				}
+			</div>
+		</div>
+	} else if v.Story != nil {
+		@ui.PageHead(v.Story.Name, v.Story.Description, nil)
+		<div class="mv-tdetail">
+			<div class="mv-box mv-box--pad mv-stack">
+				for i, a := range v.Story.Arcs {
+					<section class="mv-stack mv-stack--xs mv-tarc">
+						<span class="mv-label-mono">{ i18n.T(ctx, "studio.tpl.arc_n", "n", i+1) } · { i18n.T(ctx, "studio.tpl.chapters", "count", a.Chapters) }</span>
+						<strong>{ a.Title }</strong>
+						<span class="mv-small mv-muted">{ a.Summary }</span>
+						if len(a.Beats) > 0 {
+							<ol class="mv-tarc__beats">
+								for _, b := range a.Beats {
+									<li>{ b }</li>
+								}
+							</ol>
+						}
+					</section>
+				}
+			</div>
+			<div class="mv-stack">
+				<span class="mv-label-mono">STORY · { v.Story.Badge }</span>
+				@ui.LinkButton("/studio/new?template="+v.Story.ID, ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					{ i18n.T(ctx, "studio.tpl.new_from") }
+				}
+				if v.Own {
+					<form method="post" action={ templ.URL("/studio/templates/" + v.Story.ID + "/delete") }>
+						@ui.Button(ui.ButtonProps{Variant: ui.DangerOutline, Type: "submit", Icon: "trash", Size: ui.SM}) {
+							{ i18n.T(ctx, "studio.tpl.delete") }
+						}
+					</form>
+				}
+			</div>
+		</div>
+	}
+}

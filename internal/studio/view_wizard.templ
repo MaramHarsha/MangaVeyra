@@ -1,0 +1,337 @@
+package studio
+
+import (
+	"strconv"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/layout"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// WizardPage is B3: the five-step new manga wizard in its own full-screen frame.
+templ WizardPage(c *layout.Chrome, v WizardView) {
+	@layout.Base(c) {
+		<a class="mv-skip-link" href="#main">{ i18n.T(ctx, "ui.skip_to_content") }</a>
+		<div class="mv-wizard">
+			<main id="main" class="mv-wizard__main">
+				<div class="mv-wizard__top">
+					<a class="mv-wizard__close" href="/studio">
+						@ui.Icon("x", 20)
+						<span>{ i18n.T(ctx, "nav.new_manga") }</span>
+					</a>
+					@WizardSaved(v.SavedAt, false)
+				</div>
+				<ol class="mv-wsteps mv-list-plain" aria-label={ i18n.T(ctx, "studio.wizard.steps") }>
+					for i, s := range WizardSteps {
+						<li class={ ui.Cls("mv-wsteps__step", ui.If(i < v.Index, "is-done"), ui.If(i == v.Index, "is-current")) }>
+							<span class="mv-wsteps__bar" aria-hidden="true"></span>
+							if i <= stepIndex(v.Draft.Step) && s != v.Step && v.Job == nil {
+								<a class="mv-wsteps__label" href={ templ.URL("/studio/new/" + s) }>{ strconv.Itoa(i+1) }. <span class="mv-hide-mobile">{ i18n.T(ctx, "studio.wizard.step."+s) }</span></a>
+							} else {
+								<span
+									class="mv-wsteps__label"
+									if i == v.Index {
+										aria-current="step"
+									}
+								>{ strconv.Itoa(i+1) }. <span class="mv-hide-mobile">{ i18n.T(ctx, "studio.wizard.step."+s) }</span></span>
+							}
+						</li>
+					}
+				</ol>
+				<div class="mv-wizard__hero">
+					<span class="mv-label-mono mv-accent-text">{ i18n.T(ctx, "studio.wizard.step_of", "n", v.Index+1, "total", len(WizardSteps)) }<span class="mv-show-mobile-inline"> · { upper(i18n.T(ctx, "studio.wizard.step."+v.Step)) }</span></span>
+					<h1 class="mv-wizard__title">{ i18n.T(ctx, "studio.wizard.q."+v.Step) }</h1>
+					if v.Step != StepPremise {
+						<p class="mv-wizard__lead">{ i18n.T(ctx, "studio.wizard.lead."+v.Step) }</p>
+					}
+				</div>
+				if v.Job != nil {
+					@GenerateProgress(v)
+				} else {
+					@wizardForm(v)
+				}
+			</main>
+			@WizardSide(v, false)
+		</div>
+	}
+}
+
+func wizardAutosaveAttrs(step string) templ.Attributes {
+	return templ.Attributes{
+		"hx-post":    "/studio/new/" + step,
+		"hx-trigger": "input changed delay:800ms, change",
+		"hx-vals":    `{"autosave":"1"}`,
+		"hx-target":  "#mv-wizard-saved",
+		"hx-swap":    "outerHTML",
+	}
+}
+
+templ wizardForm(v WizardView) {
+	<form class="mv-wizard__form" method="post" action={ templ.URL("/studio/new/" + v.Step) } { wizardAutosaveAttrs(v.Step)... }>
+		@FormError(v.Errors.Form())
+		switch v.Step {
+			case StepPremise:
+				@premiseStep(v)
+			case StepGenre:
+				@genreStep(v)
+			case StepStyle:
+				@styleStep(v)
+			case StepFormat:
+				@formatStep(v)
+			case StepGenerate:
+				@generateStep(v)
+		}
+		<div class="mv-wizard__foot">
+			if v.Index > 0 {
+				@ui.LinkButton("/studio/new/"+WizardSteps[v.Index-1], ui.ButtonProps{Variant: ui.Ghost, Icon: "arrow-left", Class: "mv-hide-mobile"}) {
+					{ i18n.T(ctx, "ui.back") }
+				}
+			} else {
+				<span></span>
+			}
+			if v.Step == StepGenerate {
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "sparkles", Size: ui.LG, Class: "mv-wizard__next"}) {
+					{ i18n.T(ctx, "studio.wizard.generate") }
+				}
+			} else {
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "arrow-right", Size: ui.LG, Class: "mv-wizard__next"}) {
+					{ i18n.T(ctx, "studio.wizard.next", "step", i18n.T(ctx, "studio.wizard.step."+WizardSteps[v.Index+1])) }
+				}
+			}
+		</div>
+	</form>
+}
+
+templ premiseStep(v WizardView) {
+	@ui.Field(ui.FieldProps{ID: "premise", Label: i18n.T(ctx, "studio.wizard.premise.label"), Error: v.Errors["premise"], Class: "mv-wizard__premise"}) {
+		@ui.Textarea(ui.TextareaProps{ID: "premise", Name: "premise", Value: v.Data().Premise, Rows: 5, MaxLength: 600, Required: true,
+			Invalid: v.Errors["premise"] != "", Placeholder: i18n.T(ctx, "studio.wizard.premise.placeholder"), Class: "mv-textarea--lg"})
+	}
+	<div class="mv-stack mv-stack--sm">
+		<span class="mv-small mv-muted">{ i18n.T(ctx, "studio.wizard.premise.try") }</span>
+		<div class="mv-examples">
+			for _, ex := range PremiseExamples {
+				<button class="mv-example" type="submit" name="example" value={ ex } formnovalidate>{ i18n.T(ctx, ex) }</button>
+			}
+		</div>
+	</div>
+	@ui.Field(ui.FieldProps{ID: "title", Label: i18n.T(ctx, "studio.wizard.title.label"), Aside: i18n.T(ctx, "studio.form.optional"), Hint: i18n.T(ctx, "studio.wizard.title.hint")}) {
+		@ui.Input(ui.InputProps{ID: "title", Name: "title", Value: v.Data().Title, MaxLength: 120, Placeholder: SuggestTitle(v.Data().Premise), Described: true})
+	}
+}
+
+templ genreStep(v WizardView) {
+	<fieldset class="mv-field">
+		<legend class="mv-sr-only">{ i18n.T(ctx, "studio.wizard.step.genre") }</legend>
+		<div class="mv-chips">
+			for _, g := range Genres {
+				<label class="mv-chip">
+					<input type="checkbox" name="genres" value={ g } checked?={ contains(v.Data().Genres, g) }/>
+					@ui.Icon("check", 16)
+					{ i18n.T(ctx, "genre."+g) }
+				</label>
+			}
+		</div>
+		if v.Errors["genres"] != "" {
+			<span class="mv-field__error" role="alert">
+				@ui.Icon("alert-triangle", 14)
+				<span>{ v.Errors["genres"] }</span>
+			</span>
+		} else {
+			<span class="mv-field__hint">{ i18n.T(ctx, "studio.wizard.genre.hint") }</span>
+		}
+	</fieldset>
+}
+
+templ styleStep(v WizardView) {
+	<fieldset class="mv-choices mv-choices--3">
+		<legend class="mv-sr-only">{ i18n.T(ctx, "studio.wizard.step.style") }</legend>
+		for _, s := range Styles {
+			<label class="mv-choice mv-choice--style">
+				<input type="radio" name="style" value={ s } checked?={ v.Data().Style == s } required/>
+				<span class={ "mv-stylechip mv-stylechip--" + s } aria-hidden="true"></span>
+				<span>
+					<span class="mv-choice__title">{ i18n.T(ctx, "style."+s) }</span>
+					<span class="mv-choice__desc">{ i18n.T(ctx, "style."+s+".desc") }</span>
+				</span>
+			</label>
+		}
+	</fieldset>
+}
+
+templ formatStep(v WizardView) {
+	<fieldset class="mv-formats">
+		<legend class="mv-sr-only">{ i18n.T(ctx, "studio.wizard.step.format") }</legend>
+		for _, f := range Formats {
+			<label class="mv-format">
+				<input type="radio" name="format" value={ f } checked?={ v.Data().Format == f } required/>
+				<span class="mv-format__art" aria-hidden="true">
+					@FormatArt(f)
+				</span>
+				<span class="mv-format__text">
+					<span class="mv-format__title">{ i18n.T(ctx, "studio.format."+f) }</span>
+					<span class="mv-format__desc">{ i18n.T(ctx, "studio.format."+f+".desc") }</span>
+				</span>
+				<span class="mv-format__radio" aria-hidden="true"></span>
+			</label>
+		}
+	</fieldset>
+	<div class="mv-grid-3 mv-wizard__row">
+		@ui.Field(ui.FieldProps{ID: "page_size", Label: i18n.T(ctx, "studio.wizard.format.page_size")}) {
+			@ui.Select(ui.SelectProps{ID: "page_size", Name: "page_size", Value: v.Data().PageSize, Options: pageSizeOptions()})
+		}
+		@ui.Field(ui.FieldProps{ID: "chapters", Label: i18n.T(ctx, "studio.wizard.format.chapters"), Error: v.Errors["chapters"]}) {
+			@ui.Input(ui.InputProps{ID: "chapters", Name: "chapters", Type: "number", Value: strconv.Itoa(v.Data().Chapters), Inputmode: "numeric",
+				Invalid: v.Errors["chapters"] != "", Attrs: attrs("min", "1", "max", "200")})
+		}
+		@ui.Field(ui.FieldProps{ID: "pages_per_chapter", Label: i18n.T(ctx, "studio.wizard.format.pages"), Error: v.Errors["pages_per_chapter"]}) {
+			@ui.Input(ui.InputProps{ID: "pages_per_chapter", Name: "pages_per_chapter", Value: v.Data().PagesPerChapter, Placeholder: "30-36",
+				Invalid: v.Errors["pages_per_chapter"] != "", MaxLength: 9})
+		}
+	</div>
+}
+
+templ generateStep(v WizardView) {
+	<div class="mv-grid-2 mv-wizard__row">
+		@ui.Field(ui.FieldProps{ID: "gen-title", Label: i18n.T(ctx, "studio.wizard.title.label")}) {
+			@ui.Input(ui.InputProps{ID: "gen-title", Name: "title", Value: wizardTitle(v), MaxLength: 120})
+		}
+		@ui.Field(ui.FieldProps{ID: "template_id", Label: i18n.T(ctx, "studio.wizard.structure"), Hint: i18n.T(ctx, "studio.wizard.structure.hint")}) {
+			@ui.Select(ui.SelectProps{ID: "template_id", Name: "template_id", Value: v.Data().TemplateID, Options: storyOptions(ctx, v.Stories)})
+		}
+	</div>
+	<div class="mv-box mv-box--pad mv-wizard__summary">
+		@ui.KV(i18n.T(ctx, "studio.wizard.step.premise"), v.Data().Premise)
+		@ui.KV(i18n.T(ctx, "studio.wizard.step.genre"), genreList(ctx, v.Data().Genres))
+		@ui.KV(i18n.T(ctx, "studio.wizard.step.style"), i18n.T(ctx, "style."+v.Data().Style))
+		@ui.KV(i18n.T(ctx, "studio.wizard.step.format"), formatLine(ctx, v.Data()))
+	</div>
+	<div class="mv-show-mobile">
+		@WhatGenerateMakes(v)
+	</div>
+}
+
+// WizardSide is the "Your manga so far" panel with what Generate will make.
+templ WizardSide(v WizardView, oob bool) {
+	<aside
+		class="mv-wizard__side"
+		id="mv-wizard-side"
+		aria-label={ i18n.T(ctx, "studio.wizard.so_far") }
+		if oob {
+			hx-swap-oob="true"
+		}
+	>
+		<span class="mv-label-mono">{ i18n.T(ctx, "studio.wizard.so_far") }</span>
+		<strong class="mv-wizard__sidetitle">{ wizardTitle(v) }</strong>
+		if v.Data().Premise != "" {
+			<p class="mv-wizard__quote">“{ v.Data().Premise }”</p>
+		}
+		<div class="mv-wizard__facts">
+			@ui.KV(i18n.T(ctx, "studio.wizard.step.genre"), genreList(ctx, v.Data().Genres))
+			@ui.KV(i18n.T(ctx, "studio.wizard.step.style"), i18n.T(ctx, "style."+v.Data().Style))
+			@ui.KV(i18n.T(ctx, "studio.wizard.step.format"), formatLine(ctx, v.Data()))
+		</div>
+		<div class="mv-hide-mobile mv-mt-auto">
+			@WhatGenerateMakes(v)
+		</div>
+	</aside>
+}
+
+templ WhatGenerateMakes(v WizardView) {
+	<div class="mv-box mv-box--dashed mv-wizard__makes">
+		<strong class="mv-small">{ i18n.T(ctx, "studio.wizard.makes.title") }</strong>
+		<p class="mv-small mv-muted">{ i18n.T(ctx, "studio.wizard.makes.body", "count", max(v.Data().Chapters, 1)) }</p>
+		if v.Route.Pick != "" {
+			@RouteChipView(v.Route)
+		}
+	</div>
+}
+
+// WizardSaved is the "Draft saved" indicator (swapped after each autosave).
+templ WizardSaved(text string, oob bool) {
+	<span class="mv-wizard__saved" id="mv-wizard-saved" aria-live="polite">
+		if text != "" {
+			@ui.Icon("check", 14)
+			{ text }
+		} else {
+			{ i18n.T(ctx, "studio.wizard.autosaves") }
+		}
+	</span>
+}
+
+// WizardAutosaved is the autosave response: the indicator plus the refreshed side panel.
+templ WizardAutosaved(v WizardView) {
+	@WizardSaved(v.SavedAt, false)
+	@WizardSide(v, true)
+}
+
+// GenerateProgress shows the outline job with an ink fill tied to real progress.
+templ GenerateProgress(v WizardView) {
+	<div
+		id="mv-generate"
+		class="mv-generate"
+		hx-get={ "/studio/new/status?draft=" + v.Draft.ID }
+		hx-trigger="every 2s, mv:ws from:document throttle:600ms"
+		hx-swap="outerHTML"
+	>
+		switch v.Job.State {
+			case jobs.StateFailed, jobs.StateCanceled:
+				@ui.GenState(ui.GenProps{State: ui.GenFailed, Title: i18n.T(ctx, "studio.wizard.gen.failed"), Detail: jobErr(v.Job), SFX: "FZZT"})
+				<form method="post" action="/studio/new/generate">
+					<input type="hidden" name="draft" value={ v.Draft.ID }/>
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "refresh"}) {
+						{ i18n.T(ctx, "studio.wizard.gen.retry") }
+					}
+				</form>
+			case jobs.StateQueued:
+				@ui.GenState(ui.GenProps{State: ui.GenQueued, Position: 1, Title: i18n.T(ctx, "studio.wizard.gen.queued"), Detail: i18n.T(ctx, "studio.wizard.gen.queued_desc"), JobID: v.Job.ID})
+			default:
+				@ui.GenState(ui.GenProps{State: ui.GenGenerating, Progress: v.Job.Progress, Step: v.Job.Step, Steps: v.Job.Steps,
+					ProgressText: i18n.T(ctx, "studio.wizard.gen.progress", "pct", pct(v.Job.Progress), "step", v.Job.Step, "steps", max(v.Job.Steps, 1)),
+					Title: i18n.T(ctx, "studio.wizard.gen.writing"), Detail: v.Job.Message, JobID: v.Job.ID})
+		}
+		<p class="mv-small mv-muted">{ i18n.T(ctx, "studio.wizard.gen.keep_working") }</p>
+		if v.Project != nil {
+			<a class="mv-small" href={ templ.URL("/studio/p/" + v.Project.ID + "/story") }>{ i18n.T(ctx, "studio.wizard.gen.open_now") }</a>
+		}
+	</div>
+}
+
+// FormatArt draws the little page diagrams of the format cards.
+templ FormatArt(format string) {
+	switch format {
+		case FormatWebtoon:
+			<svg viewBox="0 0 64 120" width="64" height="120" class="mv-format__svg mv-format__svg--strip">
+				<rect x="1" y="1" width="62" height="118" class="mv-format__page"></rect>
+				<rect x="6" y="6" width="52" height="30" class="mv-format__panel"></rect>
+				<rect x="6" y="46" width="52" height="24" class="mv-format__panel"></rect>
+				<rect x="6" y="80" width="52" height="34" class="mv-format__panel"></rect>
+			</svg>
+		case FormatComicLTR:
+			<svg viewBox="0 0 84 118" width="84" height="118" class="mv-format__svg">
+				@pageSVG(false)
+			</svg>
+		default:
+			<svg viewBox="0 0 172 118" width="172" height="118" class="mv-format__svg">
+				@pageSVG(true)
+				<g transform="translate(88 0)">
+					@pageSVG(true)
+				</g>
+			</svg>
+	}
+}
+
+templ pageSVG(rtl bool) {
+	<rect x="1" y="1" width="82" height="116" class="mv-format__page"></rect>
+	<polygon points="6,6 78,6 78,34 6,40" class="mv-format__panel"></polygon>
+	if rtl {
+		<polygon points="44,44 78,40 78,74 44,74" class="mv-format__panel"></polygon>
+		<polygon points="6,45 40,44 40,74 6,74" class="mv-format__panel"></polygon>
+	} else {
+		<polygon points="6,45 40,44 40,74 6,74" class="mv-format__panel"></polygon>
+		<polygon points="44,44 78,40 78,74 44,74" class="mv-format__panel"></polygon>
+	}
+	<polygon points="6,78 50,78 44,112 6,112" class="mv-format__panel"></polygon>
+	<polygon points="54,78 78,78 78,112 48,112" class="mv-format__panel"></polygon>
+}

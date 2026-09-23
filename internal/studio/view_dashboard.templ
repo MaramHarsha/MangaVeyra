@@ -1,0 +1,110 @@
+package studio
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/pages/dashboard"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// DashboardPage is B1: greeting and status window, continue card, compute
+// card, recent projects and the ways to start.
+templ DashboardPage(d DashData) {
+	<div class="mv-hide-mobile">
+		@dashboard.Greeting(d.Data)
+	</div>
+	if len(d.Cards) > 0 {
+		<div class="mv-dash-top">
+			if d.Continue != nil {
+				@ContinueCard(*d.Continue)
+			} else {
+				@ProjectCardView(d.Cards[0])
+			}
+			<div class="mv-hide-mobile">
+				@ComputeCard(d.Compute)
+			</div>
+		</div>
+		@dashboard.ComputeLine(d.Compute.ComputeView)
+		<section class="mv-stack">
+			<div class="mv-section-head">
+				<h2 class="mv-section-head__title">
+					<span class="mv-hide-mobile">{ i18n.T(ctx, "dash.recent") }</span>
+					<span class="mv-show-mobile">{ i18n.T(ctx, "nav.projects") }</span>
+				</h2>
+				<a href="/studio/projects">{ i18n.T(ctx, "dash.all_projects") }</a>
+			</div>
+			<div class="mv-grid-4 mv-hide-mobile">
+				for _, c := range d.Cards {
+					@ProjectCardView(c)
+				}
+			</div>
+			<div class="mv-prows mv-show-mobile">
+				for i, c := range d.Cards {
+					if i > 0 || d.Continue == nil || d.Continue.ID != c.ID {
+						@ProjectRow(c)
+					}
+				}
+			</div>
+		</section>
+	} else {
+		<div class="mv-dash-empty">
+			@dashboard.Empty(d.CanCreate)
+			<div class="mv-hide-mobile">
+				@ComputeCard(d.Compute)
+			</div>
+		</div>
+		@dashboard.ComputeLine(d.Compute.ComputeView)
+	}
+	if d.CanCreate {
+		<div class="mv-hide-mobile">
+			@dashboard.IdeasRow()
+		</div>
+	}
+}
+
+// ContinueCard is "continue where you left off" with the editor and continuity links.
+templ ContinueCard(c ContinueView) {
+	<section class="mv-box mv-continue" aria-label={ i18n.T(ctx, "dash.continue") }>
+		@Thumb(c.ThumbURL, c.PageLabel, "mv-continue__art")
+		<div class="mv-continue__body">
+			<span class="mv-label-mono">{ i18n.T(ctx, "dash.continue") }</span>
+			<a class="mv-continue__title mv-link--plain" href={ templ.URL(c.Href) }>{ c.Title }</a>
+			<span class="mv-small mv-muted mv-hide-mobile">{ c.ChapterLine }</span>
+			<span class="mv-small mv-muted mv-show-mobile">{ c.MobileLine }</span>
+			@ui.Bar(c.Progress, "", true, c.ChapterLine)
+			<div class="mv-row mv-row--wrap mv-row--sm mv-hide-mobile">
+				@ui.LinkButton(c.EditorHref, ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Icon: "pencil"}) {
+					{ c.EditorLabel }
+				}
+				if c.IssuesHref != "" {
+					@ui.LinkButton(c.IssuesHref, ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Icon: "alert-triangle"}) {
+						{ c.IssuesLabel }
+					}
+				}
+			</div>
+		</div>
+		<div class="mv-continue__mobile mv-show-mobile">
+			@ui.LinkButton(c.EditorHref, ui.ButtonProps{Variant: ui.Primary, Icon: "pencil", Full: true, Size: ui.LG}) {
+				{ c.OpenPage }
+			}
+		</div>
+	</section>
+}
+
+// ComputeCard is the self-host compute card: GPU, queue, this week, remote spend on your own keys.
+templ ComputeCard(c DashComputeView) {
+	<section class="mv-box mv-compute-card" aria-label={ i18n.T(ctx, "dash.compute") }>
+		<div class="mv-compute-card__head">
+			<strong class="mv-small">{ c.Name }</strong>
+			if c.Online {
+				@ui.StatusBadge(ui.StatusOnline, i18n.T(ctx, "workers.status.online"))
+			} else {
+				@ui.StatusBadge(ui.StatusOffline, i18n.T(ctx, "workers.status.offline"))
+			}
+		</div>
+		@ui.KV(i18n.T(ctx, "dash.compute.gpu"), c.GPU)
+		@ui.KV(i18n.T(ctx, "dash.compute.queue"), c.Queue)
+		@ui.KV(i18n.T(ctx, "studio.compute.this_week"), c.Week)
+		@ui.KV(i18n.T(ctx, "dash.compute.remote"), c.Remote)
+		<a class="mv-small mv-link--plain mv-mt-auto" href={ templ.URL(c.QueueURL) }>{ i18n.T(ctx, "dash.compute.open_queue") }</a>
+	</section>
+}

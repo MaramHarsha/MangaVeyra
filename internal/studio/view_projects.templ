@@ -1,0 +1,180 @@
+package studio
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// ProjectsPage is B2: search, filters, sort, grid/list and the shared projects.
+templ ProjectsPage(v ProjectsView) {
+	<header class="mv-pagehead">
+		<div class="mv-pagehead__text">
+			<h1 class="mv-pagehead__title mv-hide-mobile">{ i18n.T(ctx, "nav.projects") }</h1>
+			<span class="mv-pagehead__sub mv-hide-mobile">{ i18n.T(ctx, "studio.projects.sub", "count", v.Total, "shared", v.Shared) }</span>
+		</div>
+		if v.CanCreate {
+			<div class="mv-pagehead__actions mv-hide-mobile">
+				@ui.LinkButton("/studio/import", ui.ButtonProps{Variant: ui.Secondary, Icon: "upload"}) {
+					{ i18n.T(ctx, "studio.projects.import") }
+				}
+				@ui.LinkButton("/studio/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					{ i18n.T(ctx, "nav.new_manga") }
+				}
+			</div>
+		}
+	</header>
+	<form
+		class="mv-ptoolbar"
+		method="get"
+		action="/studio/projects"
+		role="search"
+		hx-get="/studio/projects"
+		hx-target="#mv-projects-results"
+		hx-swap="outerHTML"
+		hx-push-url="true"
+		hx-trigger="input changed delay:350ms from:#projects-q, change from:.mv-ptoolbar__filter, submit"
+	>
+		<label class="mv-ptoolbar__search">
+			@ui.Icon("search", 16)
+			<span class="mv-sr-only">{ i18n.T(ctx, "studio.projects.search") }</span>
+			<input class="mv-search__input" id="projects-q" type="search" name="q" value={ v.Query } placeholder={ i18n.T(ctx, "studio.projects.search") } autocomplete="off"/>
+		</label>
+		<div class="mv-ptoolbar__filters mv-hide-mobile">
+			@ui.Select(ui.SelectProps{ID: "projects-status", Name: "status", Value: v.Status, Class: "mv-ptoolbar__filter", Attrs: attrs("aria-label", i18n.T(ctx, "studio.projects.status")), Options: statusOptions(ctx)})
+			@ui.Select(ui.SelectProps{ID: "projects-format", Name: "format", Value: v.Format, Class: "mv-ptoolbar__filter", Attrs: attrs("aria-label", i18n.T(ctx, "studio.projects.format")), Options: formatOptions(ctx)})
+			@ui.Select(ui.SelectProps{ID: "projects-sort", Name: "sort", Value: v.Sort, Class: "mv-ptoolbar__filter", Attrs: attrs("aria-label", i18n.T(ctx, "studio.projects.sort")), Options: sortOptions(ctx)})
+			<input type="hidden" name="view" value={ v.View }/>
+			<button class="mv-btn mv-btn--secondary mv-nojs" type="submit">{ i18n.T(ctx, "studio.projects.apply") }</button>
+		</div>
+		<div class="mv-ptoolbar__view mv-hide-mobile">
+			<nav class="mv-seg" aria-label={ i18n.T(ctx, "studio.projects.view") }>
+				<a
+					class="mv-seg__item"
+					href={ templ.URL(v.URL("view", "")) }
+					if v.View == "" {
+						aria-current="true"
+					}
+					aria-label={ i18n.T(ctx, "studio.projects.grid") }
+				>
+					@ui.Icon("layout-grid", 16)
+				</a>
+				<a
+					class="mv-seg__item"
+					href={ templ.URL(v.URL("view", "list")) }
+					if v.View == "list" {
+						aria-current="true"
+					}
+					aria-label={ i18n.T(ctx, "studio.projects.list") }
+				>
+					@ui.Icon("list", 16)
+				</a>
+			</nav>
+		</div>
+	</form>
+	<nav class="mv-pchips mv-show-mobile" aria-label={ i18n.T(ctx, "studio.projects.status") }>
+		@chipLink(v.URL("status", ""), i18n.T(ctx, "studio.projects.all_n", "count", v.Total), v.Status == "")
+		@chipLink(v.URL("status", BadgeDraft), i18n.T(ctx, "studio.projects.drafts"), v.Status == BadgeDraft)
+		@chipLink(v.URL("status", BadgePublished), i18n.T(ctx, "studio.badge.published"), v.Status == BadgePublished)
+		@chipLink(v.URL("status", "shared"), i18n.T(ctx, "studio.projects.shared"), v.Status == "shared")
+	</nav>
+	@ProjectsResults(v)
+}
+
+templ chipLink(href, label string, current bool) {
+	<a
+		class="mv-pchip"
+		href={ templ.URL(href) }
+		if current {
+			aria-current="true"
+		}
+	>{ label }</a>
+}
+
+// ProjectsResults is the swappable result area.
+templ ProjectsResults(v ProjectsView) {
+	<div id="mv-projects-results" class="mv-stack">
+		if len(v.Cards) == 0 {
+			if v.Filtered {
+				@EmptyState("HMMM…", i18n.T(ctx, "studio.projects.none_match"), i18n.T(ctx, "studio.projects.none_match_body"), false) {
+					@ui.LinkButton("/studio/projects", ui.ButtonProps{Variant: ui.Secondary, Icon: "x"}) {
+						{ i18n.T(ctx, "studio.projects.clear") }
+					}
+				}
+			} else {
+				@EmptyState("シーン…", i18n.T(ctx, "dash.empty.title"), i18n.T(ctx, "dash.empty.body"), true) {
+					if v.CanCreate {
+						@ui.LinkButton("/studio/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+							{ i18n.T(ctx, "nav.new_manga") }
+						}
+						@ui.LinkButton("/studio/import", ui.ButtonProps{Variant: ui.Secondary, Icon: "upload"}) {
+							{ i18n.T(ctx, "dash.import") }
+						}
+					}
+				}
+			}
+		} else if v.View == "list" {
+			<div class="mv-table-wrap mv-hide-mobile">
+				<table class="mv-table mv-ptable">
+					<thead>
+						<tr>
+							<th scope="col">{ i18n.T(ctx, "studio.projects.col.title") }</th>
+							<th scope="col">{ i18n.T(ctx, "studio.projects.status") }</th>
+							<th scope="col">{ i18n.T(ctx, "studio.projects.format") }</th>
+							<th scope="col">{ i18n.T(ctx, "studio.projects.col.chapters") }</th>
+							<th scope="col">{ i18n.T(ctx, "studio.projects.col.pages") }</th>
+							<th scope="col">{ i18n.T(ctx, "studio.projects.col.updated") }</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, c := range v.Cards {
+							<tr>
+								<td>
+									<a class="mv-ptable__title" href={ templ.URL(c.Href) }>
+										@Thumb(c.ThumbURL, "", "mv-ptable__thumb")
+										<span>{ c.Title }</span>
+									</a>
+								</td>
+								<td>
+									for _, b := range c.Badges {
+										@ui.Badge(b.Tone, b.Icon, b.Text)
+									}
+								</td>
+								<td>{ i18n.T(ctx, "studio.format."+c.Summary.Format) }</td>
+								<td class="mv-mono">{ itoa(c.Summary.Chapters) }</td>
+								<td class="mv-mono">{ itoa(c.Summary.Pages) }</td>
+								<td class="mv-muted">{ RelTime(ctx, c.UpdatedAt) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<div class="mv-pgrid mv-show-mobile">
+				for _, c := range v.Cards {
+					@ProjectTile(c)
+				}
+			</div>
+		} else {
+			<div class="mv-grid-5 mv-hide-mobile">
+				for _, c := range v.Cards {
+					@ProjectCardView(c)
+				}
+			</div>
+			<div class="mv-pgrid mv-show-mobile">
+				for _, c := range v.Cards {
+					@ProjectTile(c)
+				}
+			</div>
+		}
+	</div>
+}
+
+// ProjectTile is the compact phone card (B2m).
+templ ProjectTile(c ProjectCard) {
+	<a class="mv-ptile" href={ templ.URL(c.Href) }>
+		@Thumb(c.ThumbURL, "", "mv-ptile__thumb")
+		<span class="mv-ptile__body">
+			<strong>{ c.Title }</strong>
+			<span>{ c.Mobile }</span>
+		</span>
+	</a>
+}

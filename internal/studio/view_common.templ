@@ -1,0 +1,96 @@
+package studio
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// Thumb renders an image when url is set, else a labelled screentone placeholder.
+templ Thumb(url, label, class string) {
+	if url != "" {
+		<div class={ ui.Cls("mv-tone mv-thumb", class) }>
+			<img class="mv-thumb__img" src={ url } alt={ label } loading="lazy"/>
+		</div>
+	} else {
+		@ui.ToneBox(label, "", class)
+	}
+}
+
+// ProjectCardView renders a project card with the angled bottom edge and its actions menu.
+templ ProjectCardView(c ProjectCard) {
+	<article class="mv-pcard">
+		@Thumb(c.ThumbURL, c.ThumbLabel, "mv-pcard__thumb")
+		<div class="mv-pcard__body">
+			<div class="mv-pcard__head">
+				<a class="mv-pcard__title" href={ templ.URL(c.Href) }>{ c.Title }</a>
+				@ui.Dropdown("mv-pcard__menu", "end", false, cardMenuTrigger(), projectMenu(ctx, c))
+			</div>
+			if c.Meta != "" {
+				<span class="mv-pcard__meta">{ c.Meta }</span>
+			}
+			<div class="mv-pcard__badges">
+				for _, b := range c.Badges {
+					@ui.Badge(b.Tone, b.Icon, b.Text)
+				}
+			</div>
+		</div>
+	</article>
+}
+
+templ cardMenuTrigger() {
+	<span class="mv-iconlink" aria-hidden="true">
+		@ui.Icon("dots", 18)
+	</span>
+	<span class="mv-sr-only">{ i18n.T(ctx, "dash.project_actions") }</span>
+}
+
+// ProjectRow is the phone list row of a project.
+templ ProjectRow(c ProjectCard) {
+	<a class="mv-prow" href={ templ.URL(c.Href) }>
+		@Thumb(c.ThumbURL, "", "mv-prow__thumb")
+		<span class="mv-prow__text">
+			<strong>{ c.Title }</strong>
+			<span>{ c.Mobile }</span>
+		</span>
+		@ui.Icon("chevron-right", 20)
+	</a>
+}
+
+// RouteChipView renders the routing chip for a preview.
+templ RouteChipView(p RoutePreview) {
+	@ui.RouteChip(p.Auto, routePick(ctx, p), p.WhyHref, i18n.T(ctx, "studio.route.why"))
+}
+
+// Empty renders an empty state with an SFX word and one action.
+templ EmptyState(sfx, title, body string, jp bool) {
+	@ui.State(ui.StateProps{SFX: sfx, JP: jp, Title: title, Body: body, Art: "splash", Boxed: true, SFXSize: "lg"}) {
+		{ children... }
+	}
+}
+
+// FormError renders a form-level error notice.
+templ FormError(msg string) {
+	if msg != "" {
+		@ui.Notice(ui.ToneError, "alert-triangle") {
+			{ msg }
+		}
+	}
+}
+
+// ProjectTabs is the tab bar shared by the project pages (story, characters, setting, settings).
+templ ProjectTabs(p *Project, current string) {
+	<nav class="mv-ptabs" aria-label={ p.Title }>
+		for _, t := range projectTabs(ctx, p) {
+			<a
+				class="mv-ptabs__tab"
+				href={ templ.URL(t.Href) }
+				if t.Key == current {
+					aria-current="page"
+				}
+			>
+				@ui.Icon(t.Icon, 16)
+				{ t.Label }
+			</a>
+		}
+	</nav>
+}
