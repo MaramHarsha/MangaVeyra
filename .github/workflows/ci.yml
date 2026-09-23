@@ -67,7 +67,6 @@ jobs:
   web:
     name: Web build + vitest
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('web/package.json') != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -85,7 +84,6 @@ jobs:
   worker:
     name: Worker pytest
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('worker/pyproject.toml') != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
