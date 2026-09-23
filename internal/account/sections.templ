@@ -1,0 +1,625 @@
+package account
+
+import (
+	"context"
+	"strconv"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/auth"
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
+	"github.com/MaramHarsha/MangaVeyra/internal/web"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+templ sectionHead(title, sub string) {
+	<div class="mv-settings__head">
+		<h2 class="mv-settings__title">{ title }</h2>
+		if sub != "" {
+			<span class="mv-settings__sub">{ sub }</span>
+		}
+	</div>
+}
+
+// autosave returns the HTMX attributes for a form that saves on every change.
+func autosave(action string) templ.Attributes {
+	return templ.Attributes{"hx-post": action, "hx-trigger": "change", "hx-swap": "none"}
+}
+
+templ noscriptSave() {
+	<noscript>
+		<div class="mv-row mv-row--end">
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+				{ i18n.T(ctx, "settings.save") }
+			}
+		</div>
+	</noscript>
+}
+
+templ formError(msg string) {
+	if msg != "" {
+		@ui.Notice(ui.ToneError, "alert-triangle") {
+			{ msg }
+		}
+	}
+}
+
+// AccountSection is G1 · Account: profile, password, security and danger zone.
+templ AccountSection(v accountView) {
+	@sectionHead(i18n.T(ctx, "settings.nav.account"), i18n.T(ctx, "settings.account.sub", "host", v.Host))
+	@formError(v.Errors.Form())
+	<form class="mv-settings__section" method="post" action="/settings/account" novalidate>
+		<div class="mv-grid-2">
+			@ui.Field(ui.FieldProps{ID: "display_name", Label: i18n.T(ctx, "auth.page.signup.display_name"), Error: v.Errors["display_name"]}) {
+				@ui.Input(ui.InputProps{ID: "display_name", Name: "display_name", Value: v.DisplayName, MaxLength: 64, Autocomplete: "name", Invalid: v.Errors["display_name"] != ""})
+			}
+			@ui.Field(ui.FieldProps{ID: "username", Label: i18n.T(ctx, "auth.page.signup.username"), Hint: i18n.T(ctx, "settings.account.username_hint")}) {
+				@ui.Input(ui.InputProps{ID: "username", Value: "@" + v.Username, ReadOnly: true, Described: true})
+			}
+			@ui.Field(ui.FieldProps{ID: "email", Label: i18n.T(ctx, "auth.page.email"), Error: v.Errors["email"]}) {
+				@ui.Input(ui.InputProps{ID: "email", Name: "email", Type: "email", Value: v.Email, Autocomplete: "email", Invalid: v.Errors["email"] != ""})
+			}
+			<div class="mv-field">
+				<span class="mv-field__label">{ i18n.T(ctx, "auth.page.password") }</span>
+				<div class="mv-input-group">
+					<span aria-hidden="true">••••••••••</span>
+					<a class="mv-input-group__suffix" href="/settings/account/password">{ i18n.T(ctx, "settings.account.change") }</a>
+				</div>
+			</div>
+		</div>
+		@ui.Field(ui.FieldProps{ID: "bio", Label: i18n.T(ctx, "settings.account.bio"), Aside: i18n.T(ctx, "settings.optional"), Error: v.Errors["bio"]}) {
+			@ui.Textarea(ui.TextareaProps{ID: "bio", Name: "bio", Value: v.Bio, Rows: 3, MaxLength: 280, Invalid: v.Errors["bio"] != ""})
+		}
+		<div class="mv-row mv-row--end">
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Size: ui.SM}) {
+				{ i18n.T(ctx, "settings.save") }
+			}
+		</div>
+	</form>
+	<section class="mv-box mv-box--pad-lg mv-stack" aria-labelledby="sec-security">
+		<h3 class="mv-box__title" id="sec-security">{ i18n.T(ctx, "settings.account.security") }</h3>
+		<div class="mv-setrows">
+			@ui.SetRow(i18n.T(ctx, "settings.account.2fa"), twoFactorDesc(ctx, v.TwoFactor)) {
+				if v.TwoFactor {
+					@ui.Badge(ui.ToneSuccess, "shield-check", i18n.T(ctx, "settings.on"))
+					@ui.LinkButton("/settings/account/2fa", ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM}) {
+						{ i18n.T(ctx, "settings.account.manage") }
+					}
+				} else {
+					@ui.LinkButton("/settings/account/2fa", ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "shield-lock"}) {
+						{ i18n.T(ctx, "settings.account.2fa_setup") }
+					}
+				}
+			}
+		</div>
+		<div class="mv-stack mv-stack--sm">
+			<div class="mv-row mv-row--between">
+				<strong class="mv-small">{ i18n.T(ctx, "settings.account.sessions") }</strong>
+				if len(v.Sessions) > 1 {
+					<form method="post" action="/settings/account/sessions/revoke-others">
+						<button class="mv-link mv-small" type="submit">{ i18n.T(ctx, "settings.account.sign_out_others") }</button>
+					</form>
+				}
+			</div>
+			<ul class="mv-list-plain mv-stack mv-stack--xs" role="list">
+				for _, s := range v.Sessions {
+					<li class="mv-row mv-row--between mv-small">
+						<span class="mv-accent-text">
+							{ s.Device }
+							if s.Current {
+								{ " · " }{ i18n.T(ctx, "settings.account.this_device") }
+							}
+						</span>
+						<span class="mv-row mv-row--sm">
+							<span>{ s.When }</span>
+							if !s.Current {
+								<form method="post" action={ templ.URL("/settings/account/sessions/" + s.ID + "/revoke") }>
+									<button class="mv-link mv-link--plain" type="submit">{ i18n.T(ctx, "settings.account.sign_out") }</button>
+								</form>
+							}
+						</span>
+					</li>
+				}
+			</ul>
+		</div>
+	</section>
+	<section class="mv-box mv-box--pad-lg mv-box--danger mv-stack" aria-labelledby="sec-danger">
+		<h3 class="mv-box__title" id="sec-danger">{ i18n.T(ctx, "settings.account.danger") }</h3>
+		<div class="mv-row mv-row--wrap">
+			@ui.LinkButton("/settings/data", ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "download"}) {
+				{ i18n.T(ctx, "settings.account.export") }
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.DangerOutline, Size: ui.SM, Icon: "trash", Attrs: templ.Attributes{"data-dialog-open": "delete-account"}}) {
+				{ i18n.T(ctx, "settings.account.delete") }
+			}
+		</div>
+		<details class="mv-small mv-nojs-only">
+			<summary class="mv-link">{ i18n.T(ctx, "settings.account.delete") }</summary>
+			@deleteForm(v.Username, "nojs")
+		</details>
+	</section>
+	@ui.Modal(ui.ModalProps{ID: "delete-account", Title: i18n.T(ctx, "settings.account.delete_title")}) {
+		@deleteForm(v.Username, "dlg")
+	}
+}
+
+templ deleteForm(username, id string) {
+	<form method="post" action="/settings/account/delete">
+		@ui.ModalBody() {
+			<p>{ i18n.T(ctx, "settings.account.delete_body") }</p>
+			@ui.Field(ui.FieldProps{ID: id + "-confirm", Label: i18n.T(ctx, "settings.account.delete_type", "username", username)}) {
+				@ui.Input(ui.InputProps{ID: id + "-confirm", Name: "confirm", Required: true, Autocomplete: "off"})
+			}
+			@ui.Field(ui.FieldProps{ID: id + "-password", Label: i18n.T(ctx, "auth.page.password")}) {
+				@ui.Input(ui.InputProps{ID: id + "-password", Name: "password", Type: "password", Required: true, Autocomplete: "current-password"})
+			}
+		}
+		@ui.ModalFoot() {
+			@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Attrs: templ.Attributes{"data-dialog-close": ""}}) {
+				{ i18n.T(ctx, "ui.cancel") }
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit", Icon: "trash"}) {
+				{ i18n.T(ctx, "settings.account.delete_submit") }
+			}
+		}
+	</form>
+}
+
+func twoFactorDesc(ctx context.Context, on bool) string {
+	if on {
+		return i18n.T(ctx, "settings.account.2fa_on_desc")
+	}
+	return i18n.T(ctx, "settings.account.2fa_off_desc")
+}
+
+// PasswordSection changes the password (ends other sessions).
+templ PasswordSection(fe web.FormErrors) {
+	@sectionHead(i18n.T(ctx, "settings.account.password_title"), i18n.T(ctx, "settings.account.password_sub"))
+	@formError(fe.Form())
+	<form class="mv-settings__section" method="post" action="/settings/account/password" novalidate>
+		@ui.Field(ui.FieldProps{ID: "current", Label: i18n.T(ctx, "settings.account.current_password"), Error: fe["current"]}) {
+			@ui.Input(ui.InputProps{ID: "current", Name: "current", Type: "password", Autocomplete: "current-password", Required: true, Autofocus: true, Invalid: fe["current"] != ""})
+		}
+		<div class="mv-grid-2">
+			@ui.Field(ui.FieldProps{ID: "password", Label: i18n.T(ctx, "auth.page.reset.new"), Hint: i18n.T(ctx, "auth.password.too_short", "min", auth.MinPasswordLen), Error: fe["password"]}) {
+				@ui.InputGroup("", fe["password"] != "") {
+					@ui.Input(ui.InputProps{ID: "password", Name: "password", Type: "password", Autocomplete: "new-password", Required: true, MinLength: auth.MinPasswordLen, Invalid: fe["password"] != "", Described: true, Attrs: templ.Attributes{"data-strength": "pw-strength"}})
+					@ui.PasswordStrength("pw-strength", i18n.T(ctx, "auth.page.strength"))
+				}
+			}
+			@ui.Field(ui.FieldProps{ID: "confirm", Label: i18n.T(ctx, "auth.page.reset.confirm"), Error: fe["confirm"]}) {
+				@ui.Input(ui.InputProps{ID: "confirm", Name: "confirm", Type: "password", Autocomplete: "new-password", Required: true, Invalid: fe["confirm"] != ""})
+			}
+		</div>
+		<div class="mv-row mv-row--end">
+			@ui.LinkButton("/settings/account", ui.ButtonProps{Variant: ui.Ghost}) {
+				{ i18n.T(ctx, "ui.cancel") }
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+				{ i18n.T(ctx, "settings.account.password_submit") }
+			}
+		</div>
+	</form>
+}
+
+// TwoFactorSection enrols, shows recovery codes or turns off two-step login.
+templ TwoFactorSection(v twoFactorView) {
+	@sectionHead(i18n.T(ctx, "settings.account.2fa"), i18n.T(ctx, "settings.account.2fa_sub"))
+	@formError(v.Errors.Form())
+	if len(v.RecoveryCodes) > 0 {
+		@ui.Notice(ui.ToneSuccess, "shield-check") {
+			<strong>{ i18n.T(ctx, "settings.account.2fa_on") }</strong>
+			<br/>
+			{ i18n.T(ctx, "settings.account.recovery_note") }
+		}
+		<div class="mv-code-grid mv-box mv-box--pad" aria-label={ i18n.T(ctx, "settings.account.recovery") }>
+			for _, c := range v.RecoveryCodes {
+				<code>{ c }</code>
+			}
+		</div>
+		@ui.LinkButton("/settings/account", ui.ButtonProps{Variant: ui.Primary}) {
+			{ i18n.T(ctx, "settings.account.done") }
+		}
+	} else if v.Enabled {
+		<form class="mv-settings__section mv-box mv-box--pad-lg" method="post" action="/settings/account/2fa/disable">
+			<p class="mv-small mv-muted">{ i18n.T(ctx, "settings.account.2fa_disable_body") }</p>
+			@ui.Field(ui.FieldProps{ID: "password", Label: i18n.T(ctx, "auth.page.password")}) {
+				@ui.Input(ui.InputProps{ID: "password", Name: "password", Type: "password", Required: true, Autocomplete: "current-password"})
+			}
+			<div class="mv-row mv-row--end">
+				@ui.LinkButton("/settings/account", ui.ButtonProps{Variant: ui.Ghost}) {
+					{ i18n.T(ctx, "ui.cancel") }
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit"}) {
+					{ i18n.T(ctx, "settings.account.2fa_disable") }
+				}
+			</div>
+		</form>
+	} else {
+		<form class="mv-settings__section mv-box mv-box--pad-lg" method="post" action="/settings/account/2fa" novalidate>
+			<ol class="mv-stack mv-small">
+				<li>{ i18n.T(ctx, "settings.account.2fa_step1") }</li>
+				<li>{ i18n.T(ctx, "settings.account.2fa_step2") }</li>
+			</ol>
+			<div class="mv-row mv-row--wrap mv-row--start">
+				if v.QR != "" {
+					<img class="mv-qr" src={ v.QR } width="200" height="200" alt={ i18n.T(ctx, "settings.account.qr_alt") }/>
+				}
+				<div class="mv-stack mv-grow">
+					<span class="mv-field__label">{ i18n.T(ctx, "settings.account.secret") }</span>
+					<code class="mv-code-block">{ v.Secret }</code>
+					<input type="hidden" name="secret" value={ v.Secret }/>
+					<input type="hidden" name="otpauth" value={ v.OTPAuth }/>
+					@ui.Field(ui.FieldProps{ID: "code", Label: i18n.T(ctx, "auth.page.code.label"), Error: v.Errors["code"]}) {
+						@ui.Input(ui.InputProps{ID: "code", Name: "code", Autocomplete: "one-time-code", Inputmode: "numeric", Required: true, MaxLength: 8, Invalid: v.Errors["code"] != ""})
+					}
+				</div>
+			</div>
+			<div class="mv-row mv-row--end">
+				@ui.LinkButton("/settings/account", ui.ButtonProps{Variant: ui.Ghost}) {
+					{ i18n.T(ctx, "ui.cancel") }
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "shield-check"}) {
+					{ i18n.T(ctx, "settings.account.2fa_confirm") }
+				}
+			</div>
+		</form>
+	}
+}
+
+var themeKeys = []string{"dark", "light", "system"}
+
+// AppearanceSection is G1 · Appearance: theme and interface motifs.
+templ AppearanceSection(p settings.UserPrefs) {
+	@sectionHead(i18n.T(ctx, "settings.nav.appearance"), i18n.T(ctx, "settings.appearance.sub"))
+	<form class="mv-settings__section" method="post" action="/settings/appearance" { autosave("/settings/appearance")... }>
+		<fieldset class="mv-field">
+			<legend class="mv-box__title mv-settings__legend">{ i18n.T(ctx, "settings.appearance.theme") }</legend>
+			<div class="mv-themes">
+				for _, t := range themeKeys {
+					<label class={ "mv-themecard mv-themecard--" + t }>
+						<input type="radio" name="theme" value={ t } checked?={ p.Theme == t }/>
+						<span class="mv-themecard__swatch" aria-hidden="true"></span>
+						<span>{ i18n.T(ctx, "settings.theme."+t) }</span>
+					</label>
+				}
+			</div>
+		</fieldset>
+		<div class="mv-setrows">
+			@ui.ToggleRow("reduced_motion", "reduced_motion", i18n.T(ctx, "settings.appearance.motion"), i18n.T(ctx, "settings.appearance.motion_desc"), p.ReducedMotion == "on", nil)
+			@ui.ToggleRow("textures", "textures", i18n.T(ctx, "settings.appearance.textures"), i18n.T(ctx, "settings.appearance.textures_desc"), p.Textures, nil)
+			@ui.ToggleRow("show_ranks_xp", "show_ranks_xp", i18n.T(ctx, "settings.appearance.ranks"), i18n.T(ctx, "settings.appearance.ranks_desc"), p.ShowRanksXP, nil)
+			@ui.ToggleRow("living_panels", "living_panels", i18n.T(ctx, "settings.appearance.living"), i18n.T(ctx, "settings.appearance.living_desc"), p.LivingPanels, nil)
+			@ui.ToggleRow("high_contrast_focus", "high_contrast_focus", i18n.T(ctx, "settings.a11y.focus"), "", p.HighContrastFocus, nil)
+		</div>
+		@noscriptSave()
+	</form>
+}
+
+// LanguageSection is G1 · Language: interface language, time zone, reading languages, translation.
+templ LanguageSection(v languageView) {
+	<div class="mv-stack" id="language-section">
+		@sectionHead(i18n.T(ctx, "settings.nav.language"), i18n.T(ctx, "settings.language.sub"))
+		<form class="mv-settings__section" method="post" action="/settings/language" hx-post="/settings/language" hx-trigger="change from:#ui_lang, change from:#timezone, change from:#auto_translate, change from:#vertical_jp, submit" hx-target="#language-section" hx-swap="outerHTML">
+			<div class="mv-grid-2">
+				@ui.Field(ui.FieldProps{ID: "ui_lang", Label: i18n.T(ctx, "settings.language.ui")}) {
+					@ui.Select(ui.SelectProps{ID: "ui_lang", Name: "ui_lang", Value: v.UI, Options: uiLangOptions(ctx, v)})
+				}
+				@ui.Field(ui.FieldProps{ID: "timezone", Label: i18n.T(ctx, "settings.language.timezone")}) {
+					@ui.Select(ui.SelectProps{ID: "timezone", Name: "timezone", Value: v.Timezone, Options: tzOptions(ctx, v)})
+				}
+			</div>
+			<section class="mv-box mv-box--pad-lg mv-stack" aria-labelledby="reading-langs">
+				<div class="mv-stack mv-stack--xs">
+					<h3 class="mv-box__title" id="reading-langs">{ i18n.T(ctx, "settings.language.reading") }</h3>
+					<span class="mv-small mv-muted">{ i18n.T(ctx, "settings.language.reading_desc") }</span>
+				</div>
+				if len(v.Reading) == 0 {
+					<p class="mv-small mv-muted">{ i18n.T(ctx, "settings.language.reading_empty") }</p>
+				}
+				<ol class="mv-list-plain mv-stack mv-stack--sm" role="list">
+					for i, l := range v.Reading {
+						<li class="mv-box mv-row mv-langrow">
+							<span class="mv-mono mv-faint">{ strconv.Itoa(i + 1) }</span>
+							<span class="mv-grow">{ l.Name }</span>
+							if i > 0 {
+								<button class="mv-btn mv-btn--bare mv-btn--sm" type="submit" name="up" value={ l.Code } aria-label={ i18n.T(ctx, "settings.language.move_up", "lang", l.Name) }>
+									@ui.Icon("arrow-up", 16)
+								</button>
+							}
+							<button class="mv-btn mv-btn--bare mv-btn--sm" type="submit" name="remove" value={ l.Code } aria-label={ i18n.T(ctx, "settings.language.remove", "lang", l.Name) }>
+								@ui.Icon("x", 16)
+							</button>
+						</li>
+					}
+				</ol>
+				if len(v.Addable) > 0 {
+					<div class="mv-row mv-row--wrap">
+						<label class="mv-sr-only" for="add_lang">{ i18n.T(ctx, "settings.language.add") }</label>
+						@ui.Select(ui.SelectProps{ID: "add_lang", Name: "add_lang", Options: addLangOptions(v), Class: "mv-langadd"})
+						@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Type: "submit", Icon: "plus", Attrs: templ.Attributes{"name": "action", "value": "add"}}) {
+							{ i18n.T(ctx, "settings.language.add") }
+						}
+					</div>
+				}
+			</section>
+			<section class="mv-box mv-box--pad-lg" aria-labelledby="translation">
+				<h3 class="mv-box__title" id="translation">{ i18n.T(ctx, "settings.language.translation") }</h3>
+				<div class="mv-setrows">
+					@ui.ToggleRow("auto_translate", "auto_translate", i18n.T(ctx, "settings.language.auto_translate"), i18n.T(ctx, "settings.language.auto_translate_desc"), v.AutoTranslate, nil)
+					@ui.SetRow(i18n.T(ctx, "settings.language.rtl"), i18n.T(ctx, "settings.language.rtl_desc")) {
+						@ui.Badge(ui.ToneMuted, "arrows-left-right", i18n.T(ctx, "settings.automatic"))
+					}
+					@ui.ToggleRow("vertical_jp", "vertical_jp", i18n.T(ctx, "settings.language.vertical"), i18n.T(ctx, "settings.language.vertical_desc"), v.VerticalJP, nil)
+				</div>
+			</section>
+			@noscriptSave()
+		</form>
+	</div>
+}
+
+func uiLangOptions(ctx context.Context, v languageView) []ui.Option {
+	out := []ui.Option{{Value: "", Label: i18n.T(ctx, "settings.language.browser")}}
+	for _, l := range v.Languages {
+		out = append(out, ui.Option{Value: l.Code, Label: l.Name})
+	}
+	return out
+}
+
+func tzOptions(ctx context.Context, v languageView) []ui.Option {
+	out := []ui.Option{{Value: "", Label: i18n.T(ctx, "settings.language.tz_utc")}}
+	for _, tz := range v.Timezones {
+		out = append(out, ui.Option{Value: tz, Label: tz})
+	}
+	return out
+}
+
+func addLangOptions(v languageView) []ui.Option {
+	out := make([]ui.Option, 0, len(v.Addable))
+	for _, l := range v.Addable {
+		out = append(out, ui.Option{Value: l.Code, Label: l.Name})
+	}
+	return out
+}
+
+func mangaMode(p settings.UserPrefs) string {
+	switch p.Reading.Mode {
+	case "spread", "guided", "webtoon":
+		return p.Reading.Mode
+	}
+	return "paged"
+}
+
+func tapMode(p settings.UserPrefs) string {
+	switch {
+	case !p.Reading.TapZones:
+		return "off"
+	case p.Flag(FlagTapLShape, false):
+		return "l_shape"
+	}
+	return "edges"
+}
+
+func webtoonMode(p settings.UserPrefs) string {
+	if p.Flag(FlagWebtoonGuided, false) {
+		return "guided"
+	}
+	return "scroll"
+}
+
+// ReadingSection is G1 · Reading: defaults for new series.
+templ ReadingSection(p settings.UserPrefs) {
+	@sectionHead(i18n.T(ctx, "settings.nav.reading"), i18n.T(ctx, "settings.reading.sub"))
+	<form class="mv-settings__section" method="post" action="/settings/reading" { autosave("/settings/reading")... }>
+		<div class="mv-grid-2">
+			<div class="mv-field">
+				<span class="mv-field__label">{ i18n.T(ctx, "settings.reading.manga") }</span>
+				@ui.Segmented(ui.SegmentedProps{Name: "mode", Value: mangaMode(p), Label: i18n.T(ctx, "settings.reading.manga"), Full: true, Options: []ui.Option{
+					{Value: "paged", Label: i18n.T(ctx, "settings.reading.single")}, {Value: "spread", Label: i18n.T(ctx, "settings.reading.spread")},
+					{Value: "guided", Label: i18n.T(ctx, "settings.reading.guided")}, {Value: "webtoon", Label: i18n.T(ctx, "settings.reading.scroll")}}})
+			</div>
+			<div class="mv-field">
+				<span class="mv-field__label">{ i18n.T(ctx, "settings.reading.webtoon") }</span>
+				@ui.Segmented(ui.SegmentedProps{Name: "webtoon", Value: webtoonMode(p), Label: i18n.T(ctx, "settings.reading.webtoon"), Full: true, Options: []ui.Option{
+					{Value: "scroll", Label: i18n.T(ctx, "settings.reading.scroll")}, {Value: "guided", Label: i18n.T(ctx, "settings.reading.guided")}}})
+			</div>
+			<div class="mv-field">
+				<span class="mv-field__label">{ i18n.T(ctx, "settings.reading.background") }</span>
+				@ui.Segmented(ui.SegmentedProps{Name: "background", Value: p.Reading.Background, Label: i18n.T(ctx, "settings.reading.background"), Full: true, Options: []ui.Option{
+					{Value: "black", Label: i18n.T(ctx, "settings.reading.bg.black")}, {Value: "grey", Label: i18n.T(ctx, "settings.reading.bg.grey")},
+					{Value: "paper", Label: i18n.T(ctx, "settings.reading.bg.paper")}}})
+			</div>
+			<div class="mv-field">
+				<span class="mv-field__label">{ i18n.T(ctx, "settings.reading.tap") }</span>
+				@ui.Segmented(ui.SegmentedProps{Name: "tap_zones", Value: tapMode(p), Label: i18n.T(ctx, "settings.reading.tap"), Full: true, Options: []ui.Option{
+					{Value: "edges", Label: i18n.T(ctx, "settings.reading.tap.edges")}, {Value: "l_shape", Label: i18n.T(ctx, "settings.reading.tap.l")},
+					{Value: "off", Label: i18n.T(ctx, "settings.off")}}})
+			</div>
+		</div>
+		<div class="mv-box mv-box--pad-lg">
+			<div class="mv-setrows">
+				@ui.ToggleRow("hide_chrome", "hide_chrome", i18n.T(ctx, "settings.reading.hide_chrome"), "", p.Flag(FlagHideChrome, true), nil)
+				@ui.ToggleRow("panel_comments", "panel_comments", i18n.T(ctx, "settings.reading.comments"), i18n.T(ctx, "settings.reading.comments_desc"), p.Reading.ShowPanelComments, nil)
+				@ui.ToggleRow("human_only", "human_only", i18n.T(ctx, "settings.reading.filter"), i18n.T(ctx, "settings.reading.filter_desc"), p.Reading.ProvenanceFilter != "all", nil)
+				@ui.ToggleRow("auto_download", "auto_download", i18n.T(ctx, "settings.reading.download"), i18n.T(ctx, "settings.reading.download_desc"), p.Flag(FlagAutoDownload, false), nil)
+				@ui.ToggleRow("data_saver", "data_saver", i18n.T(ctx, "settings.reading.data_saver"), i18n.T(ctx, "settings.reading.data_saver_desc"), p.DataSaver, nil)
+			</div>
+		</div>
+		@noscriptSave()
+	</form>
+}
+
+// NotificationsSection is G1 · Notifications: what reaches you, and where.
+templ NotificationsSection(v notificationsView) {
+	@sectionHead(i18n.T(ctx, "settings.nav.notifications"), i18n.T(ctx, "settings.notifications.sub"))
+	<form class="mv-settings__section" method="post" action="/settings/notifications" { autosave("/settings/notifications")... }>
+		<div class="mv-box mv-table-wrap">
+			<table class="mv-table">
+				<thead>
+					<tr>
+						<th scope="col">{ i18n.T(ctx, "settings.notifications.event") }</th>
+						<th scope="col" class="mv-table__c">{ i18n.T(ctx, "settings.notifications.in_app") }</th>
+						<th scope="col" class="mv-table__c">{ i18n.T(ctx, "settings.notifications.email") }</th>
+						<th scope="col" class="mv-table__c">{ i18n.T(ctx, "settings.notifications.push") }</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, g := range notifyGroups {
+						if !g.Admin || v.Admin {
+							<tr>
+								<th scope="row" class="mv-table__row">{ i18n.T(ctx, "settings.notifications.group."+g.Key) }</th>
+								for _, ch := range []string{"in_app", "email", "push"} {
+									<td class="mv-table__c">
+										@ui.Checkbox(ui.CheckProps{Name: "n." + g.Key + "." + ch, Checked: v.on(g, ch), AriaLabel: i18n.T(ctx, "settings.notifications.group."+g.Key) + " · " + i18n.T(ctx, "settings.notifications."+ch)})
+									</td>
+								}
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+		<div class="mv-grid-2">
+			<div class="mv-field">
+				<span class="mv-field__label">{ i18n.T(ctx, "settings.notifications.quiet") }</span>
+				<div class="mv-row mv-row--wrap">
+					@ui.Toggle(ui.ToggleProps{ID: "quiet", Name: "quiet", Checked: v.Prefs.QuietHours.Enabled, AriaLabel: i18n.T(ctx, "settings.notifications.quiet")})
+					@ui.Select(ui.SelectProps{ID: "quiet_start", Name: "quiet_start", Value: v.Prefs.QuietHours.Start, Options: hourOptions(), Class: "mv-grow", Attrs: templ.Attributes{"aria-label": i18n.T(ctx, "settings.notifications.quiet_from")}})
+					<span aria-hidden="true">–</span>
+					@ui.Select(ui.SelectProps{ID: "quiet_end", Name: "quiet_end", Value: v.Prefs.QuietHours.End, Options: hourOptions(), Class: "mv-grow", Attrs: templ.Attributes{"aria-label": i18n.T(ctx, "settings.notifications.quiet_to")}})
+				</div>
+			</div>
+			@ui.Field(ui.FieldProps{ID: "digest", Label: i18n.T(ctx, "settings.notifications.digest")}) {
+				@ui.Select(ui.SelectProps{ID: "digest", Name: "digest", Value: v.Prefs.Digest, Options: []ui.Option{
+					{Value: "off", Label: i18n.T(ctx, "settings.notifications.digest.off")}, {Value: "daily", Label: i18n.T(ctx, "settings.notifications.digest.daily")},
+					{Value: "weekly", Label: i18n.T(ctx, "settings.notifications.digest.weekly")}}})
+			}
+		</div>
+		<p class="mv-small mv-faint">
+			if v.Email {
+				{ i18n.T(ctx, "settings.notifications.note") }
+			} else {
+				{ i18n.T(ctx, "settings.notifications.note_no_email") }
+			}
+		</p>
+		@noscriptSave()
+	</form>
+}
+
+func hourOptions() []ui.Option {
+	out := make([]ui.Option, 0, len(hours))
+	for _, h := range hours {
+		out = append(out, ui.Option{Value: h, Label: h})
+	}
+	return out
+}
+
+// AccessibilitySection is G1 · Accessibility: motion, contrast, text and reading aids.
+templ AccessibilitySection(p settings.UserPrefs) {
+	@sectionHead(i18n.T(ctx, "settings.nav.accessibility"), i18n.T(ctx, "settings.a11y.sub"))
+	<form class="mv-settings__section" method="post" action="/settings/accessibility" { autosave("/settings/accessibility")... }>
+		<div class="mv-box mv-box--pad-lg">
+			<div class="mv-setrows">
+				@ui.ToggleRow("a-motion", "reduced_motion", i18n.T(ctx, "settings.appearance.motion"), i18n.T(ctx, "settings.a11y.motion_desc"), p.ReducedMotion == "on", nil)
+				@ui.ToggleRow("a-focus", "high_contrast_focus", i18n.T(ctx, "settings.a11y.focus"), i18n.T(ctx, "settings.a11y.focus_desc"), p.HighContrastFocus, nil)
+				@ui.ToggleRow("a-links", "underline_links", i18n.T(ctx, "settings.a11y.links"), "", p.UnderlineLinks, nil)
+				@ui.ToggleRow("a-aloud", "read_aloud", i18n.T(ctx, "settings.a11y.aloud"), i18n.T(ctx, "settings.a11y.aloud_desc"), p.Reading.ReadAloud, nil)
+				@ui.ToggleRow("a-alt", "alt_text", i18n.T(ctx, "settings.a11y.alt"), "", p.Flag(FlagAltText, true), nil)
+				@ui.ToggleRow("a-dys", "dyslexia_font", i18n.T(ctx, "settings.a11y.dyslexia"), i18n.T(ctx, "settings.a11y.dyslexia_desc"), p.DyslexiaFont, nil)
+				@ui.ToggleRow("a-colour", "colour_safe", i18n.T(ctx, "settings.a11y.colour"), i18n.T(ctx, "settings.a11y.colour_desc"), p.Flag(FlagColourSafe, false), nil)
+			</div>
+		</div>
+		@ui.Slider(ui.SliderProps{ID: "text_size", Name: "text_size", Label: i18n.T(ctx, "settings.a11y.text_size"), Min: 87, Max: 150, Step: 1,
+			Value: float64(textSize(p)), Display: strconv.Itoa(textSize(p)) + "%", Suffix: "%"})
+		<div class="mv-grid-2">
+			@ui.SetRow(i18n.T(ctx, "settings.a11y.shortcuts"), i18n.T(ctx, "settings.a11y.shortcuts_desc")) {
+				@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "keyboard", Attrs: templ.Attributes{"data-dialog-open": "mv-shortcuts"}}) {
+					{ i18n.T(ctx, "settings.a11y.shortcuts_view") }
+				}
+			}
+		</div>
+		@noscriptSave()
+	</form>
+}
+
+func textSize(p settings.UserPrefs) int {
+	if p.TextSize == 0 {
+		return 100
+	}
+	return p.TextSize
+}
+
+// WorldSection is the World connection placeholder (the World module replaces /settings/world).
+templ WorldSection(enabled, localOnly, admin bool) {
+	@sectionHead(i18n.T(ctx, "settings.nav.world"), i18n.T(ctx, "settings.world.sub"))
+	<section class="mv-box mv-box--pad-lg mv-stack">
+		<div class="mv-row">
+			@ui.Icon("world", 26)
+			<div class="mv-stack mv-stack--xs">
+				<strong>{ i18n.T(ctx, "settings.world.title") }</strong>
+				<span class="mv-small mv-muted">{ i18n.T(ctx, "settings.world.body") }</span>
+			</div>
+		</div>
+		if localOnly {
+			@ui.Notice(ui.ToneWarning, "plug-connected-x") {
+				{ i18n.T(ctx, "settings.world.local_only") }
+			}
+		} else if !enabled {
+			@ui.Notice(ui.ToneInfo, "info-circle") {
+				if admin {
+					{ i18n.T(ctx, "settings.world.off_admin") }
+				} else {
+					{ i18n.T(ctx, "settings.world.off") }
+				}
+			}
+		}
+		<div>
+			@ui.Badge(ui.ToneMuted, "clock", i18n.T(ctx, "settings.world.soon"))
+		</div>
+	</section>
+}
+
+// DataSection is G1 · Data & export.
+templ DataSection(v dataView) {
+	@sectionHead(i18n.T(ctx, "settings.nav.data"), i18n.T(ctx, "settings.data.sub"))
+	<section class="mv-box mv-box--pad-lg mv-stack" aria-labelledby="export-h">
+		<h3 class="mv-box__title" id="export-h">{ i18n.T(ctx, "settings.data.export") }</h3>
+		<p class="mv-small mv-accent-text">{ i18n.T(ctx, "settings.data.export_desc") }</p>
+		<div class="mv-row mv-row--wrap">
+			<form method="post" action="/api/v1/export/me">
+				<input type="hidden" name="scope" value="everything"/>
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "download"}) {
+					{ i18n.T(ctx, "settings.data.export_all") }
+				}
+			</form>
+			@ui.LinkButton("/studio/projects?action=export", ui.ButtonProps{Variant: ui.Quiet, Icon: "file-export"}) {
+				{ i18n.T(ctx, "settings.data.export_project") }
+			}
+		</div>
+		@ui.KV(i18n.T(ctx, "settings.data.last_export"), i18n.T(ctx, "settings.data.never"))
+	</section>
+	<section class="mv-box mv-box--pad-lg mv-stack" aria-labelledby="storage-h">
+		<h3 class="mv-box__title" id="storage-h">{ i18n.T(ctx, "settings.data.storage") }</h3>
+		if v.QuotaMB > 0 {
+			<p class="mv-small mv-muted">{ i18n.T(ctx, "settings.data.quota", "quota", quotaGB(v.QuotaMB), "host", v.Host) }</p>
+		} else {
+			<p class="mv-small mv-muted">{ i18n.T(ctx, "settings.data.no_quota", "host", v.Host) }</p>
+		}
+	</section>
+	<section class="mv-box mv-box--pad-lg mv-stack" aria-labelledby="history-h">
+		<h3 class="mv-box__title" id="history-h">{ i18n.T(ctx, "settings.data.history") }</h3>
+		<p class="mv-small mv-muted">{ i18n.T(ctx, "settings.data.history_desc") }</p>
+		<div>
+			@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "trash", Attrs: templ.Attributes{"data-clear-downloads": "", "data-done": i18n.T(ctx, "settings.data.cleared")}}) {
+				{ i18n.T(ctx, "settings.data.clear_downloads") }
+			}
+		</div>
+	</section>
+}
+
+func quotaGB(mb int) string {
+	g := float64(mb) / 1024
+	if g == float64(int(g)) {
+		return strconv.Itoa(int(g))
+	}
+	return strconv.FormatFloat(g, 'f', 1, 64)
+}

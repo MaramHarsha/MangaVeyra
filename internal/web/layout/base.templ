@@ -1,0 +1,117 @@
+package layout
+
+import (
+	"encoding/json"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+)
+
+func flashJSON(f Flash) string {
+	b, _ := json.Marshal(f)
+	return string(b)
+}
+
+// Base renders the HTML document: language and direction, theme, motion,
+// text size and accessibility preferences on <html>, the favicon, PWA
+// manifest, self-hosted CSS/JS and the toast region. Page content goes in children.
+templ Base(c *Chrome) {
+	<!DOCTYPE html>
+	<html
+		lang={ c.Lang }
+		dir={ c.Dir }
+		data-theme={ c.Theme }
+		if c.Motion() != "" {
+			data-motion={ c.Motion() }
+		}
+		if c.TextSize() != "" {
+			data-text-size={ c.TextSize() }
+		}
+		if c.texturesOff() {
+			data-textures="off"
+		}
+		if c.Prefs.HighContrastFocus {
+			data-focus="strong"
+		}
+		if c.Prefs.UnderlineLinks {
+			data-links="underline"
+		}
+		if c.Prefs.DyslexiaFont {
+			data-font="dyslexic"
+		}
+		if c.Transition != "" {
+			data-transition={ c.Transition }
+		}
+		if !c.Dev {
+			data-sw="on"
+		}
+		data-close-label={ i18n.T(ctx, "ui.close") }
+		data-view-label={ i18n.T(ctx, "ui.view") }
+		data-error-label={ i18n.T(ctx, "ui.error_generic") }
+		data-offline-label={ i18n.T(ctx, "ui.offline") }
+	>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+			<title>{ c.fullTitle() }</title>
+			<meta name="description" content={ i18n.T(ctx, "app.description") }/>
+			<meta name="theme-color" content={ c.ThemeColor() }/>
+			<meta name="color-scheme" content="dark light"/>
+			<meta name="htmx-config" content={ `{"includeIndicatorStyles":false,"allowEval":false,"selfRequestsOnly":true}` }/>
+			<link rel="icon" href="/static/brand/favicon-gate-blue.svg" type="image/svg+xml"/>
+			<link rel="icon" href="/static/icons/favicon-gate-blue-32.png" sizes="32x32" type="image/png"/>
+			<link rel="apple-touch-icon" href="/static/icons/favicon-gate-blue-180.png"/>
+			<link rel="manifest" href="/manifest.webmanifest"/>
+			for _, f := range c.Assets.Fonts {
+				<link rel="preload" href={ f } as="font" type="font/woff2" crossorigin/>
+			}
+			for _, css := range c.Assets.CSS {
+				<link rel="stylesheet" href={ css }/>
+			}
+			for _, p := range c.Assets.Preload {
+				<link rel="modulepreload" href={ p }/>
+			}
+			if c.Assets.Script != "" {
+				<script type="module" src={ c.Assets.Script }></script>
+			}
+		</head>
+		<body
+			class="mv-body"
+			if c.User != nil {
+				data-user={ c.userID() }
+			}
+		>
+			{ children... }
+			<div id="mv-toasts" class="mv-toasts" role="status" aria-live="polite"></div>
+			for _, f := range c.Flash {
+				<template data-toast={ flashJSON(f) }></template>
+			}
+		</body>
+	</html>
+}
+
+// ThemedImg renders the dark- and light-theme variants of an image; CSS shows
+// the one matching the current theme, so switching themes without a reload
+// keeps logos legible.
+templ ThemedImg(class, dark, light, alt string, w, h int) {
+	<img class={ class + " mv-only-dark" } src={ dark } alt={ alt } width={ itoa(w) } height={ itoa(h) }/>
+	<img class={ class + " mv-only-light" } src={ light } alt={ alt } width={ itoa(w) } height={ itoa(h) }/>
+}
+
+// Brand image paths.
+const (
+	LogoDark       = "/static/brand/lockup-color-on-dark-gate-blue.svg"
+	LogoLight      = "/static/brand/lockup-color-on-light-gate-blue.svg"
+	BrandMarkDark  = "/static/brand/mark-color-on-dark.svg"
+	BrandMarkLight = "/static/brand/mark-color-on-light.svg"
+)
+
+// PlainShell renders a full-screen page without navigation (errors, offline, maintenance).
+templ PlainShell(c *Chrome) {
+	@Base(c) {
+		<div class="mv-plain">
+			<main id="main">
+				{ children... }
+			</main>
+		</div>
+	}
+}

@@ -1,0 +1,17 @@
+# Build context filter for deploy/Dockerfile and deploy/Dockerfile.worker (BuildKit).
+.git
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+bin
+data
+dist
+internal/web/static/dist
+e2e/test-results
+e2e/playwright-report
+.env
+.env.*
+!.env.example
+coverage.*
+*.log

@@ -1,0 +1,19 @@
+# Animagine XL 4.0 (SDXL architecture, anime style).
+id: animagine-xl-4
+name: Animagine XL 4.0
+maker: Cagliostro Research Lab
+kind: image
+vram_mb: 10000
+min_vram_mb: 5000
+worker:
+  diffusers:
+    repo: cagliostrolab/animagine-xl-4.0
+    family: sdxl
+    controlnet_openpose: xinsir/controlnet-openpose-sdxl-1.0
+    controlnet_lineart: xinsir/controlnet-scribble-sdxl-1.0
+    scheduler: euler_a
+    default_steps: 28
+    default_guidance: 5.0
+    prompt_suffix: "masterpiece, high score, great score, absurdres"
+    negative_prefix: "lowres, bad anatomy, bad hands, worst quality, low score, bad score, average score"
+    trainable: true

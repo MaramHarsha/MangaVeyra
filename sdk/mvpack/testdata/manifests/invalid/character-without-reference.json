@@ -1,0 +1,53 @@
+{
+  "ai_label": {
+    "art": "ai-assisted",
+    "design": "human"
+  },
+  "character": {
+    "base_model": "illustrious-xl",
+    "from_series": "Tidebreak Courier",
+    "trigger_word": "rinasagiri"
+  },
+  "created_at": "2026-09-12T10:00:00Z",
+  "credit": {
+    "display_name": "Jerry Ink",
+    "handle": "jerry-ink"
+  },
+  "files": [
+    {
+      "media_type": "image/png",
+      "path": "cover.png",
+      "role": "cover",
+      "sha256": "72457be90efc8e8c5d9083dabe845894b8a90d17469b52d6b41db7200ba204bc",
+      "size": 142
+    },
+    {
+      "media_type": "application/vnd.safetensors",
+      "path": "lora/rin-asagiri.safetensors",
+      "role": "lora",
+      "sha256": "c1461a7a4785bea9e67cbb065c2c9cb3b42084f92944faaf0e235656f4bfcb3e",
+      "size": 120
+    },
+    {
+      "media_type": "application/json",
+      "path": "profile.json",
+      "role": "profile",
+      "sha256": "292dd9e1b277332edb10a3a85bc490912056c58b0723cec65a2af56a60a816ee",
+      "size": 74
+    }
+  ],
+  "id": "rin-asagiri",
+  "kind": "character",
+  "licence": "CC-BY-4.0",
+  "mvpack": 1,
+  "name": "Rin Asagiri",
+  "summary": "19-year-old courier in a long coat with a satchel.",
+  "tags": [
+    "courier",
+    "tidebreak-courier"
+  ],
+  "version": "1.2.0",
+  "works_with": [
+    "illustrious-xl"
+  ]
+}

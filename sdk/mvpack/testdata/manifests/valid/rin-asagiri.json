@@ -1,0 +1,67 @@
+{
+  "mvpack": 1,
+  "kind": "character",
+  "id": "rin-asagiri",
+  "name": "Rin Asagiri",
+  "version": "1.2.0",
+  "summary": "19-year-old courier in a long coat with a satchel.",
+  "created_at": "2026-09-12T10:00:00Z",
+  "licence": "CC-BY-4.0",
+  "ai_label": {
+    "art": "ai-assisted",
+    "design": "human"
+  },
+  "credit": {
+    "display_name": "Jerry Ink",
+    "handle": "jerry-ink"
+  },
+  "tags": [
+    "courier",
+    "tidebreak-courier"
+  ],
+  "works_with": [
+    "illustrious-xl"
+  ],
+  "character": {
+    "from_series": "Tidebreak Courier",
+    "trigger_word": "rinasagiri",
+    "base_model": "illustrious-xl"
+  },
+  "files": [
+    {
+      "path": "cover.png",
+      "role": "cover",
+      "media_type": "image/png",
+      "size": 142,
+      "sha256": "72457be90efc8e8c5d9083dabe845894b8a90d17469b52d6b41db7200ba204bc"
+    },
+    {
+      "path": "refs/front.png",
+      "role": "reference",
+      "media_type": "image/png",
+      "size": 142,
+      "sha256": "09c2f8d0f7b05376231f7763d036a1a2156f66434aa97cf088d54148a5ea2c45"
+    },
+    {
+      "path": "refs/side.png",
+      "role": "reference",
+      "media_type": "image/png",
+      "size": 142,
+      "sha256": "cec511ab29bd2feef12b02b78a86520c09a686554de8110a604c121f0c1d1064"
+    },
+    {
+      "path": "lora/rin-asagiri.safetensors",
+      "role": "lora",
+      "media_type": "application/vnd.safetensors",
+      "size": 120,
+      "sha256": "c1461a7a4785bea9e67cbb065c2c9cb3b42084f92944faaf0e235656f4bfcb3e"
+    },
+    {
+      "path": "profile.json",
+      "role": "profile",
+      "media_type": "application/json",
+      "size": 74,
+      "sha256": "292dd9e1b277332edb10a3a85bc490912056c58b0723cec65a2af56a60a816ee"
+    }
+  ]
+}

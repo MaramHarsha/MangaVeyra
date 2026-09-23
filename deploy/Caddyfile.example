@@ -1,0 +1,14 @@
+# Caddy reverse proxy with automatic HTTPS. Set in MangaVeyra's environment:
+#   MV_PUBLIC_URL=https://manga.example.org
+#   MV_TRUSTED_PROXIES=127.0.0.1   (the address Caddy connects from)
+manga.example.org {
+	encode zstd gzip
+	# Large uploads (imports, LoRAs, worker artifacts)
+	request_body {
+		max_size 1GB
+	}
+	reverse_proxy 127.0.0.1:8080 {
+		# WebSockets (/ws) and long polls (/api/worker/v1/claim) need no extra settings in Caddy.
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

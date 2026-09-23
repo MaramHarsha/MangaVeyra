@@ -1,0 +1,41 @@
+{
+  "mvpack_signature": 1,
+  "manifest_sha256": "07afbb85f349a19a39e737504e2bce8474207a853dae186f4e6a6827d08e4661",
+  "files": [
+    {
+      "path": "cover.png",
+      "size": 142,
+      "sha256": "72457be90efc8e8c5d9083dabe845894b8a90d17469b52d6b41db7200ba204bc"
+    },
+    {
+      "path": "lora/rin-asagiri.safetensors",
+      "size": 120,
+      "sha256": "c1461a7a4785bea9e67cbb065c2c9cb3b42084f92944faaf0e235656f4bfcb3e"
+    },
+    {
+      "path": "profile.json",
+      "size": 74,
+      "sha256": "292dd9e1b277332edb10a3a85bc490912056c58b0723cec65a2af56a60a816ee"
+    },
+    {
+      "path": "refs/front.png",
+      "size": 142,
+      "sha256": "09c2f8d0f7b05376231f7763d036a1a2156f66434aa97cf088d54148a5ea2c45"
+    },
+    {
+      "path": "refs/side.png",
+      "size": 142,
+      "sha256": "cec511ab29bd2feef12b02b78a86520c09a686554de8110a604c121f0c1d1064"
+    }
+  ],
+  "signatures": [
+    {
+      "key_id": "srv_testdata",
+      "signer": "server",
+      "alg": "ed25519",
+      "public_key": "UtD35Fj5pogX5LZdjE4kwmQSgiiz+T8J3c246QRc0WM=",
+      "signed_at": "2026-09-12T10:00:00Z",
+      "sig": "wQ0C4W9It8h0JtZnjNaTBUpSCUTkEFmskdMEQ8UCboKBTx83enWjnCrWRzxEellIQw7HqszReQmTrgZbT1cCDg=="
+    }
+  ]
+}

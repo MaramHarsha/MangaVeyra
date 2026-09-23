@@ -1,0 +1,197 @@
+package ui
+
+import "github.com/MaramHarsha/MangaVeyra/internal/i18n"
+
+// ModalProps configure a modal dialog (design 04 §12: seal-style border and glow).
+type ModalProps struct {
+	ID    string
+	Title string
+	Wide  bool
+	// Static renders the dialog open and inline (style guide, no-JS fallbacks).
+	Static bool
+	Class  string
+}
+
+// Modal renders a <dialog>; open it with any element carrying data-dialog-open="<ID>".
+// Put the body in children; use ModalFoot for the action row.
+templ Modal(p ModalProps) {
+	<dialog
+		class={ Cls("mv-modal", If(p.Wide, "mv-modal--wide"), If(p.Static, "mv-modal--static"), p.Class) }
+		id={ p.ID }
+		aria-labelledby={ p.ID + "-title" }
+		if p.Static {
+			open
+		}
+	>
+		<div class="mv-modal__head">
+			<strong class="mv-modal__title" id={ p.ID + "-title" }>{ p.Title }</strong>
+			if !p.Static {
+				<form method="dialog">
+					<button class="mv-close" type="submit" aria-label={ i18n.T(ctx, "ui.close") }>
+						@Icon("x", 20)
+					</button>
+				</form>
+			} else {
+				<span class="mv-close" aria-hidden="true">
+					@Icon("x", 20)
+				</span>
+			}
+		</div>
+		{ children... }
+	</dialog>
+}
+
+// ModalBody wraps modal content.
+templ ModalBody() {
+	<div class="mv-modal__body">
+		{ children... }
+	</div>
+}
+
+// ModalFoot wraps the modal's action buttons (right aligned).
+templ ModalFoot() {
+	<div class="mv-modal__foot">
+		{ children... }
+	</div>
+}
+
+// Drawer renders a side sheet dialog opened with data-dialog-open="<id>".
+templ Drawer(id, title string, static bool) {
+	<dialog
+		class={ Cls("mv-drawer", If(static, "mv-drawer--static")) }
+		id={ id }
+		aria-labelledby={ id + "-title" }
+		if static {
+			open
+		}
+	>
+		<div class="mv-drawer__head">
+			<strong id={ id + "-title" }>{ title }</strong>
+			<form method="dialog">
+				<button class="mv-close" type="submit" aria-label={ i18n.T(ctx, "ui.close") }>
+					@Icon("x", 18)
+				</button>
+			</form>
+		</div>
+		<div class="mv-drawer__body">
+			{ children... }
+		</div>
+	</dialog>
+}
+
+// MenuItem is one entry of a dropdown menu.
+type MenuItem struct {
+	Href  string
+	Label string
+	Icon  string
+	Meta  string
+	// Current highlights the item (inset accent bar).
+	Current bool
+	Danger  bool
+	// Post turns the item into a POST form button (e.g. log out).
+	Post bool
+	// Separator renders a divider instead of an item.
+	Separator bool
+	Attrs     templ.Attributes
+}
+
+// Dropdown renders a <details> menu; the summary content is the trigger.
+// align is "" (start) or "end"; up opens upwards.
+templ Dropdown(class, align string, up bool, trigger templ.Component, items []MenuItem) {
+	<details class={ Cls("mv-dropdown", If(align == "end", "mv-dropdown--end"), If(up, "mv-dropdown--up"), class) }>
+		<summary>
+			@trigger
+		</summary>
+		<div class="mv-dropdown__panel">
+			@Menu(items)
+		</div>
+	</details>
+}
+
+// Menu renders a menu list (used by Dropdown and the style guide).
+templ Menu(items []MenuItem) {
+	<div class="mv-menu" role="menu">
+		{ children... }
+		for _, it := range items {
+			if it.Separator {
+				<div class="mv-menu__sep" role="separator"></div>
+			} else if it.Post {
+				<form method="post" action={ templ.URL(it.Href) }>
+					<button type="submit" class={ Cls("mv-menu__item", If(it.Danger, "mv-menu__item--danger")) } role="menuitem" { it.Attrs... }>
+						if it.Icon != "" {
+							@Icon(it.Icon, 18)
+						}
+						<span>{ it.Label }</span>
+					</button>
+				</form>
+			} else {
+				<a
+					class={ Cls("mv-menu__item", If(it.Danger, "mv-menu__item--danger")) }
+					href={ templ.URL(it.Href) }
+					role="menuitem"
+					if it.Current {
+						aria-current="true"
+					}
+					{ it.Attrs... }
+				>
+					if it.Icon != "" {
+						@Icon(it.Icon, 18)
+					}
+					<span>{ it.Label }</span>
+					if it.Meta != "" {
+						<span class="mv-menu__meta">{ it.Meta }</span>
+					}
+				</a>
+			}
+		}
+	</div>
+}
+
+// BubbleTip renders a static speech-bubble tooltip (for any element use data-tip="…").
+templ BubbleTip(text string) {
+	<div class="mv-bubble-tip" role="tooltip">{ text }</div>
+}
+
+// ToastProps describe a toast rendered on the server (flash messages, style guide).
+type ToastProps struct {
+	Tone   Tone
+	Title  string
+	Body   string
+	Href   string
+	Action string
+}
+
+func toastIcon(t Tone) string {
+	switch t {
+	case ToneSuccess:
+		return "circle-check"
+	case ToneError:
+		return "alert-triangle"
+	case ToneWarning:
+		return "alert-circle"
+	}
+	return "info-circle"
+}
+
+func toastTone(t Tone) Tone {
+	if t == "" {
+		return ToneInfo
+	}
+	return t
+}
+
+// Toast renders a speech-bubble toast with a tail.
+templ Toast(p ToastProps) {
+	<div class={ "mv-toast mv-toast--" + string(toastTone(p.Tone)) } role={ noticeRole(p.Tone) }>
+		@Icon(toastIcon(p.Tone), 22)
+		<div class="mv-toast__text">
+			<strong class="mv-toast__title">{ p.Title }</strong>
+			if p.Body != "" {
+				<span class="mv-toast__body">{ p.Body }</span>
+			}
+		</div>
+		if p.Href != "" {
+			<a class="mv-toast__action" href={ templ.URL(p.Href) }>{ p.Action }</a>
+		}
+	</div>
+}

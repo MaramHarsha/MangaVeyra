@@ -1,0 +1,36 @@
+# systemd unit for a bare-metal install.
+#   sudo useradd --system --home /var/lib/mangaveyra --create-home mangaveyra
+#   sudo install -m 0755 bin/mangaveyra /usr/local/bin/mangaveyra
+#   sudo install -m 0640 -o root -g mangaveyra .env.example /etc/mangaveyra/mangaveyra.env   # then edit it
+#   sudo cp deploy/mangaveyra.service /etc/systemd/system/ && sudo systemctl enable --now mangaveyra
+[Unit]
+Description=MangaVeyra self-hosted AI manga studio
+Documentation=https://github.com/MaramHarsha/MangaVeyra
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mangaveyra
+Group=mangaveyra
+Environment=MV_DATA_DIR=/var/lib/mangaveyra
+EnvironmentFile=-/etc/mangaveyra/mangaveyra.env
+ExecStart=/usr/local/bin/mangaveyra serve
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/mangaveyra
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

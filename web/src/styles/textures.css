@@ -1,0 +1,110 @@
+/*
+ * Textures (design file 04, section 05). Seasoning: at most one strong texture
+ * per view, never under body text, none inside the editor workspace.
+ * html[data-textures="off"] (G1 Appearance) removes the decorative ones.
+ */
+
+/* Screentone: dot grid at 9 px, 6–10 % on ink, 10–14 % on paper. */
+.mv-tex-screentone {
+  background-image: radial-gradient(rgb(var(--mv-tone-ink) / var(--mv-texture-alpha)) 1.2px, transparent 1.5px);
+  background-size: 9px 9px;
+}
+
+/* Halftone fade: accent dots fading across a surface (hero edges, publish success). */
+.mv-tex-halftone {
+  background-color: var(--mv-accent);
+  background-image: radial-gradient(#070A12 2.4px, transparent 2.8px);
+  background-size: 10px 10px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 70%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 70%);
+}
+
+/* Speed lines: radial lines with a clear centre. Place inside a positioned, overflow-hidden parent. */
+.mv-tex-speedlines {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background: repeating-conic-gradient(from 0deg at 50% 50%, rgb(var(--mv-tone-ink) / .1) 0deg 1.2deg, transparent 1.2deg 7deg);
+}
+.mv-tex-speedlines--wide { inset: -30%; }
+.mv-tex-speedlines--strong { background: repeating-conic-gradient(from 0deg at 50% 50%, rgb(var(--mv-tone-ink) / .8) 0deg 1.2deg, transparent 1.2deg 7deg); }
+.mv-tex-speedlines--error { background: repeating-conic-gradient(from 0deg at 50% 45%, rgb(255 92 122 / .16) 0deg 1.2deg, transparent 1.2deg 8deg); }
+
+/* The calm centre that keeps speed lines away from text. */
+.mv-tex-calm {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background: var(--mv-bg);
+  filter: blur(40px);
+  pointer-events: none;
+}
+.mv-tex-calm--wide { inset: 26%; }
+.mv-tex-calm--small { inset: 22%; filter: blur(24px); }
+
+/* Ink splash placeholder (final splashes are scanned brush art). */
+.mv-tex-splash {
+  width: 150px;
+  height: 110px;
+  flex: none;
+  background-image:
+    radial-gradient(circle at 45% 50%, var(--mv-text) 0 30%, transparent 31%),
+    radial-gradient(circle at 72% 30%, var(--mv-text) 0 10%, transparent 11%),
+    radial-gradient(circle at 22% 72%, var(--mv-text) 0 8%, transparent 9%),
+    radial-gradient(circle at 84% 70%, var(--mv-accent) 0 6%, transparent 7%);
+}
+
+/* Soft splash behind the 404 numerals. */
+.mv-tex-splash-soft {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: 520px;
+  height: 380px;
+  max-width: 100%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 45% 50%, var(--mv-surface) 0 32%, transparent 33%),
+    radial-gradient(circle at 72% 30%, var(--mv-surface) 0 10%, transparent 11%),
+    radial-gradient(circle at 22% 72%, var(--mv-surface) 0 8%, transparent 9%),
+    radial-gradient(circle at 84% 70%, var(--mv-accent) 0 4%, transparent 5%);
+}
+
+/* Gate portal: hero and empty-state backdrop, CSS only. */
+.mv-tex-portal {
+  position: relative;
+  overflow: hidden;
+  background: var(--mv-canvas);
+}
+.mv-tex-portal::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 90px;
+  height: 150px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgb(106 168 255 / .9), rgb(61 139 255 / .35) 45%, transparent 70%);
+  box-shadow: 0 0 60px rgb(61 139 255 / .6);
+  animation: mvPortal 4s ease-in-out infinite alternate;
+}
+
+/* Gate glow backdrop for status-window areas. */
+.mv-tex-gate {
+  background: radial-gradient(circle at 30% 20%, rgb(61 139 255 / .18), transparent 60%), var(--mv-canvas);
+}
+
+@keyframes mvPortal {
+  from { transform: translate(-50%, -50%) scale(1); opacity: .85; }
+  to { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+}
+
+html[data-textures="off"] .mv-tex-screentone,
+html[data-textures="off"] .mv-tex-halftone,
+html[data-textures="off"] .mv-tex-speedlines,
+html[data-textures="off"] .mv-tex-splash-soft {
+  background: none;
+}
+html[data-textures="off"] .mv-tex-halftone { background-color: var(--mv-surface-2); }

@@ -1,0 +1,36 @@
+{{define "content"}}
+{{with .Item}}
+<div class="row">
+  {{if $.HasCover}}<img class="cover" src="/_stub/covers/{{.ID}}.png" alt="Screentone placeholder cover for {{.Name}}">{{end}}
+  <div style="flex:1;min-width:260px">
+    <p class="label">{{.Kind}} · v{{.Version}}</p>
+    <h1>{{.Name}}</h1>
+    <p>{{.Summary}}</p>
+    <p>by <a href="{{$.ProfileAt}}">{{.Creator.DisplayName}}</a> <span class="meta">@{{.Creator.Handle}}</span>{{if .Creator.Verified}} <span class="badge info">Verified</span>{{end}}</p>
+    <p><span class="badge {{if eq .Availability "paid"}}warn{{else}}ok{{end}}">{{availabilityLabel .Availability}}</span>
+      <span class="badge">{{.LicenceName}}</span>
+      {{if .HandDrawn}}<span class="badge ok">Hand-drawn</span>{{end}}
+      <span class="badge">{{.ContentRating}}</span></p>
+    {{if eq .Availability "paid"}}<p class="meta">Paid items are obtained on the real World website only. The development stub never hands them out; seeded libraries already own a few for testing.</p>{{end}}
+    <p class="meta">Credit: {{.CreditLine}}</p>
+  </div>
+</div>
+{{if .Description}}<h2>About</h2><p>{{.Description}}</p>{{end}}
+<h2>Provenance</h2>
+<table><tbody>
+  {{with .AILabel}}
+  {{if .Art}}<tr><th scope="row">Art</th><td>{{.Art}}</td></tr>{{end}}
+  {{if .Design}}<tr><th scope="row">Design</th><td>{{.Design}}</td></tr>{{end}}
+  {{if .Script}}<tr><th scope="row">Script</th><td>{{.Script}}</td></tr>{{end}}
+  {{if .Lettering}}<tr><th scope="row">Lettering</th><td>{{.Lettering}}</td></tr>{{end}}
+  {{end}}
+  {{if .FromSeries}}<tr><th scope="row">From series</th><td>{{.FromSeries}}</td></tr>{{end}}
+  <tr><th scope="row">Signed by</th><td class="mono">@{{.SignedBy.Handle}} · {{.SignedBy.KeyID}}</td></tr>
+</tbody></table>
+<h2>Contents</h2>
+<ul class="plain">{{range .Contents.Summary}}<li>{{.}}</li>{{end}}</ul>
+<p class="meta">{{.Contents.FileCount}} files · {{.Contents.Size}} bytes</p>
+<h2>Versions</h2>
+<ul class="plain">{{range .Versions}}<li class="mono">{{.Version}} · {{.ReleasedAt}}</li>{{end}}</ul>
+{{end}}
+{{end}}

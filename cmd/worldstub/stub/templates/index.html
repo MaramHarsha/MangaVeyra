@@ -1,0 +1,60 @@
+{{define "content"}}
+<h1>World development stub</h1>
+<p>A fake, in-memory implementation of the World public API (<span class="mono">sdk/api/world.openapi.yaml</span>) for tests and local development of MangaVeyra's World module. It is <strong>not</strong> the real platform: there is no persistence, no real review, no malware scanning and no payments of any kind.</p>
+<div class="card">
+  <p class="label">Settings</p>
+  <table><tbody>
+    <tr><th scope="row">Public URL</th><td class="mono">{{.PublicURL}}</td></tr>
+    <tr><th scope="row">Auto-approve device codes</th><td>{{if .Options.AutoApprove}}on, as <span class="mono">{{.Options.AutoApproveAs}}</span>{{else}}off (approve on <a href="/device">/device</a>){{end}}</td></tr>
+    <tr><th scope="row">Automated checks finish after</th><td class="mono">{{.Options.CheckDelay}}</td></tr>
+    <tr><th scope="row">Submissions approve after</th><td class="mono">{{if .Options.ReviewDelay}}{{.Options.ReviewDelay}}{{else}}manual review only{{end}}</td></tr>
+    <tr><th scope="row">World pack key</th><td class="mono">{{.PackKey}}</td></tr>
+    <tr><th scope="row">World licence key</th><td class="mono">{{.LicenceKey}}</td></tr>
+  </tbody></table>
+</div>
+
+<h2 id="devices">Pending device codes</h2>
+{{if .Devices}}
+<div class="table-wrap"><table>
+<thead><tr><th>Code</th><th>Scope</th><th>Expires</th><th>Decision</th></tr></thead>
+<tbody>{{range .Devices}}<tr><td class="mono">{{.UserCode}}</td><td class="mono">{{.Scope}}</td><td class="meta">{{date .Expires}}</td><td><a href="/device?user_code={{.UserCode}}">Review</a></td></tr>{{end}}</tbody>
+</table></div>
+{{else}}<p class="meta">No codes waiting.</p>{{end}}
+
+<h2 id="submissions">Submissions</h2>
+{{if .Submissions}}
+<div class="table-wrap"><table>
+<thead><tr><th>Item</th><th>Creator</th><th>Status</th><th>Checks</th><th>Review</th></tr></thead>
+<tbody>{{range .Submissions}}<tr>
+  <td>{{.Name}} <span class="meta">{{.Kind}} · v{{.Version}}</span><br><span class="mono">{{.ID}}</span></td>
+  <td class="mono">@{{.Handle}}</td>
+  <td><span class="badge {{if eq .Status "approved"}}ok{{else if eq .Status "rejected"}}bad{{else if eq .Status "in_review"}}info{{else}}warn{{end}}">{{.Status}}</span>{{if .WorldURL}}<br><a href="{{.WorldURL}}">Item page</a>{{end}}</td>
+  <td class="meta">{{.Checks}}{{if .Message}}<br>{{.Message}}{{end}}</td>
+  <td>{{if .Reviewable}}<form method="post" action="/_stub/review" class="inline">
+    <input type="hidden" name="submission_id" value="{{.ID}}">
+    <label class="label" for="d-{{.ID}}">Decision</label>
+    <select id="d-{{.ID}}" name="decision">{{range $.Decisions}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+    <label class="label" for="m-{{.ID}}">Message</label>
+    <input id="m-{{.ID}}" name="message" placeholder="Reviewer message (optional)">
+    <button type="submit">Decide</button>
+  </form>{{else}}<span class="meta">—</span>{{end}}</td>
+</tr>{{end}}</tbody>
+</table></div>
+{{else}}<p class="meta">No submissions yet. Submit from a linked MangaVeyra server.</p>{{end}}
+
+<h2 id="accounts">Accounts</h2>
+{{if .Accounts}}
+<div class="table-wrap"><table>
+<thead><tr><th>Name</th><th>Handle</th><th>Server keys</th><th>Library</th></tr></thead>
+<tbody>{{range .Accounts}}<tr><td>{{.DisplayName}}{{if .Developer}} <span class="badge">developer</span>{{end}}</td><td>{{if .Handle}}<a href="/@{{.Handle}}">@{{.Handle}}</a>{{else}}<span class="meta">no World name yet</span>{{end}}</td><td>{{.Keys}}</td><td>{{.Library}}</td></tr>{{end}}</tbody>
+</table></div>
+{{else}}<p class="meta">No accounts. Start with <span class="mono">--seed</span> or link a server.</p>{{end}}
+
+<h2 id="catalog">Catalogue</h2>
+{{if .Items}}
+<div class="table-wrap"><table>
+<thead><tr><th>Name</th><th>Kind</th><th>Creator</th><th>Licence</th><th>Availability</th></tr></thead>
+<tbody>{{range .Items}}<tr><td><a href="/items/{{.ID}}">{{.Name}}</a></td><td>{{.Kind}}</td><td class="mono">@{{.Creator.Handle}}</td><td>{{.LicenceName}}</td><td>{{availabilityLabel .Availability}}</td></tr>{{end}}</tbody>
+</table></div>
+{{else}}<p class="meta">The catalogue is empty.</p>{{end}}
+{{end}}

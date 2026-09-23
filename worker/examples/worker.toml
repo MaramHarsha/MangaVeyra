@@ -1,0 +1,11 @@
+# Example config file: mangaveyra-worker --config worker.toml (environment variables override it).
+[worker]
+server = "http://studio.local:8080"
+name = "studio-pc"
+backends = ["diffusers", "vision"]
+max_concurrent = 1
+models = ["illustrious-xl", "flux2-klein"]
+lora_dir = "/models/loras"
+offload = "auto"
+ocr_engine = "auto"
+embedder = "auto"

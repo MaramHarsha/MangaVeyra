@@ -1,0 +1,85 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mangaveyra-worker"
+dynamic = ["version"]
+description = "MangaVeyra AI worker: pulls image, vision and training jobs from a MangaVeyra server (diffusers, ComfyUI or a built-in mock)."
+readme = "README.md"
+license = "AGPL-3.0-only"
+requires-python = ">=3.11"
+authors = [{ name = "MangaVeyra contributors" }]
+keywords = ["manga", "comics", "diffusers", "comfyui", "self-hosted", "worker"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: GPU :: NVIDIA CUDA",
+  "Intended Audience :: End Users/Desktop",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Multimedia :: Graphics",
+]
+# The core install is deliberately small: the protocol client and the mock backend run with these alone.
+dependencies = [
+  "httpx>=0.27",
+  "pillow>=10.3",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Local image generation, editing, inpainting, character sheets and LoRA training.
+diffusers = [
+  "torch>=2.4",
+  "diffusers>=0.32",
+  "transformers>=4.46",
+  "accelerate>=1.0",
+  "peft>=0.13",
+  "safetensors>=0.4",
+  "numpy>=1.26",
+]
+# Run exported ComfyUI workflows (websocket progress; falls back to polling without it).
+comfyui = [
+  "websockets>=13",
+]
+# Panel/bubble detection, identity scoring and OCR helpers. insightface, open_clip_torch and
+# manga-ocr are optional extras on top of this (see README).
+vision = [
+  "numpy>=1.26",
+  "opencv-python-headless>=4.9",
+  "onnxruntime>=1.18",
+]
+test = [
+  "pytest>=8",
+  "numpy>=1.26",
+  "opencv-python-headless>=4.9",
+]
+all = ["mangaveyra-worker[diffusers,comfyui,vision]"]
+# Alias used by deploy/Dockerfile.worker's GPU stage.
+gpu = ["mangaveyra-worker[diffusers,comfyui,vision]"]
+
+[project.scripts]
+mangaveyra-worker = "mangaveyra_worker.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/MaramHarsha/MangaVeyra"
+Source = "https://github.com/MaramHarsha/MangaVeyra/tree/main/worker"
+
+[tool.hatch.version]
+path = "mangaveyra_worker/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mangaveyra_worker"]
+
+[tool.hatch.build.targets.sdist]
+include = ["mangaveyra_worker", "tests", "examples", "README.md", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = ["ignore::DeprecationWarning:websockets.*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"

@@ -1,0 +1,189 @@
+package ui
+
+import "strconv"
+
+// MeterProps drive the compact compute meter in the top bar (self-host
+// replaces credits with GPU/queue load; design 04 §11 and §13).
+type MeterProps struct {
+	Href string
+	// Load is 0–1 (VRAM in use or queue pressure).
+	Load float64
+	// Text is "2 queued", "GPU idle", "No GPU".
+	Text string
+	// Title is the full description for the tooltip and screen readers.
+	Title   string
+	Idle    bool
+	Offline bool
+}
+
+// ComputeMeter renders the top-bar meter: CPU icon, mini bar and queue text.
+templ ComputeMeter(p MeterProps) {
+	<a
+		class={ Cls("mv-meter", If(p.Idle, "mv-meter--idle"), If(p.Offline, "mv-meter--offline")) }
+		href={ templ.URL(p.Href) }
+		aria-label={ p.Title }
+		data-tip={ p.Title }
+		data-tip-pos="below"
+		id="mv-meter"
+	>
+		@Icon("cpu", 15)
+		<span class={ Cls("mv-bar mv-meter__bar", Pct(p.Load)) } aria-hidden="true"></span>
+		<span class="mv-meter__label">{ p.Text }</span>
+	</a>
+}
+
+// ComputeCardProps drive the large compute meter (GPU, VRAM, queue).
+type ComputeCardProps struct {
+	GPU       string
+	VRAMUsed  float64
+	VRAMTotal float64
+	VRAMText  string
+	Queue     string
+}
+
+// ComputeCard renders the self-host compute meter: GPU, VRAM bar and queue estimate.
+templ ComputeCard(p ComputeCardProps) {
+	<div class="mv-compute">
+		@Icon("cpu", 18)
+		<span class="mv-compute__gpu">{ p.GPU }</span>
+		if p.VRAMTotal > 0 {
+			<span class="mv-compute__vram">
+				@Bar(p.VRAMUsed/p.VRAMTotal, "", false, p.VRAMText)
+				<span>{ p.VRAMText }</span>
+			</span>
+		}
+		<span class="mv-compute__sep" aria-hidden="true"></span>
+		<span class="mv-compute__queue">{ p.Queue }</span>
+	</div>
+}
+
+// RouteChip renders the routing explanation "Auto → model · where · estimate" with a "Why" link.
+templ RouteChip(auto, pick, whyHref, whyLabel string) {
+	<span class="mv-route-line">
+		<span class="mv-route">
+			@Icon("route", 15)
+			<span class="mv-route__auto">{ auto }</span>
+			<span class="mv-route__pick">→ { pick }</span>
+		</span>
+		if whyHref != "" {
+			<a href={ templ.URL(whyHref) }>{ whyLabel }</a>
+		}
+	</span>
+}
+
+// GenState values.
+const (
+	GenQueued     = "queued"
+	GenGenerating = "generating"
+	GenReady      = "ready"
+	GenFailed     = "failed"
+)
+
+// GenProps describe one generation result slot.
+type GenProps struct {
+	State string
+	// Position in the queue (queued).
+	Position int
+	// Progress 0–1 and Step/Steps (generating); the ink fill follows real progress.
+	Progress float64
+	Step     int
+	Steps    int
+	// ProgressText is "62% · step 18/28".
+	ProgressText string
+	Title        string
+	Detail       string
+	ResultLabel  string
+	// SFX for failures ("FZZT"); RetryLabel/RetryAttrs for the retry button.
+	SFX        string
+	RetryLabel string
+	RetryAttrs templ.Attributes
+	// JobID lets main.ts / islands update progress live.
+	JobID string
+}
+
+// GenState renders queued, generating (ink fill), ready and failed + retry states.
+templ GenState(p GenProps) {
+	<div
+		class={ Cls("mv-gen", "mv-gen--"+p.State) }
+		if p.JobID != "" {
+			data-job-id={ p.JobID }
+		}
+	>
+		<div
+			class="mv-gen__frame"
+			if p.State == GenGenerating {
+				role="progressbar"
+				aria-valuemin="0"
+				aria-valuemax="100"
+				aria-valuenow={ strconv.Itoa(int(p.Progress*100 + .5)) }
+				aria-label={ p.Title }
+			}
+		>
+			switch p.State {
+				case GenQueued:
+					<div class="mv-gen__center">
+						@Icon("clock", 26)
+						<span class="mv-gen__pos">#{ strconv.Itoa(p.Position) }</span>
+					</div>
+				case GenGenerating:
+					<div class={ Cls("mv-gen__fill", Pct(p.Progress)) }></div>
+					<span class="mv-gen__progress">{ p.ProgressText }</span>
+				case GenReady:
+					@ToneBox(p.ResultLabel, "", "mv-gen__result")
+				case GenFailed:
+					<div class="mv-gen__center">
+						@SFX(p.SFX, "xs", "error", false)
+						if p.RetryLabel != "" {
+							@Button(ButtonProps{Variant: Secondary, Size: SM, Icon: "refresh", Attrs: p.RetryAttrs}) {
+								{ p.RetryLabel }
+							}
+						}
+					</div>
+			}
+		</div>
+		<div class="mv-gen__caption">
+			<strong>{ p.Title }</strong>
+			if p.Detail != "" {
+				<span>{ p.Detail }</span>
+			}
+		</div>
+	</div>
+}
+
+// Variation is one candidate in a variation picker.
+type Variation struct {
+	Value string
+	Label string
+	// Lock is the Character Lock score 0–1 (negative hides it).
+	Lock float64
+}
+
+// VariationPicker renders four variations with number keys (1–4 pick, Enter keeps).
+templ VariationPicker(title, hint, name, selected string, vars []Variation) {
+	<fieldset class="mv-vars mv-field">
+		<legend class="mv-vars__head">
+			<strong>{ title }</strong>
+			<span>{ hint }</span>
+		</legend>
+		<div class="mv-vars__grid" data-variation-picker>
+			for i, v := range vars {
+				<label class="mv-var">
+					<input
+						type="radio"
+						name={ name }
+						value={ v.Value }
+						if v.Value == selected {
+							checked
+						}
+						aria-keyshortcuts={ strconv.Itoa(i + 1) }
+					/>
+					@ToneBox(v.Label, "", "")
+					<span class="mv-var__key" aria-hidden="true">{ strconv.Itoa(i + 1) }</span>
+					if v.Lock >= 0 {
+						<span class="mv-var__lock">LOCK { strconv.Itoa(int(v.Lock*100 + .5)) }%</span>
+					}
+				</label>
+			}
+		</div>
+	</fieldset>
+}

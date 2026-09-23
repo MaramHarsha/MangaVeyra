@@ -1,0 +1,20 @@
+# Example: serve a community SDXL fine-tune from a single .safetensors file on this worker.
+# Copy to your MV_MODELS_DIR, adjust, and make sure the server's catalogue has a manifest with the same id
+# (admin → Models & providers → Add custom model) so the router can pick it.
+id: my-sdxl-finetune
+name: My SDXL fine-tune
+kind: image
+vram_mb: 10000        # fully on the GPU
+min_vram_mb: 5000     # with model CPU offload
+worker:
+  diffusers:
+    single_file: /models/checkpoints/my-finetune.safetensors
+    repo: stabilityai/stable-diffusion-xl-base-1.0   # config source for from_single_file
+    family: sdxl
+    scheduler: euler_a
+    controlnet_openpose: xinsir/controlnet-openpose-sdxl-1.0
+    default_steps: 28
+    default_guidance: 6.0
+    prompt_suffix: "masterpiece, best quality"
+    trainable: true
+    train_resolution: 1024

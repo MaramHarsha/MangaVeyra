@@ -1,0 +1,42 @@
+{
+  "mvplugin": 1,
+  "id": "kestrel.page-flip-sounds",
+  "name": "Page flip sounds",
+  "version": "0.2.0",
+  "kind": "reader",
+  "description": "Soft paper sounds when you turn a page in the reader.",
+  "licence": "MIT",
+  "authors": [
+    {
+      "name": "kestrel",
+      "handle": "kestrel"
+    }
+  ],
+  "min_app_version": "2.0.0",
+  "entry": {
+    "type": "wasm",
+    "module": "page-flip-sounds.wasm",
+    "abi": 1,
+    "hooks": [
+      "reader.on_page_turn"
+    ]
+  },
+  "permissions": [
+    {
+      "id": "reader.audio",
+      "risk": "low",
+      "reason": "Play the page-flip sound."
+    },
+    {
+      "id": "reader.settings.read",
+      "risk": "low",
+      "reason": "Respect the reader's mute and reduced-motion settings."
+    }
+  ],
+  "source": {
+    "repo": "https://github.com/kestrel/page-flip-sounds",
+    "tag": "v0.2.0",
+    "commit": "4f2a9c1e4f2a9c1e4f2a9c1e4f2a9c1e4f2a9c1e",
+    "signed_tag": true
+  }
+}

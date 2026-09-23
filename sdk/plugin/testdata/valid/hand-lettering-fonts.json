@@ -1,0 +1,31 @@
+{
+  "mvplugin": 1,
+  "id": "inkwell.hand-lettering-fonts",
+  "name": "Hand-lettering fonts",
+  "version": "1.0.0",
+  "kind": "lettering",
+  "description": "Five open-licence comic fonts, including vertical CJK.",
+  "licence": "OFL-1.1",
+  "min_app_version": "1.0.0",
+  "entry": {
+    "type": "manifest",
+    "contributes": {
+      "fonts": [
+        "fonts/inkwell-regular.woff2",
+        "fonts/inkwell-bold.woff2"
+      ]
+    }
+  },
+  "permissions": [
+    {
+      "id": "lettering.fonts",
+      "risk": "low",
+      "reason": "Adds the fonts to the lettering tools."
+    }
+  ],
+  "source": {
+    "repo": "https://codeberg.org/inkwell/hand-lettering-fonts",
+    "tag": "v1.0.0",
+    "signed_tag": true
+  }
+}

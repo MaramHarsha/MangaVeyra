@@ -1,0 +1,51 @@
+package ui
+
+// StateProps describe an empty or error state: an SFX word, a title, one
+// line of help and one clear next action (design 04 §15; no mascot).
+type StateProps struct {
+	SFX string
+	// JP letters the SFX in Noto Sans JP 900 (シーン…).
+	JP    bool
+	Title string
+	Body  string
+	// Art: "splash" (ink splash), "speedlines" (radial lines), "error" (red lines) or "".
+	Art string
+	// Tone of the SFX word: "", "accent", "error", "warning".
+	Tone string
+	// SFXSize: "xs", "sm", "", "lg", "xl", "xxl".
+	SFXSize string
+	// Foot is the small caption in the corner ("shiin" · the sound of silence).
+	Foot  string
+	Boxed bool
+	Page  bool
+	Class string
+}
+
+// State renders an empty or error state; children are the action buttons.
+templ State(p StateProps) {
+	<section class={ Cls("mv-state", If(p.Boxed, "mv-state--boxed"), If(p.Page, "mv-state--page"), p.Class) }>
+		switch p.Art {
+			case "speedlines":
+				<div class="mv-tex-speedlines mv-tex-speedlines--wide" aria-hidden="true"></div>
+				<div class="mv-tex-calm mv-tex-calm--wide" aria-hidden="true"></div>
+			case "error":
+				<div class="mv-tex-speedlines mv-tex-speedlines--wide mv-tex-speedlines--error" aria-hidden="true"></div>
+				<div class="mv-tex-calm mv-tex-calm--small" aria-hidden="true"></div>
+			case "splash":
+				<div class="mv-tex-splash" aria-hidden="true"></div>
+		}
+		if p.SFX != "" {
+			@SFX(p.SFX, p.SFXSize, p.Tone, p.JP)
+		}
+		<h2 class={ Cls("mv-state__title", If(p.Page, "mv-state__title--lg")) }>{ p.Title }</h2>
+		if p.Body != "" {
+			<p class={ Cls("mv-state__body", If(p.Page, "mv-state__body--lg")) }>{ p.Body }</p>
+		}
+		<div class="mv-state__actions">
+			{ children... }
+		</div>
+		if p.Foot != "" {
+			<span class="mv-state__foot" aria-hidden="true">{ p.Foot }</span>
+		}
+	</section>
+}

@@ -1,0 +1,37 @@
+{
+  "mvplugin": 1,
+  "id": "kestrel.ferry-schedule",
+  "name": "Ferry schedule",
+  "version": "0.3.0-beta.1",
+  "kind": "exporter",
+  "licence": "Apache-2.0",
+  "min_app_version": "2.0.0",
+  "entry": {
+    "type": "wasm",
+    "module": "dist/ferry.wasm",
+    "abi": 2,
+    "hooks": [
+      "export.render_chapter"
+    ]
+  },
+  "permissions": [
+    {
+      "id": "export.formats",
+      "risk": "medium",
+      "reason": "Adds a timetable-style export."
+    },
+    {
+      "id": "network.fetch",
+      "risk": "high",
+      "reason": "Uploads the export to your own site.",
+      "hosts": [
+        "uploads.example.org"
+      ]
+    }
+  ],
+  "source": {
+    "repo": "https://github.com/kestrel/ferry-schedule",
+    "tag": "v0.3.0-beta.1",
+    "signed_tag": true
+  }
+}

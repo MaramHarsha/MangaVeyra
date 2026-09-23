@@ -1,0 +1,16 @@
+{
+  "model": "illustrious-comfy",
+  "job_types": ["image.generate", "character.sheet"],
+  "workflow_file": "sdxl-basic.api.json",
+  "inputs": {
+    "prompt": "6.inputs.text",
+    "negative": "7.inputs.text",
+    "seed": "3.inputs.seed",
+    "steps": "3.inputs.steps",
+    "guidance": "3.inputs.cfg",
+    "width": "5.inputs.width",
+    "height": "5.inputs.height"
+  },
+  "templates": {"prompt": "{prompt}, masterpiece, best quality, monochrome, manga, screentone"},
+  "outputs": ["9"]
+}

@@ -1,0 +1,184 @@
+/*
+ * MangaVeyra design tokens (design file 04, section 17).
+ *
+ * Shared by templ pages and Svelte islands. The theme switches with
+ * data-theme on <html> (or on any wrapper, e.g. the style guide columns):
+ * "dark" = Gate night (default), "light" = Paper, "system" follows the OS.
+ */
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --mv-bg: #070A12;
+  --mv-surface: #0D1322;
+  --mv-surface-2: #141C30;
+  --mv-line: #22304F;
+  --mv-text: #E8EEFF;
+  --mv-text-2: #A3B3D9;
+  --mv-text-3: #7C8DB5;
+  --mv-accent: #3D8BFF;
+  --mv-acc-text: #6AA8FF;
+  --mv-on-accent: #070A12;
+  --mv-success: #3CCB7F;
+  --mv-warning: #F5B83D;
+  --mv-error: #FF5C7A;
+  --mv-on-error: #070A12;
+  --mv-info: #4DA8FF;
+  --mv-focus: #E8EEFF;
+  --mv-canvas: #04060C;
+  /* Screentone dot colour on this theme (placeholders use 28 %). */
+  --mv-tone-ink: 232 238 255;
+  --mv-tone-alpha: .28;
+  --mv-texture-alpha: .08;
+  --mv-scrim: rgb(0 0 0 / .55);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --mv-bg: #E8EEFF;
+  --mv-surface: #F7F9FF;
+  --mv-surface-2: #DCE3F3;
+  --mv-line: #C9D3EA;
+  --mv-text: #070A12;
+  --mv-text-2: #3E4A66;
+  --mv-text-3: #5A6788;
+  --mv-accent: #3D8BFF;
+  --mv-acc-text: #2459C9;
+  --mv-on-accent: #070A12;
+  --mv-success: #1F7A4A;
+  --mv-warning: #8A5A00;
+  --mv-error: #C0264A;
+  --mv-on-error: #FFFFFF;
+  --mv-info: #1F5FBF;
+  --mv-focus: #070A12;
+  --mv-canvas: #DCE3F3;
+  --mv-tone-ink: 7 10 18;
+  --mv-tone-alpha: .28;
+  --mv-texture-alpha: .12;
+  --mv-scrim: rgb(7 10 18 / .35);
+}
+
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    color-scheme: light;
+    --mv-bg: #E8EEFF;
+    --mv-surface: #F7F9FF;
+    --mv-surface-2: #DCE3F3;
+    --mv-line: #C9D3EA;
+    --mv-text: #070A12;
+    --mv-text-2: #3E4A66;
+    --mv-text-3: #5A6788;
+    --mv-accent: #3D8BFF;
+    --mv-acc-text: #2459C9;
+    --mv-on-accent: #070A12;
+    --mv-success: #1F7A4A;
+    --mv-warning: #8A5A00;
+    --mv-error: #C0264A;
+    --mv-on-error: #FFFFFF;
+    --mv-info: #1F5FBF;
+    --mv-focus: #070A12;
+    --mv-canvas: #DCE3F3;
+    --mv-tone-ink: 7 10 18;
+    --mv-texture-alpha: .12;
+    --mv-scrim: rgb(7 10 18 / .35);
+  }
+}
+
+:root {
+  /* Brand (logo only; the UI accent is gate blue). */
+  --mv-brand-vermilion: #E8452C;
+  --mv-gate-blue: #3D8BFF;
+  --mv-gate-blue-light: #6AA8FF;
+
+  /* Rank tiers (always shown with the rank letter). */
+  --mv-rank-e: #7C8DB5;
+  --mv-rank-d: #3CCB7F;
+  --mv-rank-c: #4DA8FF;
+  --mv-rank-b: #6AA8FF;
+  --mv-rank-a: #B08CFF;
+  --mv-rank-s: #F5B83D;
+
+  /* Type. */
+  --mv-font-display: Anton, Impact, sans-serif;
+  --mv-font-ui: "Hanken Grotesk", system-ui, sans-serif;
+  --mv-font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --mv-font-bubble: "Comic Neue", cursive;
+  --mv-font-sfx: Bangers, "Noto Sans JP", sans-serif;
+  --mv-font-jp: "Noto Sans JP", sans-serif;
+
+  /* Type scale (rem so the text-size preference scales the UI). */
+  --mv-fs-display-xl: 6rem;     /* 96 / .9 */
+  --mv-fs-display-l: 3.5rem;    /* 56 / .95 */
+  --mv-fs-display-m: 2rem;      /* 32 / 1 */
+  --mv-fs-h1: 1.75rem;          /* 28 / 1.2 / 700 */
+  --mv-fs-h2: 1.25rem;          /* 20 / 1.3 / 600 */
+  --mv-fs-body: 1rem;           /* 16 / 1.55 */
+  --mv-fs-ui: .875rem;          /* 14 / 1.5 / 500 */
+  --mv-fs-small: .8125rem;      /* 13 */
+  --mv-fs-meta: .75rem;         /* 12 */
+  --mv-fs-mono: .6875rem;       /* 11 */
+  --mv-fs-micro: .625rem;       /* 10 */
+
+  /* Space (4 px base). */
+  --mv-space-1: 4px;
+  --mv-space-2: 8px;
+  --mv-space-3: 12px;
+  --mv-space-4: 16px;
+  --mv-space-5: 24px;
+  --mv-space-6: 32px;
+  --mv-space-7: 48px;
+  --mv-space-8: 64px;
+  --mv-space-9: 96px;
+
+  /* Radius. */
+  --mv-radius-frame: 0;
+  --mv-radius-control: 2px;
+  --mv-radius-bubble: 16px;
+  --mv-radius-toast: 14px;
+  --mv-radius-tooltip: 18px;
+  --mv-radius-pill: 999px;
+
+  /* Elevation and glow. */
+  --mv-shadow-float: 0 12px 32px rgb(0 0 0 / .55);
+  --mv-shadow-ink: 4px 4px 0 var(--mv-text);
+  --mv-shadow-seal: 8px 8px 0 var(--mv-accent);
+  --mv-glow-primary: 0 0 0 1px rgb(106 168 255 / .35), 0 0 22px rgb(61 139 255 / .45);
+  --mv-glow-window: 0 0 0 1px #3D8BFF, 0 0 36px rgb(61 139 255 / .4);
+  --mv-glow-status: 0 0 0 1px rgb(106 168 255 / .25), 0 0 40px rgb(61 139 255 / .35), inset 0 0 24px rgb(61 139 255 / .12);
+
+  /* Sizes. */
+  --mv-control-sm: 32px;
+  --mv-control-md: 40px;
+  --mv-control-lg: 48px;
+  --mv-topbar-h: 56px;
+  --mv-sidebar-w: 224px;
+  --mv-bottomnav-h: 76px;
+  --mv-focus-width: 2px;
+  --mv-focus-offset: 3px;
+
+  /* Motion. */
+  --mv-ease-slash: cubic-bezier(.7, 0, .2, 1);
+  --mv-ease-reveal: cubic-bezier(.2, .8, .2, 1);
+  --mv-ease-burst: cubic-bezier(.2, .9, .3, 1.2);
+  --mv-ease-turn: cubic-bezier(.6, 0, .3, 1);
+  --mv-ease-step: cubic-bezier(.4, 0, .2, 1);
+  --mv-dur-fast: 120ms;
+  --mv-dur-step: 200ms;
+  --mv-dur-base: 320ms;
+  --mv-dur-slash: 420ms;
+  --mv-dur-slow: 480ms;
+  --mv-dur-burst: 600ms;
+  --mv-stagger: 60ms;
+}
+
+/* Text size preference (G1 Accessibility). */
+html[data-text-size="87"] { font-size: 87.5%; }
+html[data-text-size="112"] { font-size: 112.5%; }
+html[data-text-size="125"] { font-size: 125%; }
+html[data-text-size="150"] { font-size: 150%; }
+
+/* High-contrast focus preference: 3 px ring. */
+html[data-focus="strong"] {
+  --mv-focus-width: 3px;
+  --mv-focus-offset: 3px;
+}

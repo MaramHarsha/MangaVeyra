@@ -1,0 +1,621 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mangaveyra.org/schemas/plugin/plugin.schema.json",
+  "title": "MangaVeyra plugin manifest (plugin.json), format 1",
+  "description": "Identity, kind, entry point, permissions with risk levels, minimum app version and source release of a plugin. Normative text: sdk/plugin/PLUGINS.md. Licensed MIT.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "mvplugin",
+    "id",
+    "name",
+    "version",
+    "kind",
+    "licence",
+    "min_app_version",
+    "entry",
+    "permissions",
+    "source"
+  ],
+  "properties": {
+    "mvplugin": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]\\.[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$",
+      "not": {
+        "pattern": "--"
+      },
+      "description": "<World handle of the developer>.<plugin name>, e.g. kestrel.page-flip-sounds."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "kind": {
+      "enum": [
+        "model-adapter",
+        "exporter",
+        "reader",
+        "lettering",
+        "theme"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "licence": {
+      "enum": [
+        "MIT",
+        "Apache-2.0",
+        "BSD-2-Clause",
+        "BSD-3-Clause",
+        "ISC",
+        "MPL-2.0",
+        "OFL-1.1",
+        "CC0-1.0",
+        "CC-BY-4.0"
+      ]
+    },
+    "authors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "handle": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$",
+            "not": {
+              "pattern": "--"
+            }
+          }
+        }
+      }
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://",
+      "maxLength": 300
+    },
+    "min_app_version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "entry": {
+      "$ref": "#/$defs/entry"
+    },
+    "permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/permission"
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo",
+        "tag",
+        "signed_tag"
+      ],
+      "properties": {
+        "repo": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://[^/@\\s]+/\\S*$",
+          "maxLength": 300
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$"
+        },
+        "signed_tag": {
+          "type": "boolean",
+          "description": "World only accepts builds from signed tags."
+        }
+      }
+    }
+  },
+  "if": {
+    "properties": {
+      "entry": {
+        "properties": {
+          "type": {
+            "const": "manifest"
+          }
+        }
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "permissions": {
+        "items": {
+          "properties": {
+            "id": {
+              "not": {
+                "enum": [
+                  "reader.audio",
+                  "reader.settings.read",
+                  "reader.ui",
+                  "export.formats",
+                  "import.formats",
+                  "models.invoke",
+                  "project.read",
+                  "project.write",
+                  "files.read",
+                  "network.fetch",
+                  "secrets.use"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "contributes"
+          ],
+          "description": "v1: manifest-only plugin, runs no code.",
+          "properties": {
+            "type": {
+              "const": "manifest"
+            },
+            "contributes": {
+              "type": "object",
+              "additionalProperties": false,
+              "minProperties": 1,
+              "properties": {
+                "models": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}/){0,5}[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}\\.(?:json)$"
+                  }
+                },
+                "fonts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}/){0,5}[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}\\.(?:ttf|otf|woff2)$"
+                  }
+                },
+                "layout_templates": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}/){0,5}[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}\\.(?:json)$"
+                  }
+                },
+                "themes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}/){0,5}[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}\\.(?:json)$"
+                  }
+                }
+              },
+              "anyOf": [
+                {
+                  "properties": {
+                    "models": {
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "models"
+                  ]
+                },
+                {
+                  "properties": {
+                    "fonts": {
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "fonts"
+                  ]
+                },
+                {
+                  "properties": {
+                    "layout_templates": {
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "layout_templates"
+                  ]
+                },
+                {
+                  "properties": {
+                    "themes": {
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "themes"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "module",
+            "abi",
+            "hooks"
+          ],
+          "description": "v2 (planned): WebAssembly module, ABI 2, see PLUGINS.md.",
+          "properties": {
+            "type": {
+              "const": "wasm"
+            },
+            "module": {
+              "type": "string",
+              "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}/){0,5}[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}\\.wasm$"
+            },
+            "abi": {
+              "const": 2
+            },
+            "hooks": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z]+(?:\\.[a-z_]+)+$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "permission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "risk",
+        "reason"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "models.provide",
+            "lettering.fonts",
+            "layout.templates",
+            "theme.tokens",
+            "reader.audio",
+            "reader.settings.read",
+            "reader.ui",
+            "export.formats",
+            "import.formats",
+            "models.invoke",
+            "project.read",
+            "project.write",
+            "files.read",
+            "network.fetch",
+            "secrets.use"
+          ]
+        },
+        "risk": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 200
+        },
+        "hosts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "pattern": "^(?:\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "models.provide"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "low"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "lettering.fonts"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "low"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "layout.templates"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "low"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "theme.tokens"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "low"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "reader.audio"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "low"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "reader.settings.read"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "low"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "reader.ui"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "low"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "export.formats"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "medium"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "import.formats"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "medium"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "models.invoke"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "medium"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "project.read"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "high"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "project.write"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "high"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "files.read"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "high"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "network.fetch"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "high"
+              }
+            },
+            "required": [
+              "hosts"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "const": "secrets.use"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "risk": {
+                "const": "high"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "not": {
+                  "const": "network.fetch"
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "hosts"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

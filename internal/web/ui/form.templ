@@ -1,0 +1,492 @@
+package ui
+
+import "strconv"
+
+// FieldProps describe a labelled form field (design 04 §07).
+type FieldProps struct {
+	// ID of the control; the label points at it.
+	ID    string
+	Label string
+	// Aside is mono text on the label row ("84 / 600", "optional").
+	Aside string
+	Hint  string
+	// Error shows an icon + message and marks the control invalid.
+	Error string
+	Class string
+}
+
+// Field wraps a control with its label, hint and error message.
+templ Field(p FieldProps) {
+	<div class={ Cls("mv-field", p.Class) }>
+		if p.Label != "" {
+			<label class="mv-field__label" for={ p.ID }>
+				<span>{ p.Label }</span>
+				if p.Aside != "" {
+					<span class="mv-field__aside">{ p.Aside }</span>
+				}
+			</label>
+		}
+		{ children... }
+		if p.Error != "" {
+			<span class="mv-field__error" id={ p.ID + "-error" } role="alert">
+				@Icon("alert-triangle", 14)
+				<span>{ p.Error }</span>
+			</span>
+		} else if p.Hint != "" {
+			<span class="mv-field__hint" id={ p.ID + "-hint" }>{ p.Hint }</span>
+		}
+	</div>
+}
+
+// InputProps configure a text input.
+type InputProps struct {
+	ID           string
+	Name         string
+	Type         string
+	Value        string
+	Placeholder  string
+	Autocomplete string
+	Required     bool
+	Disabled     bool
+	ReadOnly     bool
+	Autofocus    bool
+	MinLength    int
+	MaxLength    int
+	// Invalid marks the input with aria-invalid and points at "<ID>-error".
+	Invalid bool
+	// Described points aria-describedby at "<ID>-hint".
+	Described bool
+	Inputmode string
+	Class     string
+	Attrs     templ.Attributes
+}
+
+func (p InputProps) typ() string {
+	if p.Type == "" {
+		return "text"
+	}
+	return p.Type
+}
+
+func (p InputProps) describedBy() string {
+	switch {
+	case p.Invalid:
+		return p.ID + "-error"
+	case p.Described:
+		return p.ID + "-hint"
+	}
+	return ""
+}
+
+// Input renders a square text field on a surface tone.
+templ Input(p InputProps) {
+	<input
+		class={ Cls("mv-input", p.Class) }
+		type={ p.typ() }
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		name={ p.Name }
+		value={ p.Value }
+		if p.Placeholder != "" {
+			placeholder={ p.Placeholder }
+		}
+		if p.Autocomplete != "" {
+			autocomplete={ p.Autocomplete }
+		}
+		if p.Inputmode != "" {
+			inputmode={ p.Inputmode }
+		}
+		if p.MinLength > 0 {
+			minlength={ strconv.Itoa(p.MinLength) }
+		}
+		if p.MaxLength > 0 {
+			maxlength={ strconv.Itoa(p.MaxLength) }
+		}
+		if p.Required {
+			required
+		}
+		if p.Disabled {
+			disabled
+		}
+		if p.ReadOnly {
+			readonly
+		}
+		if p.Autofocus {
+			autofocus
+		}
+		if p.Invalid {
+			aria-invalid="true"
+		}
+		if p.describedBy() != "" {
+			aria-describedby={ p.describedBy() }
+		}
+		{ p.Attrs... }
+	/>
+}
+
+// InputGroup renders an input with a prefix (e.g. "http://") and/or suffix content.
+templ InputGroup(prefix string, invalid bool) {
+	<div class={ Cls("mv-input-group", If(invalid, "is-invalid")) }>
+		if prefix != "" {
+			<span class="mv-input-group__prefix" aria-hidden="true">{ prefix }</span>
+		}
+		{ children... }
+	</div>
+}
+
+// SearchBox renders the search field with the "/" shortcut hint.
+templ SearchBox(id, name, value, placeholder, action string) {
+	<form class="mv-search" role="search" action={ templ.URL(action) } method="get">
+		@Icon("search", 16)
+		<label class="mv-sr-only" for={ id }>{ placeholder }</label>
+		<input class="mv-search__input" id={ id } type="search" name={ name } value={ value } placeholder={ placeholder } autocomplete="off"/>
+		<span class="mv-kbd" aria-hidden="true">/</span>
+	</form>
+}
+
+// TextareaProps configure a textarea.
+type TextareaProps struct {
+	ID          string
+	Name        string
+	Value       string
+	Placeholder string
+	Rows        int
+	MaxLength   int
+	Required    bool
+	Invalid     bool
+	Class       string
+	Attrs       templ.Attributes
+}
+
+// Textarea renders a multi-line field; with MaxLength it shows "n / max".
+templ Textarea(p TextareaProps) {
+	<textarea
+		class={ Cls("mv-textarea", p.Class) }
+		id={ p.ID }
+		name={ p.Name }
+		if p.Rows > 0 {
+			rows={ strconv.Itoa(p.Rows) }
+		}
+		if p.MaxLength > 0 {
+			maxlength={ strconv.Itoa(p.MaxLength) }
+		}
+		if p.Placeholder != "" {
+			placeholder={ p.Placeholder }
+		}
+		if p.Required {
+			required
+		}
+		if p.Invalid {
+			aria-invalid="true"
+			aria-describedby={ p.ID + "-error" }
+		}
+		{ p.Attrs... }
+	>{ p.Value }</textarea>
+	if p.MaxLength > 0 {
+		<span class="mv-field__count" aria-hidden="true">{ strconv.Itoa(len([]rune(p.Value))) } / { strconv.Itoa(p.MaxLength) }</span>
+	}
+}
+
+// Option is one choice of a Select, Segmented control or radio group.
+type Option struct {
+	Value    string
+	Label    string
+	Icon     string
+	Desc     string
+	Disabled bool
+}
+
+// SelectProps configure a native select.
+type SelectProps struct {
+	ID       string
+	Name     string
+	Value    string
+	Options  []Option
+	Disabled bool
+	Invalid  bool
+	Class    string
+	Attrs    templ.Attributes
+}
+
+// Select renders a native <select> with the design's chevron.
+templ Select(p SelectProps) {
+	<span class={ Cls("mv-select-wrap", p.Class) }>
+		<select
+			class="mv-select"
+			id={ p.ID }
+			name={ p.Name }
+			if p.Disabled {
+				disabled
+			}
+			if p.Invalid {
+				aria-invalid="true"
+			}
+			{ p.Attrs... }
+		>
+			for _, o := range p.Options {
+				<option
+					value={ o.Value }
+					if o.Value == p.Value {
+						selected
+					}
+					if o.Disabled {
+						disabled
+					}
+				>{ o.Label }</option>
+			}
+		</select>
+		@Icon("chevron-down", 18)
+	</span>
+}
+
+// ToggleProps configure a switch.
+type ToggleProps struct {
+	ID       string
+	Name     string
+	Value    string
+	Checked  bool
+	Disabled bool
+	// Label is visible text next to the switch; empty for a bare switch (then set AriaLabel).
+	Label     string
+	AriaLabel string
+	Large     bool
+	Class     string
+	Attrs     templ.Attributes
+}
+
+func (p ToggleProps) value() string {
+	if p.Value == "" {
+		return "on"
+	}
+	return p.Value
+}
+
+// Toggle renders an on/off switch (a checkbox with role=switch).
+templ Toggle(p ToggleProps) {
+	<label class={ Cls("mv-toggle", If(p.Large, "mv-toggle--lg"), p.Class) }>
+		<input
+			type="checkbox"
+			role="switch"
+			if p.ID != "" {
+				id={ p.ID }
+			}
+			name={ p.Name }
+			value={ p.value() }
+			if p.Checked {
+				checked
+			}
+			if p.Disabled {
+				disabled
+			}
+			if p.AriaLabel != "" {
+				aria-label={ p.AriaLabel }
+			}
+			{ p.Attrs... }
+		/>
+		<span class="mv-toggle__track" aria-hidden="true"></span>
+		if p.Label != "" {
+			<span>{ p.Label }</span>
+		}
+	</label>
+}
+
+// CheckProps configure a checkbox or radio.
+type CheckProps struct {
+	ID       string
+	Name     string
+	Value    string
+	Checked  bool
+	Disabled bool
+	Required bool
+	Label    string
+	// AlignStart aligns the box with the first line of a long label.
+	AlignStart bool
+	AriaLabel  string
+	Class      string
+	Attrs      templ.Attributes
+}
+
+func (p CheckProps) value() string {
+	if p.Value == "" {
+		return "on"
+	}
+	return p.Value
+}
+
+// Checkbox renders a square check box with label.
+templ Checkbox(p CheckProps) {
+	<label class={ Cls("mv-check", If(p.AlignStart, "mv-check--start"), p.Class) }>
+		<input
+			type="checkbox"
+			if p.ID != "" {
+				id={ p.ID }
+			}
+			name={ p.Name }
+			value={ p.value() }
+			if p.Checked {
+				checked
+			}
+			if p.Disabled {
+				disabled
+			}
+			if p.Required {
+				required
+			}
+			if p.AriaLabel != "" {
+				aria-label={ p.AriaLabel }
+			}
+			{ p.Attrs... }
+		/>
+		<span class="mv-check__box" aria-hidden="true">
+			@Icon("check", 12)
+		</span>
+		if p.Label != "" {
+			<span>{ p.Label }</span>
+		}
+		{ children... }
+	</label>
+}
+
+// Radio renders a round radio button with label.
+templ Radio(p CheckProps) {
+	<label class={ Cls("mv-radio", If(p.AlignStart, "mv-check--start"), p.Class) }>
+		<input
+			type="radio"
+			if p.ID != "" {
+				id={ p.ID }
+			}
+			name={ p.Name }
+			value={ p.value() }
+			if p.Checked {
+				checked
+			}
+			if p.Disabled {
+				disabled
+			}
+			if p.Required {
+				required
+			}
+			{ p.Attrs... }
+		/>
+		<span class="mv-radio__box" aria-hidden="true"></span>
+		if p.Label != "" {
+			<span>{ p.Label }</span>
+		}
+	</label>
+}
+
+// SliderProps configure a range slider with a diamond thumb.
+type SliderProps struct {
+	ID    string
+	Name  string
+	Label string
+	Min   float64
+	Max   float64
+	Step  float64
+	Value float64
+	// Display is the formatted value ("0.62", "30%").
+	Display string
+	// Suffix is appended to the live value while dragging ("%").
+	Suffix string
+	Class  string
+	Attrs  templ.Attributes
+}
+
+func fmtNum(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }
+
+func (p SliderProps) pct() string {
+	return PctOf(p.Value-p.Min, p.Max-p.Min)
+}
+
+// Slider renders a labelled range input; main.ts keeps the fill and value in sync.
+templ Slider(p SliderProps) {
+	<div class={ Cls("mv-slider", p.Class) }>
+		<div class="mv-slider__head">
+			<label for={ p.ID }>{ p.Label }</label>
+			<output class="mv-slider__value" id={ p.ID + "-out" } for={ p.ID }>{ p.Display }</output>
+		</div>
+		<input
+			class={ Cls("mv-range", p.pct()) }
+			type="range"
+			id={ p.ID }
+			name={ p.Name }
+			min={ fmtNum(p.Min) }
+			max={ fmtNum(p.Max) }
+			if p.Step > 0 {
+				step={ fmtNum(p.Step) }
+			}
+			value={ fmtNum(p.Value) }
+			data-output={ p.ID + "-out" }
+			if p.Suffix != "" {
+				data-suffix={ p.Suffix }
+			}
+			{ p.Attrs... }
+		/>
+	</div>
+}
+
+// SegmentedProps configure a segmented control (a radio group).
+type SegmentedProps struct {
+	Name    string
+	Value   string
+	Options []Option
+	// Label is the group's accessible name.
+	Label string
+	Full  bool
+	Large bool
+	Class string
+	// InputAttrs are added to every radio (e.g. hx-post on change).
+	InputAttrs templ.Attributes
+}
+
+// Segmented renders a segmented control (Paged / Webtoon / Guided).
+templ Segmented(p SegmentedProps) {
+	<div class={ Cls("mv-seg", If(p.Full, "mv-seg--full"), If(p.Large, "mv-seg--lg"), p.Class) } role="radiogroup" aria-label={ p.Label }>
+		for _, o := range p.Options {
+			<label>
+				<input
+					type="radio"
+					name={ p.Name }
+					value={ o.Value }
+					if o.Value == p.Value {
+						checked
+					}
+					if o.Disabled {
+						disabled
+					}
+					{ p.InputAttrs... }
+				/>
+				<span class="mv-seg__item">{ o.Label }</span>
+			</label>
+		}
+	</div>
+}
+
+// SegLink is one item of a link-based segmented control.
+type SegLink struct {
+	Href    string
+	Label   string
+	Current bool
+}
+
+// SegmentedLinks renders a segmented control whose items are links (filters, views).
+templ SegmentedLinks(label string, items []SegLink) {
+	<nav class="mv-seg" aria-label={ label }>
+		for _, it := range items {
+			<a
+				class="mv-seg__item"
+				href={ templ.URL(it.Href) }
+				if it.Current {
+					aria-current="true"
+				}
+			>{ it.Label }</a>
+		}
+	</nav>
+}
+
+// PasswordStrength renders the live strength label for a password input
+// (the input needs data-strength=<id>). labels are "weak|fair|good|strong".
+templ PasswordStrength(id, labels string) {
+	<span class="mv-strength mv-input-group__suffix" id={ id } data-labels={ labels } data-level="0" aria-live="polite"></span>
+}

@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mangaveyra.org/schemas/mvpack/manifest.schema.json",
+  "title": "MangaVeyra pack manifest (manifest.json), format 1",
+  "description": "Describes a .mvpack file. Licensed MIT (see sdk/LICENSE). The normative text is sdk/mvpack/SPEC.md; a few cross-file rules (the archive must contain exactly the listed files, hashes must match) cannot be expressed here and are enforced by readers.",
+  "type": "object",
+  "required": ["mvpack", "kind", "id", "name", "version", "created_at", "licence", "ai_label", "credit", "files"],
+  "properties": {
+    "mvpack": { "const": 1, "description": "Format version." },
+    "kind": { "$ref": "#/$defs/kind" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$",
+      "description": "Stable slug of the item, unique per creator."
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[^\\n\\t]*\\S[^\\n\\t]*$" },
+    "version": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "summary": { "type": "string", "maxLength": 280 },
+    "description": { "type": "string", "maxLength": 4000 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "licence": { "$ref": "#/$defs/licence" },
+    "licence_notes": { "type": "string", "maxLength": 500 },
+    "ai_label": { "$ref": "#/$defs/aiLabel" },
+    "content_rating": { "enum": ["all-ages", "teen", "mature"] },
+    "credit": { "$ref": "#/$defs/credit" },
+    "tags": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$" }
+    },
+    "works_with": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "description": "Model ids the item was made for (e.g. the base model of a LoRA).",
+      "items": { "$ref": "#/$defs/modelId" }
+    },
+    "character": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "from_series": { "type": "string", "maxLength": 80 },
+        "trigger_word": { "type": "string", "maxLength": 64 },
+        "base_model": { "$ref": "#/$defs/modelId" }
+      }
+    },
+    "series_listing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": { "type": "string", "format": "uri", "maxLength": 500, "pattern": "^https?://[^/@\\s]+(?:[/?#]\\S*)?$" },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$" }
+        },
+        "status": { "enum": ["ongoing", "complete", "hiatus"] },
+        "chapters": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest"],
+      "properties": { "manifest": { "$ref": "#/$defs/path" } }
+    },
+    "files": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": { "$ref": "#/$defs/file" }
+    }
+  },
+  "patternProperties": {
+    "^x-": { "description": "Vendor extension; kept verbatim and covered by signatures." }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "character" } } },
+      "then": {
+        "properties": {
+          "files": { "contains": { "properties": { "role": { "const": "reference" } }, "required": ["role"] } }
+        }
+      },
+      "else": { "not": { "required": ["character"] } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "series-listing" } } },
+      "then": {
+        "required": ["series_listing"],
+        "properties": {
+          "files": { "items": { "properties": { "path": { "not": { "pattern": "\\.safetensors$" } } } } }
+        }
+      },
+      "else": { "not": { "required": ["series_listing"] } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "plugin" } } },
+      "then": {
+        "required": ["plugin"],
+        "properties": { "licence": { "not": { "enum": ["personal", "all-rights-reserved"] } } }
+      },
+      "else": {
+        "not": { "required": ["plugin"] },
+        "properties": {
+          "files": { "items": { "properties": { "path": { "not": { "pattern": "\\.(?:ttf|otf|woff2)$" } } } } }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "kind": { "enum": ["character", "style", "template", "layout", "series-listing", "plugin"] },
+    "licence": {
+      "enum": [
+        "CC-BY-4.0", "CC-BY-SA-4.0", "CC-BY-NC-4.0", "CC-BY-NC-SA-4.0", "CC-BY-ND-4.0", "CC0-1.0",
+        "MIT", "Apache-2.0", "OFL-1.1", "personal", "all-rights-reserved"
+      ]
+    },
+    "aiValue": { "enum": ["human", "ai-assisted", "ai"] },
+    "aiLabel": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "art": { "$ref": "#/$defs/aiValue" },
+        "design": { "$ref": "#/$defs/aiValue" },
+        "script": { "$ref": "#/$defs/aiValue" },
+        "lettering": { "$ref": "#/$defs/aiValue" }
+      }
+    },
+    "handle": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 30,
+      "pattern": "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$",
+      "not": { "pattern": "--" }
+    },
+    "credit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["display_name", "handle"],
+      "properties": {
+        "display_name": { "type": "string", "minLength": 1, "maxLength": 40, "pattern": "^\\S(?:.*\\S)?$" },
+        "handle": { "$ref": "#/$defs/handle" },
+        "world_item_id": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "description": "Set by World on approval; absent or null for local packs."
+        }
+      }
+    },
+    "modelId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+    "path": {
+      "type": "string",
+      "maxLength": 200,
+      "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}/){0,5}[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}\\.(?:png|jpg|jpeg|webp|safetensors|json|ttf|otf|woff2)$",
+      "not": {
+        "anyOf": [
+          { "enum": ["manifest.json", "signature.json"] },
+          { "pattern": "(?:^|/)(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][1-9]|[lL][pP][tT][1-9])(?:\\.|/|$)" }
+        ]
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "role", "media_type", "size", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/path" },
+        "role": {
+          "enum": ["cover", "preview", "reference", "lora", "profile", "style-preset", "template", "layout", "series",
+            "plugin-manifest", "model-manifest", "theme", "font", "data"]
+        },
+        "media_type": {
+          "enum": ["image/png", "image/jpeg", "image/webp", "application/vnd.safetensors", "application/json",
+            "font/ttf", "font/otf", "font/woff2"]
+        },
+        "size": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "allOf": [
+        { "if": { "properties": { "path": { "pattern": "\\.png$" } } }, "then": { "properties": { "media_type": { "const": "image/png" } } } },
+        { "if": { "properties": { "path": { "pattern": "\\.jpe?g$" } } }, "then": { "properties": { "media_type": { "const": "image/jpeg" } } } },
+        { "if": { "properties": { "path": { "pattern": "\\.webp$" } } }, "then": { "properties": { "media_type": { "const": "image/webp" } } } },
+        { "if": { "properties": { "path": { "pattern": "\\.safetensors$" } } }, "then": { "properties": { "media_type": { "const": "application/vnd.safetensors" } } } },
+        { "if": { "properties": { "path": { "pattern": "\\.json$" } } }, "then": { "properties": { "media_type": { "const": "application/json" } } } },
+        { "if": { "properties": { "path": { "pattern": "\\.ttf$" } } }, "then": { "properties": { "media_type": { "const": "font/ttf" } } } },
+        { "if": { "properties": { "path": { "pattern": "\\.otf$" } } }, "then": { "properties": { "media_type": { "const": "font/otf" } } } },
+        { "if": { "properties": { "path": { "pattern": "\\.woff2$" } } }, "then": { "properties": { "media_type": { "const": "font/woff2" } } } },
+        { "if": { "properties": { "role": { "enum": ["cover", "preview", "reference"] } } }, "then": { "properties": { "path": { "pattern": "\\.(?:png|jpe?g|webp)$" } } } },
+        { "if": { "properties": { "role": { "const": "lora" } } }, "then": { "properties": { "path": { "pattern": "\\.safetensors$" } } } },
+        { "if": { "properties": { "role": { "const": "font" } } }, "then": { "properties": { "path": { "pattern": "\\.(?:ttf|otf|woff2)$" } } } },
+        {
+          "if": { "properties": { "role": { "enum": ["profile", "style-preset", "template", "layout", "series", "plugin-manifest", "model-manifest", "theme", "data"] } } },
+          "then": { "properties": { "path": { "pattern": "\\.json$" } } }
+        }
+      ]
+    }
+  }
+}

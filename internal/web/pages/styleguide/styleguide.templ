@@ -1,0 +1,584 @@
+// Package styleguide renders the living style guide at /_design: every
+// component of the design system (design file 04) in Gate night and Paper,
+// side by side, from the same templ kit the product uses. Sample content is
+// original (Tidebreak Courier) and deliberately left in English: it is
+// reference material for contributors, not product copy.
+package styleguide
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/layout"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// Page is the full style guide document.
+templ Page(c *layout.Chrome) {
+	@layout.Base(c) {
+		<a class="mv-skip-link" href="#main">{ i18n.T(ctx, "ui.skip_to_content") }</a>
+		@layout.TopBar(c)
+		<main id="main" class="mv-sg">
+			<header class="mv-sg__intro">
+				<span class="mv-label-mono">MangaVeyra · { i18n.T(ctx, "design.kicker") }</span>
+				<h1 class="mv-display mv-display--l">{ i18n.T(ctx, "design.title") }</h1>
+				<p class="mv-muted">{ i18n.T(ctx, "design.lead") }</p>
+				<nav class="mv-sg__toc" aria-label={ i18n.T(ctx, "design.contents") }>
+					for _, s := range sections {
+						<a href={ templ.URL("#sg-" + s.ID) }>{ s.Num } { s.Title }</a>
+					}
+				</nav>
+			</header>
+			for _, s := range sections {
+				<section class="mv-sg__section" id={ "sg-" + s.ID } aria-labelledby={ "sg-" + s.ID + "-h" }>
+					<div class="mv-sg__head">
+						<span class="mv-sg__num">{ s.Num }</span>
+						<h2 class="mv-display mv-sg__title" id={ "sg-" + s.ID + "-h" }>{ s.Title }</h2>
+					</div>
+					<p class="mv-sg__desc">{ s.Desc }</p>
+					<div class="mv-sg__themes">
+						<div class="mv-sg__theme" data-theme="dark">
+							<span class="mv-sg__label">Gate night</span>
+							@s.Render(s.ID + "-d")
+						</div>
+						<div class="mv-sg__theme" data-theme="light">
+							<span class="mv-sg__label">Paper</span>
+							@s.Render(s.ID + "-l")
+						</div>
+					</div>
+				</section>
+			}
+		</main>
+	}
+}
+
+templ sub(label string) {
+	<span class="mv-sg__label">{ label }</span>
+}
+
+templ colours(_ string) {
+	<div class="mv-sg__swatches">
+		for _, t := range tokenSwatches {
+			<div class="mv-sg__swatch">
+				<span class={ "mv-sg__chip mv-sg__chip--" + t.Class } aria-hidden="true"></span>
+				<span class="mv-mono mv-mono--plain">--mv-{ t.Class }</span>
+				<span class="mv-meta mv-muted">{ t.Use }</span>
+			</div>
+		}
+	</div>
+}
+
+templ typeScale(_ string) {
+	<div class="mv-stack">
+		@sub("Display XL · Anton 96/0.9")
+		<span class="mv-display mv-display--xl mv-sg__clip">Stories break out</span>
+		@sub("Display L · Anton 56/0.95")
+		<span class="mv-display mv-display--l">Chapter eight</span>
+		@sub("Display M · Anton 32/1")
+		<span class="mv-display mv-display--m">Rin Asagiri</span>
+		@sub("H1 · Hanken Grotesk 28/1.2/700")
+		<h1>Tidebreak Courier</h1>
+		@sub("H2 · 20/1.3/600")
+		<h2>Panels on this page</h2>
+		@sub("Body · 16/1.55")
+		<p>Rin carries letters no one else will deliver, across a city built on salt flats.</p>
+		@sub("UI · 14/1.5/500")
+		<span class="mv-small">Regenerate only this layer</span>
+		@sub("Mono · IBM Plex Mono 12/1.4")
+		<span class="mv-mono mv-mono--plain">RTX 4090 · 16.3 / 24 GB · ~40 s</span>
+		@sub("Bubble · Comic Neue 17/1.25/700")
+		<span class="mv-sg__bubble">You’re late. Again.</span>
+		@sub("SFX · Bangers / Noto Sans JP 900")
+		<div class="mv-row mv-row--wrap">
+			@ui.SFX("KRAKOOM!", "", "", false)
+			@ui.SFX("ドドドド", "", "", true)
+		</div>
+	</div>
+}
+
+templ spaceRadius(_ string) {
+	<div class="mv-stack">
+		@sub("Spacing · 4 px base")
+		<div class="mv-sg__spaces">
+			for _, n := range []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"} {
+				<div class="mv-stack mv-stack--xs">
+					<span class={ "mv-sg__space mv-sg__space--" + n } aria-hidden="true"></span>
+					<span class="mv-mono mv-mono--plain">space-{ n }</span>
+				</div>
+			}
+		</div>
+		@sub("Radius · elevation")
+		<div class="mv-row mv-row--wrap">
+			<span class="mv-sg__radius mv-sg__radius--0">0 · panels</span>
+			<span class="mv-sg__radius mv-sg__radius--2">2 px · controls</span>
+			<span class="mv-sg__radius mv-sg__radius--16">16 px · bubbles</span>
+			<span class="mv-sg__radius mv-sg__radius--pill">999 · chips</span>
+		</div>
+		<div class="mv-row mv-row--wrap">
+			<span class="mv-sg__elev mv-sg__elev--ink">Ink offset</span>
+			<span class="mv-sg__elev mv-sg__elev--seal">Seal</span>
+			<span class="mv-sg__elev mv-sg__elev--float">Float</span>
+		</div>
+	</div>
+}
+
+templ icons(_ string) {
+	<div class="mv-sg__icons">
+		for _, n := range iconNames {
+			<span class="mv-sg__icon">
+				@ui.Icon(n, 22)
+				<span class="mv-meta mv-muted">{ n }</span>
+			</span>
+		}
+	</div>
+}
+
+templ textures(_ string) {
+	<div class="mv-sg__tex">
+		<div class="mv-stack mv-stack--sm">
+			<div class="mv-sg__texbox mv-tex-screentone"></div>
+			<strong class="mv-small">Screentone</strong>
+		</div>
+		<div class="mv-stack mv-stack--sm">
+			<div class="mv-sg__texbox mv-tex-halftone"></div>
+			<strong class="mv-small">Halftone fade</strong>
+		</div>
+		<div class="mv-stack mv-stack--sm">
+			<div class="mv-sg__texbox mv-sg__texbox--rel"><div class="mv-tex-speedlines mv-tex-speedlines--strong"></div></div>
+			<strong class="mv-small">Speed lines</strong>
+		</div>
+		<div class="mv-stack mv-stack--sm">
+			<div class="mv-sg__texbox mv-sg__texbox--center"><div class="mv-tex-splash"></div></div>
+			<strong class="mv-small">Ink splash</strong>
+		</div>
+	</div>
+}
+
+templ buttons(_ string) {
+	<div class="mv-stack">
+		@sub("Kinds")
+		<div class="mv-row mv-row--wrap">
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "sparkles", Kbd: "⌘↵"}) {
+				Generate panel
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Icon: "eye"}) {
+				Preview
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Ghost}) {
+				Cancel
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Danger, Icon: "trash"}) {
+				Delete page
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.IconOnly, Icon: "layers-subtract", Label: "Layers", Tip: "Regenerate only this layer"})
+			@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Icon: "alert-triangle"}) {
+				Continuity · 2 issues
+			}
+		</div>
+		@sub("States · primary")
+		<div class="mv-row mv-row--wrap">
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary}) {
+				Default
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Class: "mv-sg-hover"}) {
+				Hover
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Class: "mv-sg-focus"}) {
+				Focus
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Disabled: true}) {
+				Disabled
+			}
+		</div>
+		@sub("States · secondary")
+		<div class="mv-row mv-row--wrap">
+			@ui.Button(ui.ButtonProps{Variant: ui.Secondary}) {
+				Default
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Class: "mv-sg-hover-2"}) {
+				Hover
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Class: "mv-sg-focus"}) {
+				Focus
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Disabled: true}) {
+				Disabled
+			}
+		</div>
+		@sub("Sizes · 32 dense / 40 desktop / 48 touch")
+		<div class="mv-row mv-row--wrap">
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.SM}) {
+				Small
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary}) {
+				Default
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG}) {
+				Large
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.IconOnly, Size: ui.SM, Icon: "arrow-back-up", Label: "Undo"})
+			@ui.Button(ui.ButtonProps{Variant: ui.IconOnly, Icon: "arrow-back-up", Label: "Undo"})
+			@ui.Button(ui.ButtonProps{Variant: ui.IconOnly, Size: ui.LG, Icon: "arrow-back-up", Label: "Undo"})
+		</div>
+	</div>
+}
+
+templ inputs(id string) {
+	<div class="mv-grid-2">
+		@ui.Field(ui.FieldProps{ID: id + "-series", Label: "Series title", Hint: "Shown on the series page and in search."}) {
+			@ui.Input(ui.InputProps{ID: id + "-series", Value: "Tidebreak Courier", Described: true})
+		}
+		@ui.Field(ui.FieldProps{ID: id + "-chapter", Label: "Chapter title", Hint: "Focus state"}) {
+			@ui.Input(ui.InputProps{ID: id + "-chapter", Value: "The Salt Road", Class: "mv-sg-focus-input"})
+		}
+		@ui.Field(ui.FieldProps{ID: id + "-url", Label: "Instance URL", Error: "Can’t reach this address. Check the port and try again."}) {
+			@ui.InputGroup("http://", true) {
+				@ui.Input(ui.InputProps{ID: id + "-url", Value: "studio.local:8080", Invalid: true})
+			}
+		}
+		<div class="mv-field">
+			<span class="mv-field__label">Search</span>
+			@ui.SearchBox(id+"-search", "q", "", "Series, creators, tags", "#")
+		</div>
+		@ui.Field(ui.FieldProps{ID: id + "-prompt", Label: "Panel prompt"}) {
+			@ui.Textarea(ui.TextareaProps{ID: id + "-prompt", Value: "Rin vaults the rooftop railing, coat flaring, city lights far below. Low angle.", MaxLength: 600})
+		}
+		<div class="mv-stack">
+			@ui.Field(ui.FieldProps{ID: id + "-style", Label: "Art style"}) {
+				@ui.Select(ui.SelectProps{ID: id + "-style", Value: "seinen", Options: []ui.Option{{Value: "seinen", Label: "Seinen · B/W screentone"}, {Value: "shonen", Label: "Shōnen · bold ink"}}})
+			}
+			@ui.Field(ui.FieldProps{ID: id + "-dir", Label: "Reading direction", Hint: "Locked after the first page is published."}) {
+				@ui.Select(ui.SelectProps{ID: id + "-dir", Value: "rtl", Disabled: true, Options: []ui.Option{{Value: "rtl", Label: "Right to left"}}})
+			}
+		</div>
+	</div>
+}
+
+templ selection(id string) {
+	<div class="mv-stack mv-stack--lg">
+		<div class="mv-row mv-row--wrap mv-row--start mv-sg__gap40">
+			<div class="mv-stack">
+				@ui.Toggle(ui.ToggleProps{Label: "Reduced motion", Checked: true})
+				@ui.Toggle(ui.ToggleProps{Label: "Local only mode"})
+				@ui.Toggle(ui.ToggleProps{Label: "Show AI labels to readers", Checked: true})
+			</div>
+			<div class="mv-stack">
+				@ui.Checkbox(ui.CheckProps{Label: "Lock this page", Checked: true})
+				@ui.Checkbox(ui.CheckProps{Label: "Include thumbnails"})
+				@ui.Radio(ui.CheckProps{Name: id + "-fmt", Value: "rtl", Label: "Manga · right to left", Checked: true})
+				@ui.Radio(ui.CheckProps{Name: id + "-fmt", Value: "webtoon", Label: "Vertical webtoon"})
+			</div>
+		</div>
+		<div class="mv-grid-2">
+			@ui.Slider(ui.SliderProps{ID: id + "-sketch", Label: "Sketch strength", Min: 0, Max: 1, Step: .01, Value: .62, Display: "0.62"})
+			@ui.Slider(ui.SliderProps{ID: id + "-tone", Label: "Screentone density", Min: 0, Max: 100, Value: 30, Display: "30%", Suffix: "%"})
+		</div>
+	</div>
+}
+
+templ tabsBadges(id string) {
+	<div class="mv-stack mv-stack--lg">
+		@ui.Tabs("Project", []ui.Tab{{Href: "#", Label: "Script"}, {Href: "#", Label: "Characters", Count: "6"}, {Href: "#", Label: "Pages", Current: true}, {Href: "#", Label: "Translation"}})
+		@ui.Segmented(ui.SegmentedProps{Name: id + "-view", Value: "paged", Label: "Reading mode", Options: []ui.Option{{Value: "paged", Label: "Paged"}, {Value: "webtoon", Label: "Webtoon"}, {Value: "guided", Label: "Guided"}}})
+		<div class="mv-row mv-row--wrap mv-row--sm">
+			@ui.Badge(ui.ToneNeutral, "", "Draft")
+			@ui.StatusBadge(ui.StatusPublished, "Published")
+			@ui.StatusBadge(ui.StatusQueued, "Queued")
+			@ui.StatusBadge(ui.StatusFailed, "Failed")
+			@ui.StatusBadge(ui.StatusLocked, "Locked")
+			@ui.StatusBadge(ui.StatusNew, "New ch.")
+		</div>
+		<div class="mv-row mv-row--wrap mv-row--sm">
+			@ui.ProvenanceBadge(ui.ProvenanceAIAssisted, "AI-assisted art")
+			@ui.ProvenanceBadge(ui.ProvenanceHuman, "Hand-drawn")
+			@ui.ProvenanceBadge(ui.ProvenanceSelfHost, "Self-host")
+		</div>
+		<div class="mv-row mv-row--wrap">
+			@ui.Avatar(ui.AvatarProps{Name: "Jerry Okafor", Key: "c1", Size: "lg"})
+			@ui.Avatar(ui.AvatarProps{Name: "Jun Sato", Key: "c2x", Size: "md", Online: true})
+			@ui.Avatar(ui.AvatarProps{Name: "Aiko Kane", Key: "c3", Size: "sm"})
+			@ui.AvatarStack([]ui.AvatarProps{{Name: "Jerry Okafor", Key: "a"}, {Name: "Jun Sato", Key: "b"}, {Name: "Aiko Kane", Key: "c"}}, 2)
+			<span class="mv-small mv-muted">Green ring = online now</span>
+		</div>
+	</div>
+}
+
+templ cards(_ string) {
+	<div class="mv-stack">
+		<div class="mv-row mv-row--wrap mv-row--start">
+			<div class="mv-sg__w280">
+				@ui.ProjectCard(ui.ProjectCardProps{Href: "#", Title: "Tidebreak Courier", Meta: "Ch. 4 · 38 pages · edited 2 h ago", ThumbLabel: "PAGE THUMBNAIL", MenuLabel: "Project actions", Badges: []ui.BadgeSpec{{Text: "Draft"}, {Tone: ui.ToneMuted, Text: "RTL"}}})
+			</div>
+			<div class="mv-sg__w180">
+				@ui.SeriesCard(ui.SeriesCardProps{Href: "#", Title: "Lanterns of Oru", Meta: "Fantasy · Weekly, Sat", Stat: "41.2k follows", Badge: "New ch.", Boxed: true})
+			</div>
+			<div class="mv-sg__w118">
+				@ui.SeriesCard(ui.SeriesCardProps{Href: "#", Title: "Glass Orchard", Meta: "Romance · Ch. 3", Rank: 1, Label: "COVER"})
+			</div>
+		</div>
+		@ui.CharacterCard(ui.CharacterCardProps{Kanji: "凛", Role: "Lead · Courier", FirstName: "Rin", LastName: "Asagiri", Desc: "19 · Reckless, loyal, can’t read maps. Carries letters no one else will.", Lock: .96, LockLabel: "Character Lock", ArtLabel: "CHARACTER ART"})
+		<div class="mv-stack mv-stack--sm">
+			@ui.ChapterRow(ui.ChapterRowProps{Href: "#", Number: 8, Title: "The Lighthouse Debt", Meta: "12 Sep · 34 pages", New: true, NewLabel: "New"})
+			@ui.ChapterRow(ui.ChapterRowProps{Href: "#", Number: 7, Title: "Salt Road", Meta: "5 Sep · 30 pages · downloaded", Downloaded: true, DownloadLabel: "Downloaded"})
+			@ui.ChapterRow(ui.ChapterRowProps{Href: "#", Number: 6, Title: "Paper Crows", Meta: "Read · 29 Aug", Read: true})
+		</div>
+	</div>
+}
+
+templ aiParts(id string) {
+	<div class="mv-stack mv-stack--lg">
+		@sub("Compute meter · self-host")
+		<div class="mv-row mv-row--wrap">
+			@ui.ComputeCard(ui.ComputeCardProps{GPU: "RTX 4090", VRAMUsed: 16.3, VRAMTotal: 24, VRAMText: "VRAM 16.3 / 24 GB", Queue: "2 jobs queued · ~1 min 40 s"})
+			@ui.ComputeMeter(ui.MeterProps{Href: "#", Load: .68, Text: "2 queued", Title: "RTX 4090 · 16.3 / 24 GB · 2 jobs"})
+		</div>
+		@sub("Routing chip")
+		@ui.RouteChip("Auto", "Qwen-Image Edit · local · ~40 s", "#", "Why this model?")
+		@sub("Generation states")
+		<div class="mv-gen-row">
+			@ui.GenState(ui.GenProps{State: ui.GenQueued, Position: 3, Title: "Queued", Detail: "3rd in line · ~2 min"})
+			@ui.GenState(ui.GenProps{State: ui.GenGenerating, Progress: .62, ProgressText: "62% · step 18/28", Title: "Generating", Detail: "Ink fills as steps finish · 62%"})
+			@ui.GenState(ui.GenProps{State: ui.GenReady, ResultLabel: "RESULT", Title: "Ready", Detail: "Kept by you · 38 s"})
+			@ui.GenState(ui.GenProps{State: ui.GenFailed, SFX: "FZZT", RetryLabel: "Retry", Title: "Failed", Detail: "Timed out on remote · moved to the next model"})
+		</div>
+		@ui.VariationPicker("Pick a variation", "Keys 1–4 · Enter keeps · R rerolls only this layer", id+"-var", "2", []ui.Variation{{Value: "1", Label: "VAR 1", Lock: -1}, {Value: "2", Label: "VAR 2", Lock: .97}, {Value: "3", Label: "VAR 3", Lock: -1}, {Value: "4", Label: "VAR 4", Lock: -1}})
+	</div>
+}
+
+templ overlays(id string) {
+	<div class="mv-grid-2 mv-sg__overlays">
+		<div class="mv-stack">
+			@sub("Modal")
+			@ui.Modal(ui.ModalProps{ID: id + "-modal", Title: "Regenerate page 7?", Static: true}) {
+				@ui.ModalBody() {
+					<span>Pages 6 and 8 are used as context. Locked panels 7.2 and 7.4 stay exactly as they are.</span>
+					<span class="mv-modal__estimate">Estimate · 4 panels · ~2 min on RTX 4090</span>
+				}
+				@ui.ModalFoot() {
+					@ui.Button(ui.ButtonProps{Variant: ui.Ghost}) {
+						Cancel
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "sparkles"}) {
+						Regenerate
+					}
+				}
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Attrs: templ.Attributes{"data-dialog-open": id + "-live"}}) {
+				Open as dialog
+			}
+			@ui.Modal(ui.ModalProps{ID: id + "-live", Title: "Regenerate page 7?"}) {
+				@ui.ModalBody() {
+					<span>Opened with data-dialog-open. Escape or the backdrop closes it.</span>
+				}
+				@ui.ModalFoot() {
+					@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Attrs: templ.Attributes{"data-dialog-close": ""}}) {
+						Close
+					}
+				}
+			}
+		</div>
+		<div class="mv-stack">
+			@sub("Drawer")
+			<div class="mv-sg__drawerwrap">
+				<div class="mv-sg__drawerscrim"></div>
+				@ui.Drawer(id+"-drawer", "Comments · Panel 7.3", true) {
+					<div class="mv-row mv-row--start">
+						@ui.Avatar(ui.AvatarProps{Name: "Jerry Okafor", Key: "c1", Size: "sm"})
+						<div class="mv-stack mv-stack--xs">
+							<strong>Jerry Okafor</strong>
+							<span class="mv-muted">Her left hand looks off. Fix just that region?</span>
+						</div>
+					</div>
+					<div class="mv-row mv-row--start">
+						@ui.Avatar(ui.AvatarProps{Name: "Jun Sato", Key: "c2x", Size: "sm"})
+						<div class="mv-stack mv-stack--xs">
+							<strong>Jun Sato</strong>
+							<span class="mv-muted">On it. Keeping the coat.</span>
+						</div>
+					</div>
+				}
+			</div>
+		</div>
+		<div class="mv-stack">
+			@sub("Dropdown")
+			<div class="mv-sg__w240">
+				@ui.Menu([]ui.MenuItem{{Href: "#", Icon: "file-type-png", Label: "PNG pages"}, {Href: "#", Icon: "file-type-pdf", Label: "PDF", Meta: "print-ready", Current: true}, {Href: "#", Icon: "book", Label: "EPUB"}, {Href: "#", Icon: "movie", Label: "Video (9:16)", Meta: "animate"}})
+			</div>
+			@ui.Dropdown("", "", false, dropdownTrigger(), []ui.MenuItem{{Href: "#", Icon: "file-type-png", Label: "PNG pages"}, {Href: "#", Icon: "book", Label: "EPUB"}})
+		</div>
+		<div class="mv-stack">
+			@sub("Speech-bubble tooltip")
+			@ui.BubbleTip("Locked panels can’t be changed by AI, batch jobs or agents.")
+			<span class="mv-sg__tipanchor">
+				@ui.Button(ui.ButtonProps{Variant: ui.IconOnly, Size: ui.SM, Icon: "lock", Label: "Locked", Tip: "Locked panels can’t be changed by AI, batch jobs or agents."})
+			</span>
+			@sub("Toasts")
+			<div class="mv-stack mv-stack--lg mv-sg__toasts">
+				@ui.Toast(ui.ToastProps{Tone: ui.ToneSuccess, Title: "Chapter 8 published", Body: "Followers notified · 34 pages", Href: "#", Action: "View"})
+				@ui.Toast(ui.ToastProps{Tone: ui.ToneError, Title: "Panel 7.3 failed", Body: "Remote model timed out. Moved to local.", Href: "#", Action: "Details"})
+				@ui.Toast(ui.ToastProps{Tone: ui.ToneInfo, Title: "Jerry joined the page", Body: "Editing panel 7.1"})
+			</div>
+		</div>
+	</div>
+}
+
+templ dropdownTrigger() {
+	<span class="mv-btn mv-btn--secondary mv-btn--sm">
+		Export as
+		@ui.Icon("chevron-down", 16)
+	</span>
+}
+
+templ navigation(_ string) {
+	<div class="mv-stack">
+		@sub("Studio sidebar")
+		<div class="mv-sg__sidebar">
+			<a class="mv-sidenav__item" href="#">
+				@ui.Icon("home", 18)
+				Home
+			</a>
+			<a class="mv-sidenav__item" href="#" aria-current="page">
+				@ui.Icon("books", 18)
+				Projects
+			</a>
+			<a class="mv-sidenav__item" href="#">
+				@ui.Icon("users", 18)
+				Characters
+			</a>
+			<a class="mv-sidenav__item" href="#">
+				@ui.Icon("world", 18)
+				Setting
+			</a>
+			<div class="mv-sidebar__sep"></div>
+			<a class="mv-sidenav__item" href="#">
+				@ui.Icon("cpu", 18)
+				Models &amp; queue
+			</a>
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				New manga
+			}
+		</div>
+		@sub("Mobile bottom nav")
+		<nav class="mv-bottomnav mv-sg__bottomnav" aria-label="Sample bottom navigation">
+			<a class="mv-bottomnav__item" href="#">
+				@ui.Icon("home", 22)
+				Home
+			</a>
+			<a class="mv-bottomnav__item" href="#">
+				@ui.Icon("compass", 22)
+				Explore
+			</a>
+			<div class="mv-bottomnav__create">
+				<a href="#" aria-label="Create">
+					@ui.Icon("plus", 24)
+				</a>
+			</div>
+			<a class="mv-bottomnav__item" href="#" aria-current="page">
+				@ui.Icon("books", 22)
+				Library
+			</a>
+			<a class="mv-bottomnav__item" href="#">
+				@ui.Icon("user", 22)
+				Me
+			</a>
+		</nav>
+		@sub("Page head · box · kv")
+		@ui.PageHead("Good evening, Jerry", "Chapter 8 of Tidebreak Courier is 6 pages from done.", nil)
+		@ui.Box("mv-box--pad") {
+			@ui.KV("GPU", "RTX 4090 · 16.3 / 24 GB")
+			@ui.KV("Queue", "2 jobs · ~1 min 40 s")
+		}
+	</div>
+}
+
+templ motion(_ string) {
+	<div class="mv-sg__motion">
+		<div class="mv-stack mv-stack--sm">
+			<div class="mv-sg__motionbox mv-slash is-playing mv-sg-loop"></div>
+			<strong class="mv-small">Slash · 420 ms</strong>
+		</div>
+		<div class="mv-stack mv-stack--sm">
+			<div class="mv-sg__motionbox mv-reveal mv-sg-loop"><div class="mv-tone"></div></div>
+			<strong class="mv-small">Panel reveal · 320 ms</strong>
+		</div>
+		<div class="mv-stack mv-stack--sm">
+			<div class="mv-sg__motionbox"><div class="mv-gen__fill mv-inkfill-demo mv-sg-loop mv-p-62"></div></div>
+			<strong class="mv-small">Ink fill · real progress</strong>
+		</div>
+		<div class="mv-stack mv-stack--sm">
+			<div class="mv-sg__motionbox mv-burst">
+				<div class="mv-burst__lines mv-sg-loop"></div>
+				<span class="mv-burst__word mv-sg-loop">
+					@ui.SFX("DON!", "sm", "accent", false)
+				</span>
+			</div>
+			<strong class="mv-small">Impact burst · 600 ms</strong>
+		</div>
+		<div class="mv-stack mv-stack--sm">
+			<div class="mv-sg__motionbox mv-pageturn mv-sg__turn">
+				<div class="mv-tone"></div>
+				<div class="mv-sg__leafwrap"><div class="mv-pageturn__leaf mv-sg__leaf mv-sg-loop"></div></div>
+			</div>
+			<strong class="mv-small">Page turn · 480 ms</strong>
+		</div>
+	</div>
+}
+
+templ states(_ string) {
+	<div class="mv-stack">
+		@sub("Screentone skeleton")
+		@ui.Skeleton("Loading result")
+		@sub("Empty")
+		@ui.State(ui.StateProps{SFX: "シーン…", JP: true, Title: "No projects yet", Body: "Start from a premise, a template or pages you already have.", Art: "splash", Foot: "“shiin” · the sound of silence", Boxed: true}) {
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				New manga
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Icon: "upload"}) {
+				Import CBZ / PDF
+			}
+		}
+		@sub("Error")
+		@ui.State(ui.StateProps{SFX: "GASHAN!", Tone: "error", SFXSize: "lg", Title: "The image worker stopped responding", Body: "Your pages are saved. Queued jobs will resume when it’s back, or you can switch them to an API model.", Art: "error", Boxed: true}) {
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "refresh"}) {
+				Retry now
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Icon: "list"}) {
+				Open queue
+			}
+		}
+	</div>
+}
+
+templ gate(_ string) {
+	<div class="mv-stack mv-stack--lg mv-tex-gate mv-sg__gate">
+		@ui.StatusWindow("Status · Creator", "") {
+			@ui.StatusWho("B", "Jerry Okafor", "LV. 23 · Storyteller")
+			@ui.XPBar("XP to LV. 24", "7,240 / 10,000", .724)
+			@ui.XPBar("Chapters this month", "2 / 4", .5)
+			@ui.StatusStats([]ui.Stat{{Label: "Panels", Value: "1,204"}, {Label: "Lock avg", Value: "96%", Good: true}, {Label: "Followers", Value: "14.1k"}, {Label: "Streak", Value: "9 wk"}})
+		}
+		@ui.StatusWindow("Quest complete", "") {
+			<span class="mv-status__big">Chapter 8 published</span>
+			<span class="mv-status__center">+1,200 XP · 12.4k followers notified</span>
+			<div class="mv-status__actions">
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.SM}) {
+					View series
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM}) {
+					Dismiss
+				}
+			</div>
+		}
+		<div class="mv-ranks">
+			for _, r := range ui.Ranks {
+				@ui.RankBadge(r, false)
+			}
+		</div>
+		@ui.LevelUpToast("Level 24 · Storyteller", "Unlocked: custom rank title")
+		<div class="mv-sg__portal mv-tex-portal"></div>
+	</div>
+}
+
+templ islandDemo(id string) {
+	<div data-island="demo" data-props={ `{"label":"Panels inked","start":3}` } id={ id + "-island" }>
+		<span class="mv-small mv-muted">Svelte island loads here (needs JavaScript).</span>
+	</div>
+}

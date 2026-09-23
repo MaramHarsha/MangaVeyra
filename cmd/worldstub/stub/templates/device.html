@@ -1,0 +1,28 @@
+{{define "content"}}
+<h1>Link a MangaVeyra server</h1>
+<p class="meta">RFC 8628 device authorization · the page a person opens from the code their server shows</p>
+{{if .Error}}<div class="card" role="alert"><span class="badge bad">Not found</span> {{.Error}}</div>{{end}}
+{{if .Found}}
+<div class="card">
+  <p class="label">Code</p>
+  <p class="mono" style="font-size:24px;color:var(--text)">{{.UserCode}}</p>
+  <p>A self-hosted server wants to link to a World account. It will be able to:</p>
+  <ul class="plain">{{range .Scopes}}<li>{{.}}</li>{{end}}</ul>
+  <p>It will <strong>not</strong> be able to read your projects, prompts or drafts.</p>
+  <p class="meta">Code expires {{date .Expires}}</p>
+  <form method="post" action="/device" class="inline">
+    <input type="hidden" name="user_code" value="{{.UserCode}}">
+    <label for="account" class="label">Approve as</label>
+    <select id="account" name="account">{{range .Accounts}}<option value="{{.Ref}}">{{.Label}}</option>{{end}}</select>
+    <button class="primary" type="submit" name="decision" value="approve">Approve</button>
+    <button class="danger" type="submit" name="decision" value="deny">Deny</button>
+  </form>
+</div>
+{{else}}
+<form method="get" action="/device" class="card inline">
+  <label for="user_code" class="label">Enter the code shown on your server</label>
+  <input id="user_code" class="code" name="user_code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="BCDF-GHJK" required>
+  <button class="primary" type="submit">Continue</button>
+</form>
+{{end}}
+{{end}}

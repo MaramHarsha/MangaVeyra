@@ -1,0 +1,18 @@
+# NoobAI XL 1.1 (SDXL architecture, anime/illustration).
+id: noobai-xl
+name: NoobAI XL 1.1
+maker: Laxhar Dream Lab
+kind: image
+vram_mb: 10000
+min_vram_mb: 5000
+worker:
+  diffusers:
+    repo: Laxhar/noobai-XL-1.1
+    family: sdxl
+    controlnet_openpose: xinsir/controlnet-openpose-sdxl-1.0
+    scheduler: euler_a
+    default_steps: 28
+    default_guidance: 5.0
+    prompt_suffix: "masterpiece, best quality, newest"
+    negative_prefix: "worst quality, low quality, old, early"
+    trainable: true

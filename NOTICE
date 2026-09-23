@@ -1,0 +1,54 @@
+MangaVeyra
+Copyright (C) 2026 MangaVeyra contributors
+
+MangaVeyra is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License version 3 (see LICENSE).
+If you run a modified version as a network service, you must offer its
+source code to the users of that service (AGPL-3.0, section 13).
+
+The files under sdk/ (API descriptions, the .mvpack specification and
+schemas, plugin SDK stubs) are licensed under the MIT License (sdk/LICENSE)
+so that workers, plugins and other tools can use them under any licence.
+
+The MangaVeyra name and logo (brand/) identify the official project; forks
+must not present themselves as the official MangaVeyra.
+
+Sample content (Tidebreak Courier and its characters, Glass Orchard, Ninth
+Bell, Low Tide Radio, Lanterns of Oru, Paper Crows, Iron Koi and the other
+titles used in demos, tests and docs) is original to this project.
+
+-------------------------------------------------------------------------------
+Third-party software
+-------------------------------------------------------------------------------
+
+This product includes the following third-party components. Each remains
+under its own licence; full licence texts ship with the respective modules
+and packages. Extend this list whenever a dependency is added.
+
+Go modules
+  github.com/a-h/templ                 MIT
+  github.com/coder/websocket           ISC
+  github.com/jackc/pgx/v5              MIT
+  github.com/jmoiron/sqlx              MIT
+  github.com/minio/minio-go/v7         Apache-2.0
+  github.com/oklog/ulid/v2             Apache-2.0
+  github.com/pquerna/otp               Apache-2.0
+  go.yaml.in/yaml/v3                   MIT and Apache-2.0
+  golang.org/x/crypto                  BSD-3-Clause
+  golang.org/x/image                   BSD-3-Clause
+  golang.org/x/net, x/sys, x/text      BSD-3-Clause
+  modernc.org/sqlite (and modernc.org/libc, mathutil, memory)   BSD-3-Clause
+  SQLite                               Public domain
+
+Web assets (bundled by the web build, self-hosted, never loaded from a CDN)
+  HTMX 2                               0BSD
+  Svelte 5                             MIT
+  PixiJS 8                             MIT
+  Yjs                                  MIT
+  Tabler Icons                         MIT
+  Anton, Hanken Grotesk, IBM Plex Mono, Comic Neue, Bangers, Noto Sans JP
+                                       SIL Open Font License 1.1
+
+Runtime tools (optional, invoked as separate programs, not linked)
+  FFmpeg                               LGPL-2.1+/GPL-2.0+ depending on build
+  poppler-utils (pdftoppm)             GPL-2.0+

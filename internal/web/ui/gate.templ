@@ -1,0 +1,87 @@
+package ui
+
+import "strings"
+
+// RankBadge renders an E–S rank diamond. The letter is always shown (never colour alone).
+templ RankBadge(rank string, small bool) {
+	{{ r := strings.ToLower(rank) }}
+	<span class={ Cls("mv-rank", "mv-rank--"+r, If(small, "mv-rank--sm")) } role="img" aria-label={ "Rank " + rank }>
+		<span aria-hidden="true">{ rank }</span>
+	</span>
+}
+
+// XPBar renders a labelled XP bar ("XP TO LV. 24 · 7,240 / 10,000").
+templ XPBar(label, value string, progress float64) {
+	<div class="mv-xp">
+		if label != "" || value != "" {
+			<div class="mv-xp__head">
+				<span>{ label }</span>
+				<strong>{ value }</strong>
+			</div>
+		}
+		<div
+			class={ Cls("mv-xp__track", Pct(progress)) }
+			role="progressbar"
+			aria-valuemin="0"
+			aria-valuemax="100"
+			aria-valuenow={ fmtNum(float64(int(progress*100 + .5))) }
+			if label != "" {
+				aria-label={ label }
+			}
+		></div>
+	</div>
+}
+
+// StatusWindow renders a glowing status window with corner brackets (stats,
+// quests and system messages — never forms or settings).
+templ StatusWindow(title, class string) {
+	<section class={ Cls("mv-status", class) } aria-label={ title }>
+		<div class="mv-status__title" aria-hidden="true">{ title }</div>
+		{ children... }
+	</section>
+}
+
+// StatusWho renders the rank + name + level line of a creator status window.
+templ StatusWho(rank, name, sub string) {
+	<div class="mv-status__who">
+		@RankBadge(rank, false)
+		<div class="mv-stack mv-stack--xs">
+			<strong class="mv-status__name">{ name }</strong>
+			<span class="mv-status__sub">{ sub }</span>
+		</div>
+	</div>
+}
+
+// Stat is one "LABEL · value" pair in a status window.
+type Stat struct {
+	Label string
+	Value string
+	Good  bool
+}
+
+// StatusStats renders the two-column stat grid of a status window.
+templ StatusStats(stats []Stat) {
+	<div class="mv-status__stats">
+		for _, s := range stats {
+			<span>
+				{ s.Label } ·
+				<b
+					if s.Good {
+						class="mv-ok-text"
+					}
+				>{ s.Value }</b>
+			</span>
+		}
+	</div>
+}
+
+// LevelUpToast renders the "LV UP" milestone toast.
+templ LevelUpToast(title, body string) {
+	<div class="mv-levelup" role="status">
+		<span class="mv-levelup__tag" aria-hidden="true">LV UP</span>
+		<div class="mv-levelup__text">
+			<strong>{ title }</strong>
+			<span>{ body }</span>
+		</div>
+	</div>
+}

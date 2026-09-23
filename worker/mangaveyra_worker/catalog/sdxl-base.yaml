@@ -1,0 +1,18 @@
+# Stable Diffusion XL 1.0 base — the reference SDXL checkpoint (CreativeML Open RAIL++-M).
+id: sdxl-base
+name: Stable Diffusion XL 1.0
+maker: Stability AI
+kind: image
+vram_mb: 10000
+min_vram_mb: 5000
+worker:
+  diffusers:
+    repo: stabilityai/stable-diffusion-xl-base-1.0
+    family: sdxl
+    variant: fp16
+    controlnet_openpose: xinsir/controlnet-openpose-sdxl-1.0
+    controlnet_lineart: xinsir/controlnet-scribble-sdxl-1.0
+    ip_adapter: {repo: h94/IP-Adapter, subfolder: sdxl_models, weight_name: ip-adapter_sdxl.bin, scale: 0.6}
+    default_steps: 30
+    default_guidance: 6.5
+    trainable: true

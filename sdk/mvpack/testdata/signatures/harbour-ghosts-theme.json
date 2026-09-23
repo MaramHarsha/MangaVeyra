@@ -1,0 +1,26 @@
+{
+  "mvpack_signature": 1,
+  "manifest_sha256": "d13067635ce9a0fa4af5124eb8f46037a2bcdd7ad274fc0a1a96865a649de3c7",
+  "files": [
+    {
+      "path": "plugin.json",
+      "size": 358,
+      "sha256": "eeccbfa02d8b6fedab1defeec004e708c3ce2eb7ad84201071a2221283cc0d1f"
+    },
+    {
+      "path": "themes/harbour-ghosts.json",
+      "size": 80,
+      "sha256": "f85a36022ff9aa34112abcec071806eb2513e3cd313d2e0b8cb2c7dbf45f52a5"
+    }
+  ],
+  "signatures": [
+    {
+      "key_id": "srv_testdata",
+      "signer": "server",
+      "alg": "ed25519",
+      "public_key": "UtD35Fj5pogX5LZdjE4kwmQSgiiz+T8J3c246QRc0WM=",
+      "signed_at": "2026-09-12T10:00:00Z",
+      "sig": "4I5gTQVqnkhWTGhFGBUR3otzlqZPCnQGz6RNNLXYlprcyXLrr0nkpKDrSNkf5tpLpSB9/5Iy9W4JbyHcu0kYAg=="
+    }
+  ]
+}

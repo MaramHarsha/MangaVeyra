@@ -1,0 +1,381 @@
+package authui
+
+import (
+	"context"
+	"strconv"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/auth"
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+templ formError(msg string) {
+	if msg != "" {
+		@ui.Notice(ui.ToneError, "alert-triangle") {
+			{ msg }
+		}
+	}
+}
+
+// LoginPage is A2 – Log in.
+templ LoginPage(f loginForm) {
+	<form class="mv-auth__form" method="post" action="/login" novalidate>
+		<div class="mv-stack mv-stack--sm">
+			<h1 class="mv-auth__title">{ i18n.T(ctx, "auth.page.login.heading") }</h1>
+			<span class="mv-auth__sub">{ f.ServerLine }</span>
+		</div>
+		@formError(f.Errors.Form())
+		<input type="hidden" name="next" value={ f.Next }/>
+		@ui.Field(ui.FieldProps{ID: "identifier", Label: i18n.T(ctx, "auth.page.login.identifier"), Error: f.Errors["identifier"]}) {
+			@ui.Input(ui.InputProps{ID: "identifier", Name: "identifier", Value: f.Identifier, Autocomplete: "username", Required: true, Autofocus: f.Identifier == "", Invalid: f.Errors["identifier"] != "", Class: "mv-input--lg"})
+		}
+		@ui.Field(ui.FieldProps{ID: "password", Label: i18n.T(ctx, "auth.page.password"), Error: f.Errors["password"]}) {
+			@ui.Input(ui.InputProps{ID: "password", Name: "password", Type: "password", Autocomplete: "current-password", Required: true, Autofocus: f.Identifier != "", Invalid: f.Errors["password"] != "", Class: "mv-input--lg"})
+		}
+		<div class="mv-auth__row">
+			@ui.Checkbox(ui.CheckProps{ID: "remember", Name: "remember", Checked: f.Remember, Label: i18n.T(ctx, "auth.page.login.remember")})
+			<a href="/forgot">{ i18n.T(ctx, "auth.page.login.forgot") }</a>
+		</div>
+		@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Full: true}) {
+			{ i18n.T(ctx, "auth.login.submit") }
+		}
+		<p class="mv-auth__foot">
+			{ f.Footer }
+			if f.FooterLink != "" {
+				{ " " }
+				<a href={ templ.URL(f.FooterHref) }>{ f.FooterLink }</a>
+			}
+		</p>
+	</form>
+}
+
+// CodePage is the two-step verification step of A2.
+templ CodePage(f codeForm) {
+	<form class="mv-auth__form" method="post" action="/login/code" novalidate>
+		<div class="mv-stack mv-stack--sm">
+			@ui.SFX("PIN!", "sm", "accent", false)
+			<h1 class="mv-auth__title mv-auth__title--m">{ i18n.T(ctx, "auth.page.code.heading") }</h1>
+			<span class="mv-auth__sub">{ i18n.T(ctx, "auth.page.code.lead") }</span>
+		</div>
+		@formError(f.Errors.Form())
+		@ui.Field(ui.FieldProps{ID: "code", Label: i18n.T(ctx, "auth.page.code.label"), Hint: i18n.T(ctx, "auth.page.code.hint"), Error: f.Errors["code"]}) {
+			@ui.Input(ui.InputProps{ID: "code", Name: "code", Autocomplete: "one-time-code", Inputmode: "text", Required: true, Autofocus: true, MaxLength: 32, Invalid: f.Errors["code"] != "", Described: true, Class: "mv-input--lg"})
+		}
+		@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Full: true, Icon: "shield-check"}) {
+			{ i18n.T(ctx, "auth.page.code.submit") }
+		}
+		<p class="mv-auth__foot"><a href="/login">{ i18n.T(ctx, "auth.page.code.cancel") }</a></p>
+	</form>
+}
+
+// SignupPage is A3 – Sign up.
+templ SignupPage(f signupForm) {
+	if f.Closed {
+		<div class="mv-auth__form">
+			@brandMark()
+			<div class="mv-stack mv-stack--sm">
+				<h1 class="mv-auth__title mv-auth__title--m">{ i18n.T(ctx, "auth.page.signup.closed_heading") }</h1>
+				<span class="mv-auth__sub">{ f.Host } · { f.Line }</span>
+			</div>
+			@formError(f.Errors.Form())
+			@ui.Notice(ui.ToneInfo, "lock") {
+				{ f.ClosedText }
+			}
+			@ui.LinkButton("/login", ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Full: true}) {
+				{ i18n.T(ctx, "auth.login.submit") }
+			}
+		</div>
+	} else {
+		<form class="mv-auth__form" method="post" action="/signup" novalidate>
+			@brandMark()
+			<div class="mv-stack mv-stack--sm">
+				<h1 class="mv-auth__title mv-auth__title--m">{ i18n.T(ctx, "auth.page.signup.heading", "host", f.Host) }</h1>
+				<span class="mv-auth__sub">{ f.Line }</span>
+			</div>
+			if f.InvitedBy != "" {
+				@ui.Notice(ui.ToneAccent, "mail-opened") {
+					<strong>{ i18n.T(ctx, "auth.page.signup.invited_by", "name", f.InvitedBy) }</strong>
+					{ " · " }{ i18n.T(ctx, "auth.page.signup.invite_note") }
+				}
+			}
+			@formError(f.Errors.Form())
+			<input type="hidden" name="invite" value={ f.Invite }/>
+			@ui.Field(ui.FieldProps{ID: "display_name", Label: i18n.T(ctx, "auth.page.signup.display_name"), Error: f.Errors["display_name"]}) {
+				@ui.Input(ui.InputProps{ID: "display_name", Name: "display_name", Value: f.DisplayName, Autocomplete: "name", MaxLength: 64, Autofocus: true, Invalid: f.Errors["display_name"] != "", Class: "mv-input--lg"})
+			}
+			@ui.Field(ui.FieldProps{ID: "username", Label: i18n.T(ctx, "auth.page.signup.username"), Hint: i18n.T(ctx, "auth.page.signup.username_hint"), Error: f.Errors["username"]}) {
+				@ui.InputGroup("@", f.Errors["username"] != "") {
+					@ui.Input(ui.InputProps{ID: "username", Name: "username", Value: f.Username, Autocomplete: "username", Required: true, MaxLength: 32, Invalid: f.Errors["username"] != "", Described: true, Attrs: templ.Attributes{"autocapitalize": "none", "spellcheck": "false"}})
+				}
+			}
+			@ui.Field(ui.FieldProps{ID: "email", Label: i18n.T(ctx, "auth.page.email"), Error: f.Errors["email"]}) {
+				@ui.Input(ui.InputProps{ID: "email", Name: "email", Type: "email", Value: f.Email, Autocomplete: "email", Required: true, ReadOnly: f.InviteEmail != "", Invalid: f.Errors["email"] != "", Class: "mv-input--lg"})
+			}
+			@ui.Field(ui.FieldProps{ID: "password", Label: i18n.T(ctx, "auth.page.password"), Hint: i18n.T(ctx, "auth.password.too_short", "min", auth.MinPasswordLen), Error: f.Errors["password"]}) {
+				@ui.InputGroup("", f.Errors["password"] != "") {
+					@ui.Input(ui.InputProps{ID: "password", Name: "password", Type: "password", Autocomplete: "new-password", Required: true, MinLength: auth.MinPasswordLen, Invalid: f.Errors["password"] != "", Described: true, Attrs: templ.Attributes{"data-strength": "pw-strength"}})
+					@ui.PasswordStrength("pw-strength", i18n.T(ctx, "auth.page.strength"))
+				}
+			}
+			<div class="mv-field">
+				@ui.Checkbox(ui.CheckProps{ID: "agree", Name: "agree", Checked: f.Agree, Required: true, AlignStart: true, Class: "mv-small mv-muted"}) {
+					<span>{ i18n.T(ctx, "auth.page.signup.agree") }</span>
+				}
+				if f.Rules != "" {
+					<details class="mv-small">
+						<summary class="mv-link">{ i18n.T(ctx, "auth.page.signup.read_rules") }</summary>
+						<p class="mv-muted">{ f.Rules }</p>
+					</details>
+				}
+				if f.Errors["agree"] != "" {
+					<span class="mv-field__error" role="alert">
+						@ui.Icon("alert-triangle", 14)
+						{ f.Errors["agree"] }
+					</span>
+				}
+			</div>
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Full: true, Class: "mv-auth__submit-mobile-bottom"}) {
+				{ i18n.T(ctx, "auth.signup.submit") }
+			}
+			<p class="mv-auth__foot">
+				{ i18n.T(ctx, "auth.page.signup.have_account") }{ " " }
+				<a href="/login">{ i18n.T(ctx, "auth.login.submit") }</a>
+			</p>
+		</form>
+	}
+}
+
+// ForgotPage is A4 – Forgot password (with the self-host note when email is off).
+templ ForgotPage(f forgotForm) {
+	<form class="mv-auth__form" method="post" action="/forgot" novalidate>
+		@ui.SFX("HMMM…", "lg", "", false)
+		<h1 class="mv-state__title mv-state__title--lg mv-auth__h1">{ i18n.T(ctx, "auth.page.forgot.heading") }</h1>
+		if f.NoEmail {
+			<p class="mv-auth__sub">{ i18n.T(ctx, "auth.page.forgot.lead_no_email") }</p>
+			@ui.Notice(ui.ToneWarning, "server") {
+				<strong>{ i18n.T(ctx, "auth.page.forgot.no_email_title") }</strong>
+				<br/>
+				{ i18n.T(ctx, "auth.reset.no_email") }
+			}
+			@ui.LinkButton("/login", ui.ButtonProps{Variant: ui.Secondary, Size: ui.LG, Full: true}) {
+				{ i18n.T(ctx, "auth.page.forgot.back") }
+			}
+		} else {
+			<p class="mv-auth__sub">{ i18n.T(ctx, "auth.page.forgot.lead") }</p>
+			@formError(f.Errors.Form())
+			@ui.Field(ui.FieldProps{ID: "email", Label: i18n.T(ctx, "auth.page.email"), Error: f.Errors["email"]}) {
+				@ui.Input(ui.InputProps{ID: "email", Name: "email", Type: "email", Value: f.Email, Autocomplete: "email", Required: true, Autofocus: !f.Sent, Invalid: f.Errors["email"] != "", Class: "mv-input--lg"})
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Full: true}) {
+				{ i18n.T(ctx, "auth.page.forgot.submit") }
+			}
+			if f.Sent {
+				@ui.Notice(ui.ToneSuccess, "mail-check") {
+					{ i18n.T(ctx, "auth.page.forgot.sent", "minutes", f.TTL) }
+				}
+			}
+			<p class="mv-auth__foot"><a href="/login">{ i18n.T(ctx, "auth.page.forgot.back") }</a></p>
+		}
+	</form>
+}
+
+// ResetPage lets a member choose a new password from an emailed or admin-made link.
+templ ResetPage(f resetForm) {
+	if f.Invalid {
+		<div class="mv-auth__form">
+			@ui.SFX("PUTSUN", "lg", "error", false)
+			<h1 class="mv-state__title mv-state__title--lg">{ i18n.T(ctx, "auth.page.reset.invalid_title") }</h1>
+			<p class="mv-auth__sub">{ i18n.T(ctx, "auth.reset.invalid") }</p>
+			@ui.LinkButton("/forgot", ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Full: true}) {
+				{ i18n.T(ctx, "auth.page.reset.again") }
+			}
+		</div>
+	} else {
+		<form class="mv-auth__form" method="post" action={ templ.URL("/reset/" + f.Token) } novalidate>
+			<h1 class="mv-state__title mv-state__title--lg">{ i18n.T(ctx, "auth.page.reset.heading") }</h1>
+			<p class="mv-auth__sub">{ i18n.T(ctx, "auth.page.reset.lead", "username", f.Username) }</p>
+			@formError(f.Errors.Form())
+			<input type="text" name="username" value={ f.Username } autocomplete="username" hidden/>
+			@ui.Field(ui.FieldProps{ID: "password", Label: i18n.T(ctx, "auth.page.reset.new"), Hint: i18n.T(ctx, "auth.password.too_short", "min", auth.MinPasswordLen), Error: f.Errors["password"]}) {
+				@ui.InputGroup("", f.Errors["password"] != "") {
+					@ui.Input(ui.InputProps{ID: "password", Name: "password", Type: "password", Autocomplete: "new-password", Required: true, Autofocus: true, MinLength: auth.MinPasswordLen, Invalid: f.Errors["password"] != "", Described: true, Attrs: templ.Attributes{"data-strength": "pw-strength"}})
+					@ui.PasswordStrength("pw-strength", i18n.T(ctx, "auth.page.strength"))
+				}
+			}
+			@ui.Field(ui.FieldProps{ID: "confirm", Label: i18n.T(ctx, "auth.page.reset.confirm"), Error: f.Errors["confirm"]}) {
+				@ui.Input(ui.InputProps{ID: "confirm", Name: "confirm", Type: "password", Autocomplete: "new-password", Required: true, Invalid: f.Errors["confirm"] != "", Class: "mv-input--lg"})
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Full: true}) {
+				{ i18n.T(ctx, "auth.page.reset.submit") }
+			}
+		</form>
+	}
+}
+
+// SkipLink is the onboarding "Skip for now" button (a POST, so it works without JS).
+templ SkipLink() {
+	<form method="post" action="/onboarding/skip">
+		<button class="mv-onboard__skip" type="submit">{ i18n.T(ctx, "onboarding.skip") }</button>
+	</form>
+}
+
+func stepHref(n int) string { return "/onboarding/" + strconv.Itoa(n) }
+
+// OnboardingPage is A5 – Onboarding (three skippable steps).
+templ OnboardingPage(v onboardingView) {
+	@ui.Steps(i18n.T(ctx, "onboarding.title"), []ui.Step{
+		{Label: i18n.T(ctx, "onboarding.step1.short"), Done: v.Step > 1, Current: v.Step == 1},
+		{Label: i18n.T(ctx, "onboarding.step2.short"), Done: v.Step > 2, Current: v.Step == 2},
+		{Label: i18n.T(ctx, "onboarding.step3.short"), Current: v.Step == 3},
+	})
+	<form class="mv-onboard__form" method="post" action={ templ.URL(stepHref(v.Step)) }>
+		<div class="mv-onboard__hero">
+			<span class="mv-label-mono">{ i18n.T(ctx, "onboarding.step_of", "step", v.Step, "total", 3) }</span>
+			switch v.Step {
+				case 1:
+					<h1 class="mv-onboard__title">{ i18n.T(ctx, "onboarding.step1.title") }</h1>
+					<p class="mv-onboard__lead">{ i18n.T(ctx, "onboarding.step1.lead") }</p>
+				case 2:
+					<h1 class="mv-onboard__title">{ i18n.T(ctx, "onboarding.step2.title") }</h1>
+					<p class="mv-onboard__lead">{ i18n.T(ctx, "onboarding.step2.lead") }</p>
+				default:
+					<h1 class="mv-onboard__title">{ i18n.T(ctx, "onboarding.step3.title") }</h1>
+					<p class="mv-onboard__lead">{ i18n.T(ctx, "onboarding.step3.lead") }</p>
+			}
+		</div>
+		switch v.Step {
+			case 1:
+				<fieldset class="mv-field">
+					<legend class="mv-sr-only">{ i18n.T(ctx, "onboarding.step1.title") }</legend>
+					<div class="mv-choices mv-choices--2">
+						for i, c := range CreatorTypes {
+							<label class="mv-choice">
+								<input type="radio" name="creator_type" value={ c.Value } checked?={ v.Data.CreatorType == c.Value || (v.Data.CreatorType == "" && i == 0) }/>
+								@ui.Icon(c.Icon, 22)
+								<span>
+									<span class="mv-choice__title">{ i18n.T(ctx, "onboarding.creator."+c.Value) }</span>
+									<span class="mv-choice__desc">{ i18n.T(ctx, "onboarding.creator."+c.Value+".desc") }</span>
+								</span>
+							</label>
+						}
+					</div>
+				</fieldset>
+			case 2:
+				<fieldset class="mv-field" hx-get="/onboarding/preview" hx-trigger="change" hx-target="#mv-shelf" hx-include="this" hx-swap="outerHTML">
+					<legend class="mv-sr-only">{ i18n.T(ctx, "onboarding.step2.title") }</legend>
+					<div class="mv-chips">
+						for _, g := range Genres {
+							<label class="mv-chip">
+								<input type="checkbox" name="genres" value={ g } checked?={ contains(v.Data.Genres, g) }/>
+								@ui.Icon("check", 16)
+								{ i18n.T(ctx, "genre."+g) }
+							</label>
+						}
+					</div>
+					if v.Errors["genres"] != "" {
+						<span class="mv-field__error" role="alert">
+							@ui.Icon("alert-triangle", 14)
+							{ v.Errors["genres"] }
+						</span>
+					}
+				</fieldset>
+				@ShelfPreview(v.Shelf, len(v.Data.Genres))
+			default:
+				<fieldset class="mv-field">
+					<legend class="mv-sr-only">{ i18n.T(ctx, "onboarding.step3.title") }</legend>
+					<div class="mv-choices mv-choices--3">
+						for i, s := range ArtStyles {
+							<label class="mv-choice">
+								<input type="radio" name="art_style" value={ s.Value } checked?={ v.Data.ArtStyle == s.Value || (v.Data.ArtStyle == "" && i == 0) }/>
+								@ui.Icon(s.Icon, 22)
+								<span>
+									<span class="mv-choice__title">{ i18n.T(ctx, "style."+s.Value) }</span>
+									<span class="mv-choice__desc">{ i18n.T(ctx, "style."+s.Value+".desc") }</span>
+								</span>
+							</label>
+						}
+					</div>
+				</fieldset>
+		}
+		<div class="mv-onboard__foot">
+			if v.Step == 2 {
+				@GenreCount(len(v.Data.Genres), false)
+			} else {
+				<span class="mv-onboard__count"></span>
+			}
+			<div class="mv-row">
+				if v.Step > 1 {
+					@ui.LinkButton(stepHref(v.Step-1), ui.ButtonProps{Variant: ui.Ghost}) {
+						{ i18n.T(ctx, "ui.back") }
+					}
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Icon: nextIcon(v.Step)}) {
+					switch v.Step {
+						case 1:
+							{ i18n.T(ctx, "onboarding.next.genres") }
+						case 2:
+							{ i18n.T(ctx, "onboarding.next.style") }
+						default:
+							{ i18n.T(ctx, "onboarding.finish") }
+					}
+				}
+			</div>
+		</div>
+	</form>
+}
+
+func nextIcon(step int) string {
+	if step == 3 {
+		return "check"
+	}
+	return "arrow-right"
+}
+
+func contains(list []string, v string) bool {
+	for _, s := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
+// ShelfPreview is the Explore shelf preview for the picked genres (re-rendered by HTMX).
+templ ShelfPreview(items []ShelfItem, picked int) {
+	<section class="mv-stack mv-stack--sm" id="mv-shelf" aria-live="polite">
+		<span class="mv-small mv-muted">
+			<strong>{ i18n.T(ctx, "onboarding.shelf") }</strong>
+			if picked == 0 {
+				{ " · " }{ i18n.T(ctx, "onboarding.shelf.pick") }
+			}
+		</span>
+		<div class="mv-shelf">
+			for _, it := range items {
+				@ui.SeriesCard(ui.SeriesCardProps{Href: "#mv-shelf", Title: it.Title, Label: i18n.T(ctx, "onboarding.cover"), Meta: shelfMeta(ctx, it, picked)})
+			}
+		</div>
+	</section>
+}
+
+func shelfMeta(ctx context.Context, it ShelfItem, picked int) string {
+	if picked == 0 {
+		return ""
+	}
+	return i18n.T(ctx, "onboarding.shelf.matches", "count", it.Matches)
+}
+
+// GenreCount is the "4 selected" counter (updated out of band by the preview request).
+templ GenreCount(n int, oob bool) {
+	<span
+		class="mv-onboard__count"
+		id="mv-genre-count"
+		if oob {
+			hx-swap-oob="true"
+		}
+	>{ i18n.T(ctx, "onboarding.selected", "count", n) }</span>
+}
+
+templ brandMark() {
+	<img class="mv-auth__logo mv-only-dark" src="/static/brand/mark-color-on-dark.svg" alt="" width="40" height="40"/>
+	<img class="mv-auth__logo mv-only-light" src="/static/brand/mark-color-on-light.svg" alt="" width="40" height="40"/>
+}

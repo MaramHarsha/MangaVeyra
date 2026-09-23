@@ -1,0 +1,7 @@
+{{define "content"}}
+<div class="card" role="status">
+  <div class="sfx" aria-hidden="true">{{.SFX}}</div>
+  <p>{{.Text}}</p>
+  {{if .Href}}<p><a class="btn" href="{{.Href}}">{{.Link}}</a></p>{{end}}
+</div>
+{{end}}

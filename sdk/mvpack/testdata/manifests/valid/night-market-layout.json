@@ -1,0 +1,38 @@
+{
+  "mvpack": 1,
+  "kind": "layout",
+  "id": "night-market-layout",
+  "name": "Night Market layout",
+  "version": "1.0.0",
+  "summary": "Five-panel night market spread with a wide establishing shot.",
+  "created_at": "2026-09-12T10:00:00Z",
+  "licence": "CC-BY-4.0",
+  "ai_label": {
+    "design": "human"
+  },
+  "credit": {
+    "display_name": "lin.park",
+    "handle": "lin-park",
+    "world_item_id": "wi_night_market"
+  },
+  "tags": [
+    "layout",
+    "night"
+  ],
+  "files": [
+    {
+      "path": "cover.png",
+      "role": "cover",
+      "media_type": "image/png",
+      "size": 142,
+      "sha256": "a0d84ae7539e7b9a6001e1e75452edb0f9e876a8eb3ebec33b86d09f89275134"
+    },
+    {
+      "path": "layout.json",
+      "role": "layout",
+      "media_type": "application/json",
+      "size": 360,
+      "sha256": "19b94957cee06f06ab94563150b193a372c4cd4135ea3f6284983647722b00c3"
+    }
+  ]
+}

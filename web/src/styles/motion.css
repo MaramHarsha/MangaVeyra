@@ -1,0 +1,171 @@
+/*
+ * Motion (design file 04, section 14). CSS-first; each animation plays once in
+ * the product. Every animation has a reduced-motion fallback that applies when
+ * the OS asks for reduced motion (unless the member forced motion on with
+ * html[data-motion="full"]) or when the member turned it on in Settings
+ * (html[data-motion="reduce"]).
+ */
+
+@keyframes mvSlash {
+  0% { transform: translateX(-160%) skewX(-35deg); }
+  100% { transform: translateX(560%) skewX(-35deg); }
+}
+@keyframes mvReveal {
+  from { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); }
+  to { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+}
+@keyframes mvFill {
+  from { height: 0; }
+  to { height: 100%; }
+}
+@keyframes mvBurst {
+  0% { transform: scale(.2); opacity: 0; }
+  40% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes mvBurstLines {
+  0% { transform: scale(.2); opacity: 0; }
+  40% { opacity: 1; }
+  100% { transform: scale(1.2); opacity: 0; }
+}
+@keyframes mvTurn {
+  from { transform: rotateY(0); }
+  to { transform: rotateY(-180deg); }
+}
+@keyframes mvShimmer {
+  from { background-position: 0 0; }
+  to { background-position: 140px 0; }
+}
+@keyframes mvFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes mvToastIn {
+  from { opacity: 0; transform: translateY(12px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Slash: 420 ms sweep across the element (generate, publish, route change). */
+.mv-slash {
+  position: relative;
+  overflow: hidden;
+}
+.mv-slash::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: 0;
+  width: 18%;
+  height: 140%;
+  background: var(--mv-accent);
+  transform: translateX(-160%) skewX(-35deg);
+  pointer-events: none;
+}
+.mv-slash.is-playing::after {
+  animation: mvSlash var(--mv-dur-slash) var(--mv-ease-slash) 1 forwards;
+}
+
+/* Panel reveal: children wipe in, 320 ms each, 60 ms stagger. */
+.mv-reveal > * {
+  animation: mvReveal var(--mv-dur-base) var(--mv-ease-reveal) both;
+}
+.mv-reveal > :nth-child(2) { animation-delay: calc(var(--mv-stagger) * 1); }
+.mv-reveal > :nth-child(3) { animation-delay: calc(var(--mv-stagger) * 2); }
+.mv-reveal > :nth-child(4) { animation-delay: calc(var(--mv-stagger) * 3); }
+.mv-reveal > :nth-child(5) { animation-delay: calc(var(--mv-stagger) * 4); }
+.mv-reveal > :nth-child(6) { animation-delay: calc(var(--mv-stagger) * 5); }
+.mv-reveal > :nth-child(7) { animation-delay: calc(var(--mv-stagger) * 6); }
+.mv-reveal > :nth-child(8) { animation-delay: calc(var(--mv-stagger) * 7); }
+
+/* Ink-fill loader: tied to real progress (the height transition is in .mv-gen__fill). */
+.mv-inkfill-demo { animation: mvFill 2.6s var(--mv-ease-step) 1 both; }
+
+/* Impact burst: 600 ms overshoot for published chapters and milestones. */
+.mv-burst {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.mv-burst__lines {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  background: repeating-conic-gradient(from 0deg, rgb(var(--mv-tone-ink) / .85) 0deg 2deg, transparent 2deg 9deg);
+  -webkit-mask-image: radial-gradient(circle, transparent 28%, #000 30%, #000 60%, transparent 62%);
+  mask-image: radial-gradient(circle, transparent 28%, #000 30%, #000 60%, transparent 62%);
+  animation: mvBurstLines var(--mv-dur-burst) var(--mv-ease-burst) 1 both;
+}
+.mv-burst__word { position: relative; animation: mvBurst var(--mv-dur-burst) var(--mv-ease-burst) 1 both; }
+
+/* Page turn: View Transitions for wizard steps and paged reading. */
+@view-transition { navigation: auto; }
+/* Ordinary navigations stay instant; pages that set data-transition="turn" (wizards, paged reader) turn. */
+::view-transition-group(root),
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 1ms;
+}
+html[data-transition="turn"]::view-transition-old(root),
+html[data-transition="turn"]::view-transition-new(root) {
+  animation-duration: var(--mv-dur-slow);
+  animation-timing-function: var(--mv-ease-turn);
+}
+.mv-pageturn { perspective: 600px; }
+.mv-pageturn__leaf {
+  transform-origin: left center;
+  animation: mvTurn var(--mv-dur-slow) var(--mv-ease-turn) 1 both;
+  box-shadow: -6px 0 12px rgb(0 0 0 / .35);
+}
+
+/* Toasts, dialogs and fades. */
+.mv-toast { animation: mvToastIn 220ms var(--mv-ease-reveal) both; }
+.mv-modal[open], .mv-drawer[open] { animation: mvFadeIn 160ms linear both; }
+.mv-fade-in { animation: mvFadeIn var(--mv-dur-fast) linear both; }
+
+/* ---- reduced motion ------------------------------------------------------ */
+
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+  scroll-behavior: auto !important;
+}
+html[data-motion="reduce"] .mv-slash::after { display: none; }
+html[data-motion="reduce"] .mv-reveal > * { animation: mvFadeIn var(--mv-dur-fast) linear both !important; animation-delay: 0s !important; }
+html[data-motion="reduce"] .mv-burst__lines { display: none; }
+html[data-motion="reduce"] .mv-burst__word { animation: none !important; }
+html[data-motion="reduce"] .mv-skeleton__block { animation: none !important; }
+html[data-motion="reduce"] .mv-tex-portal::before { animation: none !important; }
+html[data-motion="reduce"] .mv-pageturn__leaf { animation: mvFadeIn 150ms linear both !important; transform: none; }
+html[data-motion="reduce"] .mv-inkfill-demo { animation: none !important; height: var(--mv-p, 62%); }
+html[data-motion="reduce"] .mv-btn--primary:hover,
+html[data-motion="reduce"] .mv-btn--danger:hover { transform: none; }
+html[data-motion="reduce"][data-transition="turn"]::view-transition-old(root),
+html[data-motion="reduce"][data-transition="turn"]::view-transition-new(root) { animation-duration: 150ms; animation-timing-function: linear; }
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="full"]) *,
+  html:not([data-motion="full"]) *::before,
+  html:not([data-motion="full"]) *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  html:not([data-motion="full"]) .mv-slash::after { display: none; }
+  html:not([data-motion="full"]) .mv-reveal > * { animation: mvFadeIn var(--mv-dur-fast) linear both !important; animation-delay: 0s !important; }
+  html:not([data-motion="full"]) .mv-burst__lines { display: none; }
+  html:not([data-motion="full"]) .mv-burst__word { animation: none !important; }
+  html:not([data-motion="full"]) .mv-skeleton__block { animation: none !important; }
+  html:not([data-motion="full"]) .mv-tex-portal::before { animation: none !important; }
+  html:not([data-motion="full"]) .mv-pageturn__leaf { animation: mvFadeIn 150ms linear both !important; transform: none; }
+  html:not([data-motion="full"]) .mv-inkfill-demo { animation: none !important; height: var(--mv-p, 62%); }
+  html:not([data-motion="full"]) .mv-btn--primary:hover,
+  html:not([data-motion="full"]) .mv-btn--danger:hover { transform: none; }
+  html[data-transition="turn"]:not([data-motion="full"])::view-transition-old(root),
+  html[data-transition="turn"]:not([data-motion="full"])::view-transition-new(root) { animation-duration: 150ms; animation-timing-function: linear; }
+}

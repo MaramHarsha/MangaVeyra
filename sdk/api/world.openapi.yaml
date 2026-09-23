@@ -1,0 +1,1432 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 MangaVeyra contributors
+openapi: 3.1.0
+info:
+  title: MangaVeyra World public API
+  version: 1.0.0
+  summary: The small public API self-hosted MangaVeyra servers use to talk to World.
+  description: |
+    World (world.mangaveyra.org) is the closed hub and marketplace run by the MangaVeyra team. Self-hosted
+    MangaVeyra servers (the AGPL app) talk to it only through this API: link a World account with the OAuth 2.0
+    device authorization grant, choose a World name, register the server's signing key, submit items for review,
+    browse the catalogue and download the packs the account has the right to use.
+
+    This document is licensed MIT (see `sdk/LICENSE`) so that anyone can interoperate. The platform code is not
+    part of the open repository.
+
+    ## Rules every client and server follows
+
+    * **No prices in this API.** Catalogue and library items carry `availability` (`free`, `paid`, `owned`) and
+      never a price, currency, checkout link or payment state. Getting a paid item happens on the World website.
+      A self-hosted app shows `Free`, `Paid · on World` or `Owned` and links out with `world_url`.
+    * **Consent.** World is off by default on new servers. Nothing is sent without a person pressing *Submit*;
+      the app never uploads prompts, drafts or project history.
+    * **Local-only mode.** A server in local-only mode must not call this API at all.
+    * **No telemetry.** World receives only what a person submits plus the account they linked.
+    * **Identity.** Credit on World always uses the World account's display name and handle, never the self-hosted
+      server's username. Every submission is signed with a key registered by the submitting account.
+
+    ## Conventions
+
+    * JSON bodies (`application/json`, UTF-8). Timestamps are RFC 3339 in UTC. Ids are opaque strings.
+    * Errors use the envelope `{"error": {"code", "message", "details"?, "request_id"?}}`, the same shape as the
+      app's own API. The OAuth endpoints use the RFC 6749 §5.2 shape (`error`, `error_description`) instead,
+      as RFC 8628 requires.
+    * Lists use cursor pagination: pass `next_cursor` from one page as `cursor` to get the next; `next_cursor` is
+      `null` on the last page.
+    * Every response carries rate-limit headers (`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`).
+      A `429` response adds `Retry-After`. Limits apply per account and per server key.
+    * Send `User-Agent: MangaVeyra/<version> (+<server host>)`. World does not require or record anything else
+      about the server.
+
+    ## Development
+
+    `go run ./cmd/worldstub` starts a **fake, in-memory, development-only** implementation of this API
+    (not the real platform) on `http://127.0.0.1:8090`. Its responses carry `X-World-Stub: true`.
+  license:
+    name: MIT
+    identifier: MIT
+  contact:
+    name: MangaVeyra contributors
+    url: https://world.mangaveyra.org
+servers:
+  - url: https://world.mangaveyra.org
+    description: World (production)
+  - url: http://127.0.0.1:8090
+    description: Development stub (cmd/worldstub) — not the real platform
+security:
+  - worldOAuth: []
+tags:
+  - name: Device authorization
+    description: OAuth 2.0 device authorization grant (RFC 8628) used to link a server to a World account.
+  - name: Meta
+    description: API metadata and World's public keys.
+  - name: Account
+    description: The linked World account and its public name.
+  - name: Servers
+    description: Signing keys of linked self-hosted servers.
+  - name: Submissions
+    description: Submit items for review and follow their status.
+  - name: Catalogue
+    description: Browse approved items. Public; a token adds `owned` availability.
+  - name: Library
+    description: Items the account owns (claimed free items and items acquired on World).
+
+paths:
+  /oauth/device_authorization:
+    post:
+      tags: [Device authorization]
+      operationId: startDeviceAuthorization
+      summary: Start linking (RFC 8628 §3.1)
+      description: |
+        The server asks for a device code and shows the `user_code` and `verification_uri` to the person linking
+        ("Press Link and a code appears"). The person approves the code on World, signed in with their World
+        account and 2FA. Meanwhile the server polls `/oauth/token`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [client_id]
+              properties:
+                client_id:
+                  type: string
+                  description: Always `mangaveyra-server` for self-hosted servers.
+                  examples: [mangaveyra-server]
+                scope:
+                  type: string
+                  description: Space-separated scopes. Defaults to `profile servers submit library`.
+                  examples: [profile servers submit library]
+      responses:
+        "200":
+          description: Device code issued.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeviceAuthorization" }
+        "400": { $ref: "#/components/responses/OAuthError" }
+        "401": { $ref: "#/components/responses/OAuthClientError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /oauth/token:
+    post:
+      tags: [Device authorization]
+      operationId: requestToken
+      summary: Poll for, or refresh, an access token (RFC 8628 §3.4, RFC 6749 §6)
+      description: |
+        Poll with the device code no faster than `interval` seconds. While the person has not decided, the
+        response is `400` with `authorization_pending`; polling too fast returns `slow_down` and the client must
+        add 5 seconds to its interval. `access_denied` and `expired_token` end the flow.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, client_id]
+              properties:
+                grant_type:
+                  type: string
+                  enum:
+                    - urn:ietf:params:oauth:grant-type:device_code
+                    - refresh_token
+                device_code:
+                  type: string
+                  description: Required for the device code grant.
+                refresh_token:
+                  type: string
+                  description: Required for the refresh token grant.
+                client_id:
+                  type: string
+                  examples: [mangaveyra-server]
+      responses:
+        "200":
+          description: Tokens issued.
+          headers:
+            Cache-Control:
+              description: Always `no-store`.
+              schema: { type: string }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "400": { $ref: "#/components/responses/OAuthError" }
+        "401": { $ref: "#/components/responses/OAuthClientError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /oauth/revoke:
+    post:
+      tags: [Device authorization]
+      operationId: revokeToken
+      summary: Revoke a token (RFC 7009)
+      description: Used by *Unlink*. Revoking a refresh token also revokes its access tokens.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+                token_type_hint:
+                  type: string
+                  enum: [access_token, refresh_token]
+      responses:
+        "200":
+          description: Revoked (also returned for unknown tokens, as RFC 7009 requires).
+        "400": { $ref: "#/components/responses/OAuthError" }
+
+  /v1/meta:
+    get:
+      tags: [Meta]
+      operationId: getMeta
+      summary: API metadata
+      security: []
+      responses:
+        "200":
+          description: Metadata.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Meta" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/keys:
+    get:
+      tags: [Meta]
+      operationId: listWorldKeys
+      summary: World's public keys
+      description: |
+        Keys World uses to countersign approved packs (`pack-signing`, signer role `world` in `signature.json`)
+        and to sign licence tokens (`licence-tokens`). Servers cache them and refresh when they meet an unknown
+        key id.
+      security: []
+      responses:
+        "200":
+          description: Key set.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items: { $ref: "#/components/schemas/WorldKey" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/me:
+    get:
+      tags: [Account]
+      operationId: getMe
+      summary: The linked World account
+      security:
+        - worldOAuth: [profile]
+      responses:
+        "200":
+          description: The account.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/me/profile:
+    patch:
+      tags: [Account]
+      operationId: updateProfile
+      summary: Change the World display name, handle, bio or links
+      description: |
+        * **Display name**: 1–40 characters, may change any time. It can be a real name, a pen name or a studio
+          name and does not have to match the username on the self-hosted server.
+        * **Handle**: unique, 3–30 characters of lowercase `a–z`, `0–9` and `-` (no leading, trailing or double
+          hyphen). It can change **once every 30 days** (choosing the first handle does not count). The old
+          handle stays **reserved for 6 months** and its links redirect to the new one, so credit stays traceable.
+        * Reserved names (staff, system words) and blocked names (other creators, brands and existing characters)
+          are rejected with a reason.
+
+        Only the fields present are changed. Credit on already-approved items is updated when
+        `update_credit_on_items` is true.
+      security:
+        - worldOAuth: [profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProfileUpdate" }
+      responses:
+        "200":
+          description: The updated account.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422":
+          description: |
+            A rule was broken. `error.code` is `validation_failed` and every `details[].code` is one of
+            `display_name_invalid`, `handle_invalid`, `handle_taken`, `handle_reserved`, `handle_blocked`,
+            `handle_previous` (someone else's recent handle), `handle_change_too_soon` (see
+            `Account.next_handle_change_at`), `bio_invalid`, `links_invalid`.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                tooSoon:
+                  value:
+                    error:
+                      code: validation_failed
+                      message: The handle can change once every 30 days.
+                      details:
+                        - field: handle
+                          code: handle_change_too_soon
+                          message: Next change after 2026-10-22.
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/handles/{handle}:
+    get:
+      tags: [Account]
+      operationId: checkHandle
+      summary: Is a handle available?
+      description: |
+        Used while typing on the *Choose World name* screen. Public, but rate limited; with a token, the
+        caller's own current and previous handles report `available: true` with reason `current` or `own_previous`.
+        A previous handle of another account reports `previous_handle` and `redirect_to`.
+      security:
+        - {}
+        - worldOAuth: [profile]
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema: { type: string, maxLength: 64 }
+      responses:
+        "200":
+          description: Availability (also for invalid handles, with reason `invalid`).
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HandleAvailability" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/servers:
+    get:
+      tags: [Servers]
+      operationId: listServers
+      summary: Signing keys registered by this account
+      security:
+        - worldOAuth: [servers]
+      responses:
+        "200":
+          description: Keys, newest first, including revoked ones.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ServerKey" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Servers]
+      operationId: registerServer
+      summary: Register this server's ed25519 public key
+      description: |
+        Called right after linking. The server generates its own ed25519 key pair, keeps the private key (encrypted
+        at rest) and registers the public key here. The returned `id` is the `key_id` the server writes into every
+        pack signature. Registering the same public key again returns the existing key (`200`).
+      security:
+        - worldOAuth: [servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ServerKeyCreate" }
+      responses:
+        "200":
+          description: This public key was already registered by this account.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServerKey" }
+        "201":
+          description: Registered.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServerKey" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: The public key is registered by another account (`key_in_use`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/servers/{id}:
+    delete:
+      tags: [Servers]
+      operationId: revokeServer
+      summary: Revoke a server key
+      description: |
+        Used by *Unlink*. The key is revoked instantly: new submissions signed with it fail the `signature`
+        check. Items already approved keep World's countersignature.
+      security:
+        - worldOAuth: [servers]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204":
+          description: Revoked (idempotent).
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/submissions:
+    get:
+      tags: [Submissions]
+      operationId: listSubmissions
+      summary: My submissions
+      security:
+        - worldOAuth: [submit]
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/SubmissionStatus" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: Submissions, newest first, with per-status counts.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubmissionPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Submissions]
+      operationId: createSubmission
+      summary: Submit an item for review
+      description: |
+        Uploads a signed `.mvpack` (see `sdk/mvpack/SPEC.md`) together with the signed manifest and the
+        creator's declarations. World checks that the signed manifest equals the pack's manifest, that the pack is
+        signed by a non-revoked key registered by this account, and that the manifest credit matches the account's
+        World name. The submission then starts in `in_review` with every automated check `pending`.
+
+        To submit a new version of an approved item, set `credit.world_item_id` in the manifest.
+        Send an `Idempotency-Key` header to make retries safe.
+      security:
+        - worldOAuth: [submit]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema: { type: string, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/SubmissionUpload" }
+            encoding:
+              signed_manifest:
+                contentType: application/json
+              declarations:
+                contentType: application/json
+              pack:
+                contentType: application/vnd.mangaveyra.mvpack, application/zip, application/octet-stream
+      responses:
+        "202":
+          description: Accepted; automated checks are running.
+          headers:
+            Location:
+              description: URL of the new submission.
+              schema: { type: string }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Submission" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: |
+            `profile_incomplete` (choose a World name first) or `duplicate_version` (this item version was already
+            submitted).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          description: The upload is larger than World accepts (`too_large`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: |
+            `validation_failed` with details: `manifest_invalid`, `manifest_mismatch` (signed manifest differs from
+            the pack), `credit_mismatch` (credit is not this account's World name), `declarations_required`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/submissions/{id}:
+    get:
+      tags: [Submissions]
+      operationId: getSubmission
+      summary: One submission with its checks and review decision
+      security:
+        - worldOAuth: [submit]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: The submission.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Submission" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/submissions/{id}/appeal:
+    post:
+      tags: [Submissions]
+      operationId: appealSubmission
+      summary: Appeal a decision (one appeal per decision)
+      description: |
+        Allowed when the status is `changes_requested`, `rejected` or `held`, once per decision. The submission
+        returns to `in_review` with the appeal attached; a different reviewer decides. The decision made on an appeal
+        is final and cannot be appealed again.
+      security:
+        - worldOAuth: [submit]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              additionalProperties: false
+              properties:
+                message:
+                  type: string
+                  minLength: 10
+                  maxLength: 2000
+                  description: Why the decision should change.
+      responses:
+        "200":
+          description: Appeal recorded.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Submission" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`appeal_not_allowed`: wrong status, or this decision was already appealed."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /v1/catalog:
+    get:
+      tags: [Catalogue]
+      operationId: searchCatalog
+      summary: Browse and search approved items
+      description: |
+        Public. With a token, `availability` is `owned` for items in the account's library. Items never carry a
+        price; paid items are only obtained on the World website (`world_url`).
+      security:
+        - {}
+        - worldOAuth: [library]
+      parameters:
+        - name: kind
+          in: query
+          schema: { $ref: "#/components/schemas/CatalogKind" }
+        - name: q
+          in: query
+          description: Full-text search over name, summary, tags and creator names.
+          schema: { type: string, maxLength: 100 }
+        - name: licence
+          in: query
+          description: Only items under one of these licence ids (comma-separated).
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/LicenceId" }
+        - name: works_with
+          in: query
+          description: Only items made for this model id (e.g. `illustrious-xl`).
+          schema: { type: string, maxLength: 64 }
+        - name: hand_drawn_only
+          in: query
+          description: Only items whose every AI-label role is `human`.
+          schema: { type: boolean, default: false }
+        - name: availability
+          in: query
+          schema: { $ref: "#/components/schemas/Availability" }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [relevance, newest, most_used]
+            default: relevance
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: A page of items.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/catalog/{id}:
+    get:
+      tags: [Catalogue]
+      operationId: getCatalogItem
+      summary: One catalogue item
+      security:
+        - {}
+        - worldOAuth: [library]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: The item.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogItemDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/library:
+    get:
+      tags: [Library]
+      operationId: listLibrary
+      summary: My World library
+      description: Items the account owns, each with its licence token. Shown on the app's *My World library*.
+      security:
+        - worldOAuth: [library]
+      parameters:
+        - name: kind
+          in: query
+          schema: { $ref: "#/components/schemas/CatalogKind" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: A page of owned items, most recently acquired first.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Library]
+      operationId: claimFreeItem
+      summary: Add a free item to the library
+      description: |
+        Claims a `free` item so it can be downloaded and carries a licence token. Paid items cannot be added here:
+        the response is `403 get_on_world` with the item's `world_url` in `details`.
+      security:
+        - worldOAuth: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [item_id]
+              additionalProperties: false
+              properties:
+                item_id: { type: string }
+      responses:
+        "200":
+          description: Already in the library.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryItem" }
+        "201":
+          description: Added.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`get_on_world`: the item is not free; it can only be obtained on the World website."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/library/{id}/download:
+    get:
+      tags: [Library]
+      operationId: downloadLibraryItem
+      summary: Get a short-lived download URL for an owned item
+      description: |
+        `id` is the catalogue item id. The URL is valid for a few minutes and needs no auth header. The `.mvpack`
+        is signed by its creator's server and countersigned by World; verify it with `sdk/mvpack` against the
+        `pack-signing` keys from `/v1/keys` and check `sha256` before importing. Keep the licence token with the
+        imported item.
+      security:
+        - worldOAuth: [library]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - name: version
+          in: query
+          description: A specific version; defaults to the latest.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Download details.
+          headers:
+            Cache-Control:
+              description: Always `no-store`.
+              schema: { type: string }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Download" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`not_owned`: the item is not in this account's library."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+components:
+  securitySchemes:
+    worldOAuth:
+      type: oauth2
+      description: |
+        OAuth 2.0 device authorization grant (RFC 8628). OpenAPI 3.1 has no device flow object, so the device
+        endpoint is given in `x-deviceAuthorizationUrl`; the token URL is the same as below. Access tokens are
+        bearer tokens (`Authorization: Bearer <token>`) valid for one hour; refresh tokens rotate on use.
+      x-deviceAuthorizationUrl: /oauth/device_authorization
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth/token
+          refreshUrl: /oauth/token
+          scopes:
+            profile: Read and change the account's World name and profile.
+            servers: Register and revoke this server's signing keys.
+            submit: Create submissions and appeals, read their status.
+            library: Read the library and download owned items.
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, maxLength: 64 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from `next_cursor`.
+      schema: { type: string, maxLength: 200 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 24 }
+
+  headers:
+    RateLimit-Limit:
+      description: Requests allowed in the current window.
+      schema: { type: integer }
+    RateLimit-Remaining:
+      description: Requests left in the current window.
+      schema: { type: integer }
+    RateLimit-Reset:
+      description: Seconds until the window resets.
+      schema: { type: integer }
+    Retry-After:
+      description: Seconds to wait before retrying.
+      schema: { type: integer }
+
+  responses:
+    OAuthError:
+      description: OAuth error (RFC 6749 §5.2 / RFC 8628 §3.5).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/OAuthError" }
+    OAuthClientError:
+      description: Unknown `client_id` (`invalid_client`, RFC 6749 §5.2).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/OAuthError" }
+    BadRequest:
+      description: Malformed request (`bad_request`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing, expired or revoked token, or a missing scope (`unauthorized`).
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: No such resource for this account (`not_found`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationFailed:
+      description: "`validation_failed` with per-field `details`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooManyRequests:
+      description: Rate limit exceeded (`rate_limited`).
+      headers:
+        Retry-After: { $ref: "#/components/headers/Retry-After" }
+        RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+        RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+        RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable code, e.g. `not_found`, `validation_failed`, `rate_limited`.
+            message:
+              type: string
+              description: Human-readable explanation in English.
+            details:
+              type: array
+              items:
+                type: object
+                required: [code, message]
+                additionalProperties: false
+                properties:
+                  field: { type: string }
+                  code: { type: string }
+                  message: { type: string }
+                  value: { type: string }
+            request_id: { type: string }
+
+    OAuthError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum:
+            - authorization_pending
+            - slow_down
+            - access_denied
+            - expired_token
+            - invalid_request
+            - invalid_client
+            - invalid_grant
+            - unsupported_grant_type
+            - invalid_scope
+        error_description: { type: string }
+
+    DeviceAuthorization:
+      type: object
+      required: [device_code, user_code, verification_uri, expires_in, interval]
+      properties:
+        device_code: { type: string, description: Secret; only the server keeps it. }
+        user_code:
+          type: string
+          description: Short code the person types on World, e.g. `WDJB-MJHT`.
+          pattern: "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$"
+        verification_uri: { type: string, format: uri }
+        verification_uri_complete: { type: string, format: uri }
+        expires_in: { type: integer, description: Seconds until the codes expire. }
+        interval: { type: integer, description: Minimum seconds between polls., default: 5 }
+
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in, refresh_token, scope]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, const: Bearer }
+        expires_in: { type: integer }
+        refresh_token: { type: string }
+        scope: { type: string }
+
+    Meta:
+      type: object
+      required: [api_version, name, stub]
+      properties:
+        api_version: { type: string, const: "1" }
+        name: { type: string, examples: [MangaVeyra World] }
+        stub:
+          type: boolean
+          description: True for the development stub. Apps show a warning when linked to a stub.
+        terms_url: { type: string, format: uri }
+        content_policy_url: { type: string, format: uri }
+        max_upload_bytes: { type: integer }
+
+    WorldKey:
+      type: object
+      required: [key_id, alg, public_key, use]
+      properties:
+        key_id: { type: string }
+        alg: { type: string, const: ed25519 }
+        public_key: { type: string, description: Base64 of the 32-byte ed25519 public key. }
+        use:
+          type: array
+          items:
+            type: string
+            enum: [pack-signing, licence-tokens]
+        not_after:
+          type: [string, "null"]
+          format: date-time
+
+    Handle:
+      type: string
+      minLength: 3
+      maxLength: 30
+      pattern: "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$"
+      not: { pattern: "--" }
+
+    DisplayName:
+      type: string
+      minLength: 1
+      maxLength: 40
+
+    PreviousHandle:
+      type: object
+      required: [handle, used_from, used_until, reserved_until]
+      properties:
+        handle: { $ref: "#/components/schemas/Handle" }
+        used_from: { type: string, format: date-time }
+        used_until: { type: string, format: date-time }
+        reserved_until:
+          type: string
+          format: date-time
+          description: Six months after `used_until`; until then links redirect to the current handle.
+
+    Account:
+      type: object
+      required: [id, display_name, handle, needs_profile, trust_level, verified, developer, two_factor, created_at, stats]
+      properties:
+        id: { type: string }
+        display_name: { $ref: "#/components/schemas/DisplayName" }
+        handle:
+          oneOf:
+            - $ref: "#/components/schemas/Handle"
+            - type: "null"
+          description: "`null` until the person chooses a World name."
+        needs_profile:
+          type: boolean
+          description: True until a handle is chosen; submissions are refused until then.
+        handle_changed_at: { type: [string, "null"], format: date-time }
+        next_handle_change_at:
+          type: [string, "null"]
+          format: date-time
+          description: Earliest time the handle can change again; `null` when it can change now.
+        previous_handles:
+          type: array
+          items: { $ref: "#/components/schemas/PreviousHandle" }
+        bio: { type: string, maxLength: 280 }
+        links:
+          type: array
+          maxItems: 4
+          items: { type: string, maxLength: 200 }
+        avatar_url: { type: [string, "null"], format: uri }
+        profile_url: { type: string, format: uri }
+        trust_level:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Rises with approved items and shortens review.
+        verified: { type: boolean }
+        developer: { type: boolean, description: Developer accounts may submit plugins. }
+        two_factor: { type: boolean }
+        show_server_name: { type: boolean, description: Show the linked server's host on shared items. }
+        created_at: { type: string, format: date-time }
+        stats:
+          type: object
+          required: [approved_items, total_uses]
+          properties:
+            approved_items: { type: integer }
+            total_uses: { type: integer }
+
+    ProfileUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name: { $ref: "#/components/schemas/DisplayName" }
+        handle: { $ref: "#/components/schemas/Handle" }
+        bio: { type: string, maxLength: 280 }
+        links:
+          type: array
+          maxItems: 4
+          items: { type: string, maxLength: 200 }
+        show_server_name: { type: boolean }
+        update_credit_on_items:
+          type: boolean
+          description: Also update the credit shown on already-approved items.
+
+    HandleAvailability:
+      type: object
+      required: [handle, available]
+      properties:
+        handle: { type: string }
+        available: { type: boolean }
+        reason:
+          type: [string, "null"]
+          enum: [invalid, taken, reserved, blocked, previous_handle, current, own_previous, null]
+        message: { type: [string, "null"], description: Human-readable reason. }
+        redirect_to:
+          oneOf:
+            - $ref: "#/components/schemas/Handle"
+            - type: "null"
+          description: For a recent previous handle, the handle it redirects to.
+        suggestions:
+          type: array
+          items: { $ref: "#/components/schemas/Handle" }
+
+    ServerKeyCreate:
+      type: object
+      required: [name, public_key]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Host name of the server as people know it, e.g. `studio.local`.
+        public_key:
+          type: string
+          description: Base64 (standard) of the 32-byte ed25519 public key.
+        app_version: { type: string, maxLength: 40 }
+
+    ServerKey:
+      type: object
+      required: [id, name, public_key, fingerprint, created_at]
+      properties:
+        id:
+          type: string
+          description: The key id to put in pack signatures.
+        name: { type: string }
+        public_key: { type: string }
+        fingerprint:
+          type: string
+          description: Uppercase hex SHA-256 of the public key; shown as `7B1D…E0A4`.
+        app_version: { type: string }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: [string, "null"], format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+
+    PackKind:
+      type: string
+      enum: [character, style, template, layout, series-listing, plugin]
+
+    CatalogKind:
+      type: string
+      description: Catalogue tab. Pack kinds `template` and `layout` are both listed under `template`.
+      enum: [character, template, style, series, plugin]
+
+    LicenceId:
+      type: string
+      enum: [CC-BY-4.0, CC-BY-SA-4.0, CC-BY-NC-4.0, CC-BY-NC-SA-4.0, CC-BY-ND-4.0, CC0-1.0, MIT, Apache-2.0, OFL-1.1, personal, all-rights-reserved]
+
+    AILabel:
+      type: object
+      additionalProperties: false
+      properties:
+        art: { $ref: "#/components/schemas/AIValue" }
+        design: { $ref: "#/components/schemas/AIValue" }
+        script: { $ref: "#/components/schemas/AIValue" }
+        lettering: { $ref: "#/components/schemas/AIValue" }
+
+    AIValue:
+      type: string
+      enum: [human, ai-assisted, ai]
+
+    Availability:
+      type: string
+      description: "`free`, `paid` (obtained only on the World website) or `owned` (in this account's library). Never a price."
+      enum: [free, paid, owned]
+
+    SubmissionStatus:
+      type: string
+      enum: [in_review, changes_requested, approved, rejected, held]
+
+    CheckName:
+      type: string
+      enum: [files, malware, safety, similarity, known_character, signature, licence]
+
+    Check:
+      type: object
+      required: [name, status]
+      properties:
+        name: { $ref: "#/components/schemas/CheckName" }
+        status:
+          type: string
+          enum: [pending, passed, warning, failed, skipped]
+        message: { type: [string, "null"] }
+        completed_at: { type: [string, "null"], format: date-time }
+
+    SubmissionUpload:
+      type: object
+      required: [signed_manifest, declarations, pack]
+      properties:
+        signed_manifest:
+          type: object
+          description: The pack's manifest.json and signature.json, as JSON objects.
+          required: [manifest, signature]
+          properties:
+            manifest:
+              type: object
+              description: See sdk/mvpack/schema/manifest.schema.json.
+            signature:
+              type: object
+              description: See sdk/mvpack/schema/signature.schema.json.
+        declarations:
+          type: object
+          description: The three confirmations on the Submit screen. All must be true.
+          required: [rights_held, original, ai_label_correct]
+          properties:
+            rights_held:
+              type: boolean
+              const: true
+              description: I made this, or have the right to share it.
+            original:
+              type: boolean
+              const: true
+              description: It isn't based on an existing character, brand or real person.
+            ai_label_correct:
+              type: boolean
+              const: true
+              description: The AI label is correct.
+        note:
+          type: string
+          maxLength: 1000
+          description: Optional note for the reviewer.
+        pack:
+          type: string
+          contentMediaType: application/vnd.mangaveyra.mvpack
+          description: The signed .mvpack file.
+
+    Submission:
+      type: object
+      required: [id, status, item, pack, checks, created_at, updated_at]
+      properties:
+        id: { type: string }
+        status: { $ref: "#/components/schemas/SubmissionStatus" }
+        item:
+          type: object
+          required: [kind, pack_id, name, version, licence]
+          properties:
+            kind: { $ref: "#/components/schemas/PackKind" }
+            pack_id: { type: string, description: The manifest id. }
+            name: { type: string }
+            version: { type: string }
+            licence: { $ref: "#/components/schemas/LicenceId" }
+            ai_label: { $ref: "#/components/schemas/AILabel" }
+        pack:
+          type: object
+          required: [sha256, size, file_count]
+          properties:
+            sha256: { type: string }
+            size: { type: integer }
+            file_count: { type: integer }
+            key_id: { type: [string, "null"] }
+        checks:
+          type: array
+          items: { $ref: "#/components/schemas/Check" }
+        review:
+          description: The latest human or automated decision; `null` while waiting.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [decision, message, decided_at]
+              properties:
+                decision:
+                  type: string
+                  enum: [approved, changes_requested, rejected, held]
+                message: { type: string, description: Message from the reviewer. }
+                reviewer: { type: [string, "null"], description: "Reviewer's short name, e.g. `SEN`." }
+                automated: { type: boolean }
+                decided_at: { type: string, format: date-time }
+        appeal:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [message, created_at, state]
+              properties:
+                message: { type: string }
+                created_at: { type: string, format: date-time }
+                state:
+                  type: string
+                  enum: [open, upheld, overturned]
+        can_appeal: { type: boolean }
+        queue_position: { type: [integer, "null"], description: Position in the review queue while `in_review`. }
+        estimated_decision_at: { type: [string, "null"], format: date-time }
+        world_item_id: { type: [string, "null"], description: Set once approved. }
+        world_url: { type: [string, "null"], format: uri }
+        note: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SubmissionPage:
+      type: object
+      required: [items, next_cursor, counts]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Submission" }
+        next_cursor: { type: [string, "null"] }
+        counts:
+          type: object
+          description: Number of submissions per status, plus `all`.
+          additionalProperties: { type: integer }
+
+    Creator:
+      type: object
+      required: [display_name, handle, verified]
+      properties:
+        display_name: { type: string }
+        handle: { $ref: "#/components/schemas/Handle" }
+        verified: { type: boolean }
+        profile_url: { type: string, format: uri }
+
+    CatalogItem:
+      description: An approved item. Deliberately has no price, currency or checkout field, and no other member.
+      allOf:
+        - $ref: "#/components/schemas/CatalogItemFields"
+      unevaluatedProperties: false
+
+    CatalogItemFields:
+      type: object
+      description: Members shared by `CatalogItem` and `CatalogItemDetail` (both closed with `unevaluatedProperties`).
+      required: [id, kind, pack_kind, name, creator, licence, ai_label, availability, version, world_url, updated_at]
+      properties:
+        id: { type: string }
+        kind: { $ref: "#/components/schemas/CatalogKind" }
+        pack_kind: { $ref: "#/components/schemas/PackKind" }
+        name: { type: string }
+        summary: { type: string }
+        creator: { $ref: "#/components/schemas/Creator" }
+        licence: { $ref: "#/components/schemas/LicenceId" }
+        licence_name: { type: string, examples: [CC BY 4.0] }
+        credit_line:
+          type: string
+          description: Credit to copy wherever the item is used.
+          examples: ["Character by Jerry Ink (@jerry-ink), CC BY 4.0"]
+        ai_label: { $ref: "#/components/schemas/AILabel" }
+        hand_drawn: { type: boolean }
+        content_rating:
+          type: string
+          enum: [all-ages, teen, mature]
+        tags:
+          type: array
+          items: { type: string }
+        works_with:
+          type: array
+          items: { type: string }
+        availability: { $ref: "#/components/schemas/Availability" }
+        version: { type: string }
+        world_url:
+          type: string
+          format: uri
+          description: The item's page on the World website ("View on World").
+        cover_url: { type: [string, "null"], format: uri }
+        uses: { type: integer, description: How many servers imported the item. }
+        rating:
+          type: [object, "null"]
+          properties:
+            average: { type: number }
+            count: { type: integer }
+        updated_at: { type: string, format: date-time }
+
+    CatalogItemDetail:
+      description: An item with its description, versions, contents and signer. Still no price field.
+      unevaluatedProperties: false
+      allOf:
+        - $ref: "#/components/schemas/CatalogItemFields"
+        - type: object
+          properties:
+            description: { type: string }
+            from_series: { type: [string, "null"] }
+            series_url:
+              type: [string, "null"]
+              format: uri
+              description: For series listings, the creator's own server (World lists, it does not host chapters).
+            versions:
+              type: array
+              items:
+                type: object
+                required: [version, released_at]
+                properties:
+                  version: { type: string }
+                  released_at: { type: string, format: date-time }
+            contents:
+              type: object
+              properties:
+                size: { type: integer }
+                file_count: { type: integer }
+                summary:
+                  type: array
+                  items: { type: string }
+                  examples: [["18 reference images", "LoRA (Illustrious XL)", "Profile, personality, voice notes"]]
+            signed_by:
+              type: object
+              properties:
+                handle: { type: string }
+                key_id: { type: string }
+                fingerprint: { type: string }
+            scanned_at: { type: [string, "null"], format: date-time }
+            approved_at: { type: [string, "null"], format: date-time }
+
+    CatalogPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CatalogItem" }
+        next_cursor: { type: [string, "null"] }
+        total: { type: integer }
+
+    LicenceToken:
+      type: string
+      description: |
+        Proof that an account may use an item, kept with the imported item and shown to World on update checks.
+        Format `mvlt1.<payload>.<signature>` where both parts are unpadded base64url; the signature is ed25519 by a
+        World `licence-tokens` key over the ASCII bytes `mvlt1.<payload>`. The payload is JSON:
+        `{"v":1,"kid","item_id","account_id","handle","version","licence","acquisition","iat"}`. It contains no price.
+      pattern: "^mvlt1\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$"
+
+    LibraryItem:
+      type: object
+      required: [item, acquisition, acquired_at, licence_token, latest_version]
+      properties:
+        item: { $ref: "#/components/schemas/CatalogItem" }
+        acquisition:
+          type: string
+          description: "`free` (claimed free item), `paid` (obtained on the World website) or `creator` (the account made it)."
+          enum: [free, paid, creator]
+        acquired_at: { type: string, format: date-time }
+        acquired_version: { type: string }
+        latest_version: { type: string }
+        licence_token: { $ref: "#/components/schemas/LicenceToken" }
+
+    LibraryPage:
+      type: object
+      required: [items, next_cursor, counts]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryItem" }
+        next_cursor: { type: [string, "null"] }
+        counts:
+          type: object
+          description: Items per catalogue kind, plus `all`.
+          additionalProperties: { type: integer }
+
+    Download:
+      type: object
+      required: [url, expires_at, file_name, size, sha256, version, licence_token]
+      properties:
+        url: { type: string, format: uri, description: Short-lived; no auth header needed. }
+        expires_at: { type: string, format: date-time }
+        file_name: { type: string, examples: [rin-asagiri-1.2.0.mvpack] }
+        size: { type: integer }
+        sha256: { type: string }
+        version: { type: string }
+        licence_token: { $ref: "#/components/schemas/LicenceToken" }

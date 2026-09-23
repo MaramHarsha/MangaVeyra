@@ -1,0 +1,12 @@
+{{define "content"}}
+<div class="card" role="status">
+{{if .Approved}}
+  <div class="sfx" aria-hidden="true">DOOON!</div>
+  <p><span class="badge ok">Approved</span> The server is linked to <strong>{{.Name}}</strong>. Go back to your server; it finishes linking on its next poll.</p>
+{{else}}
+  <div class="sfx" aria-hidden="true">PUTSUN</div>
+  <p><span class="badge bad">Denied</span> The request was denied. The server is told on its next poll.</p>
+{{end}}
+  <p><a href="/_stub">Back to the control panel</a></p>
+</div>
+{{end}}

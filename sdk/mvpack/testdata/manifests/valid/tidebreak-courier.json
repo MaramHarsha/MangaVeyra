@@ -1,0 +1,42 @@
+{
+  "mvpack": 1,
+  "kind": "series-listing",
+  "id": "tidebreak-courier",
+  "name": "Tidebreak Courier",
+  "version": "1.0.0",
+  "summary": "A courier races the tide across a drowned harbour city.",
+  "created_at": "2026-09-12T10:00:00Z",
+  "licence": "all-rights-reserved",
+  "ai_label": {
+    "art": "ai-assisted",
+    "script": "human",
+    "lettering": "human"
+  },
+  "content_rating": "teen",
+  "credit": {
+    "display_name": "Jerry Ink",
+    "handle": "jerry-ink"
+  },
+  "tags": [
+    "courier",
+    "tidebreak-courier"
+  ],
+  "series_listing": {
+    "url": "https://studio.local/series/tidebreak-courier",
+    "languages": [
+      "en",
+      "ja"
+    ],
+    "status": "ongoing",
+    "chapters": 12
+  },
+  "files": [
+    {
+      "path": "cover.png",
+      "role": "cover",
+      "media_type": "image/png",
+      "size": 142,
+      "sha256": "d81b56d6b0799af3548a91a683f730630d7d880130df0bbc8c6f0d1f90f1d188"
+    }
+  ]
+}

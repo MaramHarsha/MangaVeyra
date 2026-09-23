@@ -1,0 +1,111 @@
+package ui
+
+// ButtonProps configure Button and LinkButton.
+type ButtonProps struct {
+	Variant Variant
+	Size    Size
+	// Icon is a Tabler icon name shown before the label ("sparkles").
+	Icon string
+	// Kbd is a keyboard hint shown after the label ("⌘↵").
+	Kbd string
+	// Type is the button type ("button" by default; "submit" for forms).
+	Type     string
+	Full     bool
+	Disabled bool
+	Busy     bool
+	// Label is the accessible name for icon-only buttons.
+	Label string
+	// Tip shows a speech-bubble tooltip on hover and focus.
+	Tip   string
+	Class string
+	Attrs templ.Attributes
+}
+
+func (p ButtonProps) class() string {
+	v := p.Variant
+	if v == "" {
+		v = Secondary
+	}
+	return Cls("mv-btn", "mv-btn--"+string(v), If(p.Size != "", "mv-btn--"+string(p.Size)), If(p.Full, "mv-btn--full"), p.Class)
+}
+
+func (p ButtonProps) typ() string {
+	if p.Type == "" {
+		return "button"
+	}
+	return p.Type
+}
+
+func (p ButtonProps) iconSize() int {
+	if p.Size == SM {
+		return 16
+	}
+	return 18
+}
+
+// Icon renders a decorative Tabler icon (size in px; 0 = 18).
+templ Icon(name string, size int) {
+	<i class={ iconClass(name, size) } aria-hidden="true"></i>
+}
+
+// Button renders a <button> (design 04 §06): primary, secondary, ghost, danger, quiet, icon; 32/40/48.
+templ Button(p ButtonProps) {
+	<button
+		type={ p.typ() }
+		class={ p.class() }
+		if p.Disabled {
+			disabled
+		}
+		if p.Busy {
+			aria-busy="true"
+		}
+		if p.Label != "" {
+			aria-label={ p.Label }
+		}
+		if p.Tip != "" {
+			data-tip={ p.Tip }
+		}
+		{ p.Attrs... }
+	>
+		if p.Icon != "" {
+			@Icon(p.Icon, p.iconSize())
+		}
+		{ children... }
+		if p.Kbd != "" {
+			<span class="mv-btn__kbd" aria-hidden="true">{ p.Kbd }</span>
+		}
+	</button>
+}
+
+// LinkButton renders a link that looks like a button.
+templ LinkButton(href string, p ButtonProps) {
+	<a
+		href={ templ.URL(href) }
+		class={ p.class() }
+		if p.Disabled {
+			aria-disabled="true"
+			tabindex="-1"
+		}
+		if p.Label != "" {
+			aria-label={ p.Label }
+		}
+		if p.Tip != "" {
+			data-tip={ p.Tip }
+		}
+		{ p.Attrs... }
+	>
+		if p.Icon != "" {
+			@Icon(p.Icon, p.iconSize())
+		}
+		{ children... }
+		if p.Kbd != "" {
+			<span class="mv-btn__kbd" aria-hidden="true">{ p.Kbd }</span>
+		}
+	</a>
+}
+
+// SFX renders manga sound-effect lettering (Bangers, or Noto Sans JP 900 for kana).
+// size is "xs", "sm", "", "lg", "xl" or "xxl"; tone is "", "accent", "error" or "warning".
+templ SFX(text, size, tone string, jp bool) {
+	<span class={ Cls("mv-sfx", If(jp, "mv-sfx--jp"), If(size != "", "mv-sfx--"+size), If(tone != "", "mv-sfx--"+tone)) } aria-hidden="true">{ text }</span>
+}

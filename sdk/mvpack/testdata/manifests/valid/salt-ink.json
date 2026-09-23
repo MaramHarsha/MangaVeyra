@@ -1,0 +1,43 @@
+{
+  "ai_label": {
+    "art": "human"
+  },
+  "created_at": "2026-09-12T10:00:00Z",
+  "credit": {
+    "display_name": "Jerry Ink",
+    "handle": "jerry-ink"
+  },
+  "files": [
+    {
+      "path": "preview/sample.png",
+      "role": "preview",
+      "media_type": "image/png",
+      "size": 142,
+      "sha256": "eac3f8629d2eab81653bc79123b69b852412b3e159b7a2147e8de98b5f43a0a7"
+    },
+    {
+      "path": "style.json",
+      "role": "style-preset",
+      "media_type": "application/json",
+      "size": 70,
+      "sha256": "3b06748592c704834d1731eb7f8f38c67233c20224fffeebd659de2666fc96ef"
+    }
+  ],
+  "id": "salt-ink",
+  "kind": "style",
+  "licence": "CC-BY-SA-4.0",
+  "mvpack": 1,
+  "name": "Salt ink",
+  "summary": "Heavy brush ink with coarse screentone.",
+  "tags": [
+    "courier",
+    "tidebreak-courier"
+  ],
+  "version": "1.0.0",
+  "works_with": [
+    "illustrious-xl"
+  ],
+  "x-studio": {
+    "exported_from": "studio.local"
+  }
+}

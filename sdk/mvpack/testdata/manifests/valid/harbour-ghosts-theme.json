@@ -1,0 +1,39 @@
+{
+  "mvpack": 1,
+  "kind": "plugin",
+  "id": "harbour-ghosts-theme",
+  "name": "Harbour Ghosts theme",
+  "version": "0.2.0",
+  "summary": "A misty teal reader theme.",
+  "created_at": "2026-09-12T10:00:00Z",
+  "licence": "MIT",
+  "ai_label": {
+    "design": "human"
+  },
+  "credit": {
+    "display_name": "kestrel",
+    "handle": "kestrel"
+  },
+  "tags": [
+    "theme"
+  ],
+  "plugin": {
+    "manifest": "plugin.json"
+  },
+  "files": [
+    {
+      "path": "plugin.json",
+      "role": "plugin-manifest",
+      "media_type": "application/json",
+      "size": 358,
+      "sha256": "eeccbfa02d8b6fedab1defeec004e708c3ce2eb7ad84201071a2221283cc0d1f"
+    },
+    {
+      "path": "themes/harbour-ghosts.json",
+      "role": "theme",
+      "media_type": "application/json",
+      "size": 80,
+      "sha256": "f85a36022ff9aa34112abcec071806eb2513e3cd313d2e0b8cb2c7dbf45f52a5"
+    }
+  ]
+}

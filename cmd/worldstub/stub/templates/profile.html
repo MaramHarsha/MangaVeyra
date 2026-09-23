@@ -1,0 +1,17 @@
+{{define "content"}}
+{{with .Account}}
+<p class="label">World profile</p>
+<h1>{{.DisplayName}} {{if .Verified}}<span class="badge info">Verified</span>{{end}}</h1>
+<p class="mono">@{{deref .Handle}}{{if .Developer}} · developer{{end}} · trust level {{.TrustLevel}}</p>
+{{if .Bio}}<p>{{.Bio}}</p>{{end}}
+{{if .Links}}<p class="meta">{{join .Links " · "}}</p>{{end}}
+<p class="meta">{{.Stats.ApprovedItems}} approved items · {{.Stats.TotalUses}} uses</p>
+{{end}}
+<h2>Items</h2>
+{{if .Items}}
+<div class="table-wrap"><table>
+<thead><tr><th>Name</th><th>Kind</th><th>Licence</th><th>Availability</th></tr></thead>
+<tbody>{{range .Items}}<tr><td><a href="/items/{{.ID}}">{{.Name}}</a></td><td>{{.Kind}}</td><td>{{.LicenceName}}</td><td>{{availabilityLabel .Availability}}</td></tr>{{end}}</tbody>
+</table></div>
+{{else}}<p class="meta">No approved items yet.</p>{{end}}
+{{end}}

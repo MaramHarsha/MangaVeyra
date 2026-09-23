@@ -1,0 +1,304 @@
+package setup
+
+import (
+	"context"
+	"strings"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/auth"
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
+	"github.com/MaramHarsha/MangaVeyra/internal/web"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+templ stepBar(current string) {
+	{{ idx := stepIndex(current) }}
+	<ol class="mv-steps mv-list-plain" aria-label={ i18n.T(ctx, "setup.steps") }>
+		for i, s := range steps {
+			<li class={ ui.Cls("mv-steps__step", ui.If(i < idx, "is-done"), ui.If(i == idx, "is-current")) }>
+				<span class="mv-steps__bar" aria-hidden="true"></span>
+				<span
+					class="mv-steps__label"
+					if i == idx {
+						aria-current="step"
+					}
+				>{ itoa(i + 1) }. { i18n.T(ctx, "setup.step."+s.Name+".short") }</span>
+			</li>
+		}
+	</ol>
+}
+
+templ head(title, sub string) {
+	<div class="mv-setup__head">
+		<h1 class="mv-setup__h1">{ title }</h1>
+		<p class="mv-setup__sub">{ sub }</p>
+	</div>
+}
+
+templ formError(msg string) {
+	if msg != "" {
+		@ui.Notice(ui.ToneError, "alert-triangle") {
+			{ msg }
+		}
+	}
+}
+
+// AdminStep is step 1: the first admin account.
+templ AdminStep(f adminForm) {
+	@stepBar(StepAdmin)
+	@head(i18n.T(ctx, "setup.admin.title"), i18n.T(ctx, "setup.admin.sub"))
+	<form class="mv-setup__form" method="post" action="/setup/admin" novalidate>
+		@formError(f.Errors.Form())
+		<div class="mv-grid-2">
+			@ui.Field(ui.FieldProps{ID: "display_name", Label: i18n.T(ctx, "setup.admin.display_name"), Error: f.Errors["display_name"]}) {
+				@ui.Input(ui.InputProps{ID: "display_name", Name: "display_name", Value: f.DisplayName, Autocomplete: "name", Autofocus: true, MaxLength: 64, Invalid: f.Errors["display_name"] != ""})
+			}
+			@ui.Field(ui.FieldProps{ID: "username", Label: i18n.T(ctx, "setup.admin.username"), Hint: i18n.T(ctx, "auth.username.invalid"), Error: f.Errors["username"]}) {
+				@ui.InputGroup("@", f.Errors["username"] != "") {
+					@ui.Input(ui.InputProps{ID: "username", Name: "username", Value: f.Username, Autocomplete: "username", Required: true, MaxLength: 32, Invalid: f.Errors["username"] != "", Described: true, Attrs: templ.Attributes{"autocapitalize": "none", "spellcheck": "false"}})
+				}
+			}
+			@ui.Field(ui.FieldProps{ID: "email", Label: i18n.T(ctx, "setup.admin.email"), Aside: i18n.T(ctx, "setup.optional"), Hint: i18n.T(ctx, "setup.admin.email_hint"), Error: f.Errors["email"]}) {
+				@ui.Input(ui.InputProps{ID: "email", Name: "email", Type: "email", Value: f.Email, Autocomplete: "email", Invalid: f.Errors["email"] != "", Described: true})
+			}
+			<div></div>
+			@ui.Field(ui.FieldProps{ID: "password", Label: i18n.T(ctx, "auth.page.password"), Hint: i18n.T(ctx, "auth.password.too_short", "min", auth.MinPasswordLen), Error: f.Errors["password"]}) {
+				@ui.InputGroup("", f.Errors["password"] != "") {
+					@ui.Input(ui.InputProps{ID: "password", Name: "password", Type: "password", Autocomplete: "new-password", Required: true, MinLength: auth.MinPasswordLen, Invalid: f.Errors["password"] != "", Described: true, Attrs: templ.Attributes{"data-strength": "pw-strength"}})
+					@ui.PasswordStrength("pw-strength", i18n.T(ctx, "auth.page.strength"))
+				}
+			}
+			@ui.Field(ui.FieldProps{ID: "confirm", Label: i18n.T(ctx, "setup.admin.confirm"), Error: f.Errors["confirm"]}) {
+				@ui.Input(ui.InputProps{ID: "confirm", Name: "confirm", Type: "password", Autocomplete: "new-password", Required: true, Invalid: f.Errors["confirm"] != ""})
+			}
+		</div>
+		@ui.Notice(ui.ToneInfo, "shield-lock") {
+			{ i18n.T(ctx, "setup.admin.note") }
+		}
+		<div class="mv-setup__foot">
+			<span class="mv-small mv-muted">{ i18n.T(ctx, "setup.admin.foot") }</span>
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "arrow-right"}) {
+				{ i18n.T(ctx, "setup.continue") }
+			}
+		</div>
+	</form>
+}
+
+var modes = []struct{ Value, Icon string }{
+	{settings.ModePersonal, "user"}, {settings.ModePrivate, "users-group"}, {settings.ModePublic, "world"},
+}
+
+func signupOptions(ctx context.Context) []ui.Option {
+	return []ui.Option{
+		{Value: settings.SignUpClosed, Label: i18n.T(ctx, "instance.signup.closed")},
+		{Value: settings.SignUpInvite, Label: i18n.T(ctx, "instance.signup.invite")},
+		{Value: settings.SignUpOpen, Label: i18n.T(ctx, "instance.signup.open")},
+	}
+}
+
+// InstanceStep is step 2: name, public URL, mode and sign-up.
+templ InstanceStep(f instanceForm) {
+	@stepBar(StepInstance)
+	@head(i18n.T(ctx, "setup.instance.title"), i18n.T(ctx, "setup.instance.sub"))
+	<form class="mv-setup__form" method="post" action="/setup/instance" novalidate>
+		@formError(f.Errors.Form())
+		<div class="mv-grid-2">
+			@ui.Field(ui.FieldProps{ID: "name", Label: i18n.T(ctx, "setup.instance.name"), Hint: i18n.T(ctx, "setup.instance.name_hint"), Error: f.Errors["name"]}) {
+				@ui.Input(ui.InputProps{ID: "name", Name: "name", Value: f.Name, Required: true, MaxLength: 80, Invalid: f.Errors["name"] != "", Described: true})
+			}
+			@ui.Field(ui.FieldProps{ID: "public_url", Label: i18n.T(ctx, "setup.instance.url"), Hint: i18n.T(ctx, "setup.instance.url_hint"), Error: f.Errors["public_url"]}) {
+				@ui.Input(ui.InputProps{ID: "public_url", Name: "public_url", Type: "url", Value: f.PublicURL, Placeholder: "https://studio.example.org", Inputmode: "url", Invalid: f.Errors["public_url"] != "", Described: true})
+			}
+		</div>
+		<fieldset class="mv-field">
+			<legend class="mv-field__label">{ i18n.T(ctx, "setup.instance.mode") }</legend>
+			<div class="mv-choices mv-choices--3">
+				for _, md := range modes {
+					<label class="mv-choice">
+						<input type="radio" name="mode" value={ md.Value } checked?={ f.Mode == md.Value }/>
+						@ui.Icon(md.Icon, 22)
+						<span>
+							<span class="mv-choice__title">{ i18n.T(ctx, "instance.mode."+md.Value+".title") }</span>
+							<span class="mv-choice__desc">{ i18n.T(ctx, "instance.mode."+md.Value+".desc") }</span>
+						</span>
+					</label>
+				}
+			</div>
+			if f.Errors["mode"] != "" {
+				<span class="mv-field__error">{ f.Errors["mode"] }</span>
+			}
+		</fieldset>
+		<div class="mv-grid-2">
+			<div class="mv-field">
+				<span class="mv-field__label" id="signup-label">{ i18n.T(ctx, "setup.instance.signup") }</span>
+				@ui.Segmented(ui.SegmentedProps{Name: "sign_up", Value: f.SignUp, Label: i18n.T(ctx, "setup.instance.signup"), Full: true, Large: true, Options: signupOptions(ctx)})
+				<span class="mv-field__hint">{ i18n.T(ctx, "setup.instance.signup_hint") }</span>
+			</div>
+			@ui.SetRow(i18n.T(ctx, "setup.instance.telemetry"), i18n.T(ctx, "setup.instance.telemetry_desc")) {
+				@ui.Badge(ui.ToneMuted, "eye-off", i18n.T(ctx, "setup.instance.telemetry_off"))
+			}
+		</div>
+		<div class="mv-setup__foot">
+			<span></span>
+			<div class="mv-row">
+				@ui.LinkButton("/setup/admin", ui.ButtonProps{Variant: ui.Ghost}) {
+					{ i18n.T(ctx, "ui.back") }
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "arrow-right"}) {
+					{ i18n.T(ctx, "setup.continue") }
+				}
+			</div>
+		</div>
+	</form>
+}
+
+func providerName(ctx context.Context, p ProviderCard) string {
+	if p.Name != "" {
+		return p.Name
+	}
+	return i18n.T(ctx, p.NameKey)
+}
+
+func providerDesc(ctx context.Context, p ProviderCard) string {
+	if p.Desc != "" {
+		return p.Desc
+	}
+	return i18n.T(ctx, p.DescKey)
+}
+
+// ModelsStep is step 3: GPU detection, provider cards and Local only mode.
+templ ModelsStep(v modelsView) {
+	@stepBar(StepModels)
+	if v.Compute.GPU != "" {
+		@head(i18n.T(ctx, "setup.models.title"), i18n.T(ctx, "setup.models.sub_gpu"))
+	} else {
+		@head(i18n.T(ctx, "setup.models.title"), i18n.T(ctx, "setup.models.sub_none"))
+	}
+	<form class="mv-setup__form" method="post" action="/setup/models">
+		if v.Compute.GPU != "" {
+			<div class="mv-gpu mv-gpu--found">
+				@ui.Icon("cpu", 28)
+				<div class="mv-grow mv-stack mv-stack--xs">
+					<strong>{ i18n.T(ctx, "setup.models.gpu_found", "gpu", v.Compute.GPU, "vram", web.GB(v.Compute.VRAMTotalMB)) }</strong>
+					if v.Recommend != nil {
+						<span class="mv-small mv-muted">{ i18n.T(ctx, "setup.models.recommend", "models", strings.Join(v.Recommend.Models, ", "), "size", gbString(v.Recommend.DownloadGB)) }</span>
+					} else {
+						<span class="mv-small mv-muted">{ i18n.T(ctx, "setup.models.recommend_none") }</span>
+					}
+				</div>
+				if v.Recommend != nil {
+					@ui.LinkButton(v.Recommend.InstallHref, ui.ButtonProps{Variant: ui.Primary, Icon: "download"}) {
+						{ i18n.T(ctx, "setup.models.install") }
+					}
+				}
+			</div>
+		} else if v.Compute.WorkersOnline > 0 {
+			<div class="mv-gpu">
+				@ui.Icon("cpu", 28)
+				<div class="mv-grow mv-stack mv-stack--xs">
+					<strong>{ i18n.T(ctx, "setup.models.worker_no_gpu", "count", v.Compute.WorkersOnline) }</strong>
+					<span class="mv-small mv-muted">{ i18n.T(ctx, "setup.models.worker_no_gpu_desc") }</span>
+				</div>
+			</div>
+		} else {
+			<div class="mv-gpu">
+				@ui.Icon("cpu-off", 28)
+				<div class="mv-grow mv-stack mv-stack--xs">
+					<strong>{ i18n.T(ctx, "setup.models.no_worker") }</strong>
+					<span class="mv-small mv-muted">{ i18n.T(ctx, "setup.models.no_worker_desc") }</span>
+				</div>
+				@ui.LinkButton("/models/workers/new", ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "terminal-2"}) {
+					{ i18n.T(ctx, "setup.models.add_worker") }
+				}
+			</div>
+		}
+		<div class="mv-providers">
+			for _, p := range v.Providers {
+				if p.Kind != "local_worker" {
+					<div class={ ui.Cls("mv-provider", ui.If(p.Status == ProviderConnected, "mv-provider--connected")) }>
+						@ui.Icon(p.Icon, 24)
+						<div class="mv-provider__text">
+							<strong class="mv-provider__name">{ providerName(ctx, p) }</strong>
+							<span class="mv-provider__desc">{ providerDesc(ctx, p) }</span>
+						</div>
+						switch p.Status {
+							case ProviderConnected:
+								@ui.Badge(ui.ToneSuccess, "circle-check", i18n.T(ctx, "setup.provider.connected"))
+							case ProviderTesting:
+								@ui.Badge(ui.ToneInfo, "loader-2", i18n.T(ctx, "setup.provider.testing"))
+							case ProviderError:
+								@ui.Badge(ui.ToneError, "alert-triangle", i18n.T(ctx, "setup.provider.error"))
+							default:
+								@ui.LinkButton(p.ConnectHref(), ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Class: ui.If(v.LocalOnly, "is-disabled")}) {
+									{ i18n.T(ctx, "setup.provider.connect") }
+									<span class="mv-sr-only">{ providerName(ctx, p) }</span>
+								}
+						}
+					</div>
+				}
+			}
+		</div>
+		<div class="mv-setup__foot">
+			<div class="mv-row mv-row--wrap">
+				@ui.Toggle(ui.ToggleProps{ID: "local_only", Name: "local_only", Checked: v.LocalOnly, Label: i18n.T(ctx, "setup.models.local"),
+					Attrs: templ.Attributes{"hx-post": "/setup/models", "hx-trigger": "change", "hx-vals": `{"autosave":"1"}`, "hx-swap": "none"}})
+				<span class="mv-small mv-faint">{ i18n.T(ctx, "setup.models.local_hint") }</span>
+			</div>
+			<div class="mv-row">
+				@ui.LinkButton("/setup/instance", ui.ButtonProps{Variant: ui.Ghost}) {
+					{ i18n.T(ctx, "ui.back") }
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "arrow-right"}) {
+					{ i18n.T(ctx, "setup.continue") }
+				}
+			</div>
+		</div>
+	</form>
+}
+
+// FinishStep is step 4: the checklist and the finish button.
+templ FinishStep(checks []Check) {
+	@stepBar(StepFinish)
+	@head(i18n.T(ctx, "setup.finish.title"), i18n.T(ctx, "setup.finish.sub"))
+	<form class="mv-setup__form" method="post" action="/setup/finish">
+		<ul class="mv-list-plain mv-box mv-box--pad" role="list">
+			for _, c := range checks {
+				<li class="mv-setrow">
+					<div class="mv-row mv-row--start">
+						if c.OK {
+							<i class="ti ti-circle-check mv-ok-text mv-ic-20" aria-hidden="true"></i>
+						} else if c.Warn {
+							<i class="ti ti-alert-triangle mv-warn-text mv-ic-20" aria-hidden="true"></i>
+						} else {
+							<i class="ti ti-circle-x mv-err-text mv-ic-20" aria-hidden="true"></i>
+						}
+						<div class="mv-setrow__text">
+							<span class="mv-setrow__title">{ c.Title }</span>
+							<span class="mv-setrow__desc">{ c.Body }</span>
+						</div>
+					</div>
+					<div class="mv-setrow__control">
+						if c.OK {
+							@ui.Badge(ui.ToneSuccess, "", i18n.T(ctx, "setup.check.ok"))
+						} else if c.Warn {
+							@ui.Badge(ui.ToneWarning, "", i18n.T(ctx, "setup.check.later"))
+						} else {
+							@ui.Badge(ui.ToneError, "", i18n.T(ctx, "setup.check.fail"))
+						}
+					</div>
+				</li>
+			}
+		</ul>
+		<div class="mv-setup__foot">
+			<span class="mv-small mv-muted">{ i18n.T(ctx, "setup.finish.note") }</span>
+			<div class="mv-row">
+				@ui.LinkButton("/setup/models", ui.ButtonProps{Variant: ui.Ghost}) {
+					{ i18n.T(ctx, "ui.back") }
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "rocket"}) {
+					{ i18n.T(ctx, "setup.finish.submit") }
+				}
+			</div>
+		</div>
+	</form>
+}

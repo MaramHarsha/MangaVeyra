@@ -1,0 +1,26 @@
+{
+  "mvpack_signature": 1,
+  "manifest_sha256": "d69a71ca444c8d2468b27cf9da8c34e077c10cebd84150aec6e5bf46fd9c2cfd",
+  "files": [
+    {
+      "path": "cover.png",
+      "size": 142,
+      "sha256": "a0d84ae7539e7b9a6001e1e75452edb0f9e876a8eb3ebec33b86d09f89275134"
+    },
+    {
+      "path": "layout.json",
+      "size": 360,
+      "sha256": "19b94957cee06f06ab94563150b193a372c4cd4135ea3f6284983647722b00c3"
+    }
+  ],
+  "signatures": [
+    {
+      "key_id": "srv_testdata",
+      "signer": "server",
+      "alg": "ed25519",
+      "public_key": "UtD35Fj5pogX5LZdjE4kwmQSgiiz+T8J3c246QRc0WM=",
+      "signed_at": "2026-09-12T10:00:00Z",
+      "sig": "wcG2qK9DgpVwh9xuRak3A3udKITFDTzrYYuIvcmWQ829QuWE2a6csPzDWIIQCXoKrFPNIyrJVshSJxovdO/5AQ=="
+    }
+  ]
+}

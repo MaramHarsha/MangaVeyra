@@ -1,0 +1,172 @@
+package dashboard
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// Page is the B1 dashboard body.
+templ Page(d Data) {
+	@Greeting(d)
+	if len(d.Projects) > 0 {
+		<div class="mv-dash-top">
+			@Continue(d.Projects[0])
+			<div class="mv-hide-mobile">
+				@ComputeCard(d.Compute)
+			</div>
+		</div>
+		@ComputeLine(d.Compute)
+		@Recent(d.Projects)
+	} else {
+		<div class="mv-dash-empty">
+			@Empty(d.CanCreate)
+			<div class="mv-hide-mobile">
+				@ComputeCard(d.Compute)
+			</div>
+		</div>
+		@ComputeLine(d.Compute)
+	}
+	if d.CanCreate {
+		@IdeasRow()
+	}
+}
+
+// Greeting renders "Good evening, Jerry", the level / XP line and the main actions.
+templ Greeting(d Data) {
+	<header class="mv-pagehead">
+		<div class="mv-pagehead__text">
+			<h1 class="mv-pagehead__title">{ d.Greeting }</h1>
+			if d.ShowXP {
+				<div class="mv-greeting__meta">
+					@ui.RankBadge(d.Progress.Rank, true)
+					<span class="mv-mono mv-muted">{ i18n.T(ctx, "dash.level", "level", d.Progress.Level) } · { i18n.T(ctx, d.Progress.TitleKey) }</span>
+					<div class="mv-greeting__xp">
+						@ui.XPBar("", "", d.Progress.Fraction())
+					</div>
+					<span class="mv-mono">{ i18n.FormatInt(d.Progress.XP-d.Progress.From, i18n.LocaleFrom(ctx)) } / { i18n.FormatInt(d.Progress.To-d.Progress.From, i18n.LocaleFrom(ctx)) } XP</span>
+				</div>
+			}
+			if d.Sub != "" {
+				<span class="mv-pagehead__sub">{ d.Sub }</span>
+			}
+		</div>
+		if d.CanCreate {
+			<div class="mv-pagehead__actions mv-hide-mobile">
+				@ui.LinkButton("/studio/import", ui.ButtonProps{Variant: ui.Secondary, Icon: "upload"}) {
+					{ i18n.T(ctx, "dash.import") }
+				}
+				@ui.LinkButton("/studio/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					{ i18n.T(ctx, "nav.new_manga") }
+				}
+			</div>
+		}
+	</header>
+}
+
+// Continue renders the "continue where you left off" card for the latest project.
+templ Continue(p Project) {
+	<section class="mv-box mv-continue" aria-label={ i18n.T(ctx, "dash.continue") }>
+		@ui.ToneBox(p.PageLabel, "", "mv-continue__art")
+		<div class="mv-continue__body">
+			<span class="mv-label-mono">{ i18n.T(ctx, "dash.continue") }</span>
+			<a class="mv-continue__title mv-link--plain" href={ templ.URL(p.Href) }>{ p.Title }</a>
+			<span class="mv-small mv-muted">{ p.ChapterLine }</span>
+			@ui.Bar(p.Progress, "", true, p.ChapterLine)
+			<div class="mv-row mv-row--wrap mv-row--sm">
+				if p.EditorHref != "" {
+					@ui.LinkButton(p.EditorHref, ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Icon: "pencil"}) {
+						{ p.EditorLabel }
+					}
+				}
+				if p.IssuesHref != "" {
+					@ui.LinkButton(p.IssuesHref, ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "alert-triangle"}) {
+						{ p.IssuesLabel }
+					}
+				}
+			</div>
+		</div>
+	</section>
+}
+
+// ComputeCard renders the self-host compute card (GPU, queue, workers, remote spend on your own keys).
+templ ComputeCard(c ComputeView) {
+	<section class="mv-box mv-compute-card" aria-label={ i18n.T(ctx, "dash.compute") }>
+		<div class="mv-compute-card__head">
+			<strong class="mv-small">{ c.Name }</strong>
+			if c.Online {
+				@ui.StatusBadge(ui.StatusOnline, i18n.T(ctx, "workers.status.online"))
+			} else {
+				@ui.StatusBadge(ui.StatusOffline, i18n.T(ctx, "workers.status.offline"))
+			}
+		</div>
+		@ui.KV(i18n.T(ctx, "dash.compute.gpu"), c.GPU)
+		@ui.KV(i18n.T(ctx, "dash.compute.queue"), c.Queue)
+		@ui.KV(i18n.T(ctx, "dash.compute.workers"), c.Workers)
+		@ui.KV(i18n.T(ctx, "dash.compute.remote"), c.Remote)
+		<a class="mv-small mv-link--plain mv-mt-auto" href={ templ.URL(c.QueueURL) }>{ i18n.T(ctx, "dash.compute.open_queue") }</a>
+	</section>
+}
+
+// ComputeLine is the one-line compute summary on phones.
+templ ComputeLine(c ComputeView) {
+	<a class="mv-compute-line mv-show-mobile mv-link--plain" href={ templ.URL(c.QueueURL) }>
+		@ui.Icon("cpu", 16)
+		<span>{ c.Line }</span>
+	</a>
+}
+
+// Empty is the "No projects yet" state with シーン… and the two ways to start.
+templ Empty(canCreate bool) {
+	@ui.State(ui.StateProps{
+		SFX:   "シーン…",
+		JP:    true,
+		Title: i18n.T(ctx, "dash.empty.title"),
+		Body:  i18n.T(ctx, "dash.empty.body"),
+		Art:   "splash",
+		Foot:  i18n.T(ctx, "dash.empty.foot"),
+		Boxed: true,
+	}) {
+		if canCreate {
+			@ui.LinkButton("/studio/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				{ i18n.T(ctx, "nav.new_manga") }
+			}
+			@ui.LinkButton("/studio/import", ui.ButtonProps{Variant: ui.Secondary, Icon: "upload"}) {
+				{ i18n.T(ctx, "dash.import") }
+			}
+		} else {
+			@ui.LinkButton("/explore", ui.ButtonProps{Variant: ui.Primary, Icon: "compass"}) {
+				{ i18n.T(ctx, "nav.explore") }
+			}
+		}
+	}
+}
+
+// Recent renders the recent projects grid (cards on desktop, rows on phones).
+templ Recent(ps []Project) {
+	<section class="mv-stack">
+		<div class="mv-section-head">
+			<h2 class="mv-section-head__title">{ i18n.T(ctx, "dash.recent") }</h2>
+			<a href="/studio/projects">{ i18n.T(ctx, "dash.all_projects") }</a>
+		</div>
+		<div class="mv-grid-4">
+			for _, p := range ps {
+				@ui.ProjectCard(ui.ProjectCardProps{Href: p.Href, Title: p.Title, Meta: p.Meta, ThumbLabel: p.ThumbLabel, Badges: p.Badges, MenuLabel: i18n.T(ctx, "dash.project_actions")})
+			}
+		</div>
+	</section>
+}
+
+// IdeasRow renders the dashed "start from" suggestions.
+templ IdeasRow() {
+	<nav class="mv-ideas" aria-label={ i18n.T(ctx, "dash.ideas") }>
+		for _, it := range Ideas {
+			<a class="mv-idea" href={ templ.URL(it.Href) }>
+				@ui.Icon(it.Icon, 26)
+				<span class="mv-idea__text">
+					<strong>{ i18n.T(ctx, it.TitleKey) }</strong>
+					<span>{ i18n.T(ctx, it.DescKey) }</span>
+				</span>
+			</a>
+		}
+	</nav>
+}

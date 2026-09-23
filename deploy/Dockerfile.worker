@@ -1,0 +1,84 @@
+# syntax=docker/dockerfile:1.7
+# MangaVeyra AI worker images, built from worker/ (the Python package). Build from the repository root:
+#   GPU (diffusers + peft + ComfyUI client + OpenCV vision helpers; needs the NVIDIA container toolkit):
+#     docker build -f deploy/Dockerfile.worker --target gpu -t mangaveyra-worker:gpu .
+#   CPU (built-in mock backend: labelled screentone placeholders, real panel detection, ComfyUI client;
+#   for demos, CI and machines without a GPU):
+#     docker build -f deploy/Dockerfile.worker --target cpu -t mangaveyra-worker:cpu .
+#
+# The worker pulls jobs from the server (sdk/api/worker.md). Main settings (full list: worker/README.md):
+#   MV_SERVER (alias MV_SERVER_URL)       e.g. http://app:8080
+#   MV_WORKER_TOKEN                       worker token (mvw_...) or the server's MV_WORKER_TOKEN shared secret
+#   MV_WORKER_NAME                        name shown on the Models & providers screen
+#   MV_BACKENDS (alias MV_WORKER_BACKEND) auto | comma list of diffusers, comfyui, vision, mock
+#   MV_COMFYUI_URL, MV_MODELS_DIR, MV_LORA_DIR, MV_TRAIN_COMMAND …
+# Model weights, the LoRA cache and scratch space live under /models (mount a volume there).
+# Both images run as the unprivileged user `worker` (uid 10002). tini forwards SIGTERM so running jobs can drain:
+# give the container a stop grace period of at least MV_DRAIN_TIMEOUT_S (default 120 s).
+
+ARG PYTHON_VERSION=3.12
+ARG CUDA_IMAGE=nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu128
+
+# ---------------------------------------------------------------------------------------------------------------
+# cpu: mock + vision + ComfyUI client on python:slim
+# ---------------------------------------------------------------------------------------------------------------
+FROM python:${PYTHON_VERSION}-slim AS cpu
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tini libglib2.0-0 \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --system --uid 10002 --create-home --home-dir /home/worker --shell /usr/sbin/nologin worker \
+ && mkdir -p /models && chown worker:worker /models
+WORKDIR /app/worker
+COPY worker/pyproject.toml worker/README.md ./
+COPY worker/mangaveyra_worker ./mangaveyra_worker
+COPY worker/examples ./examples
+RUN pip install ".[vision,comfyui]" && mangaveyra-worker --version
+USER worker
+# MV_BACKENDS is left unset (= auto) so docker-compose can pass MV_BACKENDS or MV_WORKER_BACKEND.
+ENV MV_WORKER_DATA_DIR=/models/worker \
+    HF_HOME=/models \
+    MV_HEALTH_FILE=/tmp/mangaveyra-worker.alive \
+    MV_LOG_FORMAT=json
+VOLUME ["/models"]
+# Healthy while the worker has talked to the server within the last two minutes.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD python -c "import os,sys,time; p=os.environ.get('MV_HEALTH_FILE','/tmp/mangaveyra-worker.alive'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<120 else 1)"
+ENTRYPOINT ["/usr/bin/tini", "--", "mangaveyra-worker"]
+CMD ["run"]
+
+# ---------------------------------------------------------------------------------------------------------------
+# gpu: CUDA runtime + PyTorch + diffusers + peft + ComfyUI client + vision helpers (default target)
+# ---------------------------------------------------------------------------------------------------------------
+FROM ${CUDA_IMAGE} AS gpu
+ARG TORCH_INDEX_URL
+ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH
+# Ubuntu 24.04 ships Python 3.12, the project's target version.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 python3-venv tini libglib2.0-0 libgl1 ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && python3 -m venv /opt/venv \
+ && useradd --system --uid 10002 --create-home --home-dir /home/worker --shell /usr/sbin/nologin worker \
+ && mkdir -p /models && chown worker:worker /models
+# PyTorch with its CUDA wheels first, in a layer that survives worker code changes.
+RUN pip install --index-url ${TORCH_INDEX_URL} torch torchvision
+WORKDIR /app/worker
+COPY worker/pyproject.toml worker/README.md ./
+COPY worker/mangaveyra_worker ./mangaveyra_worker
+COPY worker/examples ./examples
+RUN pip install ".[gpu]" && mangaveyra-worker --version
+USER worker
+# MV_BACKENDS is left unset (= auto) so docker-compose can pass MV_BACKENDS or MV_WORKER_BACKEND.
+ENV MV_WORKER_DATA_DIR=/models/worker \
+    HF_HOME=/models \
+    MV_HEALTH_FILE=/tmp/mangaveyra-worker.alive \
+    MV_LOG_FORMAT=json \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+VOLUME ["/models"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+  CMD python -c "import os,sys,time; p=os.environ.get('MV_HEALTH_FILE','/tmp/mangaveyra-worker.alive'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<120 else 1)"
+ENTRYPOINT ["/usr/bin/tini", "--", "mangaveyra-worker"]
+CMD ["run"]

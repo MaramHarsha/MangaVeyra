@@ -1,0 +1,12 @@
+/*
+ * MangaVeyra stylesheet entry (the Tabler icon font is imported from main.ts). Order: fonts,
+ * tokens, base, components, textures, motion, layout.
+ */
+@import "./fonts.css";
+@import "./tokens.css";
+@import "./base.css";
+@import "./components.css";
+@import "./textures.css";
+@import "./motion.css";
+@import "./layout.css";
+@import "./styleguide.css";

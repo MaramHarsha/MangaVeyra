@@ -1,0 +1,236 @@
+package layout
+
+import (
+	"context"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+type navLink struct {
+	Key   string
+	Href  string
+	Icon  string
+	Label string
+}
+
+func studioNav(ctx context.Context) []navLink {
+	return []navLink{
+		{NavHome, "/studio", "home", i18n.T(ctx, "nav.home")},
+		{NavProjects, "/studio/projects", "books", i18n.T(ctx, "nav.projects")},
+		{NavCharacters, "/studio/characters", "users", i18n.T(ctx, "nav.characters")},
+		{NavSetting, "/studio/setting", "world", i18n.T(ctx, "nav.setting")},
+		{NavTemplates, "/studio/templates", "layout-grid", i18n.T(ctx, "nav.templates")},
+		{NavAnalytics, "/studio/analytics", "chart-bar", i18n.T(ctx, "nav.analytics")},
+	}
+}
+
+func systemNav(ctx context.Context, admin bool) []navLink {
+	l := []navLink{
+		{NavModels, "/models", "cpu", i18n.T(ctx, "nav.models")},
+		{NavAgents, "/agents", "plug", i18n.T(ctx, "nav.agents")},
+		{NavSettings, "/settings", "settings", i18n.T(ctx, "nav.settings")},
+	}
+	if admin {
+		l = append(l, navLink{NavAdmin, "/admin", "shield", i18n.T(ctx, "nav.admin")})
+	}
+	return l
+}
+
+func topNav(ctx context.Context) []navLink {
+	return []navLink{
+		{SectionStudio, "/studio", "", i18n.T(ctx, "nav.studio")},
+		{SectionExplore, "/explore", "", i18n.T(ctx, "nav.explore")},
+		{SectionLibrary, "/library", "", i18n.T(ctx, "nav.library")},
+	}
+}
+
+func bottomNav(ctx context.Context) []navLink {
+	return []navLink{
+		{TabHome, "/studio", "home", i18n.T(ctx, "nav.home")},
+		{TabExplore, "/explore", "compass", i18n.T(ctx, "nav.explore")},
+		{TabCreate, "/studio/new", "plus", i18n.T(ctx, "nav.create")},
+		{TabLibrary, "/library", "books", i18n.T(ctx, "nav.library")},
+		{TabMe, "/settings", "user", i18n.T(ctx, "nav.me")},
+	}
+}
+
+func (c *Chrome) userMenu(ctx context.Context) []ui.MenuItem {
+	items := []ui.MenuItem{
+		{Href: "/u/" + c.User.Username, Label: i18n.T(ctx, "nav.profile"), Icon: "user"},
+		{Href: "/notifications", Label: i18n.T(ctx, "nav.notifications"), Icon: "bell"},
+		{Href: "/settings/account", Label: i18n.T(ctx, "nav.settings"), Icon: "settings"},
+		{Href: "/settings/appearance", Label: i18n.T(ctx, "nav.theme"), Icon: "moon-stars", Attrs: templ.Attributes{"data-theme-toggle": "/settings/theme"}},
+		{Href: "#", Label: i18n.T(ctx, "nav.shortcuts"), Icon: "keyboard", Meta: "?", Attrs: templ.Attributes{"data-dialog-open": "mv-shortcuts"}},
+	}
+	if c.User.IsAdmin() {
+		items = append(items, ui.MenuItem{Href: "/admin", Label: i18n.T(ctx, "nav.admin"), Icon: "shield"})
+	}
+	return append(items, ui.MenuItem{Separator: true}, ui.MenuItem{Href: "/logout", Label: i18n.T(ctx, "nav.logout"), Icon: "logout", Post: true})
+}
+
+// AppShell renders the signed-in frame: top bar, studio sidebar, main content and the mobile bottom nav.
+templ AppShell(c *Chrome) {
+	@Base(c) {
+		<a class="mv-skip-link" href="#main">{ i18n.T(ctx, "ui.skip_to_content") }</a>
+		@TopBar(c)
+		<div class={ "mv-app", attrIf(c.User == nil, "mv-app--no-nav") }>
+			if c.User != nil && !c.NoSidebar {
+				@Sidebar(c)
+			}
+			<main id="main" class="mv-main" tabindex="-1">
+				{ children... }
+			</main>
+		</div>
+		if c.User != nil {
+			@BottomNav(c)
+			@ShortcutSheet()
+		}
+	}
+}
+
+// TopBar renders the gate-blue lockup, Studio/Explore/Library, search, compute meter, bell and avatar menu.
+templ TopBar(c *Chrome) {
+	<header class={ "mv-topbar", attrIf(c.BackURL != "", "mv-topbar--back") }>
+		<a class="mv-topbar__brand" href="/" aria-label={ c.InstanceName }>
+			@ThemedImg("mv-topbar__logo", LogoDark, LogoLight, "MangaVeyra", 96, 22)
+			@ThemedImg("mv-topbar__mark", BrandMarkDark, BrandMarkLight, "", 28, 28)
+		</a>
+		if c.BackURL != "" {
+			<a class="mv-iconlink mv-topbar__back" href={ templ.URL(c.BackURL) } aria-label={ i18n.T(ctx, "ui.back") }>
+				@ui.Icon("arrow-left", 22)
+			</a>
+		}
+		<span class="mv-topbar__title" aria-hidden="true">{ c.mobileTitle() }</span>
+		<nav class="mv-topnav" aria-label={ i18n.T(ctx, "nav.main") }>
+			for _, n := range topNav(ctx) {
+				<a
+					class="mv-topnav__item"
+					href={ templ.URL(n.Href) }
+					if n.Key == c.Section {
+						aria-current="page"
+					}
+				>{ n.Label }</a>
+			}
+		</nav>
+		@ui.SearchBox("mv-search", "q", c.SearchQuery, i18n.T(ctx, "nav.search_placeholder"), "/search")
+		<div class="mv-topbar__end">
+			if c.User != nil {
+				if c.Meter != nil {
+					@ui.ComputeMeter(*c.Meter)
+				}
+				<a class="mv-iconlink mv-bell" href="/notifications" aria-label={ i18n.T(ctx, "nav.notifications") }>
+					@ui.Icon("bell", 20)
+					<span class="mv-iconlink__dot" data-unread-dot hidden?={ c.Unread == 0 }></span>
+					if c.Unread > 0 {
+						<span class="mv-sr-only">{ i18n.T(ctx, "nav.unread", "count", c.Unread) }</span>
+					}
+				</a>
+				@ui.Dropdown("mv-usermenu", "end", false, userTrigger(c), c.userMenu(ctx))
+			} else {
+				@ui.LinkButton("/login", ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM}) {
+					{ i18n.T(ctx, "auth.login.submit") }
+				}
+				if c.SignUpOpen {
+					@ui.LinkButton("/signup", ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Class: "mv-hide-mobile"}) {
+						{ i18n.T(ctx, "auth.signup.submit") }
+					}
+				}
+			}
+		</div>
+	</header>
+}
+
+templ userTrigger(c *Chrome) {
+	<span class="mv-sr-only">{ i18n.T(ctx, "nav.account_menu") }</span>
+	@ui.Avatar(ui.AvatarProps{Name: c.userName(), Key: c.userID()})
+}
+
+// Sidebar renders the studio sidebar with the slanted active marker.
+templ Sidebar(c *Chrome) {
+	<aside class="mv-sidebar" aria-label={ i18n.T(ctx, "nav.studio") }>
+		if c.User.CanCreate() {
+			@ui.LinkButton("/studio/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Full: true, Class: "mv-sidebar__new"}) {
+				<span class="mv-btn__label">{ i18n.T(ctx, "nav.new_manga") }</span>
+			}
+		}
+		<nav class="mv-stack mv-stack--xs" aria-label={ i18n.T(ctx, "nav.studio") }>
+			for _, n := range studioNav(ctx) {
+				@sideItem(c, n)
+			}
+		</nav>
+		<div class="mv-sidebar__sep" role="separator"></div>
+		<nav class="mv-stack mv-stack--xs" aria-label={ i18n.T(ctx, "nav.system") }>
+			for _, n := range systemNav(ctx, c.IsAdmin()) {
+				@sideItem(c, n)
+			}
+		</nav>
+		<div class="mv-sidebar__server">
+			<span>
+				@ui.Icon("server", 14)
+				<span class="mv-truncate">{ c.ServerHost }</span>
+			</span>
+			<span class="mv-sidebar__version">v{ c.Version } · AGPL-3.0</span>
+		</div>
+	</aside>
+}
+
+templ sideItem(c *Chrome, n navLink) {
+	<a
+		class="mv-sidenav__item"
+		href={ templ.URL(n.Href) }
+		if n.Key == c.Nav {
+			aria-current="page"
+		}
+		data-tip={ n.Label }
+	>
+		@ui.Icon(n.Icon, 18)
+		<span class="mv-sidebar__label">{ n.Label }</span>
+	</a>
+}
+
+// BottomNav renders the mobile bottom navigation with Create as the accent action.
+templ BottomNav(c *Chrome) {
+	<nav class="mv-bottomnav" aria-label={ i18n.T(ctx, "nav.main") }>
+		for _, n := range bottomNav(ctx) {
+			if n.Key == TabCreate {
+				<div class="mv-bottomnav__create">
+					<a href={ templ.URL(n.Href) } aria-label={ i18n.T(ctx, "nav.new_manga") }>
+						@ui.Icon(n.Icon, 24)
+					</a>
+				</div>
+			} else {
+				<a
+					class="mv-bottomnav__item"
+					href={ templ.URL(n.Href) }
+					if n.Key == c.Tab {
+						aria-current="page"
+					}
+				>
+					@ui.Icon(n.Icon, 22)
+					{ n.Label }
+				</a>
+			}
+		}
+	</nav>
+}
+
+// ShortcutSheet is the keyboard shortcut dialog opened with "?".
+templ ShortcutSheet() {
+	@ui.Modal(ui.ModalProps{ID: "mv-shortcuts", Title: i18n.T(ctx, "shortcuts.title")}) {
+		@ui.ModalBody() {
+			<div class="mv-shortcuts">
+				@ui.Kbd("/")
+				<span>{ i18n.T(ctx, "shortcuts.search") }</span>
+				@ui.Kbd("?")
+				<span>{ i18n.T(ctx, "shortcuts.help") }</span>
+				@ui.Kbd("Esc")
+				<span>{ i18n.T(ctx, "shortcuts.close") }</span>
+				@ui.Kbd("1–4")
+				<span>{ i18n.T(ctx, "shortcuts.variations") }</span>
+				@ui.Kbd("⌘↵")
+				<span>{ i18n.T(ctx, "shortcuts.generate") }</span>
+			</div>
+		}
+	}
+}
