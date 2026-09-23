@@ -35,13 +35,13 @@ talks to it through the small public World API documented in `sdk/api/`.
 
 | Part | Choice |
 |---|---|
-| Core server | Go (module `github.com/MaramHarsha/MangaVeyra`, `go 1.25` minimum, built with the latest toolchain), `net/http` with Go 1.22+ pattern routing, one static binary (`CGO_ENABLED=0`), all web assets embedded with `embed.FS` |
+| Core server | Go (module `github.com/MaramHarsha/MangaVeyra`, `go 1.27.1`, the latest stable toolchain), `net/http` with Go 1.22+ pattern routing, one static binary (`CGO_ENABLED=0`), all web assets embedded with `embed.FS` |
 | Server-rendered screens | [templ](https://templ.guide) components + HTMX 2 (vendored, no CDN). Generated `*_templ.go` files are committed so `go build` works without the templ CLI |
 | Rich screens | TypeScript + Svelte 5 islands built by Vite: editor (PixiJS 8 WebGL canvas + SVG lettering layer), reader, pose tool, animate timeline |
 | Realtime | One WebSocket per tab at `/ws` (github.com/coder/websocket): topic subscriptions for jobs, notifications, presence; Yjs updates relayed per page document |
-| AI workers | Python 3.12 package in `worker/` (diffusers / ComfyUI adapter / built-in mock). Workers *pull* jobs from the Go server over HTTP and stream progress back |
+| AI workers | Python 3.14 package in `worker/` (3.11+ supported) (diffusers / ComfyUI adapter / built-in mock). Workers *pull* jobs from the Go server over HTTP and stream progress back |
 | Text models | Any OpenAI-compatible endpoint (Ollama, vLLM, llama.cpp, LM Studio, LiteLLM) or vendor keys (Anthropic, OpenAI, Google, xAI) called from Go |
-| Data | PostgreSQL 16+ or SQLite (modernc.org/sqlite, pure Go) through `database/sql` + `sqlx`. Job queue and search live in the database — no Redis, no search server |
+| Data | PostgreSQL 18 (16+ works) or SQLite (modernc.org/sqlite, pure Go) through `database/sql` + `sqlx`. Job queue and search live in the database — no Redis, no search server |
 | Files | Local disk or any S3-compatible store (minio-go) behind `storage.Store` |
 | Media | FFmpeg (optional binary on PATH) for animate clips and living-panel loops; `pdftoppm` (optional) for PDF import |
 | Agents | MCP server built into the binary (official Go SDK `github.com/modelcontextprotocol/go-sdk`), streamable HTTP at `/mcp` + `mangaveyra mcp-stdio` bridge |

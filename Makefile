@@ -50,9 +50,9 @@ test: test-go test-web test-worker ## Run every test suite that exists
 test-go: ## Go tests on SQLite (set MV_TEST_POSTGRES_URL to also run Postgres)
 	$(GO) test ./...
 
-test-pg: ## Go tests on SQLite and a throwaway Postgres 16 container
+test-pg: ## Go tests on SQLite and a throwaway Postgres 18 container
 	@docker rm -f $(PG_TEST_NAME) >/dev/null 2>&1 || true
-	docker run -d --name $(PG_TEST_NAME) -e POSTGRES_PASSWORD=mv -p $(PG_TEST_PORT):5432 postgres:16-alpine >/dev/null
+	docker run -d --name $(PG_TEST_NAME) -e POSTGRES_PASSWORD=mv -p $(PG_TEST_PORT):5432 postgres:18-alpine >/dev/null
 	@for i in $$(seq 1 30); do docker exec $(PG_TEST_NAME) pg_isready -U postgres >/dev/null 2>&1 && break; sleep 1; done
 	MV_TEST_POSTGRES_URL="postgres://postgres:mv@127.0.0.1:$(PG_TEST_PORT)/postgres?sslmode=disable" $(GO) test ./... ; \
 		status=$$?; docker rm -f $(PG_TEST_NAME) >/dev/null; exit $$status
