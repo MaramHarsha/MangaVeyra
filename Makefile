@@ -24,7 +24,7 @@ help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
 
 tools: ## Install templ and golangci-lint (optional)
-	$(GO) install github.com/a-h/templ/cmd/templ@latest
+	$(GO) install github.com/a-h/templ/cmd/templ@$$($(GO) list -m -f '{{.Version}}' github.com/a-h/templ)
 	-$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 
 web: ## Build frontend assets into internal/web/static/dist (skipped when web/ is absent)
