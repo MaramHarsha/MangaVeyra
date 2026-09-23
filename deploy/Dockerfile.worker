@@ -16,9 +16,9 @@
 # Both images run as the unprivileged user `worker` (uid 10002). tini forwards SIGTERM so running jobs can drain:
 # give the container a stop grace period of at least MV_DRAIN_TIMEOUT_S (default 120 s).
 
-ARG PYTHON_VERSION=3.12
-ARG CUDA_IMAGE=nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04
-ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu128
+ARG PYTHON_VERSION=3.14
+ARG CUDA_IMAGE=nvidia/cuda:13.4.1-cudnn-runtime-ubuntu26.04
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu132
 
 # ---------------------------------------------------------------------------------------------------------------
 # cpu: mock + vision + ComfyUI client on python:slim
@@ -55,7 +55,7 @@ FROM ${CUDA_IMAGE} AS gpu
 ARG TORCH_INDEX_URL
 ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH
-# Ubuntu 24.04 ships Python 3.12, the project's target version.
+# Ubuntu 26.04 ships Python 3.14; PyTorch cu132 wheels bundle their own CUDA 13.2 libraries.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 python3-venv tini libglib2.0-0 libgl1 ca-certificates \
  && rm -rf /var/lib/apt/lists/* \

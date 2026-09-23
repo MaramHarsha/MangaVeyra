@@ -3,9 +3,9 @@
 #   docker build -f deploy/Dockerfile -t mangaveyra .
 # Build context is the repository root (deploy/Dockerfile.dockerignore trims it).
 
-ARG GO_VERSION=1.27
-ARG NODE_VERSION=22
-ARG ALPINE_VERSION=3.22
+ARG GO_VERSION=1.27.1
+ARG NODE_VERSION=24
+ARG ALPINE_VERSION=3.24
 
 # 1. Frontend assets (skipped when web/ does not exist yet).
 FROM node:${NODE_VERSION}-alpine AS web
