@@ -305,6 +305,27 @@ func (q *Queue) get(ctx context.Context, qr db.Querier, id string) (*Job, error)
 	return r.job(), nil
 }
 
+// getForUpdate locks the selected job until tx ends on PostgreSQL. SQLite
+// transactions already start with BEGIN IMMEDIATE and are serialized by db.DB.
+func (q *Queue) getForUpdate(ctx context.Context, tx *db.Tx, id string) (*Job, error) {
+	qs := `SELECT ` + jobCols + ` FROM jobs WHERE id = ?`
+	if tx.Dialect() == db.Postgres {
+		qs += ` FOR UPDATE`
+	}
+	return q.getQuery(ctx, tx, qs, id)
+}
+
+func (q *Queue) getQuery(ctx context.Context, qr db.Querier, query string, args ...any) (*Job, error) {
+	var r jobRow
+	if err := qr.Get(ctx, &r, query, args...); err != nil {
+		if db.IsNotFound(err) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return r.job(), nil
+}
+
 // Events returns a job's log, oldest first.
 func (q *Queue) Events(ctx context.Context, jobID string) ([]Event, error) {
 	var out []Event
@@ -688,22 +709,50 @@ func (q *Queue) Complete(ctx context.Context, id, workerID string, output any, a
 }
 
 func (q *Queue) complete(ctx context.Context, id string, f fence, output any, actual Cost) (*Job, error) {
-	out, err := marshalObj(output)
+	j, err := q.completeTx(ctx, id, f, actual, false, func(context.Context, *db.Tx) (any, error) {
+		return output, nil
+	})
 	if err != nil {
 		return nil, err
 	}
+	q.finished(ctx, j, "job.done")
+	return j, nil
+}
+
+type completionEffect func(context.Context, *db.Tx) (output any, err error)
+
+// completeTx runs effect and completes the job in one transaction. When
+// rejectCanceled is true, a pending cancellation wins before effect is called.
+func (q *Queue) completeTx(ctx context.Context, id string, f fence, actual Cost, rejectCanceled bool, effect completionEffect) (*Job, error) {
+	if effect == nil {
+		return nil, errors.New("jobs: completion effect is nil")
+	}
 	var j *Job
-	err = q.db.WithTx(ctx, func(tx *db.Tx) error {
-		cur, err := q.get(ctx, tx, id)
+	err := q.db.WithTx(ctx, func(tx *db.Tx) error {
+		cur, err := q.getForUpdate(ctx, tx, id)
 		if err != nil {
 			return err
 		}
 		if !f.holds(cur) {
 			return ErrLeaseLost
 		}
+		if rejectCanceled && cur.CancelRequested {
+			return ErrCanceled
+		}
+		output, err := effect(ctx, tx)
+		if err != nil {
+			return err
+		}
+		out, err := marshalObj(output)
+		if err != nil {
+			return err
+		}
 		now := q.now()
 		total := cur.Actual.Add(actual)
 		cond, cargs := f.where(cur)
+		if rejectCanceled {
+			cond += ` AND cancel_requested = FALSE`
+		}
 		res, err := tx.Exec(ctx, `UPDATE jobs SET state = 'done', progress = 1, output = ?, actual = ?, error = '{}', message = '',
 			lease_expires_at = NULL, finished_at = ?, updated_at = ? WHERE id = ?`+cond, append([]any{out, db.MustJSON(total), now, now, id}, cargs...)...)
 		if err != nil {
@@ -721,7 +770,6 @@ func (q *Queue) complete(ctx context.Context, id string, f fence, output any, ac
 	if err != nil {
 		return nil, err
 	}
-	q.finished(ctx, j, "job.done")
 	return j, nil
 }
 
@@ -979,7 +1027,15 @@ func (q *Queue) Wait(ctx context.Context, id string, interval time.Duration) (*J
 }
 
 func (q *Queue) finished(ctx context.Context, j *Job, event string) {
-	q.publish(j, event, "")
+	defer q.signal() // a finished job frees a fair-share slot
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				q.log.ErrorContext(ctx, "jobs: publisher panicked", "job", j.ID, "panic", r)
+			}
+		}()
+		q.publish(j, event, "")
+	}()
 	q.mu.RLock()
 	hooks := append([]func(context.Context, *Job){}, q.onFinish...)
 	q.mu.RUnlock()
@@ -993,7 +1049,6 @@ func (q *Queue) finished(ctx context.Context, j *Job, event string) {
 			h(context.WithoutCancel(ctx), j)
 		}()
 	}
-	q.signal() // a finished job frees a fair-share slot
 }
 
 func (q *Queue) publish(j *Job, typ, preview string) {

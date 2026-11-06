@@ -9,6 +9,7 @@
 package jobs
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -65,24 +66,84 @@ func (s Scope) Validate() error {
 		}
 		return nil
 	}
-	switch s.Kind {
-	case ScopeChapter:
-		return errors.Join(need(s.ProjectID, "project_id"), need(s.ChapterID, "chapter_id"))
-	case ScopePage:
-		return errors.Join(need(s.ProjectID, "project_id"), need(s.PageID, "page_id"))
-	case ScopePanel:
-		return errors.Join(need(s.ProjectID, "project_id"), need(s.PageID, "page_id"), need(s.PanelID, "panel_id"))
-	case ScopeLayer:
-		return errors.Join(need(s.ProjectID, "project_id"), need(s.PanelID, "panel_id"), need(s.LayerID, "layer_id"))
-	case ScopeRegion:
-		if len(s.Region) == 0 || string(s.Region) == "null" {
+	forbid := func(set bool, name string) error {
+		if set {
+			return fmt.Errorf("jobs: %s scope forbids %s", s.Kind, name)
+		}
+		return nil
+	}
+	region := bytes.TrimSpace(s.Region)
+	regionSet := len(region) != 0
+	needRegion := func() error {
+		if !regionSet || bytes.Equal(region, []byte("null")) {
 			return errors.New("jobs: region scope needs region")
 		}
-		return errors.Join(need(s.ProjectID, "project_id"), need(s.PanelID, "panel_id"))
-	case ScopeProject:
-		return need(s.ProjectID, "project_id")
-	case ScopeNone:
 		return nil
+	}
+	switch s.Kind {
+	case ScopeChapter:
+		return errors.Join(
+			need(s.ProjectID, "project_id"),
+			need(s.ChapterID, "chapter_id"),
+			forbid(s.PageID != "", "page_id"),
+			forbid(s.PanelID != "", "panel_id"),
+			forbid(s.LayerID != "", "layer_id"),
+			forbid(regionSet, "region"),
+		)
+	case ScopePage:
+		return errors.Join(
+			need(s.ProjectID, "project_id"),
+			need(s.PageID, "page_id"),
+			forbid(s.ChapterID != "", "chapter_id"),
+			forbid(s.PanelID != "", "panel_id"),
+			forbid(s.LayerID != "", "layer_id"),
+			forbid(regionSet, "region"),
+		)
+	case ScopePanel:
+		return errors.Join(
+			need(s.ProjectID, "project_id"),
+			need(s.PageID, "page_id"),
+			need(s.PanelID, "panel_id"),
+			forbid(s.ChapterID != "", "chapter_id"),
+			forbid(s.LayerID != "", "layer_id"),
+			forbid(regionSet, "region"),
+		)
+	case ScopeLayer:
+		return errors.Join(
+			need(s.ProjectID, "project_id"),
+			need(s.PanelID, "panel_id"),
+			need(s.LayerID, "layer_id"),
+			forbid(s.ChapterID != "", "chapter_id"),
+			forbid(s.PageID != "", "page_id"),
+			forbid(regionSet, "region"),
+		)
+	case ScopeRegion:
+		return errors.Join(
+			need(s.ProjectID, "project_id"),
+			need(s.PanelID, "panel_id"),
+			needRegion(),
+			forbid(s.ChapterID != "", "chapter_id"),
+			forbid(s.PageID != "", "page_id"),
+			forbid(s.LayerID != "", "layer_id"),
+		)
+	case ScopeProject:
+		return errors.Join(
+			need(s.ProjectID, "project_id"),
+			forbid(s.ChapterID != "", "chapter_id"),
+			forbid(s.PageID != "", "page_id"),
+			forbid(s.PanelID != "", "panel_id"),
+			forbid(s.LayerID != "", "layer_id"),
+			forbid(regionSet, "region"),
+		)
+	case ScopeNone:
+		return errors.Join(
+			forbid(s.ProjectID != "", "project_id"),
+			forbid(s.ChapterID != "", "chapter_id"),
+			forbid(s.PageID != "", "page_id"),
+			forbid(s.PanelID != "", "panel_id"),
+			forbid(s.LayerID != "", "layer_id"),
+			forbid(regionSet, "region"),
+		)
 	case "":
 		return errors.New("jobs: scope kind is required")
 	}
