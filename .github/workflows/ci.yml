@@ -1,7 +1,8 @@
 name: CI
 
-# Manual only: run it from the Actions tab (Run workflow) when needed.
+# Validate every pull request; maintainers can also run it from the Actions tab.
 on:
+  pull_request:
   workflow_dispatch:
 
 permissions:
