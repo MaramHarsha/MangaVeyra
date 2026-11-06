@@ -53,27 +53,127 @@ func (r *recorder) get(topic string) []string {
 }
 
 func TestScopeValidation(t *testing.T) {
-	cases := map[string]jobs.Scope{
-		"missing kind":   {},
-		"page no id":     {Kind: jobs.ScopePage, ProjectID: "p"},
-		"region no area": {Kind: jobs.ScopeRegion, ProjectID: "p", PanelID: "x"},
-		"unknown":        {Kind: "galaxy"},
+	valid := []struct {
+		name  string
+		scope jobs.Scope
+	}{
+		{"chapter", jobs.Scope{Kind: jobs.ScopeChapter, ProjectID: "project", ChapterID: "chapter"}},
+		{"page", jobs.Scope{Kind: jobs.ScopePage, ProjectID: "project", PageID: "page"}},
+		{"panel", jobs.Scope{Kind: jobs.ScopePanel, ProjectID: "project", PageID: "page", PanelID: "panel"}},
+		{"layer", jobs.Scope{Kind: jobs.ScopeLayer, ProjectID: "project", PanelID: "panel", LayerID: "layer"}},
+		{"region", jobs.Scope{Kind: jobs.ScopeRegion, ProjectID: "project", PanelID: "panel", Region: json.RawMessage(`{"box":[1,2,3,4]}`)}},
+		{"project", jobs.Scope{Kind: jobs.ScopeProject, ProjectID: "project"}},
+		{"none", none},
 	}
-	for name, s := range cases {
-		if s.Validate() == nil {
-			t.Errorf("%s accepted", name)
+	for _, tc := range valid {
+		t.Run("valid/"+tc.name, func(t *testing.T) {
+			if err := tc.scope.Validate(); err != nil {
+				t.Fatalf("Validate() error = %v", err)
+			}
+		})
+	}
+
+	missing := []struct {
+		name  string
+		scope jobs.Scope
+		want  []string
+	}{
+		{"kind", jobs.Scope{}, []string{"scope kind is required"}},
+		{"unknown kind", jobs.Scope{Kind: "galaxy"}, []string{`unknown scope kind "galaxy"`}},
+		{"chapter ids", jobs.Scope{Kind: jobs.ScopeChapter}, []string{"project_id", "chapter_id"}},
+		{"page ids", jobs.Scope{Kind: jobs.ScopePage}, []string{"project_id", "page_id"}},
+		{"panel ids", jobs.Scope{Kind: jobs.ScopePanel}, []string{"project_id", "page_id", "panel_id"}},
+		{"layer ids", jobs.Scope{Kind: jobs.ScopeLayer}, []string{"project_id", "panel_id", "layer_id"}},
+		{"region fields", jobs.Scope{Kind: jobs.ScopeRegion}, []string{"project_id", "panel_id", "needs region"}},
+		{"project id", jobs.Scope{Kind: jobs.ScopeProject}, []string{"project_id"}},
+	}
+	for _, tc := range missing {
+		t.Run("missing/"+tc.name, func(t *testing.T) {
+			err := tc.scope.Validate()
+			if err == nil {
+				t.Fatal("Validate() accepted incomplete scope")
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("Validate() error = %q, want substring %q", err, want)
+				}
+			}
+		})
+	}
+
+	validByKind := make(map[string]jobs.Scope, len(valid))
+	for _, tc := range valid {
+		validByKind[tc.scope.Kind] = tc.scope
+	}
+	forbiddenIDs := map[string][]string{
+		jobs.ScopeChapter: {"page_id", "panel_id", "layer_id"},
+		jobs.ScopePage:    {"chapter_id", "panel_id", "layer_id"},
+		jobs.ScopePanel:   {"chapter_id", "layer_id"},
+		jobs.ScopeLayer:   {"chapter_id", "page_id"},
+		jobs.ScopeRegion:  {"chapter_id", "page_id", "layer_id"},
+		jobs.ScopeProject: {"chapter_id", "page_id", "panel_id", "layer_id"},
+		jobs.ScopeNone:    {"project_id", "chapter_id", "page_id", "panel_id", "layer_id"},
+	}
+	setID := func(s *jobs.Scope, field string) {
+		switch field {
+		case "project_id":
+			s.ProjectID = "extra"
+		case "chapter_id":
+			s.ChapterID = "extra"
+		case "page_id":
+			s.PageID = "extra"
+		case "panel_id":
+			s.PanelID = "extra"
+		case "layer_id":
+			s.LayerID = "extra"
+		default:
+			t.Fatalf("unknown test field %q", field)
 		}
 	}
-	ok := []jobs.Scope{
-		{Kind: jobs.ScopePanel, ProjectID: "p", PageID: "g", PanelID: "x"},
-		{Kind: jobs.ScopeRegion, ProjectID: "p", PanelID: "x", Region: json.RawMessage(`{"box":[1,2,3,4]}`)},
-		none,
-	}
-	for _, s := range ok {
-		if err := s.Validate(); err != nil {
-			t.Errorf("%+v: %v", s, err)
+	for kind, fields := range forbiddenIDs {
+		for _, field := range fields {
+			t.Run("extraneous/"+kind+"/"+field, func(t *testing.T) {
+				scope := validByKind[kind]
+				setID(&scope, field)
+				err := scope.Validate()
+				if err == nil || !strings.Contains(err.Error(), "forbids "+field) {
+					t.Fatalf("Validate() error = %v, want forbidden %s", err, field)
+				}
+			})
 		}
 	}
+
+	for _, tc := range valid {
+		if tc.scope.Kind == jobs.ScopeRegion {
+			continue
+		}
+		t.Run("forbidden region/"+tc.name, func(t *testing.T) {
+			scope := tc.scope
+			scope.Region = json.RawMessage(`{"box":[1,2,3,4]}`)
+			err := scope.Validate()
+			if err == nil || !strings.Contains(err.Error(), "forbids region") {
+				t.Fatalf("Validate() error = %v, want forbidden region", err)
+			}
+		})
+	}
+
+	for _, region := range []json.RawMessage{nil, json.RawMessage{}, json.RawMessage(`null`), json.RawMessage(" \nnull\t")} {
+		t.Run("required region/"+string(region), func(t *testing.T) {
+			scope := jobs.Scope{Kind: jobs.ScopeRegion, ProjectID: "project", PanelID: "panel", Region: region}
+			err := scope.Validate()
+			if err == nil || !strings.Contains(err.Error(), "needs region") {
+				t.Fatalf("Validate() error = %v, want required region", err)
+			}
+		})
+	}
+
+	t.Run("explicit null is forbidden outside region scope", func(t *testing.T) {
+		scope := jobs.Scope{Kind: jobs.ScopeNone, Region: json.RawMessage(`null`)}
+		err := scope.Validate()
+		if err == nil || !strings.Contains(err.Error(), "forbids region") {
+			t.Fatalf("Validate() error = %v, want forbidden region", err)
+		}
+	})
 }
 
 func TestEnqueueValidatorAndEvents(t *testing.T) {

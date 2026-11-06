@@ -11,6 +11,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/db"
 )
 
 // Handler runs one Go-executor job. Return nil on success (after SetOutput),
@@ -26,6 +28,9 @@ type Run struct {
 	output any
 	actual Cost
 	mu     sync.Mutex
+
+	commitMu  sync.Mutex
+	committed bool
 }
 
 // DecodeInput unmarshals the job input into v.
@@ -69,8 +74,49 @@ func (r *Run) AddActual(c Cost) {
 	r.mu.Unlock()
 }
 
-// ErrCanceled is returned by Run.Progress after the user canceled the job.
-var ErrCanceled = errors.New("jobs: canceled")
+// CommitSideEffect atomically applies fn's database writes and completes the
+// exact job attempt held by this Run. fn must use only tx for database access;
+// it must not perform network or filesystem I/O, call Queue methods, or use a
+// separate database handle. Keep it short because it holds the job row lock.
+// Call AddActual before CommitSideEffect so that usage is included in the same
+// transaction. The returned output is marshaled and stored before commit.
+func (r *Run) CommitSideEffect(ctx context.Context, fn func(context.Context, *db.Tx) (output any, err error)) error {
+	if fn == nil {
+		return errors.New("jobs: side effect callback is nil")
+	}
+
+	r.commitMu.Lock()
+	defer r.commitMu.Unlock()
+
+	r.mu.Lock()
+	if r.committed {
+		r.mu.Unlock()
+		return ErrAlreadyCommitted
+	}
+	actual := r.actual
+	r.mu.Unlock()
+
+	j, err := r.q.completeTx(ctx, r.Job.ID, r.fence(), actual, true, fn)
+	if err != nil {
+		return err
+	}
+
+	// Mark the Run before any after-commit observers execute. Pool.run uses this
+	// flag to avoid a second terminal transition even if the handler later errs.
+	r.mu.Lock()
+	r.committed = true
+	r.mu.Unlock()
+	r.q.finished(ctx, j, "job.done")
+	return nil
+}
+
+// Errors returned by a Run.
+var (
+	// ErrCanceled is returned after the user canceled the job.
+	ErrCanceled = errors.New("jobs: canceled")
+	// ErrAlreadyCommitted is returned by a second CommitSideEffect call.
+	ErrAlreadyCommitted = errors.New("jobs: side effect already committed")
+)
 
 // Pool runs Go-executor jobs with registered handlers.
 type Pool struct {
@@ -225,10 +271,22 @@ func (p *Pool) run(parent context.Context, j *Job) {
 	err := p.invoke(ctx, h, run)
 	close(stopRenew)
 
+	// Serialize the ordinary terminal path with CommitSideEffect. Synchronous
+	// handlers have already released this lock; it also makes a mistakenly
+	// detached commit race safe by allowing only one path to win the lease.
+	run.commitMu.Lock()
+	defer run.commitMu.Unlock()
+
 	bg := context.WithoutCancel(parent)
 	run.mu.Lock()
-	out, actual := run.output, run.actual
+	out, actual, committed := run.output, run.actual, run.committed
 	run.mu.Unlock()
+	if committed {
+		if err != nil {
+			p.log.Warn("jobs: handler returned an error after committing", "job", j.ID, "err", err)
+		}
+		return
+	}
 	switch {
 	case h == nil:
 		_, err = p.q.fail(bg, j.ID, run.fence(), JobError{Code: ErrCodeInternal, Message: "no handler registered for " + j.Type}, actual)
