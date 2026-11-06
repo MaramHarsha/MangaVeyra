@@ -5,6 +5,27 @@
   provider secrets and spend reservations are kept and are part of this plan).
 - Decisions: ADR 0001 (scope), 0002 (embedder), 0003 (spend reservations), 0004 (design addendum).
 
+## Handoff status (2026-11-07)
+
+- **Done (commit "Phase 1 foundation"):** `internal/assets` (implemented, tested), `internal/pagedoc` (document,
+  validation, geometry, 12 layouts; tested), every contract file listed below, the `pagestore` module stub registered
+  in `internal/app/modules.go`, embedded lettering fonts in `internal/lettering/fonts/` (OFL), and the
+  `github.com/tdewolff/canvas` dependency (pure-Go vector drawing with WOFF2 fonts, vertical Japanese via
+  `RichText.SetWritingMode(canvas.VerticalRL)`, PNG and PDF renderers — spike verified).
+- **Not started:** Waves 1–3 below.
+- **Approved contract addition, not yet in `internal/studio/contract.go`:** add
+  `NewProject{Title, Premise, Logline, Style, Format, PageSize, Language string; Genres, Tags []string; PageWidth,
+  PageHeight int; SourceText string}`, `NewCharacter{ProjectID, Name, Kanji, Role, RoleLine, Age, Look, Personality,
+  SpeechStyle, Category string}` and the Service methods `CreateProject(ctx, actor, NewProject) (Project, error)`
+  (owner membership in the same tx), `CreateChapter(ctx, actor, projectID, title) (Chapter, error)`,
+  `CreateCharacter(ctx, actor, NewCharacter) (Character, error)` and `SourceText(ctx, projectID) (string, error)`.
+  The demo seed and the end-to-end test need them.
+- **Review rule from PR #5:** every data-layer test runs on both dialects through a `forEach` helper over
+  `testdb.Dialects()` with `testutil.WithDialect` (see `internal/jobs/jobs_test.go`), so PostgreSQL is exercised
+  whenever `MV_TEST_POSTGRES_URL` is set.
+- **Design references** live outside the repository in `MangaVeyra_All_Pages/` (16 `.dc.html` canvases, 184 screens,
+  `10 Prototype.dc.html`); screen IDs map to routes in `docs/SCREENS.md`.
+
 ## Outcome
 
 On a laptop with no GPU, a creator who connected only an OpenRouter key (or nothing: the built-in placeholder
