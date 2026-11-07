@@ -578,6 +578,22 @@ func (q *Queue) Claim(ctx context.Context, p ClaimParams) (*Job, error) {
 				return err
 			}
 		}
+		if p.Executor == ExecutorWorker {
+			// Registered workers may run on another machine. Until same-host
+			// locality is attested, Local only must not hand any prompt/file to
+			// them. Read uncached after claim-lock contention, not from the
+			// earlier fair-share settings snapshot.
+			current, err := q.settings.InstanceTx(ctx, tx)
+			if err != nil {
+				return err
+			}
+			if err := current.Validate(); err != nil {
+				return err
+			}
+			if current.LocalOnly {
+				return nil
+			}
+		}
 		if p.WorkerID != "" && p.MaxRunning > 0 {
 			var running int
 			if err := tx.Get(ctx, &running, `SELECT COUNT(*) FROM jobs WHERE worker_id = ? AND state = 'running'`, p.WorkerID); err != nil {
