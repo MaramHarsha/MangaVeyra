@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -403,6 +404,10 @@ func (s *store) normalize(ctx context.Context, tx *db.Tx, p *pagedoc.Page) error
 			}
 		}
 	}
+	// Order is the bubble's reading position as the client states it; the
+	// array position is incidental. Sort stably by it before renumbering so a
+	// reordered reading sequence persists (equal values keep array order).
+	sort.SliceStable(p.Bubbles, func(i, j int) bool { return p.Bubbles[i].Order < p.Bubbles[j].Order })
 	for i := range p.Bubbles {
 		b := &p.Bubbles[i]
 		if !db.ValidID(b.ID) {
