@@ -397,7 +397,7 @@ func (s *imageService) dispatchGuard(ctx context.Context, req ImageGenerateReque
 func (s *imageService) GenerateImage(ctx context.Context, req ImageGenerateRequest) (ImageResult, error) {
 	var zero ImageResult
 	n, err := normalizeNeeds(req.Plan.Needs)
-	if err != nil || !imageTask(req.Plan.Task) || !validRoutingMode(req.Plan.RoutingMode) || !db.ValidID(req.ActorID) || !db.ValidID(req.ProjectID) || req.Width != n.Width || req.Height != n.Height || req.Count != n.Count || len(req.References) != n.References || len(req.Prompt) > 64<<10 || strings.TrimSpace(req.Prompt) == "" || !utf8.ValidString(req.Prompt) || len(req.Negative) > 16<<10 || len(req.Style) > 256 || n.Edit != (req.Init != nil) || n.Mask != (req.Mask != nil) {
+	if err != nil || req.CallSlot < 0 || req.CallSlot >= 16 || !imageTask(req.Plan.Task) || !validRoutingMode(req.Plan.RoutingMode) || !db.ValidID(req.ActorID) || !db.ValidID(req.ProjectID) || req.Width != n.Width || req.Height != n.Height || req.Count != n.Count || len(req.References) != n.References || len(req.Prompt) > 64<<10 || strings.TrimSpace(req.Prompt) == "" || !utf8.ValidString(req.Prompt) || len(req.Negative) > 16<<10 || len(req.Style) > 256 || n.Edit != (req.Init != nil) || n.Mask != (req.Mask != nil) {
 		return zero, imageError(CodeBadInput, false, jobs.Cost{})
 	}
 	totalBytes := 0

@@ -24,6 +24,9 @@ func (s *imageService) workerImage(ctx context.Context, req ImageGenerateRequest
 	if err != nil {
 		return result, err
 	}
+	if !validWorkerCallSlot(parent, req) {
+		return result, imageError(CodeBadInput, false, jobs.Cost{})
+	}
 	a := assets.New(s.d.DB, s.d.Store, s.d.Media)
 	files := map[string]string{}
 	saved := []string{}
@@ -63,7 +66,7 @@ func (s *imageService) workerImage(ctx context.Context, req ImageGenerateRequest
 	}
 	digest := hex.EncodeToString(hash.Sum(nil))
 	existing := ""
-	input := map[string]any{"prompt": req.Prompt, "negative": req.Negative, "width": req.Width, "height": req.Height, "n": req.Count, "seed": req.Seed, "style": req.Style, "_parent_attempt": req.Attempt, "_request_digest": digest, "routing_mode": req.Plan.RoutingMode}
+	input := map[string]any{"prompt": req.Prompt, "negative": req.Negative, "width": req.Width, "height": req.Height, "n": req.Count, "seed": req.Seed, "style": req.Style, "_parent_attempt": req.Attempt, "_call_slot": req.CallSlot, "_request_digest": digest, "routing_mode": req.Plan.RoutingMode}
 	child, err := s.d.Jobs.Enqueue(ctx, jobs.EnqueueParams{Type: workerTask(req.Plan.Task, req.Plan.Needs), Scope: parent.Scope, UserID: req.ActorID, Executor: jobs.ExecutorWorker, ProviderID: providerKindWorker, ModelID: req.Plan.ModelID, Input: input, Files: files, ParentID: req.JobID, MaxAttempts: 1, Estimate: jobs.Cost{GPUSeconds: req.Plan.Estimate.GPUSeconds}, Guard: func(ctx context.Context, tx *db.Tx) error {
 		var cur struct {
 			State    string `db:"state"`
@@ -71,8 +74,11 @@ func (s *imageService) workerImage(ctx context.Context, req ImageGenerateRequest
 			Canceled bool   `db:"cancel_requested"`
 			Provider string `db:"provider_id"`
 			Model    string `db:"model_id"`
+			Type     string `db:"type"`
+			Input    string `db:"input"`
+			Executor string `db:"executor"`
 		}
-		query := `SELECT state, attempts, cancel_requested, provider_id, model_id FROM jobs WHERE id = ?`
+		query := `SELECT state, attempts, cancel_requested, provider_id, model_id, type, input, executor FROM jobs WHERE id = ?`
 		if tx.Dialect() == db.Postgres {
 			query += ` FOR UPDATE`
 		}
@@ -81,6 +87,9 @@ func (s *imageService) workerImage(ctx context.Context, req ImageGenerateRequest
 		}
 		if cur.State != jobs.StateRunning || cur.Attempts != req.Attempt || cur.Canceled || cur.Provider != providerKindWorker || cur.Model != req.Plan.ModelID {
 			return jobs.ErrLeaseLost
+		}
+		if !validWorkerCallSlot(&jobs.Job{Type: cur.Type, Executor: cur.Executor, Input: json.RawMessage(cur.Input)}, req) {
+			return errors.New("ai: invalid child call slot")
 		}
 		inst, err := s.d.Settings.InstanceTx(ctx, tx)
 		if err != nil || inst.Validate() != nil || inst.LocalOnly || req.Plan.RoutingMode == ModeLocalOnly {
@@ -97,11 +106,12 @@ func (s *imageService) workerImage(ctx context.Context, req ImageGenerateRequest
 			var p struct {
 				Attempt int    `json:"_parent_attempt"`
 				Digest  string `json:"_request_digest"`
+				Slot    int    `json:"_call_slot"`
 			}
 			if json.Unmarshal([]byte(c.Input), &p) != nil {
 				return errors.New("ai: invalid child input")
 			}
-			if p.Attempt == req.Attempt {
+			if p.Attempt == req.Attempt && p.Slot == req.CallSlot {
 				if p.Digest != digest {
 					return errors.New("ai: conflicting child request")
 				}
@@ -138,18 +148,27 @@ func (s *imageService) workerImage(ctx context.Context, req ImageGenerateRequest
 	for !child.Finished() {
 		select {
 		case <-waitCtx.Done():
-			return result, imageError(CodeTimeout, true, child.Actual)
+			err := imageError(CodeTimeout, true, child.Actual)
+			err.Err = waitCtx.Err()
+			return result, s.workerObservedError(ctx, child, err)
 		case <-ticker.C:
 		}
-		if _, err := s.dispatchGuard(waitCtx, req); err != nil {
-			return result, err
-		}
-		child, err = s.d.Jobs.Get(waitCtx, child.ID)
+		current, err := s.d.Jobs.Get(waitCtx, child.ID)
 		if err != nil {
-			return result, imageError(CodeUpstream, false, jobs.Cost{})
+			failed := imageError(CodeUpstream, false, child.Actual)
+			failed.Err = waitCtx.Err()
+			return result, s.workerObservedError(ctx, child, failed)
+		}
+		child = current
+		result.Actual = child.Actual
+		if _, err := s.dispatchGuard(waitCtx, req); err != nil {
+			return result, s.workerObservedError(ctx, child, err)
 		}
 	}
 	result.Actual = child.Actual
+	if _, err := s.dispatchGuard(waitCtx, req); err != nil {
+		return result, s.workerObservedError(ctx, child, err)
+	}
 	if child.State != jobs.StateDone {
 		code := CodeUpstream
 		retry := false
@@ -198,4 +217,66 @@ func (s *imageService) workerImage(ctx context.Context, req ImageGenerateRequest
 		result.Images = append(result.Images, g)
 	}
 	return result, nil
+}
+
+// A completed worker child is the durable accounting record even when parent
+// cancellation wins the race with the bridge's next poll. Preserve its safe
+// actual in the error without returning pixels from a stale parent attempt.
+func (s *imageService) workerObservedError(ctx context.Context, child *jobs.Job, cause error) *GenerateError {
+	var generated *GenerateError
+	if !errors.As(cause, &generated) {
+		generated = imageError(CodeUpstream, false, jobs.Cost{})
+		if errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) || errors.Is(cause, jobs.ErrLeaseLost) {
+			generated.Err = cause
+		}
+	}
+	copy := *generated
+	if child == nil {
+		return &copy
+	}
+	bg, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if current, err := s.d.Jobs.Get(bg, child.ID); err == nil {
+		child = current
+	}
+	copy.Actual = child.Actual
+	return &copy
+}
+
+// Slot zero preserves old single-call jobs and children without _call_slot.
+// Additional slots are available only to bounded typed image jobs that already
+// declare that exact component in their durable input. Validate before any
+// input storage and again while holding the parent attempt's row lock.
+func validWorkerCallSlot(parent *jobs.Job, req ImageGenerateRequest) bool {
+	if req.CallSlot < 0 || req.CallSlot >= 16 || parent == nil {
+		return false
+	}
+	if req.CallSlot == 0 {
+		return true
+	}
+	if parent.Executor != jobs.ExecutorGo || parent.Type != req.Plan.Task {
+		return false
+	}
+	switch parent.Type {
+	case TaskPanel, TaskRegionEdit, TaskCharacterSheet:
+	default:
+		return false
+	}
+	if len(parent.Input) > 1<<20 {
+		return false
+	}
+	var payload struct {
+		Version int `json:"version"`
+		Plan    struct {
+			Task string `json:"task"`
+		} `json:"plan"`
+		Components []struct {
+			Prompt string `json:"prompt"`
+		} `json:"components"`
+	}
+	if json.Unmarshal(parent.Input, &payload) != nil || payload.Version != 1 || payload.Plan.Task != parent.Type ||
+		len(payload.Components) > 16 || req.CallSlot >= len(payload.Components) {
+		return false
+	}
+	return payload.Components[req.CallSlot].Prompt != "" && payload.Components[req.CallSlot].Prompt == req.Prompt
 }
