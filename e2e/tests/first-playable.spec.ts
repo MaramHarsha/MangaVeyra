@@ -365,7 +365,8 @@ test('fresh install → script → characters → layered art → lettering → 
     } finally { await noJS.close(); }
   });
 
-  await test.step('keep desktop-derived pages usable at phone width', async () => {
+  // Phone layouts are deferred to the end-of-project optimisation pass (owner, 2026-11-07; plan 0004).
+  await test.step.skip('keep desktop-derived pages usable at phone width', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     const viewportIssues: unknown[] = [];
     for (const path of ['/studio/projects', '/studio/characters', '/studio/setting', '/models?cap=image', '/models/routing', '/models/providers/new/connect', story, `/studio/p/${project}/characters`, `/studio/p/${project}/characters/${character}`, `/studio/p/${project}/characters/new`, `/studio/p/${project}/setting`, `/studio/p/${project}/chapters/${chapter}/export`, editor]) {
