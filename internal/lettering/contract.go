@@ -29,7 +29,8 @@ type TextLine struct {
 	Y        float64 `json:"y"`
 	Vertical bool    `json:"vertical"`
 	// Ruby lines are furigana placed beside/above their base text.
-	Ruby bool `json:"ruby,omitempty"`
+	Ruby     bool    `json:"ruby,omitempty"`
+	FontSize float64 `json:"font_size,omitempty"`
 }
 
 // BubbleLayout is the computed geometry of one bubble in one language.
@@ -55,6 +56,13 @@ type BubbleLayout struct {
 	Stroke      string  `json:"stroke"`
 	StrokeWidth float64 `json:"stroke_width"`
 	TextColor   string  `json:"text_color"`
+	// TextPath is the authoritative shaped glyph outline, including ruby,
+	// in page pixels. Editor SVG and export draw the identical path.
+	TextPath        string        `json:"text_path"`
+	Rotate          float64       `json:"rotate"`
+	RotationCenter  pagedoc.Point `json:"rotation_center"`
+	TextStroke      string        `json:"text_stroke,omitempty"`
+	TextStrokeWidth float64       `json:"text_stroke_width,omitempty"`
 }
 
 // Line is one line of dialogue to place automatically.

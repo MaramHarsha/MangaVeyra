@@ -48,9 +48,10 @@ type CharacterSheetRequest struct {
 	ProjectID   string `json:"project_id"`
 	CharacterID string `json:"character_id"`
 	// Count is the number of candidate sheets (1–4).
-	Count       int    `json:"count"`
-	Style       string `json:"style,omitempty"`
-	RoutingMode string `json:"routing_mode,omitempty"`
+	Count             int       `json:"count"`
+	Style             string    `json:"style,omitempty"`
+	RoutingMode       string    `json:"routing_mode,omitempty"`
+	ExpectedUpdatedAt time.Time `json:"expected_updated_at,omitempty"`
 }
 
 // PagesFromScriptRequest lays out pages for a chapter from its script.

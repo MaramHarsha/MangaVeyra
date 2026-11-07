@@ -7,13 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 )
 
 const characterCols = `c.id, c.project_id, c.name, c.kanji, c.role, c.role_line, c.age, c.look, c.personality,
-	c.speech_style, c.category, c.lock_status, c.lock_score, c.portrait_asset_id, c.lora_asset_id, c.trigger_word, c.order_idx`
+	c.speech_style, c.category, c.lock_status, c.lock_score, c.portrait_asset_id, c.lora_asset_id, c.trigger_word, c.order_idx, c.updated_at`
 
 type characterRow struct {
 	ID              string          `db:"id"`
@@ -33,13 +34,14 @@ type characterRow struct {
 	LoraAssetID     sql.NullString  `db:"lora_asset_id"`
 	TriggerWord     string          `db:"trigger_word"`
 	Order           int             `db:"order_idx"`
+	UpdatedAt       time.Time       `db:"updated_at"`
 }
 
 func (r characterRow) character() Character {
 	c := Character{ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Kanji: r.Kanji, Role: r.Role, RoleLine: r.RoleLine,
 		Age: r.Age, Look: r.Look, Personality: r.Personality, SpeechStyle: r.SpeechStyle, Category: r.Category,
 		LockStatus: r.LockStatus, PortraitAssetID: r.PortraitAssetID.String, LoraAssetID: r.LoraAssetID.String,
-		TriggerWord: r.TriggerWord, Refs: []CharacterRef{}, Outfits: []Outfit{}, Order: r.Order}
+		TriggerWord: r.TriggerWord, Refs: []CharacterRef{}, Outfits: []Outfit{}, Order: r.Order, UpdatedAt: r.UpdatedAt.UTC()}
 	if r.LockScore.Valid {
 		v := r.LockScore.Float64
 		c.LockScore = &v

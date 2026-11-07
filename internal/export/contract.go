@@ -2,7 +2,11 @@ package export
 
 // Frozen Phase 1 contract (docs/plans/0002-phase-1-first-playable.md).
 
-import "context"
+import (
+	"context"
+	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/studio"
+)
 
 // Formats.
 const (
@@ -26,9 +30,9 @@ type Trim struct {
 var Trims = []Trim{
 	{ID: "b5", Name: "B5 manga · 182 × 257 mm", WidthMM: 182, HeightMM: 257, BleedMM: 3},
 	{ID: "a5", Name: "A5 · 148 × 210 mm", WidthMM: 148, HeightMM: 210, BleedMM: 3},
-	{ID: "kdp-5x7.5", Name: "KDP manga · 5 × 7.5 in", WidthMM: 127, HeightMM: 190.5, BleedMM: 3.2, KDP: true},
-	{ID: "kdp-5.5x8.5", Name: "KDP · 5.5 × 8.5 in", WidthMM: 139.7, HeightMM: 215.9, BleedMM: 3.2, KDP: true},
-	{ID: "kdp-6x9", Name: "KDP · 6 × 9 in", WidthMM: 152.4, HeightMM: 228.6, BleedMM: 3.2, KDP: true},
+	{ID: "kdp-5x7.5", Name: "KDP manga · 5 × 7.5 in", WidthMM: 127, HeightMM: 190.5, BleedMM: 3.175, KDP: true},
+	{ID: "kdp-5.5x8.5", Name: "KDP · 5.5 × 8.5 in", WidthMM: 139.7, HeightMM: 215.9, BleedMM: 3.175, KDP: true},
+	{ID: "kdp-6x9", Name: "KDP · 6 × 9 in", WidthMM: 152.4, HeightMM: 228.6, BleedMM: 3.175, KDP: true},
 }
 
 // Request describes an export.
@@ -61,6 +65,11 @@ type Result struct {
 type Service interface {
 	// Export renders and stores the file synchronously (used by the export job handler).
 	Export(ctx context.Context, actorUserID string, req Request) (Result, error)
+}
+
+// QueueService enqueues a revision-bound, read-only chapter export.
+type QueueService interface {
+	Enqueue(context.Context, studio.Actor, Request) (*jobs.Job, error)
 }
 
 // JobType is the Go-executor job that runs an export.
