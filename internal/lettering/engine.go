@@ -1,16 +1,11 @@
 package lettering
 
 import (
-	"embed"
 	"errors"
-	"fmt"
-	"image"
 	"image/color"
 	"math"
 	"sort"
-	"strings"
 	"sync"
-	"unicode"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
@@ -18,153 +13,67 @@ import (
 	"github.com/tdewolff/canvas"
 )
 
-//go:embed fonts/*.woff2
-var fontFiles embed.FS
-
-// engine owns immutable font data. The mutex also protects the font shaper's
-// internal caches when multiple export jobs request layouts concurrently.
+// engine owns immutable font data. The mutex also protects the shaper's
+// internal caches and lazy font loading when export jobs lay out pages
+// concurrently.
 type engine struct {
-	fonts map[string]*canvas.Font
+	fonts map[string]*loadedFont
 	mu    sync.Mutex
 }
 
 var _ Engine = (*engine)(nil)
 
-// NewEngine loads only bundled, licensed fonts; no host font or network lookup occurs.
+// NewEngine loads only bundled, licensed fonts; no host font or network lookup
+// occurs. Comic Neue and Bangers load now; the CJK and Devanagari faces load
+// the first time a bubble needs them.
 func NewEngine() (Engine, error) {
-	e := &engine{fonts: map[string]*canvas.Font{}}
-	for key, name := range map[string]string{FontComic: "ComicNeue-Bold", FontSFX: "Bangers-Regular", FontJP: "NotoSansJP-Black"} {
-		data, err := fontFiles.ReadFile("fonts/" + name + ".woff2")
-		if err != nil {
+	fonts, err := newFontSet()
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range []string{FontComic, FontSFX} {
+		if _, err := fonts[key].load(); err != nil {
 			return nil, err
 		}
-		f, err := canvas.LoadFont(data, 0, canvas.FontRegular)
-		if err != nil {
-			return nil, fmt.Errorf("lettering: bundled font %s: %w", key, err)
-		}
-		e.fonts[key] = f
 	}
-	return e, nil
+	return &engine{fonts: fonts}, nil
 }
 
-func fontFor(b pagedoc.Bubble, lang string) string {
-	if b.Style.Font != "" {
-		return b.Style.Font
-	}
-	if strings.HasPrefix(lang, "ja") {
-		return FontJP
-	}
-	if b.Kind == pagedoc.BubbleSFX {
-		return FontSFX
-	}
-	return FontComic
-}
-func (e *engine) face(key string, size float64) *canvas.FontFace {
-	return e.fonts[key].Face(size*72/25.4, canvas.Black)
-}
 func finite(x float64) bool { return !math.IsNaN(x) && !math.IsInf(x, 0) }
 
-type textRun struct {
-	text       string
-	start, end int
-	x, y       float64
-	vertical   bool
-}
-
-// splitText wraps by measured glyph advances, retaining rune offsets for ruby.
-// A word is kept together where possible; Japanese punctuation never starts a line.
-func splitText(text string, face *canvas.FontFace, width float64, vertical bool, size float64) []textRun {
-	rs := []rune(text)
-	var runs []textRun
-	for start := 0; start < len(rs); {
-		if rs[start] == '\n' {
-			runs = append(runs, textRun{start: start, end: start})
-			start++
-			continue
-		}
-		end := start
-		lastSpace := -1
-		for end < len(rs) && rs[end] != '\n' {
-			advance := face.TextWidth(string(rs[start : end+1]))
-			if vertical {
-				advance = float64(end-start+1) * size
-			}
-			if advance > width && end > start {
-				break
-			}
-			if unicode.IsSpace(rs[end]) {
-				lastSpace = end
-			}
-			end++
-		}
-		if end < len(rs) && rs[end] != '\n' && lastSpace > start && !vertical {
-			end = lastSpace + 1
-		}
-		if end < len(rs) && strings.ContainsRune("、。，．！？）」』】〕〉》", rs[end]) {
-			end++
-		}
-		if end == start {
-			end++
-		}
-		runs = append(runs, textRun{text: strings.TrimRightFunc(string(rs[start:end]), unicode.IsSpace), start: start, end: end, vertical: vertical})
-		start = end
-		if start < len(rs) && rs[start] == '\n' {
-			start++
-		}
-	}
-	if len(runs) == 0 {
-		runs = []textRun{{}}
-	}
-	return runs
+// layoutStats is internal evidence for tests: missing glyphs, fonts used and
+// the line breaks chosen.
+type layoutStats struct {
+	notdef int
+	fonts  map[string]bool
+	lines  []string
 }
 
 func (e *engine) Layout(b pagedoc.Bubble, lang string) (BubbleLayout, error) {
+	l, _, err := e.layout(b, lang)
+	return l, err
+}
+
+func (e *engine) layout(b pagedoc.Bubble, lang string) (BubbleLayout, layoutStats, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	var stats layoutStats
 	switch b.Kind {
 	case pagedoc.BubbleSpeech, pagedoc.BubbleThought, pagedoc.BubbleShout, pagedoc.BubbleWhisper, pagedoc.BubbleCaption, pagedoc.BubbleSFX:
 	default:
-		return BubbleLayout{}, errors.New("lettering: invalid bubble kind")
-	}
-	if lang == "" {
-		if _, ok := b.Texts["en"]; ok {
-			lang = "en"
-		} else if _, ok := b.Texts["ja"]; ok {
-			lang = "ja"
-		} else {
-			keys := make([]string, 0, len(b.Texts))
-			for k := range b.Texts {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			if len(keys) > 0 {
-				lang = keys[0]
-			}
-		}
+		return BubbleLayout{}, stats, errors.New("lettering: invalid bubble kind")
 	}
 	if len(b.Texts) > 0 {
-		if _, ok := b.Texts[lang]; !ok {
-			if base := strings.SplitN(lang, "-", 2)[0]; b.Texts[base].Text != "" {
-				lang = base
-			} else if _, ok = b.Texts["en"]; ok {
-				lang = "en"
-			} else {
-				keys := make([]string, 0, len(b.Texts))
-				for k := range b.Texts {
-					keys = append(keys, k)
-				}
-				sort.Strings(keys)
-				lang = keys[0]
-			}
-		}
+		lang = pagedoc.TextLanguage(b.Texts, lang)
 	}
 	key := fontFor(b, lang)
-	if e.fonts[key] == nil {
-		return BubbleLayout{}, errors.New("lettering: unknown font")
+	info, ok := lookupFont(key)
+	if !ok {
+		return BubbleLayout{}, stats, errors.New("lettering: unknown font")
 	}
 	r := b.Box
 	if !finite(r.X) || !finite(r.Y) || !finite(r.W) || !finite(r.H) || r.W <= 0 || r.H <= 0 || !finite(b.Style.Rotate) || !finite(b.Style.Size) || b.Style.Size < 0 || b.Style.Size > 1000 {
-		return BubbleLayout{}, errors.New("lettering: invalid geometry")
+		return BubbleLayout{}, stats, errors.New("lettering: invalid geometry")
 	}
 	pad := math.Max(8, math.Min(r.W, r.H)*.16)
 	box := pagedoc.Rect{X: r.X + pad, Y: r.Y + pad, W: math.Max(1, r.W-2*pad), H: math.Max(1, r.H-2*pad)}
@@ -175,40 +84,42 @@ func (e *engine) Layout(b pagedoc.Bubble, lang string) (BubbleLayout, error) {
 			size = math.Min(100, box.H*.8)
 		}
 	}
-	vertical := b.Vertical && strings.HasPrefix(lang, "ja")
+	vertical := b.Vertical && pagedoc.VerticalAllowed(lang)
 	t := b.Texts[lang]
+	textRunes := len([]rune(t.Text))
 	for _, ruby := range t.Ruby {
-		if ruby.Start < 0 || ruby.End <= ruby.Start || ruby.End > len([]rune(t.Text)) || len([]rune(ruby.Text)) > pagedoc.MaxTextRunes {
-			return BubbleLayout{}, errors.New("lettering: invalid ruby")
+		if ruby.Start < 0 || ruby.End <= ruby.Start || ruby.End > textRunes || len([]rune(ruby.Text)) > pagedoc.MaxTextRunes {
+			return BubbleLayout{}, stats, errors.New("lettering: invalid ruby")
 		}
 	}
-	if len([]rune(t.Text)) > pagedoc.MaxTextRunes {
-		return BubbleLayout{}, errors.New("lettering: text too long")
+	if textRunes > pagedoc.MaxTextRunes {
+		return BubbleLayout{}, stats, errors.New("lettering: text too long")
 	}
+	st, err := e.shape(t.Text, lang, key, vertical)
+	if err != nil {
+		return BubbleLayout{}, stats, err
+	}
+	stats.notdef, stats.fonts = st.notdef, st.fonts
 	minSize := math.Min(size, 12.0)
-	var runs []textRun
-	overflow := false
 	gap := 1.25
 	if len(t.Ruby) > 0 {
 		gap = 1.6
 	}
+	if !vertical {
+		// Scripts with tall marks (Devanagari) need more leading.
+		gap = math.Max(gap, (st.ascent+st.descent)*1.06)
+	}
+	limit, across := box.W, box.H
+	if vertical {
+		limit, across = box.H, box.W
+	}
+	var lines []textLine
+	overflow := false
 	for {
-		face := e.face(key, size)
-		limit := box.W
-		if vertical {
-			limit = box.H
-		}
-		runs = splitText(t.Text, face, limit, vertical, size)
-		fits := float64(len(runs))*size*gap <= box.H
-		if vertical {
-			fits = float64(len(runs))*size*gap <= box.W
-		}
-		for _, run := range runs {
-			w := face.TextWidth(run.text)
-			if vertical {
-				w = float64(len([]rune(run.text))) * size
-			}
-			fits = fits && w <= limit+.01
+		lines = st.wrap(limit / size)
+		fits := float64(len(lines))*size*gap <= across
+		for _, line := range lines {
+			fits = fits && line.advance*size <= limit+.01
 		}
 		if fits {
 			break
@@ -219,56 +130,67 @@ func (e *engine) Layout(b pagedoc.Bubble, lang string) (BubbleLayout, error) {
 		}
 		size = math.Max(minSize, size-1)
 	}
-	l := BubbleLayout{BubbleID: b.ID, Lang: lang, TextBox: box, Font: key, FontSize: size, LineHeight: size * gap, FontWeight: 700, Fill: "#FFFFFF", Stroke: "#070A12", StrokeWidth: 3, TextColor: "#070A12", Lines: []TextLine{}, Overflow: overflow, Rotate: b.Style.Rotate, RotationCenter: pagedoc.Point{X: r.X + r.W/2, Y: r.Y + r.H/2}}
-	switch key {
-	case FontJP:
-		l.FontFamily = "Noto Sans JP"
-		l.FontWeight = 900
-	case FontSFX:
-		l.FontFamily = "Bangers"
-		l.FontWeight = 400
-	default:
-		l.FontFamily = "Comic Neue"
-	}
+	l := BubbleLayout{BubbleID: b.ID, Lang: lang, TextBox: box, Font: key, FontFamily: info.family, FontWeight: info.weight,
+		FontSize: size, LineHeight: size * gap, Fill: "#FFFFFF", Stroke: "#070A12", StrokeWidth: 3, TextColor: "#070A12",
+		Lines: []TextLine{}, Overflow: overflow, Rotate: b.Style.Rotate, RotationCenter: pagedoc.Point{X: r.X + r.W/2, Y: r.Y + r.H/2}}
 	if b.Kind == pagedoc.BubbleWhisper {
 		l.StrokeWidth = 1.5
 	}
 	shape, err := bubblePath(b)
 	if err != nil {
-		return BubbleLayout{}, err
+		return BubbleLayout{}, stats, err
 	}
 	l.ShapePath = shape
 	if b.Style.Stroke {
 		l.TextStroke = "#FFFFFF"
 		l.TextStrokeWidth = math.Max(1, size*.06)
 	}
-	face := e.face(key, size)
-	collector := &pathCollector{}
-	for i := range runs {
-		run := &runs[i]
-		if vertical {
-			run.x = box.X + box.W - (box.W-float64(len(runs))*size*gap)/2 - size*.5 - float64(i)*size*gap
-			run.y = box.Y + (box.H-float64(len([]rune(run.text)))*size)/2
-		} else {
-			w := face.TextWidth(run.text)
-			run.x = box.X + (box.W-w)/2
-			if b.Style.Align == "left" {
-				run.x = box.X
-			} else if b.Style.Align == "right" {
-				run.x = box.X + box.W - w
-			}
-			run.y = box.Y + (box.H-float64(len(runs))*size*gap)/2 + size + float64(i)*size*gap
-		}
-		l.Lines = append(l.Lines, TextLine{Text: run.text, X: run.x, Y: run.y, Vertical: vertical, FontSize: size})
-		drawRun(collector, face, run.text, run.x, run.y, vertical, size)
+	rubySize := size * .45
+	rubyBand := 0.0
+	if len(t.Ruby) > 0 {
+		rubyBand = rubySize * 1.1
 	}
-	rs := []rune(t.Text)
+	collector := &pathCollector{path: &canvas.Path{}}
+	type placed struct {
+		textLine
+		x, y float64
+	}
+	positions := make([]placed, len(lines))
+	block := float64(len(lines)) * size * gap
+	// Vertical columns share one top edge (the block is centred as a whole).
+	longest := 0.0
+	for _, line := range lines {
+		longest = math.Max(longest, line.advance*size)
+	}
+	for i, line := range lines {
+		var x, y float64
+		if vertical {
+			// Columns run right to left; ruby takes a band on each column's right.
+			slotLeft := box.X + box.W - (box.W-block)/2 - float64(i+1)*size*gap
+			x = slotLeft + size/2 + (size*gap-size-rubyBand)/2
+			y = box.Y + (box.H-longest)/2
+		} else {
+			w := line.advance * size
+			x = box.X + (box.W-w)/2
+			if b.Style.Align == "left" {
+				x = box.X
+			} else if b.Style.Align == "right" {
+				x = box.X + box.W - w
+			}
+			slotTop := box.Y + (box.H-block)/2 + float64(i)*size*gap
+			y = slotTop + rubyBand + (size*gap-rubyBand-(st.ascent+st.descent)*size)/2 + st.ascent*size
+		}
+		positions[i] = placed{line, x, y}
+		l.Lines = append(l.Lines, TextLine{Text: string(st.runes[line.start:line.end]), X: x, Y: y, Vertical: vertical, FontSize: size})
+		stats.lines = append(stats.lines, string(st.runes[line.start:line.end]))
+		st.draw(collector, line.start, line.end, x, y, size)
+	}
 	for _, ruby := range t.Ruby {
 		// A ruby annotation spanning wrapped lines is split proportionally across
 		// those lines. Every annotation rune is drawn exactly once.
 		rr := []rune(ruby.Text)
-		for _, run := range runs {
-			a, z := max(run.start, ruby.Start), min(run.end, ruby.End)
+		for _, pos := range positions {
+			a, z := max(pos.start, ruby.Start), min(pos.end, ruby.End)
 			if a >= z {
 				continue
 			}
@@ -278,53 +200,41 @@ func (e *engine) Layout(b pagedoc.Bubble, lang string) (BubbleLayout, error) {
 				continue
 			}
 			annotation := string(rr[ra:rz])
-			rubySize := size * .45
-			rf := e.face(FontJP, rubySize)
-			x, y := run.x, run.y
+			rs, err := e.shape(annotation, lang, key, vertical)
+			if err != nil {
+				return BubbleLayout{}, stats, err
+			}
+			stats.notdef += rs.notdef
+			for k := range rs.fonts {
+				stats.fonts[k] = true
+			}
+			prefix, base := st.advance(pos.start, a)*size, st.advance(a, z)*size
+			length := rs.advance(0, len(rs.runes)) * rubySize
+			x, y := pos.x, pos.y
 			if vertical {
-				x += size * .65
-				y += float64(a-run.start)*size + (float64(z-a)*size-float64(rz-ra)*rubySize)/2
+				x += size/2 + rubyBand/2
+				y += prefix + (base-length)/2
 			} else {
-				prefix := face.TextWidth(string(rs[run.start:a]))
-				base := face.TextWidth(string(rs[a:z]))
-				x += prefix + (base-rf.TextWidth(annotation))/2
-				y -= size * 1.05
+				x += prefix + (base-length)/2
+				y -= st.ascent*size + rubySize*.2
 			}
 			l.Lines = append(l.Lines, TextLine{Text: annotation, X: x, Y: y, Vertical: vertical, Ruby: true, FontSize: rubySize})
-			drawRun(collector, rf, annotation, x, y, vertical, rubySize)
+			rs.draw(collector, 0, len(rs.runes), x, y, rubySize)
 		}
 	}
 	l.TextPath = collector.path.ToSVG()
-	return l, nil
+	return l, stats, nil
 }
 
-// collect shaped outlines in page space; both SVG and canvas receive these
-// paths rather than measuring or shaping the text a second time.
-type pathCollector struct{ path canvas.Path }
+// pathCollector gathers shaped outlines in page space; both SVG and canvas
+// receive these paths rather than measuring or shaping the text a second time.
+type pathCollector struct{ path *canvas.Path }
 
-func (*pathCollector) Size() (float64, float64) { return 0, 0 }
-func (r *pathCollector) RenderPath(p *canvas.Path, _ canvas.Style, m canvas.Matrix) {
-	r.path = *r.path.Append(p.Copy().Transform(m))
-}
-func (r *pathCollector) RenderText(t *canvas.Text, m canvas.Matrix) { t.RenderTo(r, m, 0) }
-func (*pathCollector) RenderImage(image.Image, canvas.Matrix)       {}
-func drawRun(r *pathCollector, f *canvas.FontFace, s string, x, y float64, vertical bool, size float64) {
-	if s == "" {
+func (r *pathCollector) add(p *canvas.Path, m canvas.Matrix) {
+	if p.Empty() {
 		return
 	}
-	if vertical {
-		rt := canvas.NewRichText(f)
-		rt.SetWritingMode(canvas.VerticalRL)
-		rt.WriteString(s)
-		text := rt.ToText(0, 0, canvas.Left, canvas.Top, nil)
-		tmp := &pathCollector{}
-		text.RenderTo(tmp, canvas.Identity.Scale(1, -1), 0)
-		bounds := tmp.path.Bounds()
-		r.RenderPath(&tmp.path, canvas.DefaultStyle, canvas.Identity.Translate(x-bounds.W()/2-bounds.X0, y-bounds.Y0))
-	} else {
-		p, _ := f.ToPath(s)
-		r.RenderPath(p, canvas.DefaultStyle, canvas.Identity.Translate(x, y).Scale(1, -1))
-	}
+	r.path = r.path.Append(p.Transform(m))
 }
 func ellipse(x, y, w, h float64) *canvas.Path {
 	p := &canvas.Path{}
@@ -499,9 +409,12 @@ func overlap(a, b pagedoc.Rect) bool {
 	return a.X < b.X+b.W && b.X < a.X+a.W && a.Y < b.Y+b.H && b.Y < a.Y+a.H
 }
 func (e *engine) AutoPlace(p pagedoc.Page, panelID string, lines []Line, lang string, vertical bool) ([]pagedoc.Bubble, error) {
-	if lang == "" {
+	if canonical := pagedoc.NormalizeContentLanguage(lang); canonical != "" {
+		lang = canonical
+	} else if lang == "" {
 		lang = "en"
 	}
+	vertical = vertical && pagedoc.VerticalAllowed(lang)
 	pn := p.Panel(panelID)
 	if pn == nil {
 		return nil, errors.New("lettering: panel not found")
@@ -510,38 +423,46 @@ func (e *engine) AutoPlace(p pagedoc.Page, panelID string, lines []Line, lang st
 		return nil, errors.New("lettering: too many bubbles")
 	}
 	bounds := pagedoc.Bounds(pn.Points)
-	var out []pagedoc.Bubble
-	occupied := make([]pagedoc.Rect, 0, len(p.Bubbles))
-	for _, b := range p.Bubbles {
-		occupied = append(occupied, b.Box)
-	}
 	for _, line := range lines {
-		kind, shape := line.Kind, pagedoc.ShapeEllipse
-		switch kind {
-		case pagedoc.BubbleSpeech:
-		case pagedoc.BubbleThought:
-			shape = pagedoc.ShapeCloud
-		case pagedoc.BubbleCaption:
-			shape = pagedoc.ShapeRect
-		case pagedoc.BubbleSFX:
-			shape = pagedoc.ShapeNone
-		case pagedoc.BubbleShout:
-			shape = pagedoc.ShapeBurst
-		case pagedoc.BubbleWhisper:
+		switch line.Kind {
+		case pagedoc.BubbleSpeech, pagedoc.BubbleThought, pagedoc.BubbleCaption, pagedoc.BubbleSFX, pagedoc.BubbleShout, pagedoc.BubbleWhisper:
 		default:
 			return nil, errors.New("lettering: invalid dialogue kind")
 		}
-		w, h := math.Min(360, bounds.W*.44), math.Min(220, bounds.H*.28)
-		if vertical {
-			w, h = math.Min(180, bounds.W*.28), math.Min(360, bounds.H*.44)
+	}
+	w, h := math.Min(360, bounds.W*.44), math.Min(220, bounds.H*.28)
+	if vertical {
+		w, h = math.Min(180, bounds.W*.28), math.Min(360, bounds.H*.44)
+	}
+	if w < 32 || h < 32 {
+		if len(lines) == 0 {
+			return nil, nil
 		}
-		if w < 32 || h < 32 {
-			return nil, errors.New("lettering: panel too small")
+		return nil, errors.New("lettering: panel too small")
+	}
+	// A crowded panel gets uniformly smaller bubbles (auto-fit shrinks the
+	// text) before placement gives up; bubbles never overlap.
+	for _, scale := range []float64{1, .8, .64, .5, .4} {
+		if w*scale < 32 || h*scale < 32 {
+			break
 		}
-		found := false
-		var box pagedoc.Rect
+		if out, ok := e.place(p, pn, bounds, lines, lang, vertical, w*scale, h*scale); ok {
+			return out, nil
+		}
+	}
+	return nil, errors.New("lettering: no room for bubbles without overlap")
+}
+
+func (e *engine) place(p pagedoc.Page, pn *pagedoc.Panel, bounds pagedoc.Rect, lines []Line, lang string, vertical bool, w, h float64) ([]pagedoc.Bubble, bool) {
+	var out []pagedoc.Bubble
+	occupied := make([]pagedoc.Rect, 0, len(p.Bubbles)+len(lines))
+	for _, b := range p.Bubbles {
+		occupied = append(occupied, b.Box)
+	}
+	// find scans rows in reading order for the first free w×h box inside the panel.
+	find := func() (pagedoc.Rect, bool) {
 		step := math.Max(12, math.Min(w, h)*.2)
-		for y := bounds.Y + 8; y+h <= bounds.Y+bounds.H-8 && !found; y += step {
+		for y := bounds.Y + 8; y+h <= bounds.Y+bounds.H-8; y += step {
 			for off := 8.0; off+w <= bounds.W-8; off += step {
 				x := bounds.X + off
 				if p.Direction == pagedoc.DirRTL {
@@ -563,16 +484,29 @@ func (e *engine) AutoPlace(p pagedoc.Page, panelID string, lines []Line, lang st
 					}
 				}
 				if clear {
-					box = r
-					found = true
-					break
+					return r, true
 				}
 			}
 		}
-		if !found {
-			return nil, errors.New("lettering: no room for bubbles without overlap")
+		return pagedoc.Rect{}, false
+	}
+	for _, line := range lines {
+		kind, shape := line.Kind, pagedoc.ShapeEllipse
+		switch kind {
+		case pagedoc.BubbleThought:
+			shape = pagedoc.ShapeCloud
+		case pagedoc.BubbleCaption:
+			shape = pagedoc.ShapeRect
+		case pagedoc.BubbleSFX:
+			shape = pagedoc.ShapeNone
+		case pagedoc.BubbleShout:
+			shape = pagedoc.ShapeBurst
 		}
-		b := pagedoc.Bubble{ID: db.NewID(), PanelID: panelID, Kind: kind, Shape: shape, Order: len(p.Bubbles) + len(out), Box: box, SpeakerCharacterID: line.CharacterID, ScriptPanelID: line.ScriptPanelID, Vertical: vertical, Style: pagedoc.BubbleStyle{AutoFit: true}, Texts: map[string]pagedoc.BubbleText{lang: {Text: line.Text, Status: "machine", Source: pagedoc.ProvenanceAI}}}
+		box, found := find()
+		if !found {
+			return nil, false
+		}
+		b := pagedoc.Bubble{ID: db.NewID(), PanelID: pn.ID, Kind: kind, Shape: shape, Order: len(p.Bubbles) + len(out), Box: box, SpeakerCharacterID: line.CharacterID, ScriptPanelID: line.ScriptPanelID, Vertical: vertical, Style: pagedoc.BubbleStyle{AutoFit: true}, Texts: map[string]pagedoc.BubbleText{lang: {Text: line.Text, Status: "machine", Source: pagedoc.ProvenanceAI}}}
 		if kind == pagedoc.BubbleSFX {
 			b.Style.Rotate = -12
 			b.Style.Stroke = true
@@ -583,7 +517,7 @@ func (e *engine) AutoPlace(p pagedoc.Page, panelID string, lines []Line, lang st
 		out = append(out, b)
 		occupied = append(occupied, box)
 	}
-	return out, nil
+	return out, true
 }
 
 func provide(d *core.Deps, e Engine) { core.Provide[Engine](d, e) }
