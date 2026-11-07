@@ -21,12 +21,13 @@ type Module struct {
 
 // New creates the module.
 func New(d *core.Deps) *Module {
-	svc := &service{queue: d.Jobs, auth: d.Auth, db: d.DB}
+	svc := &service{queue: d.Jobs, auth: d.Auth, db: d.DB, settings: d.Settings, store: d.Store}
 	// Script inputs carry the project's private adaptation source.
 	if d.Jobs != nil {
-		d.Jobs.MarkPrivateInput(JobScript, JobCharacterSheet, JobPanel, JobRegionEdit, JobPagesFromScript, JobLetterPage)
+		d.Jobs.MarkPrivateInput(JobScript, JobCharacterSheet, JobPanel, JobRegionEdit, JobPagesFromScript, JobLetterPage, JobPage, JobRepair, JobTrain, JobScore, "character.score", "character.train")
 	}
 	core.Provide[Service](d, svc)
+	core.Provide[ControlService](d, svc)
 	return &Module{d: d, svc: svc}
 }
 
@@ -53,5 +54,5 @@ func (m *Module) Init(context.Context) error {
 
 // JobHandlers implements the Phase 1 durable generation handlers.
 func (m *Module) JobHandlers() map[string]jobs.Handler {
-	return map[string]jobs.Handler{JobScript: m.svc.handleScript, JobCharacterSheet: m.svc.handleImage, JobPanel: m.svc.handleImage, JobRegionEdit: m.svc.handleImage, JobPagesFromScript: m.svc.handlePages}
+	return map[string]jobs.Handler{JobScript: m.svc.handleScript, JobCharacterSheet: m.svc.handleImage, JobPanel: m.svc.handleImage, JobRegionEdit: m.svc.handleImage, JobPagesFromScript: m.svc.handlePages, JobPage: m.svc.handleControlArt, JobRepair: m.svc.handleControlArt, JobTrain: m.svc.handleLock, JobScore: m.svc.handleLock}
 }

@@ -280,3 +280,37 @@ segments, Mark all read and the compact 760 px notification list. Existing token
   pages, POST forms and Refresh. Timestamps explicitly label UTC.
 - **Narrow widths:** existing responsive patterns stack queue rows/cards and wrap header actions. The unapproved
   mobile artboards remain deferred, following the owner's instruction.
+
+## 10. Phase 2 control states (D4/D10/D12 and C3/C4)
+
+The approved desktop workbenches use the full canvas plus a 340 px inspector, a 52 px bar and the handoff's
+two-proof composition. D4 uses 340×480 proofs and an arrow; D12 uses 380×300 character proofs, the warning outline
+and the arrow. D10 uses 400 px proofs, compact history rows, branch section and paired footer actions. The normal
+filmstrip/footer and redundant history shortcut are hidden in these workbenches. No mobile-artboard layout is used.
+
+- **Actual data:** chapter/page/character names, reference thumbnails, measured drift, versions, route and estimates
+  replace samples. An absent result uses the existing dashed State/Notice pattern; it never shows a fabricated
+  97% repair score. A successful measured repair uses the existing success token; a low result remains a warning.
+- **D10 basic history:** one real `main` branch and the latest 50 snapshots are shown. The selected snapshot is the
+  second proof with the designed accent outline. Restore uses the existing confirmation dialog and creates a new
+  revision. New branch/Merge branch stay visible, disabled and labelled Soon until Phase 6. UTC timestamps and
+  localized action labels replace sample author/time/change strings. A Close icon follows the existing inspector
+  pattern so the creator can return to the normal editor.
+- **D4 source and detection:** Upload and Draw here are active; Camera remains disabled Soon. The three designed
+  check rows describe the actual saved layout, character layers and editable speech. Automatic detection is Soon,
+  rather than claiming invented detected counts. A helper states limits and the unchanged-content scope. Pointer
+  drawing has an upload alternative; the canvas dimensions are bounded even for extreme page aspect ratios.
+- **D12 unavailable/evidence states:** no kept reference, unassessed/outfit-pending, locked targets, no eligible
+  worker and failed/canceled work use existing Notice, badge, progress and disabled-control patterns. Selections
+  are bounded to 24 character layers per action. A narrow helper explains that limit. Quote errors retain the
+  workbench and disable dispatch until Refresh succeeds. Leaving aborts obsolete requests and protects an unsaved
+  sketch. The before proof is retained after repair; the drift list and selected target revisions refresh.
+- **C3/C4 evidence:** the existing Character Lock card contains actual status, evidence count, pending outfit count,
+  optional training/assessment actions, queue progress and the D12 link. Similarity is explicitly not an identity
+  guarantee. Missing capabilities/three distinct references keep training unavailable. No sample percentage or
+  invented training duration is shown. C4 links to the real character status after keeping a reference.
+- **Pose input:** the existing Leap/Crouch/Run cards show their own skeletons. Sketch opens the normalized joint
+  editor; arrow keys (Shift for larger steps) and pointer dragging move joints. Its helper and clear control use
+  existing inspector patterns. Generated control images are machine inputs, not a new product illustration style.
+
+Desktop and basic 390×844 evidence is recorded in [the control QA record](../qa/phase-2-control-2026-11-08.md).

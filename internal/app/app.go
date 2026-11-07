@@ -182,6 +182,8 @@ func jobNotifier(d *core.Deps) func(context.Context, *jobs.Job) {
 		}
 		var kind, key string
 		switch {
+		case j.State == jobs.StateDone && j.Type == "character.lock_train":
+			kind, key = notify.KindLockTraining, "notify.kind.lock_ready"
 		case j.State == jobs.StateFailed:
 			kind, key = notify.KindJobFailed, "notify.kind.job_failed"
 		case j.State == jobs.StateDone && j.Batch:
@@ -195,8 +197,19 @@ func jobNotifier(d *core.Deps) func(context.Context, *jobs.Job) {
 		locale := d.Settings.MustInstance(ctx).DefaultLocale
 		_ = d.DB.Get(ctx, &locale, `SELECT locale FROM users WHERE id = ?`, j.UserID)
 		titleCtx := i18n.WithLocale(ctx, locale)
+		link := "/queue?job=" + j.ID
+		if kind == notify.KindLockTraining {
+			var p struct {
+				ProjectID   string `json:"project_id"`
+				CharacterID string `json:"character_id"`
+			}
+			if j.DecodeInput(&p) == nil {
+				link = "/studio/p/" + p.ProjectID + "/characters/" + p.CharacterID
+			}
+			body = i18n.T(titleCtx, "notify.lock.ready_body")
+		}
 		if _, err := d.Notify.Notify(ctx, notify.Input{UserID: j.UserID, Kind: kind, Title: i18n.T(titleCtx, key), Body: body,
-			Link: "/queue?job=" + j.ID, Data: map[string]any{"job_id": j.ID}, GroupKey: kind}); err != nil {
+			Link: link, Data: map[string]any{"job_id": j.ID}, GroupKey: kind}); err != nil {
 			d.Log.Warn("notify job result", "job", j.ID, "err", err)
 		}
 	}

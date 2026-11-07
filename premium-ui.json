@@ -7,7 +7,8 @@
     "internal/editor",
     "web/src/styles",
     "internal/activityui",
-    "web/src/lib"
+    "web/src/lib",
+    "web/src/islands/editor"
   ],
   "locale": "ja-JP",
   "canonicalMap": "UX-CONTRACT.md",

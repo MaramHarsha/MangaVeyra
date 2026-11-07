@@ -11,6 +11,8 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/lettering"
 	"github.com/MaramHarsha/MangaVeyra/internal/pagestore"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
+	"github.com/MaramHarsha/MangaVeyra/internal/storage"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 )
 
@@ -19,6 +21,8 @@ import (
 var ErrDeferredFeature = errors.New("gen: feature deferred until a later gate")
 
 type service struct {
+	settings  *settings.Service
+	store     storage.Store
 	queue     *jobs.Queue
 	auth      *auth.Service
 	text      ai.TextService

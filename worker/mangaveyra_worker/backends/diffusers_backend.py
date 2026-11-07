@@ -29,7 +29,7 @@ from mangaveyra_worker.diffusion.loras import LoraRef, resolve_loras
 from mangaveyra_worker.diffusion.spec import ModelSpec, fits
 from mangaveyra_worker.errors import BadInput, JobFailure
 from mangaveyra_worker.gpu import max_vram_mb
-from mangaveyra_worker.imaging import render_openpose
+from mangaveyra_worker.imaging import reference_guide, render_openpose
 from mangaveyra_worker.jobs import (
     Job,
     JobContext,
@@ -428,7 +428,7 @@ class DiffusersBackend(Backend):
                 )
                 loaded_ip = True
                 pipe.set_ip_adapter_scale(float(ip.get("scale", 0.6)))
-                extra["ip_adapter_image"] = refs[0]
+                extra["ip_adapter_image"] = reference_guide(refs)
             return fn(extra)
         finally:
             if loaded_lora:
@@ -499,6 +499,8 @@ class DiffusersBackend(Backend):
             pose_img = ctx.image("pose_image").resize((base_w, base_h))
         elif not sheet and isinstance(inp.get("pose"), dict):
             pose_img = render_openpose(inp["pose"], base_w, base_h)
+        if pose_img is not None and not spec.controlnet_openpose:
+            raise BadInput("This model has no configured OpenPose ControlNet")
         refs = ctx.images("ref_")
         loras = self._loras(job, ctx)
         with self._base(spec) as entry:
@@ -506,9 +508,6 @@ class DiffusersBackend(Backend):
                 pipe = self._derived(entry, spec, "text2img", spec.controlnet_openpose)
             else:
                 pipe = entry.pipe
-                if pose_img is not None:
-                    ctx.log.info("no OpenPose ControlNet configured; generating without the pose")
-                    pose_img = None
 
             def render(i: int, s: int, offset: int, total: int) -> Image.Image:
                 def run(extra: dict[str, Any]) -> Image.Image:
@@ -788,7 +787,7 @@ class DiffusersBackend(Backend):
                 tests.append({"key": ctx.upload_image(f"test-{i + 1}", img, meta={"seed": s}), "seed": s})
         ctx.progress(0.97, message="scoring", force=True)
         try:
-            scores, method = score_identity(refs, test_images, self.config.embedder)
+            scores, method = score_identity(refs, test_images, self.config.embedder, self.config.dino_model_dir)
             score = round(sum(scores) / len(scores), 3)
         except Exception as exc:  # scoring is advisory; the LoRA is still useful
             ctx.log.warning("could not score test images", extra={"fields": {"error": str(exc)}})

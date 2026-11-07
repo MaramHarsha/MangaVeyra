@@ -117,6 +117,7 @@ type Service interface {
 	// SetLayerAssetTx stores art in a layer, bumping the page version and
 	// recording a snapshot. Fails with ErrLocked if the page, panel or target
 	// layer is locked.
+	SetLayerAssetsTx(ctx context.Context, tx *db.Tx, pageID string, in []SetLayerAsset, ch Change) ([]pagedoc.Layer, error)
 	SetLayerAssetTx(ctx context.Context, tx *db.Tx, in SetLayerAsset, ch Change) (pagedoc.Layer, error)
 	// SetBubblesTx replaces all bubbles of a page (auto-lettering, translation).
 	SetBubblesTx(ctx context.Context, tx *db.Tx, pageID string, bubbles []pagedoc.Bubble, ch Change) error

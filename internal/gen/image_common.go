@@ -26,11 +26,12 @@ type storedActor struct {
 	TokenID string `json:"token_id,omitempty"`
 }
 type component struct {
-	LayerID     string `json:"layer_id"`
-	Kind        string `json:"kind"`
-	CharacterID string `json:"character_id,omitempty"`
-	Name        string `json:"name"`
-	Prompt      string `json:"prompt"`
+	ReferenceHash string `json:"reference_hash,omitempty"`
+	LayerID       string `json:"layer_id"`
+	Kind          string `json:"kind"`
+	CharacterID   string `json:"character_id,omitempty"`
+	Name          string `json:"name"`
+	Prompt        string `json:"prompt"`
 	// ADR 0009 fields. OwnRefs means References lists exactly this
 	// component's reference assets (possibly none); payloads queued before
 	// it send every job reference, as they always did.
@@ -58,6 +59,15 @@ type imagePayload struct {
 	Style             string          `json:"style"`
 	PanelType         string          `json:"panel_type,omitempty"`
 	BatchID           string          `json:"batch_id,omitempty"`
+	ContextPages      []contextPage   `json:"context_pages,omitempty"`
+	Pose              map[string]any  `json:"pose,omitempty"`
+	SketchAssetID     string          `json:"sketch_asset_id,omitempty"`
+	Strength          float64         `json:"strength,omitempty"`
+}
+
+type contextPage struct {
+	ID      string `json:"id"`
+	Version int    `json:"version"`
 }
 type imageOutput struct {
 	Candidates   []Candidate `json:"candidates"`
@@ -155,7 +165,7 @@ func decodeImagePayload(raw json.RawMessage) (imagePayload, error) {
 	if _, err := strictDecodeJSON(raw, 1<<20, &p); err != nil {
 		return p, studio.ErrInvalid
 	}
-	if p.Version != imagePayloadVersion || !db.ValidID(p.Actor.UserID) || (p.Actor.TokenID != "" && !db.ValidID(p.Actor.TokenID)) || p.Scope.Validate() != nil || len(p.Components) < 1 || len(p.Components) > maxComponents || validateImagePlan(p.Plan) != nil || len(p.References) != p.Plan.Needs.References || p.Plan.Needs.Edit != (p.InitAssetID != "") || p.Plan.Needs.Mask != (p.MaskAssetID != "") {
+	if p.Version != imagePayloadVersion || !db.ValidID(p.Actor.UserID) || (p.Actor.TokenID != "" && !db.ValidID(p.Actor.TokenID)) || p.Scope.Validate() != nil || len(p.Components) < 1 || len(p.Components) > maxComponents || validateImagePlan(p.Plan) != nil || imageRefCount(p) != p.Plan.Needs.References || p.Plan.Needs.Edit != (p.InitAssetID != "" || p.SketchAssetID != "") || p.Plan.Needs.Mask != (p.MaskAssetID != "") {
 		return p, studio.ErrInvalid
 	}
 	if err := validatePayloadTarget(p); err != nil {
@@ -213,6 +223,23 @@ func (s *service) checkImageTx(ctx context.Context, tx *db.Tx, p imagePayload, a
 	if err := s.studio.CheckScopeWritableTx(ctx, tx, p.Scope); err != nil {
 		return err
 	}
+	for _, neighbour := range p.ContextPages {
+		var row struct {
+			Version   int    `db:"version"`
+			ChapterID string `db:"chapter_id"`
+			ProjectID string `db:"project_id"`
+		}
+		if err := tx.Get(ctx, &row, `SELECT version, chapter_id, project_id FROM pages WHERE id=?`, neighbour.ID); err != nil {
+			return studio.ErrConflict
+		}
+		var chapterID string
+		if err := tx.Get(ctx, &chapterID, `SELECT chapter_id FROM pages WHERE id=?`, p.PageID); err != nil {
+			return err
+		}
+		if row.Version != neighbour.Version || row.ChapterID != chapterID || row.ProjectID != p.Scope.ProjectID {
+			return studio.ErrConflict
+		}
+	}
 	if p.CharacterID != "" {
 		c, err := s.studio.GetCharacterTx(ctx, tx, p.CharacterID)
 		if err != nil {
@@ -238,6 +265,19 @@ func (s *service) checkImageTx(ctx context.Context, tx *db.Tx, p imagePayload, a
 		return pagestore.ErrVersion
 	}
 	for _, c := range p.Components {
+		if c.ReferenceHash != "" {
+			character, err := s.studio.GetCharacterTx(ctx, tx, c.CharacterID)
+			if err != nil {
+				return err
+			}
+			hash, err := referenceStamp(ctx, tx, character)
+			if err != nil {
+				return err
+			}
+			if hash != c.ReferenceHash {
+				return studio.ErrConflict
+			}
+		}
 		if l := pn.Layer(c.LayerID); l != nil && l.Locked {
 			return pagestore.ErrLocked
 		}

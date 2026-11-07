@@ -40,6 +40,7 @@ type bibleMedia struct {
 	Default                          bool
 }
 type biblePage struct {
+	Lock                                                                          gen.LockStatus
 	Kind, Title, Query, Status, Format, Sort, View, Filter, Target, Notice, Error string
 	Projects                                                                      []studio.ProjectSummary
 	Project                                                                       studio.Project
@@ -88,6 +89,8 @@ func (m *Module) RegisterBibleRoutes(r *core.Router) {
 	r.Page("GET /studio/p/{project}/characters", m.charactersPage, core.RequireSession)
 	r.Page("GET /studio/p/{project}/characters/new", m.newCharacterPage, core.RequireSession)
 	r.Page("POST /studio/p/{project}/characters/new", m.createBibleCharacter, core.RequireSession)
+	r.Page("GET /studio/p/{project}/characters/{character}/lock", m.lockFragment, core.RequireSession)
+	r.Page("POST /studio/p/{project}/characters/{character}/lock/{action}", m.lockAction, core.RequireSession)
 	r.Page("GET /studio/p/{project}/characters/{character}", m.characterPage, core.RequireSession)
 	r.Page("POST /studio/p/{project}/characters/{character}", m.updateBibleCharacter, core.RequireSession)
 	r.Page("POST /studio/p/{project}/characters/{character}/references", m.uploadBibleReference, core.RequireSession)
@@ -210,7 +213,7 @@ func (m *Module) bibleBase(r *http.Request, kind string) (biblePage, studio.Acto
 }
 
 func (m *Module) charactersPage(w http.ResponseWriter, r *http.Request) error {
-	v, _, err := m.bibleBase(r, "characters")
+	v, actor, err := m.bibleBase(r, "characters")
 	if err != nil {
 		return pageObjectError(err)
 	}
@@ -224,6 +227,12 @@ func (m *Module) charactersPage(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	for _, c := range v.Characters {
+		lockState, err := m.control.LockStatus(r.Context(), actor, v.Project.ID, c.ID)
+		if err != nil {
+			return err
+		}
+		c.LockStatus = lockState.Status
+		c.LockScore = lockState.Score
 		v.Counts[c.Category]++
 		if c.LockStatus == "ready" {
 			v.Counts["locked"]++
@@ -239,10 +248,10 @@ func (m *Module) charactersPage(w http.ResponseWriter, r *http.Request) error {
 			first, last = parts[0], parts[1]
 		}
 		lock := -1.0
-		if c.LockStatus == "ready" && c.LockScore != nil {
+		if c.LockScore != nil {
 			lock = *c.LockScore
 		}
-		status := i18n.T(r.Context(), "bible.lock.soon")
+		status := i18n.T(r.Context(), "bible.lock.unscored")
 		if c.LockStatus == "training" || c.LockStatus == "failed" {
 			status = i18n.T(r.Context(), "bible.lock."+c.LockStatus)
 		}
@@ -333,6 +342,16 @@ func (m *Module) loadBibleCharacter(r *http.Request, v *biblePage, id string) er
 	if c.ProjectID != v.Project.ID {
 		return studio.ErrNotFound
 	}
+	actor, err := browserActor(r)
+	if err != nil {
+		return err
+	}
+	v.Lock, err = m.control.LockStatus(r.Context(), actor, v.Project.ID, c.ID)
+	if err != nil {
+		return err
+	}
+	c.LockScore = v.Lock.Score
+	c.LockStatus = v.Lock.Status
 	v.Character = c
 	v.Form = formFromCharacter(c)
 	v.Images[c.PortraitAssetID] = m.assetURL(r.Context(), c.PortraitAssetID)

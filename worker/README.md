@@ -46,7 +46,8 @@ timeout of at least `MV_DRAIN_TIMEOUT_S` (default 120 s) so running jobs can fin
 ```sh
 python3.12 -m venv .venv && . .venv/bin/activate
 pip install ./worker                              # mock backend only (Pillow, httpx) — works anywhere
-pip install './worker[vision]'                    # + OpenCV panel/bubble detection, identity scoring
+pip install './worker[vision]'                    # + OpenCV panel/bubble detection
+pip install './worker[character-lock]'            # + explicit offline DINOv2 scoring (weights supplied separately)
 pip install './worker[diffusers,comfyui,vision]'  # everything (install a CUDA build of torch first, see GPU notes)
 
 export MV_SERVER=http://studio.local:8080 MV_WORKER_TOKEN=mvw_…
@@ -97,7 +98,8 @@ Every option is an environment variable; a TOML file (`--config worker.toml` or 
 | `MV_COMFYUI_WORKFLOWS` | — | Directory of ComfyUI workflow bundles |
 | `MV_COMFYUI_TIMEOUT_S` | `1800` | Longest a ComfyUI prompt may run |
 | `MV_OCR_ENGINE` / `MV_OCR_URL` | `auto` | `auto`, `manga-ocr`, `tesseract`, `http`, `none` |
-| `MV_EMBEDDER` | `auto` | Character Lock embedder: `auto`, `insightface`, `clip`, `structural` |
+| `MV_EMBEDDER` | `auto` | Character Lock embedder: `auto`/`dinov2`; legacy explicit `insightface`, `clip`, `structural` |
+| `MV_DINO_MODEL_DIR` | — | Explicit local DINOv2 Small directory containing config, processor config and safetensors; no runtime downloads |
 | `MV_MOCK_MODELS` | `mock` | Model ids the mock backend advertises |
 | `MV_MOCK_STEP_DELAY` | `0.05` | Seconds per simulated step (makes progress bars realistic) |
 | `MV_MAX_DOWNLOAD_MB` | `64` | Largest input file the worker downloads |
@@ -264,10 +266,19 @@ from outputs (it can contain local paths).
   manga). A page without structure yields one full-page panel, so imports always produce an editable page.
 - **Bubbles**: enclosed, roughly elliptical white regions that contain ink (OpenCV). When an OCR engine is present,
   the vision backend fills their text.
-- **Character Lock** (`character.score`): cosine similarity between each candidate and the centroid of the reference
-  embeddings. Embedders, best first: InsightFace ArcFace (`pip install insightface`; only when every image has a
-  detectable face), OpenCLIP (`pip install open_clip_torch`), and a numpy structural descriptor that always works.
-  The output carries `method` so the UI can say which one scored.
+- **Character Lock** (`character.score`): the automatic learned backend is DINOv2 Small. Install the optional
+  `character-lock` dependencies explicitly and provision `facebook/dinov2-small` (Apache-2.0) into
+  `MV_DINO_MODEL_DIR` yourself. The three required files are `config.json`, `preprocessor_config.json` and
+  `model.safetensors`. Loading is offline, safetensors-only, with remote model code disabled. The vision backend
+  advertises `character-lock-dinov2-v1` only when dependencies/files are present. OpenCV is independently required
+  for panel detection, not for learned scoring.
+  The method is `dinov2-small-v1:<weights SHA256>`. Identity compares candidate/reference-centroid embeddings;
+  an explicitly supplied outfit reference gets a separate lower-body comparison. The server records current
+  reference/asset fingerprints and rejects structural/mock evidence. Missing learned weights mean unavailable,
+  not a synthetic fallback percentage. Legacy InsightFace/CLIP/structural modes remain explicit diagnostic
+  opt-ins; the application never uses them as authoritative Character Lock evidence.
+  DINOv2 is a general visual feature model: these are uncalibrated similarities, not identity probabilities.
+  The real Phase 2 30-page run failed the 0.90 policy threshold; see [ADR 0010](../docs/decisions/0010-phase-2-scoped-control-and-character-evidence.md).
 - **OCR** (`ocr`), pluggable via `MV_OCR_ENGINE`:
   - `manga-ocr` (Apache-2.0, `pip install manga-ocr`) — Japanese manga text incl. vertical lines, run per bubble;
   - `tesseract` (`pip install pytesseract` + the `tesseract` binary and language packs) — Latin scripts;

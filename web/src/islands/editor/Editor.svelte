@@ -3,6 +3,8 @@
  import Button from './Button.svelte';
  import CanvasStage from './CanvasStage.svelte';
  import RegionMask from './RegionMask.svelte';
+ import ControlWorkbench from './ControlWorkbench.svelte';
+ import PoseTool from './PoseTool.svelte';
  import {request, APIError} from './api';
  import {showToast} from '../../lib/toast';
  import {
@@ -52,8 +54,10 @@
 
  /* ---- interface state ---- */
  let mode = $state(bootMode === 'lettering' ? 'lettering' : 'pages');
- let tool = $state(bootTool === 'region' ? 'region' : 'select');
- let tray = $state(bootTray === 'layouts' || bootTray === 'variations' ? bootTray : 'properties');
+ let tool = $state(['region','sketch','lockfix'].includes(bootTool) ? bootTool : 'select');
+ let controlDirty=$state(false);
+ const controlMode=$derived<'history'|'sketch'|'lockfix'|null>(tray==='history'?'history':tool==='sketch'?'sketch':tool==='lockfix'?'lockfix':null);
+ let tray = $state(bootTray === 'layouts' || bootTray === 'variations' || bootTray==='history' ? bootTray : 'properties');
  let zoom = $state('100');
  let menu = $state('');
  let panelID = $state(initial.current?.page.panels[0]?.id || '');
@@ -80,7 +84,7 @@
  let rectangle = $state<Rect>({x: 0, y: 0, w: 100, h: 100}), rectangleSelection = $state<Rect | null>(null), regionWidth = $state(0);
  let rubyStart = $state(0), rubyEnd = $state(1), rubyText = $state('');
  let dragBubble = $state('');
- let confirmTitle = $state(''), confirmBody = $state(''), confirmAction: (() => void) | null = null;
+ let confirmTitle = $state(''), confirmBody = $state(''), confirmLabel=$state(''), confirmAction: (() => void) | null = null;
 
  /* ---- derived ---- */
  const panel = $derived(page?.panels.find(p => p.id === panelID));
@@ -92,7 +96,7 @@
  const activeLayout = $derived(pickerLayouts.find(l => l.id === pickedLayout));
  const selectedCandidate = $derived(candidates.find(c => c.index === candidateIndex));
  // Page-level edits (layouts) need no selected panel; panel edits do.
- const writablePage = $derived(!!page && initial.permissions.art && !initial.chapter.locked && !page.locked && !page.panels.some(p => p.locked) && !busy);
+ const writablePage = $derived(!!page && initial.permissions.art && !initial.chapter.locked && !page.locked && !page.panels.some(p => p.locked || p.layers.some(l=>l.locked&&l.kind!=='lettering')) && !busy);
  const writableArt = $derived(!!page && !!panel && initial.permissions.art && !initial.chapter.locked && !page.locked && !panel.locked && !busy);
  const writableLetter = $derived(!!page && !!panel && initial.permissions.letter && !initial.chapter.locked && !page.locked && !panel.locked && !textLayer?.locked && !busy);
  const selectedText = $derived(bubble?.texts[lang] || {text: '', source: 'human', status: 'draft'});
@@ -175,7 +179,7 @@
  function panelNameOf(id?: string) { const p = pages.length && page ? page.panels.findIndex(v => v.id === id) : -1; return p >= 0 && page ? `${page.number}.${p + 1}` : ''; }
 
  /* ---- drafts and saving ---- */
- function emitDirty() { if (owner) document.dispatchEvent(new CustomEvent('mv:unsaved', {detail: {owner, dirty: dirty || mask !== null}})); }
+ function emitDirty() { if (owner) document.dispatchEvent(new CustomEvent('mv:unsaved', {detail: {owner, dirty: dirty || mask !== null || controlDirty}})); }
  function sync() { if (!history) return; page = clone(history.current); dirty = history.dirty; canUndo = history.past.length > 0; canRedo = history.future.length > 0; emitDirty(); }
  function mark(next: Page, preview = true) {
   if (!history) return;
@@ -222,17 +226,17 @@
  async function flush(): Promise<boolean> { return !dirty ? true : autosave.flush(); }
  // leave runs proceed once the draft is saved, else asks through the shared unsaved dialog.
  async function leave(proceed: () => void) {
-  if (!dirty && !mask) { proceed(); return; }
-  if (dirty && await flush() && !mask) { proceed(); return; }
-  document.dispatchEvent(new CustomEvent('mv:guard-navigation', {detail: {proceed: () => { dirty = false; mask = null; emitDirty(); proceed(); }, trigger: document.activeElement instanceof HTMLElement ? document.activeElement : undefined}}));
+  if (!dirty && !mask && !controlDirty) { proceed(); return; }
+  if (dirty && await flush() && !mask && !controlDirty) { proceed(); return; }
+  document.dispatchEvent(new CustomEvent('mv:guard-navigation', {detail: {proceed: () => { dirty = false; mask = null; controlDirty=false; emitDirty(); proceed(); }, trigger: document.activeElement instanceof HTMLElement ? document.activeElement : undefined}}));
  }
  function followLink(e: MouseEvent, href: string) {
-  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (!dirty && !mask)) return;
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (!dirty && !mask && !controlDirty)) return;
   e.preventDefault();
   void leave(() => location.assign(href));
  }
  function guard(proceed: () => void) {
-  if (dirty || mask) document.dispatchEvent(new CustomEvent('mv:guard-navigation', {detail: {proceed, trigger: document.activeElement instanceof HTMLElement ? document.activeElement : undefined}}));
+  if (dirty || mask || controlDirty) document.dispatchEvent(new CustomEvent('mv:guard-navigation', {detail: {proceed, trigger: document.activeElement instanceof HTMLElement ? document.activeElement : undefined}}));
   else proceed();
  }
  function selectPanel(id: string) { panelID = id; layerID = page?.panels.find(p => p.id === id)?.layers.find(l => l.kind !== 'lettering')?.id || ''; const b = page?.bubbles.find(v => v.panel_id === id); if (b) bubbleID = b.id; }
@@ -241,9 +245,9 @@
  // never shows a form that edits nothing.
  $effect(() => { const p = page, id = panelID; if (p && !p.panels.some(v => v.id === id)) untrack(() => selectPanel(p.panels[0]?.id || '')); });
  function selectBubble(id: string) { bubbleID = id; const b = page?.bubbles.find(v => v.id === id); if (b?.panel_id) panelID = b.panel_id; if (mode !== 'lettering') switchMode('lettering'); tray = 'properties'; tool = 'select'; }
- function setMask(blob: Blob | null) { mask = blob; emitDirty(); }
- function switchMode(next: string) { if (dirty) void flush(); mode = next; tool = 'select'; tray = 'properties'; menu = ''; }
- function confirm(title: string, body: string, action: () => void) { confirmTitle = title; confirmBody = body; confirmAction = action; void tick().then(() => dialog.showModal()); }
+ function setMask(blob: Blob | null) { if(blob&&tool!=='region')return;mask = blob; emitDirty(); }
+ function switchMode(next: string) { void leave(()=>{mode=next;tool='select';tray='properties';menu='';}); }
+ function confirm(title: string, body: string, action: () => void, label=t('confirm')) { confirmTitle = title; confirmBody = body;confirmLabel=label; confirmAction = action; void tick().then(() => dialog.showModal()); }
  function accept() { const action = confirmAction; confirmAction = null; dialog.close(); action?.(); }
  function fail(e: unknown) {
   if (e instanceof DOMException && e.name === 'AbortError') return;
@@ -332,12 +336,20 @@
   })();
   if (locked) confirm(t('unlock'), t('unlock.body'), perform); else perform();
  }
- async function openHistory() {
-  menu = '';
-  if (!page) return;
-  tray = 'history';
-  try { versions = (await request<{versions: Version[]}>(`${pageAPI()}/history`)).versions; } catch (e) { fail(e); }
+ async function openHistory() { if (!page || !await flush()) return; guard(()=>{menu='';tool='select';tray='history';const url=new URL(location.href);url.searchParams.set('panel','history');url.searchParams.delete('tool');historyURL(url);}); }
+ async function openControl(next:'sketch'|'lockfix') { if(!page||jobRunning||!await flush())return;guard(()=>{jobID='';activeJob=null;candidates=[];tool=next;tray='properties';mode='pages';const url=new URL(location.href);url.searchParams.set('tool',next);url.searchParams.delete('panel');url.searchParams.delete('job');historyURL(url);}); }
+ function closeControl(){guard(()=>{tool='select';tray='properties';controlDirty=false;emitDirty();const url=new URL(location.href);url.searchParams.delete('tool');url.searchParams.delete('panel');historyURL(url);});}
+ function controlJob(j:Job){activeJob=j;jobID=j.id;candidates=[];const url=new URL(location.href);url.searchParams.set('job',jobID);historyURL(url);void pollJob();scheduleQueue(0);}
+ async function preparePageRun(){
+  if(!page||busy||jobRunning||!await flush())return;
+  busy=true;error='';
+  try{const out=await request<{quote:{layers:number;placeholder:boolean;estimate:{usd?:number;gpu_seconds?:number}};model_name:string}>(`${pageAPI()}/quote`);const q=out.quote;
+   const cost=q.placeholder?t('control.quote_placeholder'):(q.estimate.usd||0)>0?t('control.quote',{route:out.model_name,amount:new Intl.NumberFormat(initial.lang,{style:'currency',currency:'USD',minimumFractionDigits:6,maximumFractionDigits:6}).format(q.estimate.usd||0)}):t('control.quote_local',{route:out.model_name,seconds:Math.ceil(q.estimate.gpu_seconds||0)});
+   confirm(t('control.regenerate_page'),t('control.page_confirm',{number:page.number,count:q.layers})+' '+cost,()=>void regeneratePage(),t('control.regenerate_page'));
+  }catch(e){fail(e);}finally{busy=false;}
  }
+ async function regeneratePage(){if(!page||busy||jobRunning||!await flush())return;busy=true;error='';try{const out=await request<{job:Job}>(`${pageAPI()}/regenerate`,'POST',{base_version:page.version});controlJob(out.job);}catch(e){fail(e);}finally{busy=false;}}
+
  function revert(v: Version) {
   confirm(t('history.revert'), t('history.body', {number: v.number}), () => void (async () => {
    if (!await flush()) return;
@@ -433,6 +445,7 @@
  function makeRegion() { if (!layer?.asset) { error = t('region.no_art'); return; } if (activeJob && activeJob.type !== 'region.edit') { clearTimeout(pollTimer); jobAbort?.abort(); activeJob = null; jobID = ''; candidates = []; } tool = 'region'; mode = 'pages'; tray = 'properties'; scope = 'region'; }
  function closeRegion() { guard(() => { tool = 'select'; mask = null; scope = 'panel'; emitDirty(); }); }
  async function generate(kind = scope, layerOverride = '') {
+  if(kind==='page'){await preparePageRun();return;}
   if (!page || !panel || !initial.permissions.generate || busy) return;
   const maskForRequest = mask;
   if (!await flush()) return;
@@ -468,6 +481,9 @@
     const out = await request<{job: Job; candidates: Candidate[]}>(`${pageAPI()}/jobs/${jobID}`, 'GET', undefined, jobAbort.signal);
     const was = activeJob?.state;
     activeJob = out.job; candidates = out.candidates;
+    if(out.job.state==='done'&&['page.generate','character.repair'].includes(out.job.type||'')){
+     if(dirty){conflict=true;error=t('error.conflict');}else{install(await request<PageResponse>(pageAPI()));await refreshPages(false);}
+    }
     if (!candidates.some(c => c.index === candidateIndex)) candidateIndex = candidates[0]?.index || 0;
     if (was !== out.job.state) scheduleQueue(0);
    }
@@ -584,7 +600,7 @@
 {#snippet chip(l: Layer)}
  {@const c = characters.find(v => v.id === l.character_id)}
  {@const name = c?.name || label(l)}
- {@const score = l.lock_score ?? c?.lock_score}
+ {@const score = l.lock_score}
  <button type="button" class="mv-ed__chip" class:selected={l.id === layerID} aria-pressed={l.id === layerID} title={name} onclick={() => layerID = l.id}>
   <span class={`mv-avatar mv-avatar--xs mv-avatar--c${avatarTone(l.character_id || l.id)}`} aria-hidden="true">{initials(name)}</span>
   <span class="mv-ed__chip-name">{name}</span>
@@ -593,12 +609,13 @@
 {/snippet}
 
 <svelte:window onkeydown={key} onpointerdown={outside}/>
-<div bind:this={owner} class={`mv-ed${tray === 'layouts' ? ' mv-ed--layouts' : ''}${tool === 'region' ? ' mv-ed--region' : ''}${mode === 'lettering' ? ' mv-ed--lettering' : ''}`} aria-busy={busy}>
+<div bind:this={owner} class={`mv-ed${tray === 'layouts' ? ' mv-ed--layouts' : ''}${tool === 'region' ? ' mv-ed--region' : ''}${mode === 'lettering' ? ' mv-ed--lettering' : ''}${controlMode ? ' mv-ed--control' : ''}${controlMode==='history'?' mv-ed--history':''}`} aria-busy={busy}>
  <header class="mv-ed__bar">
   <a class="mv-ed__back" href={`/studio/p/${initial.project.id}/story/${initial.chapter.id}`} aria-label={t('back')} onclick={(e) => followLink(e, `/studio/p/${initial.project.id}/story/${initial.chapter.id}`)}><img class="mv-only-dark" src="/static/brand/mark-color-on-dark-gate-blue.svg" width="24" height="24" alt=""/><img class="mv-only-light" src="/static/brand/mark-color-on-light-gate-blue.svg" width="24" height="24" alt=""/></a>
   <div class="mv-ed__crumbs">
    <span class="mv-ed__project" title={initial.project.title}>{initial.project.title}</span>
    <i class="ti ti-chevron-right mv-ed__crumb" aria-hidden="true"></i>
+   {#if controlMode==='history'}<strong class="mv-ed__chapter-static">{t('control.history_header',{chapter:initial.chapter.number,page:page?.number||1})}</strong>{:else}
    <div class="mv-ed__menu-wrap mv-ed__chapter-wrap">
     <button type="button" class="mv-ed__chapter" aria-haspopup="menu" aria-expanded={menu === 'chapters'} title={`${initial.project.title} · ${t('chapter', {number: initial.chapter.number, title: initial.chapter.title})}`} onclick={(e) => toggleMenu('chapters', e)}>
      <strong>{t('chapter', {number: initial.chapter.number, title: initial.chapter.title})}</strong><i class="ti ti-chevron-down" aria-hidden="true"></i><span class="mv-sr-only">{t('chapter.switch')}</span>
@@ -611,21 +628,22 @@
      </div>
     {/if}
    </div>
+   {/if}
   </div>
   <div class="mv-ed__history-buttons">
    <Button variant="bare" icon="arrow-back-up" label={t('undo')} small disabled={!canUndo || busy} onclick={undo}/>
    <Button variant="bare" icon="arrow-forward-up" label={t('redo')} small disabled={!canRedo || busy} onclick={redo}/>
   </div>
   <nav class="mv-seg mv-ed__modes" aria-label={t('mode')}>
-   <button type="button" class="mv-seg__item" aria-pressed={mode === 'pages'} onclick={() => switchMode('pages')}>{t('pages')}</button>
-   <button type="button" class="mv-seg__item" aria-pressed={mode === 'lettering'} onclick={() => switchMode('lettering')}>{t('lettering')}</button>
+   <button type="button" class="mv-seg__item" aria-pressed={mode === 'pages'} disabled={busy} onclick={() => switchMode('pages')}>{t('pages')}</button>
+   <button type="button" class="mv-seg__item" aria-pressed={mode === 'lettering'} disabled={busy} onclick={() => switchMode('lettering')}>{t('lettering')}</button>
    <button type="button" class="mv-seg__item" disabled>{t('translate')}<span class="mv-soon">{t('soon')}</span></button>
    <button type="button" class="mv-seg__item" disabled>{t('animate')}<span class="mv-soon">{t('soon')}</span></button>
   </nav>
   <div class="mv-ed__bar-end">
    <button type="button" class="mv-ed__collaboration mv-iconlink" disabled aria-label={`${t('collaboration')} · ${t('soon')}`} title={`${t('collaboration')} · ${t('soon')}`}><i class="ti ti-users" aria-hidden="true"></i><span class="mv-soon">{t('soon')}</span></button>
    <span class={`mv-meter mv-ed__meter${meter.idle ? ' mv-meter--idle' : ''}${meter.offline ? ' mv-meter--offline' : ''}`} role="status" aria-label={meter.title} title={meter.title}><i class="ti ti-cpu" aria-hidden="true"></i><span class="mv-bar mv-meter__bar" style:--mv-p={`${meter.load}%`} aria-hidden="true"></span><span class="mv-meter__label">{meter.text}</span></span>
-   <Button variant="bare" icon="history" label={t('history.title')} small disabled={!page} onclick={() => void openHistory()}/>
+   <span class="mv-ed__history-shortcut"><Button variant="bare" icon="history" label={t('history.title')} small disabled={!page || busy} onclick={() => void openHistory()}/></span>
    <div class="mv-ed__menu-wrap">
     <button type="button" class="mv-btn mv-btn--sm mv-ed__zoom" aria-haspopup="menu" aria-expanded={menu === 'zoom'} aria-label={t('zoom.level', {value: zoom})} onclick={(e) => toggleMenu('zoom', e)}><i class="ti ti-zoom-in" aria-hidden="true"></i><span>{zoom}%</span></button>
     {#if menu === 'zoom'}
@@ -652,6 +670,7 @@
        <button type="button" class="mv-menu__item" role="menuitem" disabled={!initial.permissions.art || busy || page.locked} onclick={() => void openLayouts()}><i class="ti ti-layout-grid" aria-hidden="true"></i>{t('page.change_layout')}</button>
        <button type="button" class="mv-menu__item" role="menuitem" disabled={!initial.permissions.art || busy || pages[0]?.id === page.id} onclick={() => void reorder(-1)}><i class="ti ti-arrow-up" aria-hidden="true"></i>{t('page.previous')}</button>
        <button type="button" class="mv-menu__item" role="menuitem" disabled={!initial.permissions.art || busy || pages.at(-1)?.id === page.id} onclick={() => void reorder(1)}><i class="ti ti-arrow-down" aria-hidden="true"></i>{t('page.next')}</button>
+       <button type="button" class="mv-menu__item" role="menuitem" disabled={!writablePage||!initial.permissions.generate||jobRunning} onclick={()=>{menu='';void preparePageRun();}}><i class="ti ti-sparkles" aria-hidden="true"></i>{t('control.regenerate_page')}</button>
        <button type="button" class="mv-menu__item" role="menuitem" onclick={() => void openHistory()}><i class="ti ti-history" aria-hidden="true"></i>{t('history.title')}</button>
        <div class="mv-menu__sep" role="separator"></div>
        <button type="button" class="mv-menu__item" role="menuitem" disabled={!initial.permissions.lock || busy} onclick={() => void lockTarget('page')}><i class={`ti ti-${page.locked ? 'lock-open' : 'lock'}`} aria-hidden="true"></i>{page.locked ? t('unlock_page') : t('lock_page')}</button>
@@ -694,7 +713,7 @@
       <button type="button" class="mv-ed__layer-select" onclick={() => { if (l.kind === 'lettering') switchMode('lettering'); else { layerID = l.id; if (mode === 'lettering') switchMode('pages'); } }}>
        <i class={`ti ti-${l.kind === 'lettering' ? 'message-circle' : l.kind === 'character' ? 'user' : l.kind === 'fx' ? 'bolt' : 'photo'}`} aria-hidden="true"></i>
        <span>{name}</span>
-       <small>{l.kind === 'lettering' ? t('bubble.count', {count: page?.bubbles.filter(b => b.panel_id === panel!.id).length || 0}) : l.kind === 'character' && (l.lock_score ?? characters.find(c => c.id === l.character_id)?.lock_score) !== undefined ? t('lock_score', {score: Math.round((l.lock_score ?? characters.find(c => c.id === l.character_id)?.lock_score ?? 0) * 100)}) : l.provenance === 'ai' ? t('ai') : l.provenance === 'mixed' ? t('mixed') : t('human')}</small>
+       <small>{l.kind === 'lettering' ? t('bubble.count', {count: page?.bubbles.filter(b => b.panel_id === panel!.id).length || 0}) : l.kind === 'character' && l.lock_score !== undefined ? t('lock_score', {score: Math.round((l.lock_score ?? 0) * 100)}) : l.provenance === 'ai' ? t('ai') : l.provenance === 'mixed' ? t('mixed') : t('human')}</small>
       </button>
       <button type="button" class="mv-iconlink" aria-label={l.visible ? t('layer.hide_named', {name}) : t('layer.show_named', {name})} disabled={!writableArt || l.locked} onclick={() => toggleVisible(l)}><i class={`ti ti-${l.visible ? 'eye' : 'eye-off'}`} aria-hidden="true"></i></button>
       <button type="button" class="mv-iconlink mv-ed__layer-lock" class:locked={l.locked} aria-label={l.locked ? t('layer.unlock_named', {name}) : t('layer.lock_named', {name})} disabled={!initial.permissions.lock || busy} onclick={() => { layerID = l.kind === 'lettering' ? layerID : l.id; void lockTarget('layer', l.id); }}><i class={`ti ti-${l.locked ? 'lock' : 'lock-open'}`} aria-hidden="true"></i></button>
@@ -704,6 +723,9 @@
   </section>
  </aside>
 
+ {#if controlMode && page}
+  {#key `${page.id}:${controlMode}`}<ControlWorkbench kind={controlMode} {page} api={initial.api} lang={initial.lang} chapter={initial.chapter.number} characterID={new URLSearchParams(location.search).get('character')||layer?.character_id||characterLayers[0]?.character_id||''} writable={!busy&&(controlMode==='history'?(initial.permissions.art||initial.permissions.letter):initial.permissions.generate&&initial.permissions.art)&&!initial.chapter.locked&&!page.locked} {activeJob} {t} onClose={closeControl} onRestore={revert} onJob={controlJob} onDirty={(value)=>{controlDirty=value;emitDirty();}}/>{/key}
+ {:else}
  <section class="mv-ed__stage" aria-label={t('canvas')}>
   {#if error}
    <div class="mv-notice mv-notice--error mv-ed__status" role="alert">
@@ -772,6 +794,7 @@
      <div class="mv-ed__property-head"><strong>{t('variations.layer')}</strong></div>
      <div class="mv-ed__reroll">{#each rerollLayers as l (l.id)}<button type="button" class="mv-ed__reroll-button" title={label(l)} disabled={busy || !initial.permissions.generate || l.locked} onclick={() => void generate('layer', l.id)}><i class="ti ti-refresh" aria-hidden="true"></i><span>{rerollName(l)}</span></button>{/each}</div>
      <p class="mv-ed__help">{drift ? t('variations.drift_hint', {number: candidates.indexOf(drift) + 1, name: driftName || t('layer.character'), score: Math.round((drift.lock_score || 0) * 100)}) : t('variations.layer_hint')}</p>
+     {#if drift}<Button small icon="wand" disabled={!initial.permissions.generate||busy} onclick={()=>void openControl('lockfix')}>{t('control.fix_character')}</Button>{/if}
     </section>
     <section class="mv-ed__property">
      <div class="mv-ed__property-head"><strong>{t('queue')}</strong><a class="mv-ed__soon-link" href="/queue">{t('queue.open')}</a></div>
@@ -799,7 +822,7 @@
      </div>
      <label class="mv-ed__feather"><span class="mv-ed__feather-head"><span>{t('region.feather')}</span><span class="mv-ed__mono">{feather} px</span></span><input class="mv-range mv-ed__thin-range" type="range" min="0" max="64" bind:value={feather} style:--mv-p={`${feather / 64 * 100}%`}/></label>
     </div>
-    <label class="mv-field mv-ed__property"><span class="mv-ed__property-head"><strong>{t('region.prompt')}</strong></span><textarea class="mv-textarea" rows="3" maxlength="4000" bind:value={regionPrompt}></textarea></label>
+    <label class="mv-field mv-ed__property"><span class="mv-ed__property-head"><strong>{t('region.prompt')}</strong></span><textarea class="mv-textarea resize-none" rows="3" maxlength="4000" bind:value={regionPrompt}></textarea></label>
     <section class="mv-ed__property">
      <div class="mv-ed__property-head"><strong>{t('region.keep')}</strong></div>
      <label class="mv-check"><input type="checkbox" disabled/><span class="mv-check__box"><i class="ti ti-check" aria-hidden="true"></i></span><span>{t('region.character_lock')} <span class="mv-soon">{t('soon')}</span></span></label>
@@ -843,7 +866,7 @@
       <label class="mv-field"><span class="mv-field__label">{t('speaker')}</span>
        <span class="mv-select-wrap mv-ed__speaker">{#if speaker}<span class={`mv-avatar mv-avatar--xs mv-avatar--c${avatarTone(speaker.id)}`} aria-hidden="true">{initials(speaker.name)}</span>{/if}<select class="mv-select" class:with-avatar={!!speaker} value={bubble.speaker_character_id || ''} onchange={(e) => editBubble(b => b.speaker_character_id = e.currentTarget.value || undefined)}><option value="">{t('none')}</option>{#each characters as c (c.id)}<option value={c.id}>{c.name}</option>{/each}</select><i class="ti ti-chevron-down" aria-hidden="true"></i></span>
       </label>
-      <label class="mv-field"><span class="mv-field__label">{t('text')}</span><textarea class="mv-textarea" rows="2" maxlength="2000" value={selectedText.text} oninput={(e) => { const composing = (e as InputEvent).isComposing; editBubble(b => b.texts[lang] = {...selectedText, text: e.currentTarget.value, source: 'human', status: 'draft'}); if (composing) { clearTimeout(previewTimer); previewAbort?.abort(); } }} oncompositionend={schedulePreview}></textarea></label>
+      <label class="mv-field"><span class="mv-field__label">{t('text')}</span><textarea class="mv-textarea resize-none" rows="2" maxlength="2000" value={selectedText.text} oninput={(e) => { const composing = (e as InputEvent).isComposing; editBubble(b => b.texts[lang] = {...selectedText, text: e.currentTarget.value, source: 'human', status: 'draft'}); if (composing) { clearTimeout(previewTimer); previewAbort?.abort(); } }} oncompositionend={schedulePreview}></textarea></label>
       <div class="mv-ed__font-row">
        <label class="mv-field"><span class="mv-field__label">{t('font')}</span><span class="mv-select-wrap"><select class="mv-select" value={bubble.style.font || ''} onchange={(e) => editBubble(b => b.style.font = e.currentTarget.value)}>{#if !bubble.style.font}<option value="">{t('font.auto', {family: FONT_FAMILIES[defaultFont(lang, bubble.kind)]})}</option>{/if}{#each FONT_KEYS as k}<option value={k}>{FONT_FAMILIES[k]}</option>{/each}</select><i class="ti ti-chevron-down" aria-hidden="true"></i></span></label>
        <label class="mv-field"><span class="mv-field__label">{t('font_size')}</span><span class="mv-ed__unit"><input class="mv-input" type="number" min="1" max="200" step="1" inputmode="numeric" aria-label={t('font_size_pt')} value={currentPt || ''} placeholder={autoPt ? String(autoPt) : ''} onchange={(e) => setSizePt(e.currentTarget.value)}/><span aria-hidden="true">{initial.print?.width_mm ? t('pt') : 'px'}</span></span></label>
@@ -898,10 +921,10 @@
    <fieldset class="mv-ed__inspector-scroll mv-ed__fieldset" disabled={!page || busy}>
     <div class="mv-ed__property">
      <div class="mv-ed__property-head"><strong>{t('scope')}</strong></div>
-     <div class="mv-seg mv-seg--full mv-ed__scope"><button type="button" class="mv-seg__item" disabled title={t('soon')}>{t('scope.page')}<span class="mv-soon">{t('soon')}</span></button><button type="button" class="mv-seg__item" aria-pressed={scope === 'panel'} onclick={() => scope = 'panel'}>{t('scope.panel')}</button><button type="button" class="mv-seg__item" aria-pressed={scope === 'layer'} disabled={!layer || layer.kind === 'lettering'} onclick={() => scope = 'layer'}>{t('scope.layer')}</button><button type="button" class="mv-seg__item" aria-pressed={scope === 'region'} disabled={!layer?.asset} onclick={makeRegion}>{t('scope.region')}</button></div>
+     <div class="mv-seg mv-seg--full mv-ed__scope"><button type="button" class="mv-seg__item" aria-pressed={scope==='page'} disabled={!writablePage} onclick={()=>scope='page'}>{t('scope.page')}</button><button type="button" class="mv-seg__item" aria-pressed={scope === 'panel'} onclick={() => scope = 'panel'}>{t('scope.panel')}</button><button type="button" class="mv-seg__item" aria-pressed={scope === 'layer'} disabled={!layer || layer.kind === 'lettering'} onclick={() => scope = 'layer'}>{t('scope.layer')}</button><button type="button" class="mv-seg__item" aria-pressed={scope === 'region'} disabled={!layer?.asset} onclick={makeRegion}>{t('scope.region')}</button></div>
      <p class="mv-ed__help">{scope === 'layer' ? t('scope.layer_hint') : t('scope.panel_hint', {panel: panelName})}</p>
     </div>
-    <label class="mv-field mv-ed__property"><span class="mv-ed__property-head"><strong>{t('prompt')}</strong>{#if promptTag}<span class="mv-ed__tag">{promptTag}</span>{/if}</span><textarea class="mv-textarea" rows="3" maxlength="4000" value={panel?.prompt || ''} disabled={!writableArt} oninput={(e) => editPanel(p => { p.prompt = e.currentTarget.value; p.prompt_source = 'user'; })}></textarea></label>
+    <label class="mv-field mv-ed__property"><span class="mv-ed__property-head"><strong>{t('prompt')}</strong>{#if promptTag}<span class="mv-ed__tag">{promptTag}</span>{/if}</span><textarea class="mv-textarea resize-none" rows="3" maxlength="4000" value={panel?.prompt || ''} disabled={!writableArt} oninput={(e) => editPanel(p => { p.prompt = e.currentTarget.value; p.prompt_source = 'user'; })}></textarea></label>
     <section class="mv-ed__property">
      <div class="mv-ed__property-head"><strong>{t('characters')}</strong></div>
      <div class="mv-ed__chips">
@@ -910,8 +933,10 @@
      </div>
     </section>
     <section class="mv-ed__property">
+     {#if characterLayers.length}<Button small icon="lock" disabled={!initial.permissions.generate||busy} onclick={()=>void openControl('lockfix')}>{t('control.lockfix_open')}</Button>{/if}
      <div class="mv-ed__property-head"><strong>{t('pose_camera')}</strong></div>
-     <div class="mv-ed__poses">{#each ['leap', 'crouch', 'run'] as pose}<button type="button" class="mv-ed__pose" disabled title={t('soon')}><span>{t(`pose.${pose}`)}</span><span class="mv-soon">{t('soon')}</span></button>{/each}<button type="button" class="mv-ed__pose mv-ed__pose--sketch" disabled title={t('soon')}><i class="ti ti-scribble" aria-hidden="true"></i>{t('sketch')}<span class="mv-soon">{t('soon')}</span></button></div>
+     <PoseTool pose={panel?.pose} presets={initial.pose_presets||{}} disabled={!writableArt} {t} onChange={(value)=>editPanel(p=>p.pose=value?{...value}:undefined)}/>
+     <Button small icon="brush" disabled={!writablePage} onclick={()=>void openControl('sketch')}>{t('control.sketch_title')}</Button>
      <div class="mv-seg mv-seg--full" role="group" aria-label={t('pose_camera')}>{#each ['low', 'eye', 'high', 'bird'] as camera}<button type="button" class="mv-seg__item" aria-pressed={(cameraOption(panel?.camera) || 'eye') === camera} disabled={!writableArt} onclick={() => editPanel(p => p.camera = camera)}>{t(`camera.${camera}`)}</button>{/each}</div>
      <div class="mv-seg mv-seg--full" role="group" aria-label={t('pose_camera')}>{#each ['wide', 'medium', 'close'] as shot}<button type="button" class="mv-seg__item" aria-pressed={(shotOption(panel?.shot) || 'medium') === shot} disabled={!writableArt} onclick={() => editPanel(p => p.shot = shot)}>{t(`shot.${shot}`)}</button>{/each}</div>
     </section>
@@ -921,12 +946,13 @@
    </fieldset>
    <div class="mv-ed__generate">
     <div class="mv-route"><i class="ti ti-route" aria-hidden="true"></i><strong>{t('auto')}</strong><span class="mv-route__pick">→ {routeText}</span></div>
-    <Button full variant="primary" icon="sparkles" busy={busy} disabled={!page || !panel || !initial.permissions.generate || page.locked || !!panel.locked || !!layer?.locked && scope === 'layer'} onclick={() => void generate()}>{t(scope === 'layer' ? 'regenerate_layer' : 'regenerate_panel')}<span class="mv-ed__kbd">⌘↵</span></Button>
+    <Button full variant="primary" icon="sparkles" busy={busy} disabled={!page || !panel || !initial.permissions.generate || jobRunning || page.locked || (scope==='page'?!writablePage:!!panel.locked) || !!layer?.locked && scope === 'layer'} onclick={() => void generate()}>{t(scope === 'page'?'control.regenerate_page':scope === 'layer' ? 'regenerate_layer' : 'regenerate_panel')}<span class="mv-ed__kbd">⌘↵</span></Button>
     <span class="mv-ed__help mv-ed__center">{routeHelp}</span>
    </div>
   {/if}
  </aside>
 
+ {/if}
  <footer class="mv-ed__footer">
   {#if page}<span>{t('page.of', {number: page.number, count: pages.length})}</span>{/if}
   <span>{initial.print?.format_label || initial.project.format}</span>
@@ -952,5 +978,5 @@
    </div>
   {/if}
  </dialog>
- <dialog bind:this={dialog} class="mv-modal mv-ed__dialog" aria-labelledby="editor-confirm-title" aria-describedby="editor-confirm-body" onclose={() => confirmAction = null}><div class="mv-modal__head"><h2 id="editor-confirm-title">{confirmTitle}</h2></div><div class="mv-modal__body"><p id="editor-confirm-body">{confirmBody}</p></div><div class="mv-modal__foot"><Button onclick={() => dialog.close()}>{t('cancel')}</Button><Button variant="danger" onclick={accept}>{t('confirm')}</Button></div></dialog>
+ <dialog bind:this={dialog} class="mv-modal mv-ed__dialog" aria-labelledby="editor-confirm-title" aria-describedby="editor-confirm-body" onclose={() => confirmAction = null}><div class="mv-modal__head"><h2 id="editor-confirm-title">{confirmTitle}</h2></div><div class="mv-modal__body"><p id="editor-confirm-body">{confirmBody}</p></div><div class="mv-modal__foot"><Button onclick={() => dialog.close()}>{t('cancel')}</Button><Button variant="danger" onclick={accept}>{confirmLabel||t('confirm')}</Button></div></dialog>
 </div>

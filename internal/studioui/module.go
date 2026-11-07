@@ -16,12 +16,13 @@ import (
 // Module is the browser-facing Studio module. Domain persistence stays in
 // studio and queued execution stays in gen.
 type Module struct {
-	d      *core.Deps
-	studio studio.Service
-	gen    gen.Service
-	bible  studio.BibleService
-	assets *assets.Service
-	ui     *web.UI
+	d       *core.Deps
+	studio  studio.Service
+	gen     gen.Service
+	control gen.ControlService
+	bible   studio.BibleService
+	assets  *assets.Service
+	ui      *web.UI
 }
 
 var _ dashboard.Source = (*Module)(nil)
@@ -50,6 +51,7 @@ func (m *Module) Init(context.Context) error {
 		return errors.New("studioui: web UI unavailable")
 	}
 	m.bible = core.MustUse[studio.BibleService](m.d)
+	m.control = core.MustUse[gen.ControlService](m.d)
 	m.assets = core.MustUse[*assets.Service](m.d)
 	return nil
 }

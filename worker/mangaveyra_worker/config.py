@@ -90,8 +90,10 @@ class Config:
     """``auto``, ``manga-ocr``, ``tesseract``, ``http`` or ``none`` (MV_OCR_ENGINE)."""
     ocr_url: str | None = None
     """Endpoint for the ``http`` OCR engine (MV_OCR_URL)."""
+    dino_model_dir: Path | None = None
+    """Explicit offline DINOv2 Small model directory (MV_DINO_MODEL_DIR); no automatic downloads."""
     embedder: str = "auto"
-    """Identity embedder for character.score: ``auto``, ``insightface``, ``clip`` or ``structural`` (MV_EMBEDDER)."""
+    """Identity embedder: ``auto``/``dinov2``, or a legacy explicit diagnostic mode (MV_EMBEDDER)."""
     mock_models: list[str] = field(default_factory=lambda: ["mock"])
     """Model ids the mock backend advertises (MV_MOCK_MODELS)."""
     mock_step_delay: float = 0.05
@@ -171,8 +173,8 @@ class Config:
             raise ConfigError("MV_OFFLOAD must be auto, none, model or sequential")
         if self.ocr_engine not in ("auto", "manga-ocr", "tesseract", "http", "none"):
             raise ConfigError("MV_OCR_ENGINE must be auto, manga-ocr, tesseract, http or none")
-        if self.embedder not in ("auto", "insightface", "clip", "structural"):
-            raise ConfigError("MV_EMBEDDER must be auto, insightface, clip or structural")
+        if self.embedder not in ("auto", "dinov2", "insightface", "clip", "structural"):
+            raise ConfigError("MV_EMBEDDER must be auto, dinov2, insightface, clip or structural")
         if self.log_format not in ("auto", "text", "json"):
             raise ConfigError("MV_LOG_FORMAT must be auto, text or json")
         if self.comfyui_url:
@@ -210,6 +212,7 @@ ENV_VARS: dict[str, str] = {
     "ocr_engine": "MV_OCR_ENGINE",
     "ocr_url": "MV_OCR_URL",
     "embedder": "MV_EMBEDDER",
+    "dino_model_dir": "MV_DINO_MODEL_DIR",
     "mock_models": "MV_MOCK_MODELS",
     "mock_step_delay": "MV_MOCK_STEP_DELAY",
     "max_download_mb": "MV_MAX_DOWNLOAD_MB",
@@ -228,7 +231,7 @@ ENV_ALIASES: dict[str, str] = {
 _LISTS = {"backends", "models", "mock_models"}
 _INTS = {"max_concurrent", "claim_wait_s", "max_download_mb"}
 _FLOATS = {"drain_timeout_s", "comfyui_timeout_s", "mock_step_delay"}
-_PATHS = {"data_dir", "models_dir", "lora_dir", "hf_cache_dir", "comfyui_workflows_dir", "health_file"}
+_PATHS = {"data_dir", "models_dir", "lora_dir", "hf_cache_dir", "dino_model_dir", "comfyui_workflows_dir", "health_file"}
 _OPT_INTS = {"vram_budget_mb"}
 _BOOLS = {"tls_verify"}
 

@@ -57,3 +57,13 @@ def test_preview_fits_protocol_limit() -> None:
 def test_indexed_names_numeric_order() -> None:
     files = {"ref_10": "", "ref_2": "", "ref_0": "", "reference_1": "", "ref_x": ""}
     assert indexed_names(files, "ref_") == ["ref_0", "ref_2", "ref_10"]
+
+
+def test_reference_guide_preserves_all_subjects_and_flattens_transparency() -> None:
+    a = Image.new("RGB", (64, 128), "black")
+    b = Image.new("RGBA", (128, 64), (0, 0, 0, 0))
+    sheet = imaging.reference_guide([a, b])
+    assert sheet.size == (768, 384)
+    assert sheet.getpixel((192, 192)) == (0, 0, 0)
+    assert sheet.getpixel((576, 192)) == (255, 255, 255)
+    assert sheet.getpixel((0, 192)) == (255, 255, 255)  # aspect ratio is retained

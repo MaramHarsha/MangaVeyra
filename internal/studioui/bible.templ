@@ -328,27 +328,7 @@ templ BibleCharacter(v biblePage) {
 				</div>
 			</header>
 			<div class="mv-bible__character-summary">
-				<section class={ "mv-bible__lock-card",ui.If(v.Character.LockScore!=nil,"mv-bible__lock-card--ready") }>
-					<div class="mv-bible__lock-heading">
-						<strong>
-							@ui.Icon("lock", 18)
-							{ i18n.T(ctx,"bible.lock.title") }
-						</strong>
-						if v.Character.LockScore!=nil {
-							<span class="mv-bible__lock-score">
-								{ strconv.Itoa(int(*v.Character.LockScore*100+.5)) }%
-							</span>
-						} else {
-							@ui.SoonTag()
-						}
-					</div>
-					<p>
-						{ i18n.T(ctx,"bible.lock.references","count",len(v.Character.Refs)) }
-					</p>
-					<p>
-						{ i18n.T(ctx,"bible.lock.hint") }
-					</p>
-				</section>
+				@BibleLockCard(v)
 				<dl class="mv-bible__facts">
 					<div>
 						<dt>
@@ -600,7 +580,12 @@ templ BibleNewCharacter(v biblePage) {
 				</div>
 			}
 			@ui.Notice(ui.ToneInfo, "info-circle") {
-				{ i18n.T(ctx,"bible.new.training_hint") } @ui.SoonTag()
+				{ i18n.T(ctx,"bible.lock.training_hint") }
+                if v.Character.ID!="" {
+                 @ui.LinkButton(characterPath(v.Project.ID,v.Character.ID),ui.ButtonProps{Size:ui.SM,Variant:ui.Quiet}) {
+                  {i18n.T(ctx,"bible.lock.open_status")}
+                 }
+                }
 			}
 		</section>
 	</div>

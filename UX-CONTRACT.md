@@ -57,6 +57,15 @@
 
 ## Dataset navigation
 
+- D10 shows the latest 50 immutable page snapshots, newest first. Selection compares a snapshot without mutating
+  it; Restore requires confirmation and creates a new revision. Named branches/merging remain Soon for Phase 6.
+- D12 lists only current-reference drift in the selected chapter (up to 100 rows), with an explicit maximum of 24
+  selected character layers per repair. Locked targets cannot be selected; versions, identity and outfit evidence
+  remain server owned. Missing evidence is labelled, and a similarity is never described as an identity guarantee.
+- D4 quotes the actual page operation before dispatch, retains the saved panel/cast/text structure and protects an
+  unsaved sketch on navigation. Job completion refreshes the current page; stale responses cannot overwrite a new
+  page/tool. C3 assessment/training actions require a human session and a current character revision.
+
 - Phase 2 activity: G9 and G4 use cursor pagination with 20 entries per page and Latest/Older links. The cursor and
   G4 category live in the URL; changing a category resets the cursor. G9 shows the server queue to admins and only
   the signed-in member's jobs otherwise. Job details and the refresh endpoint repeat authorization on every read.

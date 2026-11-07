@@ -111,5 +111,9 @@
   "activity.error.job": "ジョブを完了できませんでした。再試行の前にスタジオで確認してください。",
   "activity.queue.remote_subtitle": "サーバー・リモートジョブ · 公平な割り当て",
   "activity.queue.worker_pool": "ローカルワーカー",
-  "activity.queue.worker_unavailable": "このワーカーは利用できません。キューを更新してください。"
+  "activity.queue.worker_unavailable": "このワーカーは利用できません。キューを更新してください。",
+  "activity.job.page": "ページの絵",
+  "activity.job.repair": "キャラクター修正",
+  "activity.job.train": "Character Lockの学習",
+  "activity.job.score": "キャラクター評価"
 }

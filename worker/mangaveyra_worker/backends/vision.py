@@ -1,8 +1,8 @@
 """Vision helpers backend: panel/bubble detection, identity scoring and OCR with real models.
 
-Needs the ``vision`` extra (``opencv-python-headless`` + ``numpy``). ``character.score`` uses the best available
-identity embedder (InsightFace → OpenCLIP → structural descriptor) and ``ocr`` is only advertised when an OCR engine
-is installed or configured (see :mod:`mangaveyra_worker.vision.ocr`).
+Scoring needs numpy and an explicitly provisioned learned model. Panel detection
+additionally needs OpenCV. OCR is advertised only when an engine is configured
+and available (see :mod:`mangaveyra_worker.vision.ocr`).
 """
 
 from __future__ import annotations
@@ -23,9 +23,8 @@ class VisionBackend(Backend):
 
     @classmethod
     def available(cls, config: Any) -> tuple[bool, str]:
-        """Requires OpenCV and numpy."""
+        """Scoring can run without the independent OpenCV detector."""
         try:
-            import cv2  # noqa: F401
             import numpy  # noqa: F401
         except ImportError as exc:
             return False, f"{exc} (pip install 'mangaveyra-worker[vision]')"
@@ -42,11 +41,19 @@ class VisionBackend(Backend):
                 self._ocr_error = str(exc)
 
     def job_types(self) -> list[str]:
-        """``detect.panels`` and ``character.score`` always; ``ocr`` when an engine is available."""
-        types = ["detect.panels", "character.score"]
+        """Advertise only installed capabilities; model readiness is separate."""
+        import importlib.util
+
+        types = ["character.score"]
+        if importlib.util.find_spec("cv2"):
+            types.insert(0, "detect.panels")
         if self._ocr is not None:
             types.append("ocr")
         return types
+
+    def models(self) -> list[str]:
+        from mangaveyra_worker.vision.embed import dino_available
+        return ["character-lock-dinov2-v1"] if dino_available(self.config.dino_model_dir) else []
 
     def describe(self) -> dict[str, Any]:
         """Include the OCR engine in startup logs."""
@@ -104,8 +111,18 @@ class VisionBackend(Backend):
         if not refs or not cands:
             raise BadInput("character.score needs reference_N and candidate_N files")
         ctx.progress(0.3, message="embedding", force=True)
-        scores, method = score_identity(refs, cands, self.config.embedder)
-        return {"scores": scores, "method": method}
+        preference = "dinov2" if job.model_id == "character-lock-dinov2-v1" else self.config.embedder
+        scores, method = score_identity(refs, cands, preference, self.config.dino_model_dir)
+        outfit_refs = ctx.images("outfit_")
+        outfit_scores: list[float | None] = [None] * len(cands)
+        if outfit_refs:
+            def body(im: Any) -> Any:
+                return im.crop((0, int(im.height * 0.35), im.width, im.height))
+            values, outfit_method = score_identity([body(im) for im in outfit_refs], [body(im) for im in cands], preference, self.config.dino_model_dir)
+            if outfit_method != method:
+                raise BadInput("identity and outfit methods must match")
+            outfit_scores = list(values)
+        return {"scores": scores, "outfit_scores": outfit_scores, "method": method}
 
     def _ocr_job(self, job: Job, ctx: JobContext) -> dict[str, Any]:
         assert self._ocr is not None

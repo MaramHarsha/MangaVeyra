@@ -1,0 +1,67 @@
+package studioui
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+	"strconv"
+)
+
+// The existing C3 Character Lock card owns training and evidence status.
+templ BibleLockCard(v biblePage) {
+	<section id="bible-character-lock" class={ "mv-bible__lock-card",ui.If(v.Lock.Score!=nil,"mv-bible__lock-card--ready"),ui.If(v.Lock.Score!=nil&&*v.Lock.Score<.9,"mv-bible__lock-card--drift") } { lockCardAttrs(v)... }>
+		<div class="mv-bible__lock-heading">
+			<strong>
+				@ui.Icon("lock", 18)
+				{ i18n.T(ctx,"bible.lock.title") }
+			</strong>
+			if v.Lock.Score!=nil {
+				<span class="mv-bible__lock-score">{ lockPercent(v.Lock.Score) }</span>
+			} else {
+				<span class="mv-badge">{ i18n.T(ctx,"bible.lock."+v.Lock.Status) }</span>
+			}
+		</div>
+		<p>{ i18n.T(ctx,"bible.lock.references","count",v.Lock.References) }</p>
+		if v.Lock.Score!=nil {
+			<p>{ i18n.T(ctx,"bible.lock.measured","count",v.Lock.Panels) }</p>
+		}
+		if v.Lock.Unscored>0 {
+			<p>{ i18n.T(ctx,"bible.lock.unscored_panels","count",v.Lock.Unscored) }</p>
+		}
+		if v.Lock.OutfitPending>0 {
+			<p>{ i18n.T(ctx,"bible.lock.outfit_pending","count",v.Lock.OutfitPending) }</p>
+		}
+		if v.Lock.Status=="ready" {
+			<p>{ i18n.T(ctx,"bible.lock.trained","model",v.Lock.TrainingModel) }</p>
+		}
+		if v.Lock.JobID!="" {
+			<div role="status">
+				<p>{ i18n.T(ctx,"bible.lock."+v.Lock.Status) } · { strconv.Itoa(int(v.Lock.Progress*100+.5)) }%</p>
+				<progress max="1" value={ strconv.FormatFloat(v.Lock.Progress, 'f', 4, 64) } aria-label={ i18n.T(ctx, "bible.lock.progress") }></progress>
+			</div>
+			<a href={ templ.URL("/queue?job=" + v.Lock.JobID) }>{ i18n.T(ctx,"bible.lock.open_queue") }</a>
+		}
+		if len(v.Lock.Drift)>0 {
+			<p>{ i18n.T(ctx,"bible.lock.drift","count",v.Lock.DriftTotal) } · <a href={ templ.URL(lockFixHref(v)) }>{ i18n.T(ctx,"bible.lock.fix") }</a></p>
+		}
+		<p>{ i18n.T(ctx,"bible.lock.evidence_hint") }</p>
+		if v.CanGenerate&&v.CanArt {
+			<div class="mv-bible__actions">
+				<form action={ templ.URL(characterPath(v.Project.ID, v.Character.ID) + "/lock/score") } method="post" novalidate>
+					<input type="hidden" name="revision" value={ bibleRevision(v.Character.UpdatedAt) }/>
+					@ui.Button(ui.ButtonProps{Type: "submit", Size: ui.SM, Disabled: !v.Lock.CanScore || v.Lock.JobID != "", Tip: ui.If(!v.Lock.CanScore, i18n.T(ctx, "bible.lock.scoring_needed"))}) {
+						{ i18n.T(ctx,"bible.lock.assess") }
+					}
+				</form>
+				<form action={ templ.URL(characterPath(v.Project.ID, v.Character.ID) + "/lock/train") } method="post" novalidate>
+					<input type="hidden" name="revision" value={ bibleRevision(v.Character.UpdatedAt) }/>
+					@ui.Button(ui.ButtonProps{Type: "submit", Size: ui.SM, Disabled: !v.Lock.CanTrain || v.Lock.JobID != "", Tip: ui.If(!v.Lock.CanTrain, i18n.T(ctx, "bible.lock.training_needed"))}) {
+						{ i18n.T(ctx,"bible.lock.train") }
+					}
+				</form>
+			</div>
+			if !v.Lock.CanTrain||!v.Lock.CanScore {
+				<p>{ i18n.T(ctx,"bible.lock.worker_needed") }</p>
+			}
+		}
+	</section>
+}

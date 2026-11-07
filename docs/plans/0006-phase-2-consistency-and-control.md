@@ -1,9 +1,10 @@
 # Phase 2: Consistency and control
 
-- Status: Active — milestone 1 complete; milestones 2–5 remain.
+- Status: Active — milestones 1, 2 and 4 implemented and verified; learned-consistency acceptance in 3/5 has failed.
 - Base: merged Phase 1, `12041ed` on `main`.
 - Branch: `phase-2/consistency-control`.
 - Owner direction: start Phase 2, follow the supplied design exactly; mobile UI is deferred.
+- Continuation: the owner requested completion of the remaining milestones on 2026-11-08.
 - Scope source: `../MangaVeyra-build-status-and-phases.md`, Phase 2; feature contracts in `docs/FEATURES.md`.
 
 ## Outcome and boundaries
@@ -28,7 +29,9 @@ mobile optimisation, translation, animation, World and any new visual direction 
 - Screen sources: G9 in `09 Screens - Flow 6-7 Tools and System.dc.html`, G4 in
   `08 Screens - Flow 4-5 Publish Read Translate.dc.html`. Layout, copy, hierarchy, iconography and navigation must
   match these artboards at 1440×900. Phones use existing responsive patterns; no mobile-artboard implementation.
-- User data, provider keys and live preview databases are not migrated or copied for Phase 2 development.
+- Development fixtures are isolated. The owner separately approved a bounded live run on 2026-11-08: only the
+  required account and sealed OpenAI connection were copied into a new temporary database, with the matching
+  encryption key kept locally at rest. The source database was opened read-only; no manuscripts were copied.
 
 ## Milestones and dependencies
 
@@ -36,12 +39,12 @@ mobile optimisation, translation, animation, World and any new visual direction 
    URL-restorable lists; real progress/worker facts; safe per-job state/actions; per-user filters and explicit read
    actions. No prompts, input/output payloads, secrets or raw upstream errors in queue markup. Preserve server-side
    authority, ordinary no-JavaScript forms, safe links and recovery. Activate shell links only after routes exist.
-2. [ ] **History and scoped control.** Compare/revert through the existing version fence; page regeneration with
+2. [x] **History and scoped control.** Compare/revert through the existing version fence; page regeneration with
    neighbour context; explicit page/panel locks; prove unrelated pages/layers/lettering stay unchanged.
 3. [ ] **Character consistency.** Reference-first identity/outfit assessment and drift indicators in C3/C4/D8;
    designed D12 fix scoped to the character layer. Select and document an appropriately licensed scoring backend
    before claiming measured identity scores. Optional worker LoRA training retains honest readiness and provenance.
-4. [ ] **Pose and sketch (D4).** Designed pose presets/stick sketch and sketch-to-manga with bounded inputs, explicit
+4. [x] **Pose and sketch (D4).** Designed pose presets/stick sketch and sketch-to-manga with bounded inputs, explicit
    scope and protected lettering/locks. No invented quality score or unsupported backend promise.
 5. [ ] **Integrated Phase 2 verification.** Design comparison, local gates and a recorded chapter-scale quality
    assessment using configured capabilities. Mark the phase complete only when its final acceptance has evidence.
@@ -50,6 +53,35 @@ Milestone 1 does not depend on GPU quality or a new provider. Later milestones d
 and backend capability being demonstrated; a disabled Soon control is not an implemented feature.
 Milestone 1 results and remaining design/runtime differences are recorded in
 [the activity QA record](../qa/phase-2-activity-2026-11-07.md).
+
+The remaining control implementation, verification and live acceptance results are recorded in
+[the control QA record](../qa/phase-2-control-2026-11-08.md) and
+[ADR 0010](../decisions/0010-phase-2-scoped-control-and-character-evidence.md). Character assessment/repair and
+optional training have runtime paths and protocol checks; the final consistency requirement is still unsatisfied.
+The real chapter has 30 different generated character assets. All 30 fall below 0.90 with the current learned
+metric, including after representative repairs. Do not mark Phase 2 complete, lower the threshold to make this
+test pass, substitute synthetic scores or repeat one character image across pages.
+
+## Remaining implementation contract
+
+- Single-page regeneration stages all independent art layers and commits the page atomically. It reads only the
+  immediately preceding/following pages for context; it never writes them. All target locks, authorization,
+  neighbour revisions and target versions are checked at enqueue, dispatch and commit. Lettering stays structured.
+- Basic history uses D10's two-preview/history anatomy. Branch creation/merge remain visible Soon (Phase 6).
+  Snapshot access is scoped to the current project/chapter/page. Restoring creates a new version.
+- Character Lock uses explicit reference-first evaluation, separate identity/outfit evidence and a named scoring
+  method. DINOv2 is the selected optional learned embedder; no restricted InsightFace weights are selected
+  automatically and no structural/mock result is presented as a measured identity percentage.
+- D12 repairs only explicitly selected character layers. D4 keeps the existing polygon layout and editable
+  lettering, with upload/drawing and a composition-strength control. Unsupported detection/camera capabilities
+  retain the designed disabled controls with an honest reason.
+- Optional worker training must bind the character/reference revision, compatible base model and artifact. It must
+  never report ready on a mock artifact or install/download weights automatically.
+- The root owns `internal/{gen,editor,pagedoc,pagestore,studio,studioui,ai}`, worker scoring/training integration,
+  editor islands/styles, bilingual catalogues, migrations, E2E and evidence. No concurrent editing agents.
+- Final quality assessment requires a real configured scoring backend and original chapter art. Deterministic
+  tests prove scope isolation and recovery, not the roadmap's 30-page visual-quality acceptance. Prepare the
+  assessment and report any missing runtime capability explicitly; do not mark that acceptance complete without it.
 
 ## Ownership and verification
 

@@ -46,6 +46,7 @@ type pageResponse struct {
 	Lettering []lettering.BubbleLayout `json:"lettering"`
 }
 type bootstrapData struct {
+	PosePresets map[string]pagedoc.Pose `json:"pose_presets"`
 	Project     studio.Project          `json:"project"`
 	Chapter     studio.Chapter          `json:"chapter"`
 	Pages       []pagestore.PageSummary `json:"pages"`
@@ -180,6 +181,12 @@ func mapped(r *http.Request, err error) error {
 	return err
 }
 func (m *Module) response(ctx context.Context, p pagedoc.Page, lang string) (pageResponse, error) {
+	id := core.IdentityFrom(ctx)
+	if id.User != nil {
+		if err := m.control.WithLockScores(ctx, studio.Actor{UserID: id.User.ID}, &p); err != nil {
+			return pageResponse{}, err
+		}
+	}
 	layouts, err := m.letter.LayoutPage(p, lang)
 	if err != nil {
 		return pageResponse{}, err
@@ -234,6 +241,7 @@ func (m *Module) data(r *http.Request, res resource) (bootstrapData, error) {
 	v.Styles = styles(ctx, res.Project.Style)
 	v.Print = printFor(ctx, res.Project)
 	v.Compute = m.compute(r)
+	v.PosePresets = pagedoc.PosePresets()
 	v.Beats = m.beats(ctx, res.Chapter.ID)
 	v.ScriptActions = m.scriptActions(ctx, res.Chapter.ID)
 	panels, number := 0, 0
@@ -764,6 +772,29 @@ func (m *Module) ownedJob(r *http.Request, res resource) (*jobs.Job, error) {
 			return nil, studio.ErrNotFound
 		}
 	}
+	if j.Type == gen.JobRepair && j.Scope.ChapterID == res.Chapter.ID {
+		return j, nil
+	}
+	if j.Type == gen.JobPage || j.Type == gen.JobRepair {
+		var p struct {
+			Panels []struct {
+				PageID string `json:"page_id"`
+			} `json:"panels"`
+		}
+		if j.DecodeInput(&p) != nil {
+			return nil, studio.ErrNotFound
+		}
+		found := false
+		for _, item := range p.Panels {
+			if item.PageID == res.Page.ID {
+				found = true
+			}
+		}
+		if !found {
+			return nil, studio.ErrNotFound
+		}
+		return j, nil
+	}
 	if j.Type != gen.JobPanel && j.Type != gen.JobRegionEdit {
 		return nil, studio.ErrNotFound
 	}
@@ -779,7 +810,7 @@ func (m *Module) job(w http.ResponseWriter, r *http.Request) error {
 		return mapped(r, err)
 	}
 	candidates := []gen.Candidate{}
-	if j.State == jobs.StateDone {
+	if j.State == jobs.StateDone && (j.Type == gen.JobPanel || j.Type == gen.JobRegionEdit) {
 		candidates, err = m.gen.Candidates(r.Context(), res.Actor, j.ID)
 		if err != nil {
 			return mapped(r, err)

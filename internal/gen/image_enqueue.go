@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -40,14 +41,15 @@ func (s *service) plan(ctx context.Context, p *imagePayload, mode, pin string, w
 			charIDs = append(charIDs, c.CharacterID)
 		}
 	}
-	plan, err := s.images.PlanImage(ctx, ai.ImagePlanRequest{Task: task, ActorID: p.Actor.UserID, ProjectID: p.Scope.ProjectID, RoutingMode: mode, PinModelID: pin, CharacterIDs: charIDs, PanelType: p.PanelType, Needs: ai.ImageNeeds{Width: width, Height: height, Count: count, References: len(p.References), BW: strings.Contains(p.Style, "bw"), Edit: p.InitAssetID != "", Mask: p.MaskAssetID != ""}})
+	pose := len(p.Pose) > 0
+	plan, err := s.images.PlanImage(ctx, ai.ImagePlanRequest{Task: task, ActorID: p.Actor.UserID, ProjectID: p.Scope.ProjectID, RoutingMode: mode, PinModelID: pin, CharacterIDs: charIDs, PanelType: p.PanelType, Needs: ai.ImageNeeds{Pose: pose, Width: width, Height: height, Count: count, References: imageRefCount(*p), BW: strings.Contains(p.Style, "bw"), Edit: p.InitAssetID != "" || p.SketchAssetID != "", Mask: p.MaskAssetID != ""}})
 	if err != nil {
 		return sanitizePlanningError(ctx, err)
 	}
 	if mode != "" && plan.RoutingMode != mode && plan.RoutingMode != ai.ModeLocalOnly {
 		return studio.ErrInvalid
 	}
-	if validateImagePlan(plan) != nil || plan.Task != task || plan.Needs.Width != width || plan.Needs.Height != height || plan.Needs.Count != count || plan.Needs.References != len(p.References) || plan.Needs.Edit != (p.InitAssetID != "") || plan.Needs.Mask != (p.MaskAssetID != "") || (pin != "" && plan.PinModelID != pin) {
+	if validateImagePlan(plan) != nil || plan.Task != task || plan.Needs.Width != width || plan.Needs.Height != height || plan.Needs.Count != count || plan.Needs.References != imageRefCount(*p) || plan.Needs.Edit != (p.InitAssetID != "" || p.SketchAssetID != "") || plan.Needs.Mask != (p.MaskAssetID != "") || (pin != "" && plan.PinModelID != pin) {
 		return studio.ErrInvalid
 	}
 	p.Plan = plan
@@ -136,7 +138,15 @@ func (s *service) preparePanel(ctx context.Context, actor studio.Actor, req Pane
 	if err != nil {
 		return imagePayload{}, err
 	}
-	p := imagePayload{PanelType: pn.Shot, Version: imagePayloadVersion, Request: requestJSON(req), Actor: storedActor{actor.UserID, actor.TokenID}, Scope: jobs.Scope{Kind: jobs.ScopePanel, ProjectID: req.ProjectID, PageID: page.ID, PanelID: pn.ID}, PageID: page.ID, PanelID: pn.ID, ExpectedVersion: page.Version, TargetHash: hashPanel(*pn), Style: project.Style, BatchID: batchID, Plan: ai.ImagePlan{Task: ai.TaskPanel}}
+	pose := pn.Pose
+	if pose["schema"] != "mangaveyra.pose.v1" {
+		pose = nil
+	}
+	// Composition-preserving repair uses the existing art as its pose source.
+	if req.PreserveComposition {
+		pose = nil
+	}
+	p := imagePayload{PanelType: pn.Shot, Pose: pose, Version: imagePayloadVersion, Request: requestJSON(req), Actor: storedActor{actor.UserID, actor.TokenID}, Scope: jobs.Scope{Kind: jobs.ScopePanel, ProjectID: req.ProjectID, PageID: page.ID, PanelID: pn.ID}, PageID: page.ID, PanelID: pn.ID, ExpectedVersion: page.Version, TargetHash: hashPanel(*pn), Style: project.Style, BatchID: batchID, Plan: ai.ImagePlan{Task: ai.TaskPanel}}
 	style := project.Style
 	if strings.TrimSpace(pn.Style) != "" {
 		style = pn.Style
@@ -202,6 +212,11 @@ func (s *service) preparePanel(ctx context.Context, actor studio.Actor, req Pane
 				return p, studio.ErrForbidden
 			}
 			focus = castMember{Name: character.Name, Look: character.Look, Outfit: defaultOutfit(character)}
+			hash, err := referenceStamp(ctx, s.db, character)
+			if err != nil {
+				return p, err
+			}
+			p.Components[idx].ReferenceHash = hash
 			for _, r := range orderedRefs(character.Refs) {
 				if !seen[r.AssetID] {
 					if len(p.References) >= 32 {
@@ -210,7 +225,7 @@ func (s *service) preparePanel(ctx context.Context, actor studio.Actor, req Pane
 					seen[r.AssetID] = true
 					p.References = append(p.References, r.AssetID)
 				}
-				if len(p.Components[idx].References) < 4 {
+				if len(p.Components[idx].References) < 4 && !slices.Contains(p.Components[idx].References, r.AssetID) {
 					p.Components[idx].References = append(p.Components[idx].References, r.AssetID)
 				}
 			}
@@ -220,9 +235,25 @@ func (s *service) preparePanel(ctx context.Context, actor studio.Actor, req Pane
 		}
 		p.Components[idx].Prompt = layerPrompt(style, scene, c.Kind, focus)
 	}
+	if req.PreserveComposition {
+		if req.LayerID == "" {
+			return p, studio.ErrInvalid
+		}
+		l := pn.Layer(req.LayerID)
+		if l == nil || l.Kind != pagedoc.LayerCharacter || l.Asset == nil || len(p.References) == 0 {
+			return p, studio.ErrInvalid
+		}
+		p.InitAssetID = l.Asset.ID
+		p.Strength = .9
+		p.Components[0].Prompt = clip(p.Components[0].Prompt, 2800) + " Preserve the source character's pose, silhouette, scale and position. Correct only the identity, face, hair and expected outfit using the kept references. " + promptRules
+	}
 	bounds := pagedoc.Bounds(pn.Points)
 	scale := math.Min(1, 1024/math.Max(bounds.W, bounds.H))
 	w, h := max(64, int(math.Round(bounds.W*scale))), max(64, int(math.Round(bounds.H*scale)))
+	if req.PreserveComposition {
+		l := pn.Layer(req.LayerID)
+		w, h = l.Asset.Width, l.Asset.Height
+	}
 	if err = s.plan(ctx, &p, req.RoutingMode, req.PinModelID, w, h, n); err != nil {
 		return p, err
 	}
@@ -284,6 +315,24 @@ func (s *service) EnqueueRegionEdit(ctx context.Context, actor studio.Actor, req
 	// prompt); the handler wraps it with regionEditPrompt at dispatch.
 	edit := component{LayerID: l.ID, Kind: l.Kind, CharacterID: l.CharacterID, Name: l.Name, Prompt: req.Prompt, OwnRefs: true, Background: layerBackground(l.Kind), Negative: layerNegative(project.Style, l.Kind)}
 	p := imagePayload{Version: imagePayloadVersion, Request: requestJSON(req), Actor: storedActor{actor.UserID, actor.TokenID}, Scope: jobs.Scope{Kind: jobs.ScopeRegion, ProjectID: req.ProjectID, LayerID: l.ID, Region: requestJSON(map[string]string{"mask_asset_id": req.MaskAssetID})}, PageID: page.ID, PanelID: pn.ID, ExpectedVersion: page.Version, TargetHash: hashPanel(*pn), InitAssetID: l.Asset.ID, MaskAssetID: req.MaskAssetID, Style: project.Style, Plan: ai.ImagePlan{Task: ai.TaskRegionEdit}, Components: []component{edit}}
+	if l.Kind == pagedoc.LayerCharacter && l.CharacterID != "" {
+		character, err := s.studio.GetCharacter(ctx, l.CharacterID)
+		if err != nil || character.ProjectID != req.ProjectID {
+			return nil, studio.ErrForbidden
+		}
+		hash, err := referenceStamp(ctx, s.db, character)
+		if err != nil {
+			return nil, err
+		}
+		p.Components[0].ReferenceHash = hash
+		for i, ref := range orderedRefs(character.Refs) {
+			if i >= 4 {
+				break
+			}
+			p.References = append(p.References, ref.AssetID)
+			p.Components[0].References = append(p.Components[0].References, ref.AssetID)
+		}
+	}
 	if err = s.plan(ctx, &p, req.RoutingMode, "", w, h, n); err != nil {
 		return nil, err
 	}

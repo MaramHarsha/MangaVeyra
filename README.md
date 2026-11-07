@@ -47,8 +47,12 @@
 - **Working screens:** first-run setup, provider connections, login/signup/onboarding, account/settings, project
   creation/adaptation, the real Studio dashboard, generation state and the editable chapter manuscript.
 - **Phase 2 activity:** the designed G9 job queue and G4 notification center, with scoped job visibility, progress,
-  cancellation, admin worker pause/resume, categorized notifications and explicit read actions. Remaining Phase 2
-  work is tracked in [plan 0006](docs/plans/0006-phase-2-consistency-and-control.md).
+  cancellation, admin worker pause/resume, categorized notifications and explicit read actions.
+- **Phase 2 controls:** designed D4/D10/D12 workbenches, atomic page art regeneration with neighbour context,
+  snapshot comparison/restore, selected-character repair, pose presets/joint editing and sketch conversion.
+  C3 shows real learned identity/outfit evidence and optional compatible-worker training status. DINOv2 requires
+  explicit local provisioning. The live 30-page consistency threshold has **not passed**; Phase 2 remains active
+  in [plan 0006](docs/plans/0006-phase-2-consistency-and-control.md).
 - **Gate A generation:** deterministic offline script generation and fixed-model OpenRouter or OpenAI structured
   text, with hard spend reservations, project/token authorization, revision fencing and honest AI provenance.
 - **Visual generation:** deterministic offline images, fixed OpenAI/OpenRouter/fal image adapters, configured worker
@@ -75,9 +79,9 @@
 
 ### Not yet an end product
 
-Publishing, reader, application MCP server, backup/update flows, admin UI, training/Character Lock repair,
+Publishing, reader, application MCP server, backup/update flows, admin UI, named history branches/merging,
 translation, animation, EPUB/video export and the World link remain incomplete or intentional stubs. Their
-designed controls stay visible as disabled **Soon** actions. GPU/model quality still needs hardware validation;
+designed controls stay visible as disabled **Soon** actions. Optional GPU training and pose quality still need hardware validation;
 remote routes have fake-transport coverage, and direct OpenAI has a recorded basic live check; its extended
 reference/mask/accounting matrix remains pending in ADR 0009. See the
 [accepted MVP decision](docs/decisions/0001-mvp-scope.md), the

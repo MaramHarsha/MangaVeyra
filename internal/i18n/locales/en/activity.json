@@ -111,5 +111,9 @@
   "activity.error.job": "This job could not finish. Review it in Studio before trying again.",
   "activity.queue.remote_subtitle": "Server & remote jobs · fair share on",
   "activity.queue.worker_pool": "Local workers",
-  "activity.queue.worker_unavailable": "This worker is no longer available. Refresh the queue."
+  "activity.queue.worker_unavailable": "This worker is no longer available. Refresh the queue.",
+  "activity.job.page": "Page art",
+  "activity.job.repair": "Character repair",
+  "activity.job.train": "Character Lock training",
+  "activity.job.score": "Character assessment"
 }

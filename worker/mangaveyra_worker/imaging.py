@@ -29,6 +29,30 @@ ACCENT = (61, 139, 255)
 STYLES = ("bw_screentone", "flat_grey", "colour", "screentone")
 
 
+def reference_guide(images: Sequence[Image.Image]) -> Image.Image:
+    """One bounded IP-Adapter guide retaining every supplied reference.
+
+    Multiple source images are laid out without distortion, labels or new art.
+    This avoids silently ignoring reference 2 onward on a single-adapter model.
+    """
+    if not images or len(images) > 8:
+        raise ValueError("reference guide needs 1–8 images")
+    if len(images) == 1:
+        return images[0]
+    cols = math.ceil(math.sqrt(len(images)))
+    rows = math.ceil(len(images) / cols)
+    edge = 384
+    sheet = Image.new("RGB", (cols * edge, rows * edge), "white")
+    for i, image in enumerate(images):
+        rgba = image.convert("RGBA")
+        flat = Image.new("RGBA", rgba.size, "white")
+        flat.alpha_composite(rgba)
+        thumb = ImageOps.contain(flat.convert("RGB"), (edge, edge))
+        sheet.paste(thumb, ((i % cols) * edge + (edge - thumb.width) // 2,
+                            (i // cols) * edge + (edge - thumb.height) // 2))
+    return sheet
+
+
 @lru_cache(maxsize=16)
 def font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     """Pillow's bundled font at ``size`` px (a bitmap fallback when FreeType is unavailable)."""

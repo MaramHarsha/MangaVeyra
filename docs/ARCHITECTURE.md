@@ -248,6 +248,13 @@ status window, rank badges E–S, XP bar, level-up toast, screentone skeleton, e
 
 ## Build and test
 
+Phase 2 adds `gen.ControlService` for atomic page generation, selected-character repair, optional worker training
+and attributable learned assessments. Migration 0202 stores current asset/reference/method evidence separately
+from historical page percentages. D4/D10/D12 are documented rich editor islands; C3 remains server rendered with
+ordinary POST forms. See [ADR 0010](decisions/0010-phase-2-scoped-control-and-character-evidence.md) for their fences,
+offline-model rules and remaining quality acceptance. `cmd/phase2check` is an explicitly gated, temporary-data live
+acceptance harness and is not part of normal application startup or routing.
+
 ```
 make tools     # templ, golangci-lint (optional)
 make web       # npm ci && vite build → internal/web/static/dist

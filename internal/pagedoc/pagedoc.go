@@ -433,6 +433,9 @@ func (p *Page) Validate() error {
 	}
 	panelIDs := map[string]bool{}
 	for i, pn := range p.Panels {
+		if err := ValidatePose(pn.Pose); err != nil {
+			add("panel %d pose is invalid", i)
+		}
 		seen("panel", pn.ID)
 		panelIDs[pn.ID] = true
 		if len(pn.Points) < 3 || len(pn.Points) > MaxPolygonPoints {

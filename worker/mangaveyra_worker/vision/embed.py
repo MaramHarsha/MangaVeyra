@@ -1,14 +1,11 @@
 """Identity embeddings for ``character.score`` (Character Lock).
 
 The score of a candidate is the cosine similarity between its embedding and the centroid of the reference
-embeddings, clamped to 0–1. Embedders, best first:
-
-* ``insightface`` — ArcFace face-identity embeddings (``pip install insightface onnxruntime``; the ``buffalo_l``
-  pack downloads on first use). Used only when *every* image has a detectable face; stylised manga faces often
-  defeat real-face detectors, in which case the next embedder is used for the whole job.
-* ``clip`` — OpenCLIP image embeddings (``pip install open_clip_torch``), robust on drawn characters.
-* ``structural`` — a dependency-light descriptor (numpy only): gradient-orientation histograms, a tonal
-  histogram and a coarse thumbnail. It is a weak identity signal, but always available and deterministic.
+embeddings, clamped to 0–1. The automatic learned backend is DINOv2 Small, Apache-2.0. Weights must be
+placed in an explicitly configured local directory; loading never downloads
+models or executes repository code. Structural descriptors remain available for
+diagnostics and are never authoritative Character Lock evidence. InsightFace
+and CLIP are legacy explicit opt-ins, never automatic fallbacks.
 
 Embeddings are computed on the whole image; the server sends character crops (panel layers), not whole pages.
 """
@@ -16,6 +13,10 @@ Embeddings are computed on the whole image; the server sends character crops (pa
 from __future__ import annotations
 
 import logging
+import hashlib
+import json
+from pathlib import Path
+import importlib.util
 import math
 import threading
 from typing import Protocol, Sequence
@@ -152,6 +153,72 @@ class ClipEmbedder:
         return [f.float().cpu().tolist() for f in feats]
 
 
+
+def dino_available(model_dir: str | Path | None) -> bool:
+    """Cheap, offline readiness gate used before advertising the learned model."""
+    if not model_dir or not importlib.util.find_spec("torch") or not importlib.util.find_spec("transformers"):
+        return False
+    path = Path(model_dir)
+    return all((path / f).is_file() for f in ("config.json", "preprocessor_config.json", "model.safetensors"))
+
+
+class DinoEmbedder:
+    """Locally provisioned facebook/dinov2-small, with safe offline loading."""
+
+    name = "dinov2"
+    _lock = threading.Lock()
+    _cache: dict[str, tuple[object, object, str]] = {}
+
+    def __init__(self, model_dir: str | Path | None) -> None:
+        if not dino_available(model_dir):
+            raise RuntimeError("DINOv2 is not provisioned locally")
+        self.path = Path(model_dir).resolve()
+        self.method = ""
+
+    def _load(self) -> tuple[object, object]:
+        import torch
+        from transformers import AutoImageProcessor, AutoModel
+
+        key = str(self.path)
+        with self._lock:
+            if key not in self._cache:
+                config = json.loads((self.path / "config.json").read_text())
+                if config.get("model_type") != "dinov2" or config.get("hidden_size") != 384:
+                    raise ValueError("the configured model must be DINOv2 Small")
+                digest = hashlib.sha256()
+                with (self.path / "model.safetensors").open("rb") as file:
+                    for chunk in iter(lambda: file.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                processor = AutoImageProcessor.from_pretrained(key, local_files_only=True, trust_remote_code=False)
+                model = AutoModel.from_pretrained(key, local_files_only=True, trust_remote_code=False, use_safetensors=True)
+                model.eval().to("cpu")
+                self._cache[key] = (model, processor, digest.hexdigest())
+            model, processor, digest = self._cache[key]
+        self.method = "dinov2-small-v1:" + digest
+        return model, processor
+
+    def embed(self, images: Sequence[Image.Image]) -> list[list[float] | None]:
+        import torch
+        from PIL import ImageChops
+
+        model, processor = self._load()
+        subjects = []
+        for im in images:
+            rgba = im.convert("RGBA")
+            white = Image.new("RGBA", rgba.size, "white")
+            white.alpha_composite(rgba)
+            rgb = white.convert("RGB")
+            foreground = ImageChops.difference(rgb, Image.new("RGB", rgb.size, "white")).convert("L")
+            box = foreground.point(lambda n: 255 if n > 12 else 0).getbbox()
+            if box is None or (box[2] - box[0]) * (box[3] - box[1]) < 16:
+                raise ValueError("no visible character in scoring image")
+            subjects.append(rgb.crop(box))
+        inputs = processor(images=subjects, return_tensors="pt")
+        with torch.inference_mode():
+            features = model(**inputs).last_hidden_state[:, 0]
+            features = torch.nn.functional.normalize(features, dim=-1)
+        return [row.float().cpu().tolist() for row in features]
+
 class InsightFaceEmbedder:
     """ArcFace identity embeddings from InsightFace (largest face per image)."""
 
@@ -193,13 +260,16 @@ class InsightFaceEmbedder:
         return out
 
 
-def available_embedders(preference: str = "auto") -> list[str]:
+def available_embedders(preference: str = "auto", model_dir: str | Path | None = None) -> list[str]:
     """Embedder names usable on this machine, best first, filtered by ``preference``."""
     names: list[str] = []
-    order = ["insightface", "clip", "structural"] if preference == "auto" else [preference]
+    order = ["dinov2", "structural"] if preference == "auto" else [preference]
     for name in order:
         try:
-            if name == "insightface":
+            if name == "dinov2":
+                if not dino_available(model_dir):
+                    continue
+            elif name == "insightface":
                 import insightface  # noqa: F401
             elif name == "clip":
                 import open_clip  # noqa: F401
@@ -212,8 +282,10 @@ def available_embedders(preference: str = "auto") -> list[str]:
     return names
 
 
-def make_embedder(name: str) -> Embedder:
+def make_embedder(name: str, model_dir: str | Path | None = None) -> Embedder:
     """Construct an embedder by name."""
+    if name == "dinov2":
+        return DinoEmbedder(model_dir)
     if name == "insightface":
         return InsightFaceEmbedder()
     if name == "clip":
@@ -224,7 +296,7 @@ def make_embedder(name: str) -> Embedder:
 
 
 def score_identity(
-    references: Sequence[Image.Image], candidates: Sequence[Image.Image], preference: str = "auto"
+    references: Sequence[Image.Image], candidates: Sequence[Image.Image], preference: str = "auto", model_dir: str | Path | None = None
 ) -> tuple[list[float], str]:
     """Score each candidate against the references. Returns ``(scores, embedder_name)``.
 
@@ -233,14 +305,14 @@ def score_identity(
     if not references or not candidates:
         raise ValueError("need at least one reference and one candidate")
     last_error: Exception | None = None
-    for name in available_embedders(preference):
+    for name in available_embedders(preference, model_dir):
         try:
-            emb = make_embedder(name)
+            emb = make_embedder(name, model_dir)
             vecs = emb.embed([*references, *candidates])
         except Exception as exc:  # model download failures etc. — try the next embedder
             log.warning(
                 "embedder failed, trying the next one",
-                extra={"fields": {"embedder": name, "error": str(exc)}},
+                extra={"fields": {"embedder": name}},
             )
             last_error = exc
             continue
@@ -250,5 +322,5 @@ def score_identity(
         cands = vecs[len(references) :]
         c = centroid(refs)
         scores = [round(max(0.0, min(1.0, cosine(c, v))), 4) for v in cands if v is not None]
-        return scores, name
-    raise RuntimeError(f"no identity embedder could process the images ({last_error})")
+        return scores, emb.method if isinstance(emb, DinoEmbedder) else name
+    raise RuntimeError("no identity embedder could process the images") from last_error

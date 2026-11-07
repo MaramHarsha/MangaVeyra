@@ -112,7 +112,17 @@ func gptImagePrompt(req ImageGenerateRequest, refs int, maskParam bool) string {
 		if req.Init != nil {
 			first = "After the first image, the attached images are"
 		}
-		b.WriteString("\n" + first + " this character's approved reference sheets: keep the face, hairstyle, costume and proportions consistent with them. Do not copy their layout or poses.")
+		hasControls := false
+		for _, ref := range req.References {
+			if ref.Role == "pose" || ref.Label == "Neighbouring page: setting and lighting only" {
+				hasControls = true
+			}
+		}
+		if hasControls {
+			b.WriteString("\n" + first + " labelled controls: pose skeletons control body pose only; neighbouring pages control setting and lighting only; character reference sheets control face, hair and costume. Do not borrow another character's identity or copy a reference sheet layout.")
+		} else {
+			b.WriteString("\n" + first + " this character's approved reference sheets: keep the face, hairstyle, costume and proportions consistent with them. Do not copy their layout or poses.")
+		}
 	}
 	if req.Mask != nil {
 		if maskParam {

@@ -232,6 +232,14 @@ func (m *Module) jobView(ctx context.Context, j *jobs.Job) (jobView, error) {
 		key = "activity.job.panel"
 	case gen.JobRegionEdit:
 		key = "activity.job.region"
+	case gen.JobPage:
+		key = "activity.job.page"
+	case gen.JobRepair:
+		key = "activity.job.repair"
+	case gen.JobTrain:
+		key = "activity.job.train"
+	case gen.JobScore:
+		key = "activity.job.score"
 	case gen.JobLetterPage:
 		key = "activity.job.lettering"
 	default:

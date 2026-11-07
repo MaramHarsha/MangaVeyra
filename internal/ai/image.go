@@ -236,6 +236,10 @@ func (s *imageService) planImage(ctx context.Context, req ImagePlanRequest, excl
 			add(imageCandidate{ProviderID: p.ID, Kind: p.Kind, Executor: jobs.ExecutorGo, Remote: true, Preferred: frozen && route.Preferred, Cost: cost})
 		}
 		if hasProvider(m, providerKindWorker) {
+			if n.Pose && !workerSupportsPose(m) {
+				skipped = append(skipped, m.ID+": pose control unavailable")
+				continue
+			}
 			available := false
 			for _, w := range workers {
 				if w.Status != jobs.WorkerOnline || time.Since(w.LastSeenAt) > jobs.MissedHeartbeats*jobs.HeartbeatInterval {
@@ -323,6 +327,15 @@ func (s *imageService) planImage(ctx context.Context, req ImagePlanRequest, excl
 	p := imagePlan(req, candidates[0], candidates, skipped, chain)
 	p.Estimate = ceiling
 	return p, nil
+}
+
+func workerSupportsPose(m ModelManifest) bool {
+	config, ok := m.Worker["diffusers"].(map[string]any)
+	if !ok {
+		return false
+	}
+	value, _ := config["controlnet_openpose"].(string)
+	return strings.TrimSpace(value) != ""
 }
 
 // maxImageAttempts is the parent attempt envelope ADR 0007 approves.
@@ -458,7 +471,7 @@ func (s *imageService) dispatchGuard(ctx context.Context, req ImageGenerateReque
 func (s *imageService) GenerateImage(ctx context.Context, req ImageGenerateRequest) (ImageResult, error) {
 	var zero ImageResult
 	n, err := normalizeNeeds(req.Plan.Needs)
-	if err != nil || req.CallSlot < 0 || req.CallSlot >= 16 || !imageTask(req.Plan.Task) || !validRoutingMode(req.Plan.RoutingMode) || !db.ValidID(req.ActorID) || !db.ValidID(req.ProjectID) || req.Width != n.Width || req.Height != n.Height || req.Count != n.Count || len(req.References) > n.References || req.Background != "" && req.Background != "opaque" && req.Background != "transparent" || len(req.Prompt) > 64<<10 || strings.TrimSpace(req.Prompt) == "" || !utf8.ValidString(req.Prompt) || len(req.Negative) > 16<<10 || len(req.Style) > 256 || n.Edit != (req.Init != nil) || n.Mask != (req.Mask != nil) {
+	if err != nil || req.CallSlot < 0 || req.CallSlot >= 384 || !imageTask(req.Plan.Task) || !validRoutingMode(req.Plan.RoutingMode) || !db.ValidID(req.ActorID) || !db.ValidID(req.ProjectID) || !finiteStrength(req.Strength) || req.Strength != 0 && req.Init == nil || req.Width != n.Width || req.Height != n.Height || req.Count != n.Count || len(req.References) > n.References || req.Background != "" && req.Background != "opaque" && req.Background != "transparent" || len(req.Prompt) > 64<<10 || strings.TrimSpace(req.Prompt) == "" || !utf8.ValidString(req.Prompt) || len(req.Negative) > 16<<10 || len(req.Style) > 256 || n.Edit != (req.Init != nil) || n.Mask != (req.Mask != nil) {
 		return zero, imageError(CodeBadInput, false, jobs.Cost{})
 	}
 	totalBytes := 0
@@ -678,3 +691,5 @@ func safeImageAdapterError(err error, cost jobs.Cost) *GenerateError {
 	}
 	return imageError(CodeUpstream, false, cost)
 }
+
+func finiteStrength(n float64) bool { return !math.IsNaN(n) && !math.IsInf(n, 0) && n >= 0 && n <= 1 }

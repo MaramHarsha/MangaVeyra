@@ -46,9 +46,15 @@ func (s *imageService) workerImage(ctx context.Context, req ImageGenerateRequest
 	}
 	hash := sha256.New()
 	fmt.Fprintf(hash, "%s\x00%s\x00%s\x00%s\x00%d\x00%d\x00%d\x00%d", req.Plan.ModelID, req.Prompt, req.Negative, req.Style, req.Width, req.Height, req.Count, req.Seed)
+	fmt.Fprintf(hash, "\x00%.6f", req.Strength)
 	for i, r := range req.References {
+		hash.Write([]byte(r.Role))
 		hash.Write(r.Data)
-		if err := add(fmt.Sprintf("ref_%d", i), r); err != nil {
+		name := fmt.Sprintf("ref_%d", i)
+		if r.Role == "pose" {
+			name = "pose_image"
+		}
+		if err := add(name, r); err != nil {
 			return result, imageError(CodeUpstream, false, jobs.Cost{})
 		}
 	}
@@ -64,10 +70,29 @@ func (s *imageService) workerImage(ctx context.Context, req ImageGenerateRequest
 			return result, imageError(CodeUpstream, false, jobs.Cost{})
 		}
 	}
+	var loraKey string
+	if req.LoRAAssetID != "" {
+		lora, err := a.Get(ctx, req.LoRAAssetID)
+		var meta struct {
+			Model string `json:"base_model"`
+		}
+		if err != nil || lora.ProjectID == nil || *lora.ProjectID != req.ProjectID || lora.Kind != "character_lora" || json.Unmarshal(lora.Meta, &meta) != nil || meta.Model != req.Plan.ModelID {
+			return result, imageError(CodeBadInput, false, jobs.Cost{})
+		}
+		loraKey = lora.Key
+		files["lora_0"] = lora.Key
+		hash.Write([]byte(lora.SHA256))
+	}
 	digest := hex.EncodeToString(hash.Sum(nil))
 	existing := ""
 	input := map[string]any{"prompt": req.Prompt, "negative": req.Negative, "width": req.Width, "height": req.Height, "n": req.Count, "seed": req.Seed, "style": req.Style, "_parent_attempt": req.Attempt, "_call_slot": req.CallSlot, "_request_digest": digest, "routing_mode": req.Plan.RoutingMode}
-	child, err := s.d.Jobs.Enqueue(ctx, jobs.EnqueueParams{Type: workerTask(req.Plan.Task, req.Plan.Needs), Scope: parent.Scope, UserID: req.ActorID, Executor: jobs.ExecutorWorker, ProviderID: providerKindWorker, ModelID: req.Plan.ModelID, Input: input, Files: files, ParentID: req.JobID, MaxAttempts: 1, Estimate: jobs.Cost{GPUSeconds: req.Plan.Estimate.GPUSeconds}, Guard: func(ctx context.Context, tx *db.Tx) error {
+	if loraKey != "" {
+		input["loras"] = []map[string]any{{"key": loraKey, "weight": .9}}
+	}
+	if req.Init != nil {
+		input["strength"] = .9 - .55*req.Strength
+	}
+	child, err := s.d.Jobs.Enqueue(ctx, jobs.EnqueueParams{Type: workerTask(req.Plan.Task, req.Plan.Needs), Scope: imageWorkerScope(parent, req), UserID: req.ActorID, Executor: jobs.ExecutorWorker, ProviderID: providerKindWorker, ModelID: req.Plan.ModelID, Input: input, Files: files, ParentID: req.JobID, MaxAttempts: 1, Estimate: jobs.Cost{GPUSeconds: req.Plan.Estimate.GPUSeconds}, Guard: func(ctx context.Context, tx *db.Tx) error {
 		var cur struct {
 			State    string `db:"state"`
 			Attempts int    `db:"attempts"`
@@ -99,7 +124,7 @@ func (s *imageService) workerImage(ctx context.Context, req ImageGenerateRequest
 			ID    string `db:"id"`
 			Input string `db:"input"`
 		}
-		if err := tx.Select(ctx, &children, `SELECT id, input FROM jobs WHERE parent_id = ? ORDER BY id`, req.JobID); err != nil {
+		if err := tx.Select(ctx, &children, `SELECT id, input FROM jobs WHERE parent_id = ? AND type=? ORDER BY id`, req.JobID, workerTask(req.Plan.Task, req.Plan.Needs)); err != nil {
 			return err
 		}
 		for _, c := range children {
@@ -248,12 +273,16 @@ func (s *imageService) workerObservedError(ctx context.Context, child *jobs.Job,
 // declare that exact component in their durable input. Validate before any
 // input storage and again while holding the parent attempt's row lock.
 func validWorkerCallSlot(parent *jobs.Job, req ImageGenerateRequest) bool {
-	if req.CallSlot < 0 || req.CallSlot >= 16 || parent == nil {
+	if req.CallSlot < 0 || req.CallSlot >= 384 || parent == nil {
 		return false
+	}
+	if parent.Type == "page.generate" || parent.Type == "character.repair" {
+		return validControlCallSlot(parent, req)
 	}
 	if req.CallSlot == 0 {
 		return true
 	}
+
 	if parent.Executor != jobs.ExecutorGo || parent.Type != req.Plan.Task {
 		return false
 	}
@@ -278,5 +307,73 @@ func validWorkerCallSlot(parent *jobs.Job, req ImageGenerateRequest) bool {
 		len(payload.Components) > 16 || req.CallSlot >= len(payload.Components) {
 		return false
 	}
-	return payload.Components[req.CallSlot].Prompt != "" && payload.Components[req.CallSlot].Prompt == req.Prompt
+	return payload.Components[req.CallSlot].Prompt != "" && strings.HasPrefix(req.Prompt, payload.Components[req.CallSlot].Prompt)
+}
+
+// A page coordinator declares each immutable image component. Slots are the
+// flattened panel/component indexes, independent of worker concurrency.
+func validControlCallSlot(parent *jobs.Job, req ImageGenerateRequest) bool {
+	if parent.Executor != jobs.ExecutorGo || len(parent.Input) > 2<<20 {
+		return false
+	}
+	var p struct {
+		Version int `json:"version"`
+		Panels  []struct {
+			Scope      jobs.Scope `json:"scope"`
+			PageID     string     `json:"page_id"`
+			Plan       ImagePlan  `json:"plan"`
+			Components []struct {
+				Prompt string `json:"prompt"`
+			} `json:"components"`
+		} `json:"panels"`
+	}
+	if json.Unmarshal(parent.Input, &p) != nil || p.Version != 1 || len(p.Panels) == 0 || len(p.Panels) > 24 {
+		return false
+	}
+	slot := 0
+	for _, panel := range p.Panels {
+		if panel.Scope.Validate() != nil || panel.Scope.ProjectID != parent.Scope.ProjectID {
+			return false
+		}
+		if parent.Type == "page.generate" && (parent.Scope.Kind != jobs.ScopePage || panel.PageID != parent.Scope.PageID || panel.Scope.PageID != parent.Scope.PageID || panel.Scope.Kind != jobs.ScopePanel) {
+			return false
+		}
+		if parent.Type == "character.repair" && (parent.Scope.Kind != jobs.ScopeChapter || panel.Scope.Kind != jobs.ScopeLayer || len(panel.Components) != 1) {
+			return false
+		}
+		for _, c := range panel.Components {
+			if slot == req.CallSlot {
+				return c.Prompt != "" && strings.HasPrefix(req.Prompt, c.Prompt) && panel.Plan.Task == req.Plan.Task && panel.Plan.ModelID == req.Plan.ModelID && panel.Plan.ProviderID == req.Plan.ProviderID
+			}
+			slot++
+		}
+	}
+	return false
+}
+
+// Internal page jobs declare a narrower target for each call. Worker children
+// inherit that target, so the common queue validator sees descendant locks too.
+func imageWorkerScope(parent *jobs.Job, req ImageGenerateRequest) jobs.Scope {
+	if parent.Type != "page.generate" && parent.Type != "character.repair" {
+		return parent.Scope
+	}
+	var p struct {
+		Panels []struct {
+			Scope      jobs.Scope        `json:"scope"`
+			Components []json.RawMessage `json:"components"`
+		} `json:"panels"`
+	}
+	if json.Unmarshal(parent.Input, &p) != nil {
+		return parent.Scope
+	}
+	slot := 0
+	for _, pn := range p.Panels {
+		for range pn.Components {
+			if slot == req.CallSlot {
+				return pn.Scope
+			}
+			slot++
+		}
+	}
+	return parent.Scope
 }
