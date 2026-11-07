@@ -1,5 +1,8 @@
 <script lang="ts">
  import {onMount} from 'svelte';
+ // This official adapter installs static shader/uniform synchronizers for CSP
+ // environments. Despite its package name, it removes Pixi's eval requirement.
+ import 'pixi.js/unsafe-eval';
  import {Application,Assets,Container,Graphics,Sprite} from 'pixi.js';
  import type {Page,Lettering,Point} from './types';
  import {bounds,layerPlacement,letteringOpacity} from './document';
