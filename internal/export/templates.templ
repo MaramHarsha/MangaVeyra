@@ -1,0 +1,167 @@
+package export
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/layout"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+	"strconv"
+)
+
+templ exportScreen(c *layout.Chrome, v exportView) {
+	@layout.EditorShell(c) {
+		<div class="mv-exportui">
+			<div class="mv-exportui__editor" aria-hidden="true" inert>
+				<header class="mv-exportui__bar">
+					@ui.Icon("arrow-left", 20)
+					<strong>{ v.Project.Title }</strong><span>· { i18n.T(ctx,"exportui.chapter","number",v.Chapter.Number) } · { v.Chapter.Title }</span>
+					<div class="mv-exportui__tools">@ui.Icon("arrow-back-up", 18)
+@ui.Icon("arrow-forward-up", 18)
+</div>
+					<div class="mv-exportui__tabs"><span>{ i18n.T(ctx,"exportui.pages") }</span><span>{ i18n.T(ctx,"exportui.lettering") }</span><span>{ i18n.T(ctx,"exportui.translate") }</span><span>{ i18n.T(ctx,"exportui.animate") }</span></div>
+					<div class="mv-exportui__bar-actions"><span>100%</span><span>{ i18n.T(ctx,"exportui.preview") }</span><strong>{ i18n.T(ctx,"exportui.export") }</strong><span>{ i18n.T(ctx,"exportui.publish") }</span></div>
+				</header>
+				<aside class="mv-exportui__rail">
+					<h2>{ i18n.T(ctx,"exportui.pages") }</h2>
+					<div class="mv-exportui__filmstrip">
+						for _,p:=range v.Pages {
+							<figure><img src={ v.previewURL(p.ID) } alt="" width="104" height="147" loading="lazy"/><figcaption>{ strconv.Itoa(p.Number) }</figcaption></figure>
+						}
+					</div>
+					<h2>{ i18n.T(ctx,"exportui.layers") }</h2>
+					if len(v.Page.Panels)>0 {
+						for _,l:=range v.Page.Panels[0].Layers {
+							<div class="mv-exportui__layer">@ui.Icon("stack-2", 16)
+<span>{ l.Name }</span>@ui.Icon("eye", 16)
+</div>
+						}
+					}
+				</aside>
+				<div class="mv-exportui__canvas">
+					if v.Page.ID!="" {
+						<img src={ v.previewURL(v.Page.ID) } width="520" height="735" alt=""/>
+					}
+				</div>
+				<aside class="mv-exportui__properties"><h2>{ i18n.T(ctx,"exportui.properties") }</h2><span>{ v.Project.PageSize }</span><span>{ strconv.Itoa(v.Page.Width) } × { strconv.Itoa(v.Page.Height) }</span></aside>
+				<footer class="mv-exportui__status"><span>{ i18n.T(ctx,"exportui.page_count","count",len(v.Pages)) }</span><span>{ i18n.T(ctx,"exportui.direction."+v.Page.Direction) }</span><span>{ v.Project.PageSize }</span><span>{ i18n.T(ctx,"exportui.self_host") }</span></footer>
+			</div>
+			<div class="mv-exportui__scrim"></div>
+			@ui.Modal(ui.ModalProps{ID: "chapter-export", Title: i18n.T(ctx, "exportui.title", "number", v.Chapter.Number), Static: true, Class: "mv-exportui__panel"}) {
+				<a class="mv-exportui__close mv-close" href={ templ.URL(v.Back) } aria-label={ i18n.T(ctx, "ui.close") }>@ui.Icon("x", 20)
+</a>
+				<form method="post" action={ templ.URL(v.action()) } novalidate hx-disabled-elt="find button[type='submit']">
+					if v.Error!="" {
+						<div class="mv-exportui__notice" role="alert">@ui.Icon("alert-triangle", 18)
+<p>{ v.Error }</p></div>
+					}
+					if len(v.Pages)==0 {
+						<div class="mv-exportui__notice" role="status"><p>{ i18n.T(ctx,"exportui.empty") }</p></div>
+					}
+					<fieldset class="mv-exportui__formats">
+						<legend class="mv-sr-only">{ i18n.T(ctx,"exportui.format") }</legend>
+						for _,format:=range []string{"png","pdf","epub","video","cbz"} {
+							<label class={ ui.Cls("mv-exportui__format", ui.If(format == "cbz", "mv-exportui__format--wide")) }>
+								<input
+									type="radio"
+									name="format"
+									value={ format }
+									if v.Request.Format == format {
+										checked
+									}
+									if format == "epub" || format == "video" || v.active() {
+										disabled
+									}
+								/>
+								@ui.Icon(formatIcon(format), 22)
+								<span><strong>{ i18n.T(ctx,"exportui.format."+format) }</strong><span>{ i18n.T(ctx,"exportui.format_desc."+format) }</span></span>
+								if format=="epub"||format=="video" {
+									<span class="mv-exportui__soon">{ i18n.T(ctx,"exportui.soon") }</span>
+								}
+							</label>
+						}
+					</fieldset>
+					<div class="mv-exportui__fields">
+						<fieldset class="mv-exportui__pages">
+							<legend>{ i18n.T(ctx,"exportui.pages") }</legend>
+							<div class="mv-exportui__segments">
+								for _,mode:=range []string{"all","range","current"} {
+									<label>
+										<input
+											type="radio"
+											name="pages"
+											value={ mode }
+											if v.PageMode == mode {
+												checked
+											}
+											if v.active() {
+												disabled
+											}
+										/><span>{ i18n.T(ctx,"exportui.pages."+mode) }</span>
+									</label>
+								}
+							</div>
+						</fieldset>
+						@ui.Field(ui.FieldProps{ID: "export-language", Label: i18n.T(ctx, "exportui.language")}) {
+							@ui.Select(ui.SelectProps{ID: "export-language", Name: "lang", Value: v.Request.Lang, Options: v.Languages, Disabled: v.active()})
+						}
+						@ui.Field(ui.FieldProps{ID: "export-range", Label: i18n.T(ctx, "exportui.range"), Hint: i18n.T(ctx, "exportui.range_hint")}) {
+							@ui.Input(ui.InputProps{ID: "export-range", Name: "range", Value: v.Range, Placeholder: "1-3, 5", Disabled: v.active(), MaxLength: 2048, Described: true})
+						}
+						@ui.Field(ui.FieldProps{ID: "export-trim", Label: i18n.T(ctx, "exportui.trim")}) {
+							@ui.Select(ui.SelectProps{ID: "export-trim", Name: "trim_id", Value: v.Request.TrimID, Options: trimOptions(ctx), Disabled: v.active()})
+						}
+						@ui.Field(ui.FieldProps{ID: "export-dpi", Label: i18n.T(ctx, "exportui.resolution")}) {
+							@ui.Select(ui.SelectProps{ID: "export-dpi", Name: "dpi", Value: strconv.Itoa(v.Request.DPI), Options: dpiOptions(ctx), Disabled: v.active()})
+						}
+						<p class="mv-exportui__print-note">{ i18n.T(ctx,"exportui.print_note") }</p>
+					</div>
+					<div class="mv-exportui__checks">
+						@ui.Checkbox(ui.CheckProps{Name: "credits_page", Checked: v.Request.CreditsPage, Label: i18n.T(ctx, "exportui.credits"), Disabled: v.active()})
+						@ui.Checkbox(ui.CheckProps{Name: "living_loops", Label: i18n.T(ctx, "exportui.loops"), Disabled: true})
+					</div>
+					@ui.ModalFoot() {
+						<span class="mv-exportui__limit">{ i18n.T(ctx,"exportui.output_limit","count",len(v.Pages)) }</span><a href={ templ.URL(v.Back) } class="mv-btn mv-btn--secondary">{ i18n.T(ctx,"ui.cancel") }</a>@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Primary, Icon: "download", Disabled: len(v.Pages) == 0 || v.active(), Busy: v.active()}) {
+	{ i18n.T(ctx,"exportui.export") }
+}
+					}
+				</form>
+				@jobStatus(v)
+			}
+		</div>
+	}
+}
+
+func formatIcon(f string) string {
+	switch f {
+	case "png":
+		return "photo"
+	case "pdf":
+		return "file-type-pdf"
+	case "epub":
+		return "book"
+	case "video":
+		return "movie"
+	default:
+		return "archive"
+	}
+}
+
+templ jobStatus(v exportView) {
+	<section id="export-job" class="mv-exportui__job" aria-live="polite" { poll(v)... }>
+		if v.Job!=nil {
+			@ui.GenState(jobProps(ctx, v.Job))
+			if v.Result!=nil {
+				<a class="mv-btn mv-btn--primary" href={ templ.URL(v.Result.URL) } download={ v.Result.Filename }>
+					@ui.Icon("download", 18)
+					{ i18n.T(ctx,"exportui.download") }
+				</a>
+			}
+			if v.active() {
+				<form method="post" action={ templ.URL(v.Base + "/jobs/" + v.Job.ID + "/cancel") } novalidate>
+					@ui.Button(ui.ButtonProps{Type: "submit"}) {
+						{ i18n.T(ctx,"exportui.cancel_job") }
+					}
+				</form><a href={ templ.URL(v.Base + "?job=" + v.Job.ID) }>{ i18n.T(ctx,"exportui.refresh") }</a>
+			}
+		}
+	</section>
+}
