@@ -191,6 +191,10 @@ func mapStudioJobError(ctx context.Context, err error) error {
 		return badInputJobError("The script chapter is locked.")
 	case errors.Is(err, studio.ErrInvalid), errors.Is(err, studio.ErrConflict):
 		return badInputJobError("The script can no longer be saved.")
+	case db.IsTransient(err):
+		// A deadlock or serialization failure rolled the save back; the
+		// attempt can safely run again instead of failing for good.
+		return &jobs.JobError{Code: jobs.ErrCodeInternal, Message: "The script save was interrupted; it will be retried.", Retryable: true}
 	default:
 		return internalJobError()
 	}

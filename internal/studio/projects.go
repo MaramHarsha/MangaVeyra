@@ -99,7 +99,24 @@ func (s *service) CreateProject(ctx context.Context, actor Actor, in NewProject)
 			return fmt.Errorf("studio: check project slug: %w", err)
 		}
 		if n != 0 {
-			slug += "-" + id[:6]
+			// The ULID's last characters are random (its first ten encode the
+			// time), so they make a unique suffix even for projects created in
+			// the same few minutes; retry in the unlikely event of a clash.
+			base := slug
+			for attempt := 0; n != 0 && attempt < 8; attempt++ {
+				tail := id[len(id)-6:]
+				if attempt > 0 {
+					fresh := db.NewID()
+					tail = fresh[len(fresh)-6:]
+				}
+				slug = base + "-" + tail
+				if err := tx.Get(ctx, &n, `SELECT COUNT(*) FROM projects WHERE owner_id = ? AND slug = ?`, state.user.ID, slug); err != nil {
+					return fmt.Errorf("studio: check project slug: %w", err)
+				}
+			}
+			if n != 0 {
+				return ErrConflict
+			}
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO projects
 			(id, owner_id, title, slug, premise, logline, genres, tags, style, format, page_size, page_width, page_height,

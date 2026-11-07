@@ -94,6 +94,9 @@ type Queue struct {
 	onFinish   []func(context.Context, *Job)
 	onCancel   []func(jobID string)
 	access     func(ctx context.Context, id httpx.Identity, j *Job) bool
+	// privateInput lists job types whose input never leaves the server
+	// through the jobs API (it may carry private project material).
+	privateInput map[string]bool
 
 	wakeMu sync.Mutex
 	wake   chan struct{}
@@ -117,6 +120,37 @@ func New(d *db.DB, st *settings.Service, pub Publisher, opts Options) *Queue {
 		opts.Logger = slog.Default()
 	}
 	return &Queue{db: d, settings: st, pub: pub, log: opts.Logger, opts: opts, wake: make(chan struct{}), Now: db.Now}
+}
+
+// MarkPrivateInput hides the input of these job types from the jobs API. The
+// stored payload may carry private project material, such as an adaptation
+// source, that only the job handler needs.
+func (q *Queue) MarkPrivateInput(types ...string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.privateInput == nil {
+		q.privateInput = map[string]bool{}
+	}
+	for _, t := range types {
+		q.privateInput[t] = true
+	}
+}
+
+// PublicView returns j as the jobs API may show it: a copy without the input
+// when the job type's input is private.
+func (q *Queue) PublicView(j *Job) *Job {
+	if j == nil {
+		return nil
+	}
+	q.mu.RLock()
+	private := q.privateInput[j.Type]
+	q.mu.RUnlock()
+	if !private {
+		return j
+	}
+	c := *j
+	c.Input = nil
+	return &c
 }
 
 // SetPublisher sets the realtime publisher (wiring creates the hub after the queue).

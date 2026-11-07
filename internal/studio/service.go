@@ -70,7 +70,9 @@ func (s *service) authorize(ctx context.Context, q db.Querier, actor Actor, proj
 			return ErrForbidden
 		}
 	}
-	if state.user.IsAdmin() {
+	// A site admin may act on any project, but a narrow API token does not
+	// carry that power unless it has the admin scope (as for job access).
+	if state.user.IsAdmin() && (state.token == nil || state.token.HasScope("admin")) {
 		return nil
 	}
 
@@ -99,12 +101,15 @@ func (s *service) resolveActor(ctx context.Context, q db.Querier, actor Actor) (
 		var u *auth.User
 		var err error
 		if tx, ok := q.(*db.Tx); ok {
-			var tokenUserID string
-			if err := tx.Get(ctx, &tokenUserID, `SELECT user_id FROM api_tokens WHERE id = ?`+forUpdate(tx), actor.TokenID); err != nil || tokenUserID != actor.UserID {
-				return actorState{}, ErrForbidden
-			}
+			// Lock users before api_tokens, the same order auth uses when it
+			// suspends a user and revokes their tokens, so the two cannot
+			// deadlock on PostgreSQL.
 			var lockedUserID string
 			if err := tx.Get(ctx, &lockedUserID, `SELECT id FROM users WHERE id = ?`+forUpdate(tx), actor.UserID); err != nil {
+				return actorState{}, ErrForbidden
+			}
+			var tokenUserID string
+			if err := tx.Get(ctx, &tokenUserID, `SELECT user_id FROM api_tokens WHERE id = ?`+forUpdate(tx), actor.TokenID); err != nil || tokenUserID != actor.UserID {
 				return actorState{}, ErrForbidden
 			}
 			tok, u, err = s.auth.ResolveStoredTokenTx(ctx, tx, actor.TokenID)

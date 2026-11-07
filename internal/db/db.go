@@ -307,6 +307,19 @@ func IsUniqueViolation(err error) bool {
 		strings.Contains(msg, "duplicate key value")
 }
 
+// IsTransient reports whether err is a deadlock or serialization failure
+// (PostgreSQL 40P01 / 40001) or a busy SQLite database: the transaction did
+// nothing and may be retried.
+func IsTransient(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "SQLSTATE 40P01") || strings.Contains(msg, "SQLSTATE 40001") ||
+		strings.Contains(msg, "deadlock detected") || strings.Contains(msg, "could not serialize access") ||
+		strings.Contains(msg, "database is locked") || strings.Contains(msg, "SQLITE_BUSY")
+}
+
 // IsForeignKeyViolation reports whether err is a foreign key violation on either dialect.
 func IsForeignKeyViolation(err error) bool {
 	if err == nil {

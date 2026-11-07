@@ -18,6 +18,10 @@ type Module struct {
 // New creates the module.
 func New(d *core.Deps) *Module {
 	svc := &service{queue: d.Jobs, auth: d.Auth}
+	// Script inputs carry the project's private adaptation source.
+	if d.Jobs != nil {
+		d.Jobs.MarkPrivateInput(JobScript)
+	}
 	core.Provide[Service](d, svc)
 	return &Module{d: d, svc: svc}
 }

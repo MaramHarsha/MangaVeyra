@@ -237,7 +237,7 @@ func (m *Module) newProviderPage(w http.ResponseWriter, r *http.Request) error {
 
 func (m *Module) createProvider(w http.ResponseWriter, r *http.Request) error {
 	if err := web.ParseForm(w, r); err != nil {
-		return core.ErrBadRequest("invalid form")
+		return core.ErrBadRequest(i18n.T(r.Context(), "models.error.form"))
 	}
 	ctx := r.Context()
 	actor, err := browserProviderActor(ctx)
@@ -269,7 +269,7 @@ func (m *Module) createProvider(w http.ResponseWriter, r *http.Request) error {
 	if !validProviderName(v.Name) {
 		v.Errors.Add("name", i18n.T(ctx, "models.form.name_invalid"))
 	}
-	if key == "" || len(key) > maxProviderKeyBytes {
+	if !validProviderKey(key) {
 		v.Errors.Add("key", i18n.T(ctx, "models.form.key_invalid"))
 	}
 	if v.Scope != providerScopeServer && v.Scope != providerScopeUser {
@@ -301,7 +301,7 @@ func (m *Module) renderProviderForm(w http.ResponseWriter, r *http.Request, stat
 
 func (m *Module) testProvider(w http.ResponseWriter, r *http.Request) error {
 	if err := web.ParseForm(w, r); err != nil {
-		return core.ErrBadRequest("invalid form")
+		return core.ErrBadRequest(i18n.T(r.Context(), "models.error.form"))
 	}
 	ctx := r.Context()
 	actor, id, err := m.providerMutationTarget(ctx, r.PathValue("id"))
@@ -314,7 +314,7 @@ func (m *Module) testProvider(w http.ResponseWriter, r *http.Request) error {
 	if testErr != nil && view.ID == "" {
 		view, err = m.providers.GetManageable(ctx, actor, id)
 		if err != nil {
-			return m.providerPageError(err)
+			return m.providerPageError(r.Context(), err)
 		}
 	}
 	inst, settingsErr := loadRemoteSettings(ctx, m.d.Settings)
@@ -341,7 +341,7 @@ func (m *Module) testProvider(w http.ResponseWriter, r *http.Request) error {
 
 func (m *Module) setProviderEnabled(w http.ResponseWriter, r *http.Request) error {
 	if err := web.ParseForm(w, r); err != nil {
-		return core.ErrBadRequest("invalid form")
+		return core.ErrBadRequest(i18n.T(r.Context(), "models.error.form"))
 	}
 	ctx := r.Context()
 	actor, id, err := m.providerMutationTarget(ctx, r.PathValue("id"))
@@ -355,11 +355,11 @@ func (m *Module) setProviderEnabled(w http.ResponseWriter, r *http.Request) erro
 	case "false":
 		enabled = false
 	default:
-		return core.ErrBadRequest("invalid enabled state")
+		return core.ErrBadRequest(i18n.T(r.Context(), "models.error.enabled"))
 	}
 	view, err := m.providers.SetEnabled(ctx, actor, id, enabled)
 	if err != nil {
-		return m.providerPageError(err)
+		return m.providerPageError(r.Context(), err)
 	}
 	inst, err := loadRemoteSettings(ctx, m.d.Settings)
 	if err != nil {
@@ -380,7 +380,7 @@ func (m *Module) setProviderEnabled(w http.ResponseWriter, r *http.Request) erro
 
 func (m *Module) replaceProviderKey(w http.ResponseWriter, r *http.Request) error {
 	if err := web.ParseForm(w, r); err != nil {
-		return core.ErrBadRequest("invalid form")
+		return core.ErrBadRequest(i18n.T(r.Context(), "models.error.form"))
 	}
 	ctx := r.Context()
 	actor, id, err := m.providerMutationTarget(ctx, r.PathValue("id"))
@@ -392,10 +392,10 @@ func (m *Module) replaceProviderKey(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return err
 	}
-	if key == "" || len(key) > maxProviderKeyBytes {
+	if !validProviderKey(key) {
 		view, getErr := m.providers.GetManageable(ctx, actor, id)
 		if getErr != nil {
-			return m.providerPageError(getErr)
+			return m.providerPageError(r.Context(), getErr)
 		}
 		row := providerRowView{Provider: view, LocalOnly: inst.LocalOnly, Tone: ui.ToneError,
 			Notice: i18n.T(ctx, "models.form.key_invalid")}
@@ -408,7 +408,7 @@ func (m *Module) replaceProviderKey(w http.ResponseWriter, r *http.Request) erro
 	}
 	view, err := m.providers.ReplaceKey(ctx, actor, id, key)
 	if err != nil {
-		return m.providerPageError(err)
+		return m.providerPageError(r.Context(), err)
 	}
 	message := i18n.T(ctx, "models.flash.key_replaced")
 	if core.IsHTMX(r) {
@@ -430,17 +430,17 @@ func (m *Module) providerMutationTarget(ctx context.Context, id string) (provide
 		return providerActor{}, "", core.ErrNotFound()
 	}
 	if _, err := m.providers.GetManageable(ctx, actor, id); err != nil {
-		return providerActor{}, "", m.providerPageError(err)
+		return providerActor{}, "", m.providerPageError(ctx, err)
 	}
 	return actor, id, nil
 }
 
-func (m *Module) providerPageError(err error) error {
+func (m *Module) providerPageError(ctx context.Context, err error) error {
 	if errors.Is(err, errProviderNotFound) || errors.Is(err, errProviderForbidden) {
 		return core.ErrNotFound()
 	}
 	if errors.Is(err, errProviderInvalid) || errors.Is(err, errProviderUnavailable) {
-		return core.ErrBadRequest("provider unavailable")
+		return core.ErrBadRequest(i18n.T(ctx, "models.error.unavailable"))
 	}
 	return err
 }

@@ -537,6 +537,12 @@ func usdToMicrodollars(v float64) (int64, error) {
 	if v > 0 && scaled == 0 {
 		return 1, nil
 	}
+	// Decimal amounts are not exact in binary floating point, so $4.03 scales
+	// to 4030000.0000000005. Snap such representation noise to the intended
+	// whole microdollar before rounding up, so a cap is never 1 µ$ off.
+	if r := math.Round(scaled); math.Abs(scaled-r) <= math.Max(1e-6, r*1e-12) {
+		scaled = r
+	}
 	return int64(math.Ceil(scaled)), nil
 }
 
@@ -639,14 +645,6 @@ func insertLedger(ctx context.Context, tx *db.Tx, row reservationRow, actual int
 	return nil
 }
 
-type reservationUsageRow struct {
-	UserID        string        `db:"user_id"`
-	ProviderScope string        `db:"provider_scope"`
-	State         string        `db:"state"`
-	Estimate      int64         `db:"estimate_microusd"`
-	Actual        sql.NullInt64 `db:"actual_microusd"`
-}
-
 type legacyUsageRow struct {
 	UserID sql.NullString `db:"user_id"`
 	USD    float64        `db:"usd"`
@@ -654,32 +652,29 @@ type legacyUsageRow struct {
 
 func monthlyUsageTx(ctx context.Context, tx *db.Tx, userID, month string) (MonthlyRemoteUsage, error) {
 	out := MonthlyRemoteUsage{Month: month}
-	var reservations []reservationUsageRow
-	if err := tx.Select(ctx, &reservations, `SELECT user_id, provider_scope, state, estimate_microusd, actual_microusd
-		FROM spend_reservations WHERE month = ?`, month); err != nil {
-		return out, fmt.Errorf("ai: read monthly spend reservations: %w", err)
+	// Sum in SQL: the spend lock is held while this runs, so it must not grow
+	// with the month's call volume by loading every reservation row.
+	var sums struct {
+		Server   int64 `db:"server_total"`
+		User     int64 `db:"user_total"`
+		Reserved int64 `db:"reserved_count"`
+		Invalid  int64 `db:"invalid_count"`
 	}
-	for _, row := range reservations {
-		amount := row.Estimate
-		if row.State == SpendStateReserved {
-			out.ReservedCount++
-		} else {
-			if !row.Actual.Valid {
-				return MonthlyRemoteUsage{}, ErrInvalidSpendAmount
-			}
-			amount = row.Actual.Int64
-		}
-		var err error
-		out.ServerMicroUSD, err = checkedAdd(out.ServerMicroUSD, amount)
-		if err != nil {
-			return MonthlyRemoteUsage{}, err
-		}
-		if userID != "" && row.UserID == userID && row.ProviderScope == "server" {
-			out.UserMicroUSD, err = checkedAdd(out.UserMicroUSD, amount)
-			if err != nil {
-				return MonthlyRemoteUsage{}, err
-			}
-		}
+	const amount = `CASE WHEN state = 'reserved' THEN estimate_microusd ELSE actual_microusd END`
+	if err := tx.Get(ctx, &sums, `SELECT
+		CAST(COALESCE(SUM(`+amount+`), 0) AS BIGINT) AS server_total,
+		CAST(COALESCE(SUM(CASE WHEN user_id = ? AND provider_scope = 'server' THEN `+amount+` ELSE 0 END), 0) AS BIGINT) AS user_total,
+		CAST(COALESCE(SUM(CASE WHEN state = 'reserved' THEN 1 ELSE 0 END), 0) AS BIGINT) AS reserved_count,
+		CAST(COALESCE(SUM(CASE WHEN state <> 'reserved' AND actual_microusd IS NULL THEN 1 ELSE 0 END), 0) AS BIGINT) AS invalid_count
+		FROM spend_reservations WHERE month = ?`, userID, month); err != nil {
+		return out, fmt.Errorf("ai: sum monthly spend reservations: %w", err)
+	}
+	if sums.Invalid != 0 || sums.Server < 0 || sums.User < 0 {
+		return MonthlyRemoteUsage{}, ErrInvalidSpendAmount
+	}
+	out.ServerMicroUSD, out.ReservedCount = sums.Server, int(sums.Reserved)
+	if userID != "" {
+		out.UserMicroUSD = sums.User
 	}
 
 	// Rows whose id is not a reservation pre-date this state machine (or belong

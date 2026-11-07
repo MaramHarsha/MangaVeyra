@@ -138,7 +138,7 @@ func (s *providerStore) Create(ctx context.Context, actor providerActor, in prov
 	if in.Kind == "" {
 		in.Kind = providerKindOpenRouter
 	}
-	if !validProviderKind(in.Kind) || !validProviderName(in.Name) || in.Key == "" || len(in.Key) > maxProviderKeyBytes {
+	if !validProviderKind(in.Kind) || !validProviderName(in.Name) || !validProviderKey(in.Key) {
 		return zero, errProviderInvalid
 	}
 	owner, err := s.ownerForCreate(ctx, actor, in.Scope)
@@ -187,7 +187,7 @@ func (s *providerStore) Update(ctx context.Context, actor providerActor, id stri
 func (s *providerStore) ReplaceKey(ctx context.Context, actor providerActor, id, plaintext string) (providerView, error) {
 	var zero providerView
 	plaintext = strings.TrimSpace(plaintext)
-	if plaintext == "" || len(plaintext) > maxProviderKeyBytes {
+	if !validProviderKey(plaintext) {
 		return zero, errProviderInvalid
 	}
 	err := s.db.WithTx(ctx, func(tx *db.Tx) error {
@@ -505,6 +505,21 @@ func (r providerRecord) view() providerView {
 	}
 	return providerView{ID: r.ID, Kind: r.Kind, Name: r.Name, KeyHint: r.KeyHint, Enabled: r.Enabled,
 		Scope: r.Scope, OwnerID: owner, LastTest: last, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+}
+
+// validProviderKey accepts a non-empty key of visible ASCII only. A key with
+// spaces or control characters can never be sent as an Authorization header,
+// so it would make every call fail (and be charged as an unknown outcome).
+func validProviderKey(key string) bool {
+	if key == "" || len(key) > maxProviderKeyBytes {
+		return false
+	}
+	for i := 0; i < len(key); i++ {
+		if key[i] < 0x21 || key[i] > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 func validProviderName(name string) bool {

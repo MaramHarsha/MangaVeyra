@@ -335,9 +335,14 @@ func TestJobAPIBearerScopesAndProjectAllowlist(t *testing.T) {
 			bytes.Contains(list.Body, []byte("blocked-source")) || bytes.Contains(list.Body, []byte("unscoped-source")) {
 			t.Fatalf("project-restricted job list = %d %s", list.StatusCode, list.Body)
 		}
+		// Script inputs carry private adaptation source: an allowed reader sees
+		// the job, never its input.
 		if got := reader.Get("/api/v1/jobs/" + allowed.ID); got.StatusCode != http.StatusOK ||
-			!bytes.Contains(got.Body, []byte("allowed-source")) {
+			!bytes.Contains(got.Body, []byte(allowed.ID)) || bytes.Contains(got.Body, []byte("allowed-source")) {
 			t.Fatalf("allowed job = %d %s", got.StatusCode, got.Body)
+		}
+		if list.StatusCode == http.StatusOK && bytes.Contains(list.Body, []byte("allowed-source")) {
+			t.Fatal("job list exposed a private script input")
 		}
 		for _, id := range []string{blocked.ID, unscoped.ID} {
 			if got := reader.Get("/api/v1/jobs/" + id); got.StatusCode != http.StatusNotFound {

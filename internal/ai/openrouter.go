@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core/netguard"
+	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 )
 
 const (
@@ -323,6 +325,13 @@ func (c *openRouterClient) Complete(ctx context.Context, key string, in ScriptIn
 	var decoded openRouterResponse
 	decodeErr := json.Unmarshal(raw, &decoded)
 	out.ActualUSD = parseUsageCost(decoded.Usage.Cost)
+	// provider.max_price bounds what OpenRouter may charge to this
+	// reservation, so a larger reported cost is invalid; record the bound
+	// rather than let one bad value block remote spend for the month.
+	if out.ActualUSD != nil && *out.ActualUSD > openRouterReserveUSD {
+		bound := openRouterReserveUSD
+		out.ActualUSD = &bound
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return out, classifyHTTPStatus(resp.StatusCode)
 	}
@@ -396,7 +405,7 @@ func (s *providerService) TestConnection(ctx context.Context, actor providerActo
 	if _, err := s.store.GetManageable(ctx, actor, id); err != nil {
 		return zero, err
 	}
-	inst, err := loadRemoteSettings(ctx, s.settings)
+	inst, err := s.freshSettings(ctx)
 	if err != nil || inst.LocalOnly {
 		return zero, errProviderUnavailable
 	}
@@ -424,6 +433,34 @@ func (s *providerService) TestConnection(ctx context.Context, actor providerActo
 		return view, testErr
 	}
 	return view, nil
+}
+
+// txInstanceReader reads settings inside a transaction, bypassing the cache.
+type txInstanceReader interface {
+	InstanceTx(context.Context, *db.Tx) (settings.Instance, error)
+}
+
+// freshSettings reads instance settings without the short-lived cache, so a
+// connection check that sends the key can never go out after Local only was
+// turned on (generation already re-reads settings under the spend lock).
+func (s *providerService) freshSettings(ctx context.Context) (settings.Instance, error) {
+	reader, ok := s.settings.(txInstanceReader)
+	if !ok || s.store == nil || s.store.db == nil {
+		return loadRemoteSettings(ctx, s.settings)
+	}
+	var inst settings.Instance
+	err := s.store.db.WithReadTx(ctx, func(tx *db.Tx) error {
+		var err error
+		inst, err = reader.InstanceTx(ctx, tx)
+		return err
+	})
+	if err != nil {
+		return settings.Instance{}, errors.New("ai: settings unavailable")
+	}
+	if err := inst.Validate(); err != nil {
+		return settings.Instance{}, errors.New("ai: settings invalid")
+	}
+	return inst, nil
 }
 
 func readBounded(r io.Reader, limit int64) ([]byte, bool, error) {

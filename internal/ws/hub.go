@@ -143,13 +143,22 @@ func New(d *db.DB, log *slog.Logger) *Hub {
 		presence:    map[string]map[*conn]json.RawMessage{},
 	}
 	h.Authorize("user:", func(ctx context.Context, id httpx.Identity, topic string, write bool) error {
-		if id.User != nil && !write && (id.User.IsAdmin() || topic == "user:"+id.User.ID) {
+		if id.User == nil || write {
+			return ErrForbidden
+		}
+		// The user topic carries job summaries from every project. A bearer
+		// token may follow it only with projects:read and no project
+		// allow-list, the same rule as listing all of the user's jobs.
+		if id.Token != nil && (!id.Token.HasScope("projects:read") || len(id.Token.ProjectIDs) != 0) {
+			return ErrForbidden
+		}
+		if topic == "user:"+id.User.ID || (id.User.IsAdmin() && (id.Token == nil || id.Token.HasScope("admin"))) {
 			return nil
 		}
 		return ErrForbidden
 	})
 	h.Authorize("admin:", func(ctx context.Context, id httpx.Identity, topic string, write bool) error {
-		if id.User.IsAdmin() && !write {
+		if id.User != nil && id.User.IsAdmin() && !write && (id.Token == nil || id.Token.HasScope("admin")) {
 			return nil
 		}
 		return ErrForbidden
