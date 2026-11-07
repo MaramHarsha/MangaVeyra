@@ -104,7 +104,29 @@ func TestImageCatalogueAndRoutingScreensAreCompleteWithoutJavaScript(t *testing.
 			body := mainOf(t, response)
 			mustContain(t, body, labels...)
 			assertEveryTargetIsServed(t, ta, body)
-			mustNotContain(t, body, "aiimage.")
+			mustNotContain(t, body, "aiimage.", "@ui.")
+		}
+	})
+}
+
+func TestFalConnectionCanBeReenabledFromImageCatalogue(t *testing.T) {
+	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
+		admin := ta.Login(t, ta.Admin.Username)
+		created := postModelsForm(admin, "/models/providers", url.Values{"kind": {"fal"}, "name": {"Harbour image connection"}, "key": {"fal-fixture-secret"}, "scope": {"server"}})
+		if created.StatusCode != http.StatusSeeOther {
+			t.Fatalf("fal create=%d %s", created.StatusCode, created.Body)
+		}
+		id := providerIDByName(t, ta, "Harbour image connection")
+		disabled := postModelsForm(admin, "/models/providers/"+id+"/enabled?cap=image", url.Values{"enabled": {"false"}})
+		if disabled.StatusCode != http.StatusSeeOther || disabled.Header.Get("Location") != "/models?cap=image" {
+			t.Fatalf("disable=%d %s", disabled.StatusCode, disabled.Body)
+		}
+		body := mainOf(t, admin.Get("/models?cap=image"))
+		mustContain(t, body, "Harbour image connection", "Disabled", "/models/providers/"+id+"/enabled?cap=image")
+		mustNotContain(t, body, "fal-fixture-secret")
+		enabled := postModelsForm(admin, "/models/providers/"+id+"/enabled?cap=image", url.Values{"enabled": {"true"}})
+		if enabled.StatusCode != http.StatusSeeOther {
+			t.Fatalf("enable=%d", enabled.StatusCode)
 		}
 	})
 }

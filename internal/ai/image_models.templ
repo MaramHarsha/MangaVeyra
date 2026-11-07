@@ -16,10 +16,16 @@ templ imageModelsTable(rows []imageModelView) {
 			for index,row:=range rows {
 				<tr class="mv-models-table__row">
 					<td class="mv-models-table__model" data-label={ i18n.T(ctx, "models.col.model") }><strong>{ row.Name }</strong><span class="mv-models-table__meta">{ row.ID }</span></td>
-					<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.provider") }>{ row.Provider }</td>
+					<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.provider") }>
+						{ row.Provider }
+						if row.Connection!=nil {
+							<span class="mv-models-table__meta">{ row.Connection.Name } · { providerScopeLabel(ctx,row.Connection.Scope) }</span>
+						}
+					</td>
 					<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.use") }>{ row.Use }</td>
-					<td data-label={ i18n.T(ctx, "models.col.status") }>@ui.Badge(imageStatusTone(row.Ready), "", row.Status)
-</td>
+					<td data-label={ i18n.T(ctx, "models.col.status") }>
+						@ui.Badge(imageStatusTone(row.Ready), "", row.Status)
+					</td>
 					<td class="mv-models-table__cost" data-label={ i18n.T(ctx, "models.col.cost") }>{ row.Cost }</td>
 					<td data-label={ i18n.T(ctx, "models.col.on") }>
 						if row.Connection!=nil {
@@ -30,7 +36,7 @@ templ imageModelsTable(rows []imageModelView) {
 										<span class="mv-sr-only">{ i18n.T(ctx,"models.toggle.label","name",row.Connection.Name) }</span>
 									}
 								</form>
-								@ui.Dropdown("mv-models-table__menu", "end", false, providerMenuTrigger(row.Connection.Name), imageProviderMenu(ctx, row.Connection))
+								@ui.Dropdown("mv-models-table__menu", "end", false, providerMenuTrigger(row.Connection.Name), imageProviderMenu(ctx, row.Connection, row.Status == i18n.T(ctx, "models.tile.blocked")))
 								@providerKeyDialog(providerRowView{Provider: *row.Connection})
 							</div>
 						} else {
@@ -55,6 +61,6 @@ func imageToggleIcon(enabled bool) string {
 	}
 	return "toggle-left"
 }
-func imageProviderMenu(ctx context.Context, p *providerView) []ui.MenuItem {
-	return []ui.MenuItem{{Post: true, Href: providerPath(p.ID, "test") + "?cap=image", Label: i18n.T(ctx, "models.test.action"), Icon: "plug-connected"}, {Href: "#" + providerKeyDialogID(p.ID), Label: i18n.T(ctx, "models.key.replace"), Icon: "key", Attrs: templ.Attributes{"data-dialog-open": providerKeyDialogID(p.ID)}}}
+func imageProviderMenu(ctx context.Context, p *providerView, blocked bool) []ui.MenuItem {
+	return []ui.MenuItem{{Post: true, Href: providerPath(p.ID, "test") + "?cap=image", Label: i18n.T(ctx, "models.test.action"), Icon: "plug-connected", Attrs: templ.Attributes{"disabled": blocked || !p.Enabled}}, {Href: "#" + providerKeyDialogID(p.ID), Label: i18n.T(ctx, "models.key.replace"), Icon: "key", Attrs: templ.Attributes{"data-dialog-open": providerKeyDialogID(p.ID)}}}
 }

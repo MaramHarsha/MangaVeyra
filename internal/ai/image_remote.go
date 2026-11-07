@@ -37,6 +37,7 @@ func (s *imageService) remoteImage(ctx context.Context, req ImageGenerateRequest
 	if err != nil || !hasProvider(m, provider.Kind) {
 		return result, imageError(CodeNoProvider, false, jobs.Cost{})
 	}
+	expectedKind := provider.Kind
 	quote, ok := quoteImage(provider.Kind, req.Plan.ModelID, req.Plan.Needs)
 	if !ok {
 		return result, imageError(CodeNoProvider, false, jobs.Cost{})
@@ -89,7 +90,7 @@ func (s *imageService) remoteImage(ctx context.Context, req ImageGenerateRequest
 		return closeReservation(imageCall{}, err)
 	}
 	provider, err = s.providers.ResolveDispatch(ctx, req.ActorID, req.Plan.ProviderID)
-	if err != nil || !hasProvider(m, provider.Kind) {
+	if err != nil || provider.Kind != expectedKind || !hasProvider(m, provider.Kind) {
 		return closeReservation(imageCall{}, imageError(CodeNoProvider, false, jobs.Cost{}))
 	}
 	if provider.Kind == providerKindOpenRouter {
@@ -267,12 +268,12 @@ func (s *imageService) falImage(ctx context.Context, key string, req ImageGenera
 	if len(decoded.Images) != req.Count {
 		return out, badOutputAdapterError(false)
 	}
-	for i, item := range decoded.Images {
+	for _, item := range decoded.Images {
 		data, err := s.falImageBytes(ctx, item.URL)
 		if err != nil {
 			return out, err
 		}
-		g, err := decodeGeneratedImage(data, req.Width, req.Height, decoded.Seed+int64(i))
+		g, err := decodeGeneratedImage(data, req.Width, req.Height, decoded.Seed)
 		if err != nil {
 			return out, err
 		}

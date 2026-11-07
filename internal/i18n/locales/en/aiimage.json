@@ -66,7 +66,7 @@
   "aiimage.task.cover.generate": "Covers",
   "aiimage.task.panel.generate": "Panel art",
   "aiimage.task.region.edit": "Region edits",
-  "aiimage.tile.fal": "2 image models",
+  "aiimage.tile.fal": "Image generation",
   "aiimage.use.edits": "Region edits",
   "aiimage.use.panels": "Panels · sheets · covers"
 }

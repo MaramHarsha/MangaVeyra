@@ -166,7 +166,9 @@ func (m *Module) customPost(w http.ResponseWriter, r *http.Request) error {
 				return core.ErrInternal(errProviderUnavailable)
 			}
 		}
-		err = testLocalText(r.Context(), p, m.text.localDoer)
+		testCtx, cancel := context.WithTimeout(r.Context(), providerTestTimeout)
+		err = testLocalText(testCtx, p, m.text.localDoer)
+		cancel()
 		state := "ok"
 		stage := "describe"
 		if err != nil {

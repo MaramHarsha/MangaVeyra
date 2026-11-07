@@ -66,7 +66,7 @@
   "aiimage.task.cover.generate": "表紙",
   "aiimage.task.panel.generate": "コマの作画",
   "aiimage.task.region.edit": "領域編集",
-  "aiimage.tile.fal": "画像モデル2件",
+  "aiimage.tile.fal": "画像生成",
   "aiimage.use.edits": "領域編集",
   "aiimage.use.panels": "コマ・設定画・表紙"
 }

@@ -31,5 +31,7 @@
 .mv-aicustom__metrics dt{color:var(--mv-text-2);font-size:var(--mv-fs-meta)}
 .mv-aicustom__metrics dd{margin:2px 0 0;font-weight:700;overflow-wrap:anywhere}
 .mv-aicustom__actions{display:flex;justify-content:flex-end;gap:10px}
-@media(max-width:1000px){.mv-airouting .mv-page-head{align-items:flex-start;flex-direction:column}.mv-airouting .mv-seg{flex-wrap:wrap}.mv-aicustom__types{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1000px){.mv-airouting .mv-pagehead{align-items:flex-start;flex-direction:column}.mv-airouting .mv-seg{flex-wrap:wrap}.mv-aicustom__types{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.mv-airouting__columns,.mv-aicustom__columns{grid-template-columns:minmax(0,1fr)}.mv-airouting__decisions{min-height:240px}.mv-airouting__decision{grid-template-columns:minmax(0,1fr)}.mv-aicustom__preview{height:240px}.mv-aicustom__actions{flex-wrap:wrap}.mv-airouting .mv-seg__item{min-height:44px}}
+
+@media(min-width:1001px){.mv-airouting__decisions{min-height:calc(100dvh - 199px)}}

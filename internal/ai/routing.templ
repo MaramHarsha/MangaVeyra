@@ -28,7 +28,7 @@ templ RoutingPage(v routingView) {
 				<h2 id="routing-decisions">{ i18n.T(ctx,"aiimage.routing.recent") }</h2>
 				<ol class="mv-list-plain">
 					for _,decision:=range v.Decisions {
-						<li class="mv-airouting__decision"><span>{ decision.Task }</span><div><strong>{ decision.Model }</strong><p>{ decision.Explanation }</p></div></li>
+						<li class="mv-airouting__decision"><span>{ i18n.T(ctx,"aiimage.task."+decision.Task) }</span><div><strong>{ decision.Model }</strong><p>{ decision.Explanation }</p></div></li>
 					}
 					if len(v.Decisions)==0 {
 						<li class="mv-airouting__empty">{ i18n.T(ctx,"aiimage.routing.no_decisions") }</li>
@@ -40,7 +40,7 @@ templ RoutingPage(v routingView) {
 					<h2 id="routing-pins">{ i18n.T(ctx,"aiimage.routing.pins") }</h2>
 					for _,pin:=range v.Pins {
 						<div class="mv-airouting__pin">
-							<span>{ pin.Task }<small>{ pin.Scope } · { pin.ScopeID }</small></span><strong>{ pin.Model }</strong>
+							<span>{ i18n.T(ctx,"aiimage.task."+pin.Task) }<small>{ i18n.T(ctx,"aiimage.scope."+pin.Scope) } · { pin.ScopeID }</small></span><strong>{ pin.Model }</strong>
 							if pin.Editable {
 								<form method="post" action={ templ.URL("/models/routing/pins/" + pin.ID + "/delete") } novalidate>
 									@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Ghost, Size: ui.SM, Icon: "x", Label: i18n.T(ctx, "aiimage.routing.remove_pin")}) {
@@ -76,16 +76,20 @@ templ RoutingPage(v routingView) {
 				</section>
 				<form id="routing-settings" method="post" action="/models/routing" novalidate class="mv-airouting__box">
 					<h2>{ i18n.T(ctx,"aiimage.routing.guards") }</h2>
-					<div class="mv-airouting__guard"><label for="licence-guard">{ i18n.T(ctx,"aiimage.routing.licence") }</label>@ui.Toggle(ui.ToggleProps{ID: "licence-guard", Name: "licence_guard", Value: "true", Checked: v.LicenceGuard, Disabled: !v.Admin, AriaLabel: i18n.T(ctx, "aiimage.routing.licence")})
-</div>
+					<div class="mv-airouting__guard">
+						<label for="licence-guard">{ i18n.T(ctx,"aiimage.routing.licence") }</label>@ui.Toggle(ui.ToggleProps{ID: "licence-guard", Name: "licence_guard", Value: "true", Checked: v.LicenceGuard, Disabled: !v.Admin, AriaLabel: i18n.T(ctx, "aiimage.routing.licence")})
+					</div>
 					@ui.Field(ui.FieldProps{ID: "routing-limit", Label: i18n.T(ctx, "aiimage.routing.limit"), Hint: i18n.T(ctx, "aiimage.routing.limit_hint")}) {
 						@ui.Input(ui.InputProps{ID: "routing-limit", Name: "limit", Type: "number", Value: fmt.Sprintf("%g", v.Limit), Disabled: !v.Admin, Described: true, Attrs: templ.Attributes{"min": "0", "step": "0.000001"}})
 					}
-					<div class="mv-airouting__guard"><span>{ i18n.T(ctx,"aiimage.routing.learn") } @ui.SoonTag()
-</span>@ui.Toggle(ui.ToggleProps{ID: "routing-learn", Disabled: true, AriaLabel: i18n.T(ctx, "aiimage.routing.learn")})
-</div>
-					<div class="mv-airouting__guard"><label for="users-add-providers">{ i18n.T(ctx,"aiimage.routing.users") }</label>@ui.Toggle(ui.ToggleProps{ID: "users-add-providers", Name: "users_may_add", Value: "true", Checked: v.UsersMayAdd, Disabled: !v.Admin, AriaLabel: i18n.T(ctx, "aiimage.routing.users")})
-</div>
+					<div class="mv-airouting__guard">
+						<span>
+							{ i18n.T(ctx,"aiimage.routing.learn") } @ui.SoonTag()
+						</span>@ui.Toggle(ui.ToggleProps{ID: "routing-learn", Disabled: true, AriaLabel: i18n.T(ctx, "aiimage.routing.learn")})
+					</div>
+					<div class="mv-airouting__guard">
+						<label for="users-add-providers">{ i18n.T(ctx,"aiimage.routing.users") }</label>@ui.Toggle(ui.ToggleProps{ID: "users-add-providers", Name: "users_may_add", Value: "true", Checked: v.UsersMayAdd, Disabled: !v.Admin, AriaLabel: i18n.T(ctx, "aiimage.routing.users")})
+					</div>
 					if v.Admin {
 						@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Quiet, Size: ui.SM}) {
 							{ i18n.T(ctx,"aiimage.routing.save") }
@@ -151,7 +155,21 @@ templ CustomProviderPage(v customProviderView) {
 			<div class="mv-aicustom__fields">
 				<fieldset class="mv-field">
 					<legend class="mv-field__label">{ i18n.T(ctx,"aiimage.custom.type") }</legend>
-					<div class="mv-aicustom__types"><span class="is-current">{ i18n.T(ctx,"aiimage.custom.compatible") }</span><span aria-disabled="true">ComfyUI @ui.SoonTag()</span><span aria-disabled="true">Hugging Face @ui.SoonTag()</span><span aria-disabled="true">HTTP @ui.SoonTag()</span></div>
+					<div class="mv-aicustom__types">
+						<span class="is-current">{ i18n.T(ctx,"aiimage.custom.compatible") }</span>
+						<span aria-disabled="true">
+							ComfyUI
+							@ui.SoonTag()
+						</span>
+						<span aria-disabled="true">
+							Hugging Face
+							@ui.SoonTag()
+						</span>
+						<span aria-disabled="true">
+							HTTP
+							@ui.SoonTag()
+						</span>
+					</div>
 				</fieldset>
 				if v.Step=="connect" {
 					@customNameField(v)
@@ -196,8 +214,12 @@ templ CustomProviderPage(v customProviderView) {
 			</div>
 			<div class="mv-aicustom__result">
 				<h2>{ i18n.T(ctx,"aiimage.custom.result") }</h2>
-				<div class="mv-aicustom__preview" role="status"><div>@ui.Icon("plug-connected", 32)
-<strong>{ i18n.T(ctx,"aiimage.custom.text_check") }</strong><span>{ i18n.T(ctx,"aiimage.custom.non_generation") }</span></div></div>
+				<div class="mv-aicustom__preview" role="status">
+					<div>
+						@ui.Icon("plug-connected", 32)
+						<strong>{ i18n.T(ctx,"aiimage.custom.text_check") }</strong><span>{ i18n.T(ctx,"aiimage.custom.non_generation") }</span>
+					</div>
+				</div>
 				<dl class="mv-aicustom__metrics"><div><dt>{ i18n.T(ctx,"models.col.status") }</dt><dd>{ customStatus(ctx,v.TestState) }</dd></div><div><dt>{ i18n.T(ctx,"aiimage.custom.kind") }</dt><dd>{ i18n.T(ctx,"models.cap.text") }</dd></div><div><dt>{ i18n.T(ctx,"models.col.cost") }</dt><dd>{ i18n.T(ctx,"models.cost.none") }</dd></div></dl>
 				<div class="mv-aicustom__actions">
 					@ui.LinkButton(customBack(v), ui.ButtonProps{Variant: ui.Ghost}) {

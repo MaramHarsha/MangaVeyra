@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core/netguard"
+	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 )
 
 const providerKindLocalText = "openai-compatible-local"
@@ -30,7 +33,8 @@ func (r providerRecord) localConfig() localTextConfig {
 	if r.Kind == providerKindLocalText {
 		dec := json.NewDecoder(strings.NewReader(r.Config))
 		dec.DisallowUnknownFields()
-		if dec.Decode(&c) != nil {
+		var extra any
+		if dec.Decode(&c) != nil || dec.Decode(&extra) != io.EOF {
 			return localTextConfig{}
 		}
 	}
@@ -65,7 +69,7 @@ func (s *textService) planLocalText(ctx context.Context, req TextPlanRequest, in
 		return TextPlan{}, false, nil
 	}
 	mode := req.RoutingMode
-	inst, err := loadRemoteSettings(ctx, s.settings)
+	inst, err := s.localSettings(ctx)
 	if err != nil {
 		return TextPlan{}, false, nil
 	}
@@ -115,7 +119,7 @@ func (s *textService) generateLocalText(ctx context.Context, req TextGenerateReq
 	}
 	reason := ""
 	for attempt := 0; attempt < 2; attempt++ {
-		inst, err := loadRemoteSettings(ctx, s.settings)
+		inst, err := s.localSettings(ctx)
 		if err != nil || inst.LocalOnly {
 			return zero, localOnlyError(nil)
 		}
@@ -234,4 +238,24 @@ func testLocalText(ctx context.Context, p dispatchProvider, doer httpDoer) error
 		}
 	}
 	return errProviderUnavailable
+}
+
+// Custom local text has no remote reservation transaction, so its privacy
+// admission must independently bypass the settings cache before every call.
+func (s *textService) localSettings(ctx context.Context) (settings.Instance, error) {
+	if reader, ok := s.settings.(interface {
+		InstanceTx(context.Context, *db.Tx) (settings.Instance, error)
+	}); ok && s.db != nil {
+		var inst settings.Instance
+		err := s.db.WithTx(ctx, func(tx *db.Tx) error {
+			var err error
+			inst, err = reader.InstanceTx(ctx, tx)
+			if err != nil {
+				return err
+			}
+			return inst.Validate()
+		})
+		return inst, err
+	}
+	return loadRemoteSettings(ctx, s.settings)
 }

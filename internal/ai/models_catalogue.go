@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
@@ -32,7 +33,7 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 	out := []imageModelView{}
 	for _, model := range models {
 		row := imageModelView{Name: model.Name, ID: model.ID, Status: i18n.T(ctx, "models.tile.not_connected"), Use: i18n.T(ctx, "aiimage.use.panels"), Cost: i18n.T(ctx, "models.cost.none")}
-		if model.Mask {
+		if model.Edit {
 			row.Use = i18n.T(ctx, "aiimage.use.edits")
 		}
 		if model.ID == PlaceholderArt {
@@ -50,7 +51,7 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 			if inst.LocalOnly {
 				row.Status = i18n.T(ctx, "models.tile.blocked")
 			}
-			quote, ok := quoteImage(p.Kind, model.ID, ImageNeeds{Width: 1024, Height: 1024, Count: 1})
+			quote, ok := quoteImage(p.Kind, model.ID, ImageNeeds{Width: 1024, Height: 1024, Count: 1, Edit: model.Edit, Mask: model.Mask})
 			if ok {
 				row.Cost = fmt.Sprintf("≤ $%.3f", quote.USD)
 			}
@@ -66,10 +67,35 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 			}
 			break
 		}
+
+		// Disabled connections remain manageable from the image tab; otherwise
+		// disabling the only fal connection would also hide its enable action.
+		if row.Provider == "" {
+			for _, v := range manageable {
+				if !hasProvider(model, v.Kind) {
+					continue
+				}
+				row.Provider = providerKindName(v.Kind)
+				row.Status = providerStatusLabel(ctx, v)
+				if !used[v.ID] {
+					copy := v
+					row.Connection = &copy
+					used[v.ID] = true
+				}
+				if quote, ok := quoteImage(v.Kind, model.ID, ImageNeeds{Width: 1024, Height: 1024, Count: 1, Edit: model.Edit, Mask: model.Mask}); ok {
+					row.Cost = fmt.Sprintf("≤ $%.3f", quote.USD)
+				}
+				break
+			}
+		}
+		if row.Connection != nil && !inst.LocalOnly {
+			row.Status = providerStatusLabel(ctx, *row.Connection)
+			row.Ready = row.Connection.Enabled && row.Connection.LastTest.State == "ok"
+		}
 		if row.Provider == "" && hasProvider(model, providerKindWorker) {
 			row.Provider = i18n.T(ctx, "models.tile.local")
 			for _, w := range workers {
-				if w.Status != jobs.WorkerOnline {
+				if w.Status != jobs.WorkerOnline || time.Since(w.LastSeenAt) > jobs.MissedHeartbeats*jobs.HeartbeatInterval {
 					continue
 				}
 				for _, id := range w.Models.V {

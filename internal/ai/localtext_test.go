@@ -48,7 +48,13 @@ func TestLocalTextConnectionOptionalKeyAndValidatedScript(t *testing.T) {
 		if err := d.Get(ctx, &count, `SELECT COUNT(*) FROM spend_reservations WHERE job_id = ?`, id); err != nil || count != 0 {
 			t.Fatalf("local call reserved remote spending: %d %v", count, err)
 		}
-		updateInstance(t, f.settings, func(i *settings.Instance) { i.LocalOnly = true })
+		// A second process commits local-only while this service retains its old
+		// settings cache. The local adapter has no reservation transaction to
+		// perform this refresh on its behalf.
+		if _, err := f.settings.Instance(ctx); err != nil {
+			t.Fatal(err)
+		}
+		updateInstance(t, settings.New(d), func(i *settings.Instance) { i.LocalOnly = true })
 		_, err = m.text.GenerateText(ctx, TextGenerateRequest{Plan: plan, ActorID: f.userID, ProjectID: f.projectID, JobID: id, Attempt: 1, Input: testScriptInputJSON(t)})
 		requireGenerateCode(t, err, CodeLocalOnly)
 		if fake.count() != 1 {
