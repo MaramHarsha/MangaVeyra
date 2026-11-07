@@ -22,17 +22,11 @@ var defaultLayerNames = map[string][]string{
 	pagedoc.LayerCharacter:  {"character"},
 }
 
-// layerName is the localised display name of a layer: the character's name
-// for character layers, the interface label for default names, otherwise the
-// creator's own name.
+// layerName is the display name of a layer, matching the island and the
+// export screen's shell: default names show the interface label for the
+// layer kind, any other stored name shows as stored, and a character layer
+// without its own name shows its character's name.
 func layerName(ctx context.Context, l pagedoc.Layer, characters []studio.Character) string {
-	if l.Kind == pagedoc.LayerCharacter && l.CharacterID != "" {
-		for _, c := range characters {
-			if c.ID == l.CharacterID && c.Name != "" {
-				return c.Name
-			}
-		}
-	}
 	name := strings.TrimSpace(l.Name)
 	if name != "" {
 		lower := strings.ToLower(name)
@@ -44,6 +38,13 @@ func layerName(ctx context.Context, l pagedoc.Layer, characters []studio.Charact
 		}
 		if custom {
 			return name
+		}
+	}
+	if l.Kind == pagedoc.LayerCharacter && l.CharacterID != "" {
+		for _, c := range characters {
+			if c.ID == l.CharacterID && c.Name != "" {
+				return c.Name
+			}
 		}
 	}
 	return i18n.T(ctx, "editor.layer."+l.Kind)

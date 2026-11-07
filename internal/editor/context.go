@@ -76,9 +76,20 @@ func styles(ctx context.Context, current string) []option {
 		found = found || s.Value == current
 	}
 	if !found {
-		out = append(out, option{ID: current, Label: current})
+		out = append(out, option{ID: current, Label: labelOr(ctx, "editor.style_legacy."+current, humanize(current))})
 	}
 	return out
+}
+
+// humanize turns a stored identifier ("bw_screentone") into readable text
+// ("Bw screentone") for styles the catalogue has no label for.
+func humanize(id string) string {
+	s := strings.TrimSpace(strings.NewReplacer("_", " ", "-", " ").Replace(id))
+	if s == "" {
+		return id
+	}
+	r := []rune(s)
+	return strings.ToUpper(string(r[0])) + string(r[1:])
 }
 
 func shotClass(shot string) string {

@@ -314,5 +314,9 @@
   "editor.four_variations_gpu": "4 variations · {gpu}",
   "editor.version.restored": "Version restored",
   "editor.history.empty": "No saved versions yet.",
-  "editor.dismiss": "Dismiss"
+  "editor.dismiss": "Dismiss",
+  "editor.style_legacy.bw_screentone": "B/W screentone",
+  "editor.style_legacy.seinen": "Seinen",
+  "editor.style_legacy.shoujo": "Shōjo",
+  "editor.style_legacy.color_webtoon": "Webtoon · full colour"
 }

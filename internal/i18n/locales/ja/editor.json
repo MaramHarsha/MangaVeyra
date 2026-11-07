@@ -314,5 +314,9 @@
   "editor.four_variations_gpu": "4案を生成 · {gpu}",
   "editor.version.restored": "バージョンを復元しました",
   "editor.history.empty": "保存されたバージョンはまだありません。",
-  "editor.dismiss": "閉じる"
+  "editor.dismiss": "閉じる",
+  "editor.style_legacy.bw_screentone": "白黒スクリーントーン",
+  "editor.style_legacy.seinen": "青年マンガ",
+  "editor.style_legacy.shoujo": "少女マンガ",
+  "editor.style_legacy.color_webtoon": "Webtoon · フルカラー"
 }
