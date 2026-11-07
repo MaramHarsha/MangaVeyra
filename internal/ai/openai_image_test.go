@@ -671,3 +671,67 @@ func TestFitGeneratedImageCoversWithoutDistortion(t *testing.T) {
 		t.Fatal("oversized output accepted")
 	}
 }
+
+func TestOpenRouterBackupEditBoundsInputsAndRestoresOutsidePixels(t *testing.T) {
+	forEachAIDialect(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		w, h := 2000, 1000
+		initIm := image.NewNRGBA(image.Rect(0, 0, w, h))
+		maskIm := image.NewNRGBA(image.Rect(0, 0, w, h))
+		for y := 0; y < h; y++ {
+			for x := 0; x < w; x++ {
+				initIm.SetNRGBA(x, y, color.NRGBA{uint8(x), uint8(y), 7, 255})
+				maskIm.SetNRGBA(x, y, color.NRGBA{A: 255})
+				if x < 500 {
+					maskIm.SetNRGBA(x, y, color.NRGBA{255, 255, 255, 255})
+				}
+			}
+		}
+		var ib, mb bytes.Buffer
+		_ = png.Encode(&ib, initIm)
+		_ = png.Encode(&mb, maskIm)
+		out := imageTestPNG(t, 1376, 768, color.NRGBA{240, 0, 0, 255})
+		fake := &queuedDoer{responders: []func(*http.Request) (*http.Response, error){func(*http.Request) (*http.Response, error) {
+			return httpJSON(200, map[string]any{"data": []any{map[string]string{"b64_json": base64.StdEncoding.EncodeToString(out)}}, "usage": map[string]any{"cost": 0.04}}, nil), nil
+		}}}
+		m, f := imageTestModule(t, d, fake)
+		f.createProvider(t, m.providers, providerScopeServer, "or-edit")
+		p := planWith(t, m, f, ImagePlanRequest{Task: TaskRegionEdit, PinModelID: openRouterNanoBanana21, Needs: ImageNeeds{Width: w, Height: h, Count: 1, Edit: true, Mask: true}})
+		id := imageTestJob(t, m, f, p)
+		req := imageTestRequest(f, p, id)
+		req.Init = &ImageRef{Data: ib.Bytes(), ContentType: "image/png", Role: "init"}
+		req.Mask = &ImageRef{Data: mb.Bytes(), ContentType: "image/png", Role: "mask"}
+		result, err := m.image.GenerateImage(ctx, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body struct {
+			Prompt string `json:"prompt"`
+			Refs   []struct {
+				ImageURL struct {
+					URL string `json:"url"`
+				} `json:"image_url"`
+			} `json:"input_references"`
+		}
+		if err := json.Unmarshal(fake.requests()[0].Body, &body); err != nil || len(body.Refs) != 2 {
+			t.Fatalf("references = %d %v", len(body.Refs), err)
+		}
+		for _, r := range body.Refs {
+			if b := decodeDataURLImage(t, r.ImageURL.URL).Bounds(); b.Dx() != 1536 || b.Dy() != 768 {
+				t.Fatalf("init/mask not bounded together: %v", b)
+			}
+		}
+		if !strings.Contains(body.Prompt, "edit mask") {
+			t.Fatalf("prompt = %q", body.Prompt)
+		}
+		got, _, _ := storage.DecodeImage(result.Images[0].Data, storage.ImageLimits{MaxWidth: 4096, MaxHeight: 4096, MaxPixels: 16 << 20})
+		for _, pt := range []image.Point{{600, 10}, {1999, 999}, {1200, 500}} {
+			if color.NRGBAModel.Convert(got.At(pt.X, pt.Y)) != initIm.NRGBAAt(pt.X, pt.Y) {
+				t.Fatalf("outside pixel %v changed", pt)
+			}
+		}
+		if r, _, _, _ := got.At(100, 100).RGBA(); r>>8 < 200 {
+			t.Fatal("masked area not edited")
+		}
+	})
+}

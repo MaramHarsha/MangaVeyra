@@ -233,18 +233,30 @@ func openRouterImagePayload(req ImageGenerateRequest) (map[string]any, error) {
 	}
 	refs := min(len(req.References), route.MaxRefs)
 	references := []map[string]any{}
+	// Every input is re-encoded and bounded: references to gptImageRefEdge,
+	// the init and mask together to gptImageEditEdge so they stay aligned.
+	add := func(data []byte, edge int) error {
+		scaled, err := downscaleReference(data, edge)
+		if err != nil {
+			return badInputAdapterError()
+		}
+		references = append(references, openRouterReference(pngDataURL(scaled)))
+		return nil
+	}
 	if req.Init != nil {
-		references = append(references, openRouterReference(imageDataURL(*req.Init)))
+		if err := add(req.Init.Data, gptImageEditEdge); err != nil {
+			return nil, err
+		}
 	}
 	for _, r := range req.References[:refs] {
-		data, err := downscaleReference(r.Data, gptImageRefEdge)
-		if err != nil {
-			return nil, badInputAdapterError()
+		if err := add(r.Data, gptImageRefEdge); err != nil {
+			return nil, err
 		}
-		references = append(references, openRouterReference(pngDataURL(data)))
 	}
 	if req.Mask != nil {
-		references = append(references, openRouterReference(imageDataURL(*req.Mask)))
+		if err := add(req.Mask.Data, gptImageEditEdge); err != nil {
+			return nil, err
+		}
 	}
 	prompt := gptImagePrompt(req, refs, false)
 	if len(prompt) > imagePromptBytes {

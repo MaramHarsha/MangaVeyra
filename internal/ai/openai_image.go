@@ -28,6 +28,9 @@ const (
 	// gptImageRefEdge is the longest edge of a reference image after the
 	// adapter downscales it, which also bounds its input tokens and bytes.
 	gptImageRefEdge = 1024
+	// gptImageEditEdge bounds an init image and its mask when a route takes
+	// them as references; both scale together so they stay aligned.
+	gptImageEditEdge = 1536
 )
 
 type gptImageInput struct {
