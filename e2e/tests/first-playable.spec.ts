@@ -21,11 +21,10 @@ async function setup(page: Page) {
   await page.waitForURL('**/studio');
 }
 
+// The editor autosaves; Cmd/Ctrl+S saves at once. The footer reports the state.
 async function savePage(page: Page) {
-  const response = page.waitForResponse(r => r.request().method() === 'PUT' && /\/api\/v1\/editor\/.*\/pages\/[a-z0-9]+$/.test(new URL(r.url()).pathname));
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  expect((await response).status()).toBe(200);
-  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+  await page.keyboard.press('ControlOrMeta+KeyS');
+  await expect(page.locator('[data-save-state]')).toHaveAttribute('data-save-state', 'saved');
 }
 
 function archiveEntries(data: Buffer): string[] {
@@ -137,14 +136,15 @@ test('fresh install → script → characters → layered art → lettering → 
     const add = page.getByRole('combobox', { name: 'Add character', exact: true });
     await expect(add).toBeEnabled();
     await expect(page.locator('.mv-ed__stage canvas')).toBeVisible();
-    await page.getByRole('button', { name: 'Layouts', exact: true }).click();
+    await page.getByRole('button', { name: 'Page actions', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Change layout', exact: true }).click();
     const tilt = page.getByRole('switch', { name: 'Tilt gutters for action', exact: true });
     await expect(tilt).toBeChecked();
     await tilt.press('Space');
     await expect(tilt).not.toBeChecked();
     await page.screenshot({ animations: 'disabled', path: info.outputPath('D2-desktop.png') });
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+    await expect(page.locator('[data-save-state]')).toHaveAttribute('data-save-state', 'saved');
     await add.selectOption(character);
     await savePage(page);
     await page.getByRole('button', { name: /^Regenerate panel/ }).click();
@@ -208,10 +208,10 @@ test('fresh install → script → characters → layered art → lettering → 
     await savePage(other);
     await other.close();
     const text = page.getByLabel('Text', { exact: true });
-    await text.fill('Keep this unsaved conflict draft.');
     const rejected = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().includes('/api/v1/editor/'));
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await text.fill('Keep this unsaved conflict draft.');
     expect((await rejected).status()).toBe(409);
+    await expect(page.locator('[data-save-state]')).toHaveAttribute('data-save-state', 'conflict');
     await expect(text).toHaveValue('Keep this unsaved conflict draft.');
     await page.getByRole('button', { name: 'Reload latest', exact: true }).click();
     await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
@@ -219,11 +219,13 @@ test('fresh install → script → characters → layered art → lettering → 
     await page.getByRole('button', { name: 'Reload latest', exact: true }).click();
     await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
     await expect(text).toHaveValue('The harbour remembers every footstep.');
-    await page.getByRole('button', { name: 'Lock page', exact: true }).click();
+    await page.getByRole('button', { name: 'Page actions', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Lock page', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Speech', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: 'Pages', exact: true }).click();
     await expect(page.getByRole('button', { name: /^Regenerate panel/ })).toBeDisabled();
-    await page.getByRole('button', { name: 'Unlock page', exact: true }).click();
+    await page.getByRole('button', { name: 'Page actions', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Unlock page', exact: true }).click();
     await page.getByRole('dialog', { name: 'Unlock', exact: true }).getByRole('button', { name: 'Confirm', exact: true }).click();
     await expect(page.getByRole('button', { name: /^Regenerate panel/ })).toBeEnabled();
   });
