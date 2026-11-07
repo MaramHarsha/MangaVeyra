@@ -17,19 +17,36 @@ type MeterProps struct {
 }
 
 // ComputeMeter renders the top-bar meter: CPU icon, mini bar and queue text.
+// The meter always shows live status; it links to the queue only once the
+// queue page exists (ADR 0004 §7).
 templ ComputeMeter(p MeterProps) {
-	<a
-		class={ Cls("mv-meter", If(p.Idle, "mv-meter--idle"), If(p.Offline, "mv-meter--offline")) }
-		href={ templ.URL(p.Href) }
-		aria-label={ p.Title }
-		data-tip={ p.Title }
-		data-tip-pos="below"
-		id="mv-meter"
-	>
-		@Icon("cpu", 15)
-		<span class={ Cls("mv-bar mv-meter__bar", Pct(p.Load)) } aria-hidden="true"></span>
-		<span class="mv-meter__label">{ p.Text }</span>
-	</a>
+	if Ready(ctx, p.Href) {
+		<a
+			class={ Cls("mv-meter", If(p.Idle, "mv-meter--idle"), If(p.Offline, "mv-meter--offline")) }
+			href={ templ.URL(p.Href) }
+			aria-label={ p.Title }
+			data-tip={ p.Title }
+			data-tip-pos="below"
+			id="mv-meter"
+		>
+			@Icon("cpu", 15)
+			<span class={ Cls("mv-bar mv-meter__bar", Pct(p.Load)) } aria-hidden="true"></span>
+			<span class="mv-meter__label">{ p.Text }</span>
+		</a>
+	} else {
+		<span
+			class={ Cls("mv-meter", If(p.Idle, "mv-meter--idle"), If(p.Offline, "mv-meter--offline")) }
+			role="status"
+			aria-label={ p.Title }
+			data-tip={ p.Title }
+			data-tip-pos="below"
+			id="mv-meter"
+		>
+			@Icon("cpu", 15)
+			<span class={ Cls("mv-bar mv-meter__bar", Pct(p.Load)) } aria-hidden="true"></span>
+			<span class="mv-meter__label">{ p.Text }</span>
+		</span>
+	}
 }
 
 // ComputeCardProps drive the large compute meter (GPU, VRAM, queue).

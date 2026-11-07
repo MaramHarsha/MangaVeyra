@@ -15,7 +15,7 @@ func multipartProjectRequest(t *testing.T, mode, premise, paste string, upload [
 	mw := multipart.NewWriter(&body)
 	fields := map[string]string{
 		"title": "Harbor Ghosts", "chapter_title": "The Quiet Bell", "mode": mode, "premise": premise,
-		"source_text": paste, "style": "bw_screentone", "format": "manga_rtl", "language": "en", "pages_target": "24",
+		"source_text": paste, "style": "seinen_bw", "format": "manga_rtl", "language": "en", "pages_target": "24",
 	}
 	for key, value := range fields {
 		if err := mw.WriteField(key, value); err != nil {

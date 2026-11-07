@@ -2,86 +2,258 @@ package ai
 
 import (
 	"context"
+	"strconv"
+
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
 )
 
-templ modelsAddAction(canAdd bool) {
-	if canAdd {
-		<div class="mv-models__add">
-			@ui.LinkButton("/models/providers/new?kind=openrouter", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
-				{ i18n.T(ctx, "models.openrouter.connect") }
-			}
-			@ui.LinkButton("/models/providers/new?kind=openai", ui.ButtonProps{Variant: ui.Secondary, Icon: "plus"}) {
-				{ i18n.T(ctx, "models.openai.connect") }
-			}
-		</div>
-	}
-}
-
-// ModelsPage is the Gate A provider-management surface.
+// ModelsPage is G2 Models & providers (desktop artboard): the header
+// actions, the four summary tiles, the capability tabs and the model table. It is complete without JavaScript;
+// HTMX only swaps one connection's rows in place.
 templ ModelsPage(v modelsPageView) {
 	<div class="mv-models">
-		@ui.PageHead(i18n.T(ctx, "models.title"), i18n.T(ctx, "models.subtitle"), modelsAddAction(v.CanAdd))
+		@ui.PageHead(i18n.T(ctx, "models.title"), i18n.T(ctx, "models.subtitle", "server", v.Server), modelsHeadActions(v))
 		if v.LocalOnly {
 			@ui.Notice(ui.ToneWarning, "shield-lock") {
 				<strong>{ i18n.T(ctx, "models.local_only.title") }</strong>
 				<p>{ i18n.T(ctx, "models.local_only.body") }</p>
 			}
 		}
-		<div class="mv-models__grid">
-			@PlaceholderProviderCard()
-			for _, provider := range v.Providers {
-				@ProviderCard(providerCardView{Provider: provider, LocalOnly: v.LocalOnly})
+		<ul class="mv-models__tiles mv-list-plain" aria-label={ i18n.T(ctx, "models.tiles.label") }>
+			for _, t := range v.Tiles {
+				@modelsTile(t)
 			}
-		</div>
-		if len(v.Providers) == 0 {
-			<p class="mv-models__empty mv-muted">{ i18n.T(ctx, "models.empty") }</p>
-		}
+		</ul>
+		@ui.SegmentedLinks(i18n.T(ctx, "models.caps.label"), modelsCapLinks(ctx, v))
+		<section class="mv-models__box" aria-label={ capLabel(ctx, v.Cap) }>
+			if v.Cap == capText {
+				@modelsTable(v)
+			} else {
+				@ui.State(ui.StateProps{SFX: "シーン…", JP: true, Title: capEmptyTitle(ctx, v.Cap),
+					Body: i18n.T(ctx, "models.empty.body"), Art: "splash", Class: "mv-models__empty"}) {
+					@ui.SoonTag()
+				}
+			}
+		</section>
 	</div>
 }
 
-// PlaceholderProviderCard describes the deterministic built-in text provider.
-templ PlaceholderProviderCard() {
-	<article class="mv-model-card mv-model-card--builtin">
-		<header class="mv-model-card__head">
-			<div class="mv-model-card__identity">
-				@ui.Icon("file-text", 24)
-				<div>
-					<h2>{ i18n.T(ctx, "models.placeholder.name") }</h2>
-					<p>{ i18n.T(ctx, "models.placeholder.description") }</p>
-				</div>
-			</div>
-			@ui.Badge(ui.ToneSuccess, "circle-check", i18n.T(ctx, "models.placeholder.status"))
-		</header>
-		<div class="mv-model-card__meta">
-			@ui.KV(i18n.T(ctx, "models.field.scope"), i18n.T(ctx, "models.scope.builtin"))
-			@ui.KV(i18n.T(ctx, "models.field.model"), "placeholder-text")
-		</div>
-	</article>
+templ modelsHeadActions(v modelsPageView) {
+	@ui.LinkButton(modelsCustomHref, ui.ButtonProps{Variant: ui.Quiet, Icon: "plus"}) {
+		{ i18n.T(ctx, "models.add.custom") }
+	}
+	if v.CanAdd {
+		@ui.Dropdown("mv-models__add", "end", false, addProviderTrigger(), addProviderItems())
+	} else {
+		@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plug", Disabled: true, Tip: i18n.T(ctx, "models.add.admin_only")}) {
+			{ i18n.T(ctx, "models.add.provider") }
+		}
+	}
 }
 
-func providerCardID(id string) string { return "provider-" + id }
+templ addProviderTrigger() {
+	<span class="mv-btn mv-btn--primary">
+		@ui.Icon("plug", 18)
+		{ i18n.T(ctx, "models.add.provider") }
+	</span>
+}
+
+// addProviderItems lists the providers in G8 order. OpenRouter and OpenAI
+// open the existing connection form; the others are designed but not built,
+// so ui.Menu renders them disabled with a Soon tag.
+func addProviderItems() []ui.MenuItem {
+	return []ui.MenuItem{
+		{Href: "/models/providers/new?kind=" + providerKindOpenRouter, Label: providerKindName(providerKindOpenRouter), Icon: "route"},
+		{Href: falConnectHref, Label: "fal", Icon: "bolt"},
+		{Href: "/models/providers/new?kind=" + providerKindOpenAI, Label: providerKindName(providerKindOpenAI), Icon: "brand-openai"},
+		{Href: googleConnectHref, Label: "Google", Icon: "brand-google"},
+		{Href: xaiConnectHref, Label: "xAI", Icon: "brand-x"},
+		{Href: ollamaConnectHref, Label: "Ollama", Icon: "server-2"},
+	}
+}
+
+func tileStateLabel(ctx context.Context, state string) string {
+	switch state {
+	case tileOn:
+		return i18n.T(ctx, "models.tile.state.on")
+	case tileError:
+		return i18n.T(ctx, "models.tile.state.error")
+	default:
+		return i18n.T(ctx, "models.tile.state.off")
+	}
+}
+
+// modelsTile renders one summary tile: icon, name, detail and a status dot
+// (with its state in words for screen readers), or a Soon tag for a designed
+// provider whose page is not served yet.
+templ modelsTile(t modelsTileView) {
+	if t.Href != "" && !ui.Ready(ctx, t.Href) {
+		<li class="mv-models-tile is-soon" title={ i18n.T(ctx, "ui.soon_hint") }>
+			@ui.Icon(t.Icon, 24)
+			<span class="mv-models-tile__text">
+				<strong>{ t.Name }</strong>
+				<span>{ t.Detail }</span>
+			</span>
+			@ui.SoonTag()
+		</li>
+	} else {
+		<li class="mv-models-tile">
+			@ui.Icon(t.Icon, 24)
+			<span class="mv-models-tile__text">
+				<strong>{ t.Name }</strong>
+				<span>{ t.Detail }</span>
+			</span>
+			<span class={ "mv-models-tile__dot", "mv-models-tile__dot--" + t.State } aria-hidden="true"></span>
+			<span class="mv-sr-only">{ tileStateLabel(ctx, t.State) }</span>
+		</li>
+	}
+}
+
+func capLabel(ctx context.Context, capability string) string {
+	switch capability {
+	case capImage:
+		return i18n.T(ctx, "models.cap.image")
+	case capVideo:
+		return i18n.T(ctx, "models.cap.video")
+	case capVoice:
+		return i18n.T(ctx, "models.cap.voice")
+	case capOCR:
+		return i18n.T(ctx, "models.cap.ocr")
+	default:
+		return i18n.T(ctx, "models.cap.text")
+	}
+}
+
+func capEmptyTitle(ctx context.Context, capability string) string {
+	switch capability {
+	case capImage:
+		return i18n.T(ctx, "models.empty.image")
+	case capVideo:
+		return i18n.T(ctx, "models.empty.video")
+	case capVoice:
+		return i18n.T(ctx, "models.empty.voice")
+	default:
+		return i18n.T(ctx, "models.empty.ocr")
+	}
+}
+
+// modelsCapLinks are the server-side capability tabs ("Text 3").
+func modelsCapLinks(ctx context.Context, v modelsPageView) []ui.SegLink {
+	links := make([]ui.SegLink, 0, len(modelCapabilities))
+	for _, c := range modelCapabilities {
+		links = append(links, ui.SegLink{Href: "/models?cap=" + c, Current: c == v.Cap,
+			Label: capLabel(ctx, c) + " " + strconv.Itoa(v.capCount(c))})
+	}
+	return links
+}
+
+// modelsTable is the designed model table: MODEL | PROVIDER | ROUTER USES IT
+// FOR | STATUS | COST | ON. The ON cell also holds the row's action menu.
+templ modelsTable(v modelsPageView) {
+	<table class="mv-table mv-models-table">
+		<caption class="mv-sr-only">{ i18n.T(ctx, "models.table.caption") }</caption>
+		<colgroup>
+			<col class="mv-models-table__col-model"/>
+			<col class="mv-models-table__col-provider"/>
+			<col class="mv-models-table__col-use"/>
+			<col class="mv-models-table__col-status"/>
+			<col class="mv-models-table__col-cost"/>
+			<col class="mv-models-table__col-on"/>
+		</colgroup>
+		<thead>
+			<tr>
+				<th scope="col">{ i18n.T(ctx, "models.col.model") }</th>
+				<th scope="col">{ i18n.T(ctx, "models.col.provider") }</th>
+				<th scope="col">{ i18n.T(ctx, "models.col.use") }</th>
+				<th scope="col">{ i18n.T(ctx, "models.col.status") }</th>
+				<th scope="col">{ i18n.T(ctx, "models.col.cost") }</th>
+				<th scope="col">{ i18n.T(ctx, "models.col.on") }</th>
+			</tr>
+		</thead>
+		@placeholderRows()
+		for _, provider := range v.Providers {
+			@ProviderRows(providerRowView{Provider: provider, LocalOnly: v.LocalOnly})
+		}
+	</table>
+}
+
+// placeholderRows is the deterministic built-in text provider: always ready,
+// always on, never remote.
+templ placeholderRows() {
+	<tbody class="mv-models-table__group" id="provider-placeholder">
+		<tr class="mv-models-table__row">
+			<td class="mv-models-table__model" data-label={ i18n.T(ctx, "models.col.model") }>
+				<strong>{ PlaceholderText }</strong>
+			</td>
+			<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.provider") }>
+				{ i18n.T(ctx, "models.provider.builtin") }
+			</td>
+			<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.use") }>
+				{ i18n.T(ctx, "models.use.scripts_fallback") }
+			</td>
+			<td data-label={ i18n.T(ctx, "models.col.status") }>
+				@ui.Badge(ui.ToneSuccess, "", i18n.T(ctx, "models.status.ready"))
+			</td>
+			<td class="mv-models-table__cost" data-label={ i18n.T(ctx, "models.col.cost") }>
+				{ i18n.T(ctx, "models.cost.none") }
+			</td>
+			<td class="mv-models-table__on" data-label={ i18n.T(ctx, "models.col.on") }>
+				<div class="mv-models-table__controls">
+					@ui.Toggle(ui.ToggleProps{ID: "enabled-placeholder", Checked: true, Disabled: true,
+						AriaLabel: i18n.T(ctx, "models.toggle.placeholder")})
+				</div>
+			</td>
+		</tr>
+	</tbody>
+}
+
+func providerRowsID(id string) string { return "provider-" + id }
+
+func providerKeyDialogID(id string) string { return "replace-key-" + id }
+
+func providerPath(id, action string) string { return "/models/providers/" + id + "/" + action }
+
+func providerScopeLabel(ctx context.Context, scope string) string {
+	if scope == providerScopeUser {
+		return i18n.T(ctx, "models.scope.user")
+	}
+	return i18n.T(ctx, "models.scope.server")
+}
 
 func providerStatusTone(provider providerView) ui.Tone {
-	if provider.Enabled {
+	switch {
+	case !provider.Enabled:
+		return ui.ToneMuted
+	case provider.LastTest.State == "ok":
 		return ui.ToneSuccess
+	case provider.LastTest.State == "error":
+		return ui.ToneError
+	default:
+		return ui.ToneMuted
 	}
-	return ui.ToneMuted
 }
 
 func providerStatusIcon(provider providerView) string {
-	if provider.Enabled {
-		return "circle-check"
+	if provider.Enabled && provider.LastTest.State == "error" {
+		return "alert-triangle"
 	}
-	return "circle-off"
+	return ""
 }
 
-func providerStateKey(provider providerView) string {
-	if provider.Enabled {
-		return "models.state.enabled"
+// providerStatusLabel is the STATUS column: Disabled, Ready (last check
+// passed), Check failed, or Not checked.
+func providerStatusLabel(ctx context.Context, provider providerView) string {
+	switch {
+	case !provider.Enabled:
+		return i18n.T(ctx, "models.status.disabled")
+	case provider.LastTest.State == "ok":
+		return i18n.T(ctx, "models.status.ready")
+	case provider.LastTest.State == "error":
+		return i18n.T(ctx, "models.status.failed")
+	default:
+		return i18n.T(ctx, "models.status.unchecked")
 	}
-	return "models.state.disabled"
 }
 
 func providerNoticeIcon(tone ui.Tone) string {
@@ -91,120 +263,122 @@ func providerNoticeIcon(tone ui.Tone) string {
 	return "circle-check"
 }
 
-func providerEnabledValue(provider providerView) string {
-	if provider.Enabled {
-		return "false"
+// providerMenuItems are the row actions: test the connection (the existing
+// POST, disabled while Local only is on or the connection is off) and open
+// the replace-key dialog. Without JavaScript the dialog link falls back to
+// the dialog's :target styling.
+func providerMenuItems(ctx context.Context, v providerRowView) []ui.MenuItem {
+	id := v.Provider.ID
+	test := templ.Attributes{"hx-post": providerPath(id, "test"), "hx-target": "#" + providerRowsID(id), "hx-swap": "outerHTML"}
+	if v.LocalOnly || !v.Provider.Enabled {
+		test["disabled"] = true
 	}
-	return "true"
-}
-
-func providerEnabledIcon(provider providerView) string {
-	if provider.Enabled {
-		return "circle-off"
-	}
-	return "circle-check"
-}
-
-func providerTestTone(provider providerView) ui.Tone {
-	switch provider.LastTest.State {
-	case "ok":
-		return ui.ToneSuccess
-	case "error":
-		return ui.ToneError
-	default:
-		return ui.ToneMuted
+	return []ui.MenuItem{
+		{Post: true, Href: providerPath(id, "test"), Label: i18n.T(ctx, "models.test.action"), Icon: "plug-connected", Attrs: test},
+		{Href: "#" + providerKeyDialogID(id), Label: i18n.T(ctx, "models.key.replace"), Icon: "key",
+			Attrs: templ.Attributes{"data-dialog-open": providerKeyDialogID(id)}},
 	}
 }
 
-func providerTestIcon(provider providerView) string {
-	switch provider.LastTest.State {
-	case "ok":
-		return "circle-check"
-	case "error":
-		return "alert-triangle"
-	default:
-		return "clock"
-	}
+templ providerMenuTrigger(name string) {
+	<span class="mv-btn mv-btn--bare mv-btn--sm">
+		@ui.Icon("dots", 16)
+		<span class="mv-sr-only">{ i18n.T(ctx, "models.row.actions", "name", name) }</span>
+	</span>
 }
 
-func providerTestKey(provider providerView) string {
-	switch provider.LastTest.State {
-	case "ok":
-		return "models.test.ok"
-	case "error":
-		return "models.test.failed"
-	default:
-		return "models.test.never"
-	}
-}
-
-// ProviderCard renders only providerView, which has no plaintext/ciphertext field.
-templ ProviderCard(v providerCardView) {
-	<article class="mv-model-card" id={ providerCardID(v.Provider.ID) }>
-		<header class="mv-model-card__head">
-			<div class="mv-model-card__identity">
-				@ui.Icon(providerKindIcon(v.Provider.Kind), 24)
-				<div>
-					<h2>{ v.Provider.Name }</h2>
-					<p>{ i18n.T(ctx, "models." + v.Provider.Kind + ".description") }</p>
+// ProviderRows renders one connection's rows of the model table (the HTMX
+// swap target). It reads only providerView, which has no plaintext or
+// ciphertext field.
+templ ProviderRows(v providerRowView) {
+	<tbody class="mv-models-table__group" id={ providerRowsID(v.Provider.ID) }>
+		<tr class="mv-models-table__row">
+			<td class="mv-models-table__model" data-label={ i18n.T(ctx, "models.col.model") }>
+				<strong>{ providerKindModel(v.Provider.Kind) }</strong>
+			</td>
+			<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.provider") }>
+				<span class="mv-models-table__provider">{ providerKindName(v.Provider.Kind) } · { v.Provider.Name }</span>
+				<span class="mv-models-table__meta">{ providerScopeLabel(ctx, v.Provider.Scope) }</span>
+			</td>
+			<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.use") }>
+				{ i18n.T(ctx, "models.use.scripts") }
+			</td>
+			<td data-label={ i18n.T(ctx, "models.col.status") }
+				if v.Provider.LastTest.RequestID != "" {
+					title={ i18n.T(ctx, "models.status.request", "id", v.Provider.LastTest.RequestID) }
+				}
+			>
+				@ui.Badge(providerStatusTone(v.Provider), providerStatusIcon(v.Provider), providerStatusLabel(ctx, v.Provider))
+			</td>
+			<td class="mv-models-table__cost" data-label={ i18n.T(ctx, "models.col.cost") }>
+				{ providerCostLabel(ctx, v.Provider.Kind) }
+			</td>
+			<td class="mv-models-table__on" data-label={ i18n.T(ctx, "models.col.on") }>
+				<div class="mv-models-table__controls">
+					@providerEnabledForm(v)
+					@ui.Dropdown("mv-models-table__menu", "end", false, providerMenuTrigger(v.Provider.Name), providerMenuItems(ctx, v))
 				</div>
-			</div>
-			@ui.Badge(providerStatusTone(v.Provider), providerStatusIcon(v.Provider), i18n.T(ctx, providerStateKey(v.Provider)))
-		</header>
+				@providerKeyDialog(v)
+			</td>
+		</tr>
 		if v.Notice != "" {
-			@ui.Notice(v.Tone, providerNoticeIcon(v.Tone)) {
-				{ v.Notice }
-			}
-		}
-		<div class="mv-model-card__meta">
-			@ui.KV(i18n.T(ctx, "models.field.scope"), i18n.T(ctx, "models.scope."+v.Provider.Scope))
-			@ui.KV(i18n.T(ctx, "models.field.model"), providerKindModel(v.Provider.Kind))
-			@ui.KV(i18n.T(ctx, "models.field.key"), v.Provider.KeyHint)
-			@ui.KVC(i18n.T(ctx, "models.field.check")) {
-				@ui.Badge(providerTestTone(v.Provider), providerTestIcon(v.Provider), i18n.T(ctx, providerTestKey(v.Provider)))
-			}
-			if v.Provider.LastTest.RequestID != "" {
-				@ui.KV(i18n.T(ctx, "models.field.request_id"), v.Provider.LastTest.RequestID)
-			}
-		</div>
-		<div class="mv-model-card__actions">
-			<form method="post" action={ templ.URL("/models/providers/" + v.Provider.ID + "/test") } novalidate
-				hx-post={ "/models/providers/" + v.Provider.ID + "/test" }
-				hx-target={ "#" + providerCardID(v.Provider.ID) } hx-swap="outerHTML" hx-disabled-elt="find button">
-				@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Quiet, Size: ui.SM, Icon: "plug-connected",
-					Disabled: v.LocalOnly || !v.Provider.Enabled}) {
-					{ i18n.T(ctx, "models.test.action") }
-				}
-			</form>
-			<form method="post" action={ templ.URL("/models/providers/" + v.Provider.ID + "/enabled") } novalidate
-				hx-post={ "/models/providers/" + v.Provider.ID + "/enabled" }
-				hx-target={ "#" + providerCardID(v.Provider.ID) } hx-swap="outerHTML" hx-disabled-elt="find button">
-				<input type="hidden" name="enabled" value={ providerEnabledValue(v.Provider) }/>
-				@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Ghost, Size: ui.SM,
-					Icon: providerEnabledIcon(v.Provider)}) {
-					if v.Provider.Enabled {
-						{ i18n.T(ctx, "models.disable") }
-					} else {
-						{ i18n.T(ctx, "models.enable") }
+			<tr class="mv-models-table__notice">
+				<td colspan="6">
+					@ui.Notice(v.Tone, providerNoticeIcon(v.Tone)) {
+						{ v.Notice }
 					}
-				}
-			</form>
-		</div>
-		<details class="mv-model-card__key">
-			<summary class="mv-link">{ i18n.T(ctx, "models.key.replace") }</summary>
-			<form class="mv-model-card__key-form" method="post" action={ templ.URL("/models/providers/" + v.Provider.ID + "/key") } novalidate
-				hx-post={ "/models/providers/" + v.Provider.ID + "/key" }
-				hx-target={ "#" + providerCardID(v.Provider.ID) } hx-swap="outerHTML" hx-disabled-elt="find button">
-				@ui.Field(ui.FieldProps{ID: "key-" + v.Provider.ID, Label: i18n.T(ctx, "models.form.key"), Hint: i18n.T(ctx, "models.key.hint")}) {
+				</td>
+			</tr>
+		}
+	</tbody>
+}
+
+// providerEnabledForm is the ON switch. The checkbox comes before the hidden
+// "false" so the first submitted value is the switch state. HTMX posts on
+// change; without JavaScript a Save button submits the same form.
+templ providerEnabledForm(v providerRowView) {
+	<form class="mv-models-table__toggle" method="post" action={ templ.URL(providerPath(v.Provider.ID, "enabled")) } novalidate
+		hx-post={ providerPath(v.Provider.ID, "enabled") } hx-trigger="change"
+		hx-target={ "#" + providerRowsID(v.Provider.ID) } hx-swap="outerHTML">
+		@ui.Toggle(ui.ToggleProps{ID: "enabled-" + v.Provider.ID, Name: "enabled", Value: "true", Checked: v.Provider.Enabled,
+			AriaLabel: i18n.T(ctx, "models.toggle.label", "name", v.Provider.Name)})
+		<input type="hidden" name="enabled" value="false"/>
+		<noscript>
+			@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Quiet, Size: ui.SM}) {
+				{ i18n.T(ctx, "models.toggle.save") }
+			}
+		</noscript>
+	</form>
+}
+
+// providerKeyDialog replaces a connection's key with the existing POST. It
+// shows only the stored key hint, never the key.
+templ providerKeyDialog(v providerRowView) {
+	@ui.Modal(ui.ModalProps{ID: providerKeyDialogID(v.Provider.ID), Class: "mv-models-keydlg",
+		Title: i18n.T(ctx, "models.key.title", "name", v.Provider.Name)}) {
+		<form method="post" action={ templ.URL(providerPath(v.Provider.ID, "key")) }
+			hx-post={ providerPath(v.Provider.ID, "key") } hx-target={ "#" + providerRowsID(v.Provider.ID) }
+			hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+			@ui.ModalBody() {
+				<p>{ i18n.T(ctx, "models.key.current", "hint", v.Provider.KeyHint) }</p>
+				@ui.Field(ui.FieldProps{ID: "key-" + v.Provider.ID, Label: i18n.T(ctx, "models.form.key"),
+					Hint: i18n.T(ctx, "models.form.key_hint")}) {
 					@ui.Input(ui.InputProps{ID: "key-" + v.Provider.ID, Name: "key", Type: "password", Autocomplete: "off",
-						Required: true, MaxLength: maxProviderKeyBytes, Attrs: templ.Attributes{"spellcheck": "false", "autocapitalize": "none"}})
+						Required: true, MaxLength: maxProviderKeyBytes, Described: true,
+						Attrs: templ.Attributes{"spellcheck": "false", "autocapitalize": "none"}})
 				}
-				@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Secondary, Size: ui.SM, Icon: "key"}) {
+			}
+			@ui.ModalFoot() {
+				@ui.LinkButton("#"+providerRowsID(v.Provider.ID), ui.ButtonProps{Variant: ui.Ghost,
+					Attrs: templ.Attributes{"data-dialog-close": "true"}}) {
+					{ i18n.T(ctx, "ui.cancel") }
+				}
+				@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Primary, Icon: "key"}) {
 					{ i18n.T(ctx, "models.key.submit") }
 				}
-			</form>
-		</details>
-	</article>
+			}
+		</form>
+	}
 }
 
 func providerScopeOptions(ctx context.Context) []ui.Option {

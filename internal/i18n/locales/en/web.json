@@ -129,5 +129,7 @@
   "xp.title.storyteller": "Storyteller",
   "xp.title.mangaka": "Mangaka",
   "xp.title.veteran": "Veteran",
-  "xp.title.legend": "Legend"
+  "xp.title.legend": "Legend",
+  "ui.soon": "Soon",
+  "ui.soon_hint": "Coming in a later release"
 }

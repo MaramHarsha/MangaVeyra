@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/a-h/templ"
@@ -96,8 +97,11 @@ func (m *Module) signup(w http.ResponseWriter, r *http.Request) error {
 	f.Email = web.FormValue(r, "email")
 	f.Agree = web.FormBool(r, "agree")
 	password := r.PostFormValue("password")
-	if f.Username == "" {
-		f.Errors.Add("username", i18n.T(ctx, "auth.page.required"))
+	// The designed sign-up form (A3) has no username field: the handle is
+	// derived from the email address and made unique on conflict.
+	derived := f.Username == ""
+	if derived {
+		f.Username = deriveUsername(f.Email, f.DisplayName)
 	}
 	if f.Email == "" {
 		f.Errors.Add("email", i18n.T(ctx, "auth.page.required"))
@@ -106,8 +110,13 @@ func (m *Module) signup(w http.ResponseWriter, r *http.Request) error {
 		f.Errors.Add("agree", i18n.T(ctx, "auth.page.signup.agree_required"))
 	}
 	if !f.Errors.Has() {
-		u, err := m.d.Auth.Signup(ctx, auth.SignupInput{Username: f.Username, Email: f.Email, Password: password,
-			DisplayName: f.DisplayName, InviteCode: f.Invite, Locale: i18n.LocaleFrom(ctx)})
+		in := auth.SignupInput{Username: f.Username, Email: f.Email, Password: password,
+			DisplayName: f.DisplayName, InviteCode: f.Invite, Locale: i18n.LocaleFrom(ctx)}
+		u, err := m.d.Auth.Signup(ctx, in)
+		for attempt := 2; derived && attempt <= 20 && usernameTaken(err); attempt++ {
+			in.Username = usernameVariant(f.Username, attempt)
+			u, err = m.d.Auth.Signup(ctx, in)
+		}
 		if err == nil {
 			if u.Status != auth.StatusActive {
 				web.Flash(w, r, "info", i18n.T(ctx, "auth.page.signup.pending"), "")
@@ -145,7 +154,7 @@ type forgotForm struct {
 }
 
 func (m *Module) forgotForm() forgotForm {
-	return forgotForm{NoEmail: !m.d.Auth.EmailEnabled(), Errors: web.FormErrors{}, TTL: int(auth.ResetTTL.Minutes())}
+	return forgotForm{Errors: web.FormErrors{}, TTL: int(auth.ResetTTL.Minutes())}
 }
 
 func (m *Module) forgotPage(w http.ResponseWriter, r *http.Request) error {
@@ -164,7 +173,9 @@ func (m *Module) forgot(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	f := m.forgotForm()
 	f.Email = web.FormValue(r, "email")
-	if f.NoEmail {
+	if !m.d.Auth.EmailEnabled() {
+		// The designed lead already explains the admin route; confirm it.
+		f.NoEmail = true
 		return m.renderForgot(w, r, http.StatusConflict, f)
 	}
 	if err := auth.ValidateEmail(auth.NormalizeEmail(f.Email)); err != nil || f.Email == "" {
@@ -240,4 +251,54 @@ func (m *Module) reset(w http.ResponseWriter, r *http.Request) error {
 	web.Flash(w, r, "success", i18n.T(ctx, "auth.page.reset.done"), "")
 	core.Redirect(w, r, "/login?u="+url.QueryEscape(u.Username))
 	return nil
+}
+
+// deriveUsername builds a valid handle from the email's local part (or the
+// display name) for the designed sign-up form, which has no username field.
+func deriveUsername(email, display string) string {
+	source := email
+	if at := strings.IndexByte(source, '@'); at > 0 {
+		source = source[:at]
+	} else if strings.TrimSpace(display) != "" {
+		source = display
+	}
+	var b strings.Builder
+	for _, r := range strings.ToLower(source) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '.' || r == '-' || r == '_':
+			if b.Len() > 0 {
+				b.WriteRune(r)
+			}
+		}
+	}
+	name := strings.Trim(b.String(), "._-")
+	for strings.Contains(name, "..") {
+		name = strings.ReplaceAll(name, "..", ".")
+	}
+	if len(name) > 28 {
+		name = strings.Trim(name[:28], "._-")
+	}
+	if len(name) < 3 {
+		name = "member"
+	}
+	if auth.ValidateUsername(name) != nil {
+		name = usernameVariant(name, 1)
+	}
+	return name
+}
+
+// usernameVariant appends a number so a taken or reserved handle becomes free.
+func usernameVariant(base string, n int) string {
+	suffix := strconv.Itoa(n)
+	if len(base)+len(suffix) > 32 {
+		base = strings.Trim(base[:32-len(suffix)], "._-")
+	}
+	return base + suffix
+}
+
+func usernameTaken(err error) bool {
+	var fe *auth.FieldError
+	return errors.As(err, &fe) && fe.Field == "username"
 }

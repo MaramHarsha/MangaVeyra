@@ -3,8 +3,10 @@ package studioui
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
 )
 
@@ -41,6 +43,157 @@ func provenanceText(ctx context.Context, value string) string {
 	}
 }
 
+// ---- B3 wizard helpers -------------------------------------------------------
+
+func stepName(ctx context.Context, step string) string {
+	return i18n.T(ctx, "studioui.new.step."+step)
+}
+
+func stepClass(v newProjectView, step string) string {
+	open := stepIndex(v.openStep())
+	i := stepIndex(step)
+	return ui.Cls("mv-steps__step", ui.If(i < open, "is-done"), ui.If(i == open, "is-current"))
+}
+
+func nextLabel(ctx context.Context, step string) string {
+	i := stepIndex(step)
+	if i+1 >= len(wizardSteps) {
+		return ""
+	}
+	return i18n.T(ctx, "studioui.new.next."+wizardSteps[i+1])
+}
+
+func styleLabel(ctx context.Context, value string) string { return i18n.T(ctx, "style."+value) }
+
+func formatLabel(ctx context.Context, value string) string {
+	return i18n.T(ctx, "studioui.format."+value)
+}
+
+func genreSummary(ctx context.Context, genres []string) string {
+	labels := make([]string, 0, len(genres))
+	for _, genre := range genres {
+		if contains(genreValues, genre) {
+			labels = append(labels, i18n.T(ctx, "genre."+genre))
+		}
+	}
+	if len(labels) == 0 {
+		return i18n.T(ctx, "studioui.new.summary.none")
+	}
+	return strings.Join(labels, " · ")
+}
+
+func premiseSummary(ctx context.Context, v newProjectValues) string {
+	if v.Mode == "adapt" {
+		return i18n.T(ctx, "studioui.new.summary.adapt")
+	}
+	if strings.TrimSpace(v.Premise) == "" {
+		return i18n.T(ctx, "studioui.new.summary.no_premise")
+	}
+	return i18n.T(ctx, "studioui.new.summary.quoted", "text", v.Premise)
+}
+
+func titleSummary(ctx context.Context, title string) string {
+	if strings.TrimSpace(title) == "" {
+		return i18n.T(ctx, "studioui.new.summary.untitled")
+	}
+	return title
+}
+
+func pageSizeOptions(ctx context.Context) []ui.Option {
+	out := make([]ui.Option, 0, len(pageSizes))
+	for _, size := range pageSizes {
+		out = append(out, ui.Option{Value: size.Value, Label: i18n.T(ctx, "studioui.page_size."+size.Value)})
+	}
+	return out
+}
+
+var premiseSuggestions = []string{"gull", "keeper", "lantern"}
+
+// ---- C1 story editor helpers ---------------------------------------------------
+
+func storyViewIs(v storyView, view string) bool {
+	if v.View == viewProse {
+		return view == viewProse
+	}
+	return view == viewPanels
+}
+
+// sceneHref targets the scene in the view that is showing; the story script
+// swaps between both targets when the Prose / Panels toggle changes.
+func sceneHref(v storyView, sceneID string) string {
+	if storyViewIs(v, viewProse) {
+		return "#prose-" + sceneID
+	}
+	return "#scene-" + sceneID
+}
+
+// hintAttrs points a control without its own Described prop at its hint.
+func hintAttrs(id string, ok bool) templ.Attributes {
+	if !ok {
+		return nil
+	}
+	return templ.Attributes{"aria-describedby": id + "-hint"}
+}
+
+func cellLabel(parts ...string) string { return strings.Join(parts, " · ") }
+
+// cellRows sizes a compact textarea to its text where field-sizing is not
+// supported, so cells read like the design's text instead of scroll boxes.
+func cellRows(text string, perLine, min, max int) int {
+	rows := 0
+	for _, line := range strings.Split(text, "\n") {
+		rows += 1 + len([]rune(line))/perLine
+	}
+	if rows < min {
+		return min
+	}
+	if rows > max {
+		return max
+	}
+	return rows
+}
+
+func cellAttrs(readOnly bool, maxLength int, rows int) templ.Attributes {
+	a := templ.Attributes{"maxlength": strconv.Itoa(maxLength)}
+	if rows > 0 {
+		a["rows"] = strconv.Itoa(rows)
+	}
+	if readOnly {
+		a["readonly"] = true
+	}
+	return a
+}
+
+func speakerSize(speaker string) int {
+	n := len([]rune(speaker)) + 1
+	if n < 6 {
+		return 6
+	}
+	if n > 24 {
+		return 24
+	}
+	return n
+}
+
+func lineFallback(ctx context.Context, line studio.ScriptDialogue) string {
+	if strings.TrimSpace(line.Speaker) != "" {
+		return line.Speaker
+	}
+	return i18n.T(ctx, "studioui.dialogue."+line.Kind)
+}
+
+func dialogueKind(kind string) string {
+	switch kind {
+	case "speech", "thought", "caption":
+		return kind
+	}
+	return "speech"
+}
+
+func indexID(prefix, panelID string, index int) string {
+	return prefix + panelID + "-" + strconv.Itoa(index)
+}
+
 templ FormNotice(message string) {
 	if message != "" {
 		@ui.Notice(ui.ToneError, "alert-triangle") {
@@ -50,94 +203,320 @@ templ FormNotice(message string) {
 	}
 }
 
-// NewProjectPage is the focused B3 workbench: one form and one production brief.
+// NewProjectPage is the B3 wizard: one complete form holding all five steps.
+// Without JavaScript every step shows, stacked; the studio script shows one
+// step at a time with a working stepper, Back / Next and the live summary.
 templ NewProjectPage(v newProjectView) {
-	<main class="mv-new-project">
-		<header class="mv-new-project__head">
-			<a href="/studio" class="mv-new-project__back">@ui.Icon("arrow-left", 18) { i18n.T(ctx, "studioui.new.back") }</a>
-			<span class="mv-label-mono">{ i18n.T(ctx, "studioui.new.eyebrow") }</span>
-			<h1>{ i18n.T(ctx, "studioui.new.heading") }</h1>
-			<p>{ i18n.T(ctx, "studioui.new.intro") }</p>
+	<div class="mv-wizard" data-wizard data-current={ v.openStep() }>
+		<form id="mv-wizard-form" class="mv-wizard__form" method="post" action="/studio/new/premise" enctype="multipart/form-data" novalidate>
+			<div class="mv-wizard__main">
+				<header class="mv-wizard__top">
+					<a class="mv-wizard__close" href="/studio" aria-label={ i18n.T(ctx, "studioui.new.close") }>
+						@ui.Icon("x", 20)
+					</a>
+					<h1 class="mv-wizard__name">{ i18n.T(ctx, "studioui.new.title") }</h1>
+					<span class="mv-wizard__saved">{ i18n.T(ctx, "studioui.new.not_saved") }</span>
+				</header>
+				@wizardStepper(v)
+				@wizardErrors(v)
+				@wizardStep(v, "premise") {
+					@wizardPremise(v)
+				}
+				@wizardStep(v, "genre") {
+					@wizardGenre(v)
+				}
+				@wizardStep(v, "style") {
+					@wizardStyle(v)
+				}
+				@wizardStep(v, "format") {
+					@wizardFormat(v)
+				}
+				@wizardStep(v, "generate") {
+					@wizardGenerate(v)
+				}
+				<footer class="mv-wizard__nav">
+					@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Icon: "arrow-left", Class: "mv-wizard__back", Attrs: templ.Attributes{"data-wizard-back": true, "hidden": true}}) {
+						{ i18n.T(ctx, "ui.back") }
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Icon: "arrow-right", Class: "mv-wizard__next", Attrs: templ.Attributes{"data-wizard-next": true, "hidden": true}}) {
+						<span data-wizard-next-text>{ nextLabel(ctx, wizardSteps[0]) }</span>
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Icon: "sparkles", Class: "mv-wizard__submit", Attrs: templ.Attributes{"data-wizard-submit": true}}) {
+						{ i18n.T(ctx, "studioui.new.submit") }
+					}
+				</footer>
+			</div>
+			@wizardSummary(v)
+		</form>
+	</div>
+}
+
+// wizardStepper is the designed progress bar. Its labels are in-page links,
+// so they reach the stacked steps without JavaScript too.
+templ wizardStepper(v newProjectView) {
+	<nav class="mv-wizard__stepper" aria-label={ i18n.T(ctx, "studioui.new.steps") }>
+		<ol class="mv-steps mv-list-plain">
+			for i, step := range wizardSteps {
+				<li class={ stepClass(v, step) } data-step-item={ step }>
+					<a
+						class="mv-wizard__steplink"
+						href={ templ.URL("#mv-step-" + step) }
+						data-step-link={ step }
+						if step == v.openStep() {
+							aria-current="step"
+						}
+					>
+						<span class="mv-steps__bar" aria-hidden="true"></span>
+						<span class="mv-steps__label">{ strconv.Itoa(i + 1) }. <span class="mv-wizard__stepname">{ stepName(ctx, step) }</span></span>
+					</a>
+				</li>
+			}
+		</ol>
+	</nav>
+}
+
+templ wizardErrors(v newProjectView) {
+	if v.Errors.Has() {
+		@ui.Notice(ui.ToneError, "alert-triangle") {
+			<strong>{ i18n.T(ctx, "studioui.form.check") }</strong>
+			if v.Errors.Form() != "" {
+				<p>{ v.Errors.Form() }</p>
+			}
+			<p class="mv-wizard__errsteps">
+				<span>{ i18n.T(ctx, "studioui.new.error.steps") }</span>
+				for _, step := range v.errorSteps() {
+					<a href={ templ.URL("#mv-step-" + step) } data-step-link={ step }>{ stepName(ctx, step) }</a>
+				}
+			</p>
+		}
+	}
+}
+
+templ wizardStep(v newProjectView, step string) {
+	<section
+		class="mv-wizard__step"
+		id={ "mv-step-" + step }
+		data-step={ step }
+		aria-labelledby={ "mv-step-" + step + "-title" }
+		if nextLabel(ctx, step) != "" {
+			data-next-label={ nextLabel(ctx, step) }
+		}
+	>
+		<header class="mv-wizard__head">
+			<span class="mv-wizard__eyebrow">
+				{ i18n.T(ctx, "studioui.new.step_of", "number", stepIndex(step) + 1, "total", len(wizardSteps)) }
+				<span class="mv-wizard__eyebrow-step">· { stepName(ctx, step) }</span>
+			</span>
+			<h2 class="mv-wizard__heading" id={ "mv-step-" + step + "-title" } tabindex="-1">{ i18n.T(ctx, "studioui.new." + step + ".heading") }</h2>
+			<p class="mv-wizard__lead">{ i18n.T(ctx, "studioui.new." + step + ".lead") }</p>
 		</header>
-		<div class="mv-new-project__grid">
-			<form class="mv-new-project__form" method="post" action="/studio/new/premise" enctype="multipart/form-data" novalidate>
-				@FormNotice(v.Errors.Form())
-				<section class="mv-new-project__section" aria-labelledby="mv-new-story">
-					<div class="mv-new-project__section-head">
-						<span>01</span>
-						<div><h2 id="mv-new-story">{ i18n.T(ctx, "studioui.new.story") }</h2><p>{ i18n.T(ctx, "studioui.new.story_help") }</p></div>
-					</div>
-					@ui.Field(ui.FieldProps{ID: "title", Label: i18n.T(ctx, "studioui.new.title_label"), Error: v.Errors["title"]}) {
-						@ui.Input(ui.InputProps{ID: "title", Name: "title", Value: v.Values.Title, Placeholder: i18n.T(ctx, "studioui.new.title_placeholder"), Required: true, MaxLength: 160, Invalid: v.Errors["title"] != ""})
-					}
-					@ui.Field(ui.FieldProps{ID: "chapter_title", Label: i18n.T(ctx, "studioui.new.chapter_label"), Error: v.Errors["chapter_title"]}) {
-						@ui.Input(ui.InputProps{ID: "chapter_title", Name: "chapter_title", Value: v.Values.ChapterTitle, Placeholder: i18n.T(ctx, "studioui.new.chapter_placeholder"), Required: true, MaxLength: 160, Invalid: v.Errors["chapter_title"] != ""})
-					}
-					<fieldset class="mv-new-project__modes">
-						<legend>{ i18n.T(ctx, "studioui.new.mode") }</legend>
-						@ui.Radio(ui.CheckProps{ID: "mode-premise", Name: "mode", Value: "premise", Checked: v.Values.Mode == "premise", Label: i18n.T(ctx, "studioui.new.mode_premise")})
-						@ui.Radio(ui.CheckProps{ID: "mode-adapt", Name: "mode", Value: "adapt", Checked: v.Values.Mode == "adapt", Label: i18n.T(ctx, "studioui.new.mode_adapt")})
-					</fieldset>
-					@ui.Field(ui.FieldProps{ID: "premise", Label: i18n.T(ctx, "studioui.new.premise_label"), Hint: i18n.T(ctx, "studioui.new.premise_hint"), Error: v.Errors["premise"]}) {
-						@ui.Textarea(ui.TextareaProps{ID: "premise", Name: "premise", Value: v.Values.Premise, Placeholder: i18n.T(ctx, "studioui.new.premise_placeholder"), Rows: 7, MaxLength: 4000, Invalid: v.Errors["premise"] != "", Class: "mv-new-project__premise"})
-					}
-					<div class="mv-new-project__adapt">
-						@ui.Field(ui.FieldProps{ID: "source_text", Label: i18n.T(ctx, "studioui.new.source_label"), Hint: i18n.T(ctx, "studioui.new.source_hint"), Error: v.Errors["source_text"]}) {
-							@ui.Textarea(ui.TextareaProps{ID: "source_text", Name: "source_text", Value: v.Values.SourceText, Placeholder: i18n.T(ctx, "studioui.new.source_placeholder"), Rows: 6, Invalid: v.Errors["source_text"] != ""})
-						}
-						<span class="mv-new-project__or">{ i18n.T(ctx, "studioui.new.or") }</span>
-						@ui.Field(ui.FieldProps{ID: "source_file", Label: i18n.T(ctx, "studioui.new.upload_label"), Hint: i18n.T(ctx, "studioui.new.upload_hint"), Error: v.Errors["source_file"]}) {
-							@ui.Input(ui.InputProps{ID: "source_file", Name: "source_file", Type: "file", Invalid: v.Errors["source_file"] != "", Attrs: templ.Attributes{"accept": ".txt,text/plain"}})
-						}
-					</div>
-				</section>
-				<section class="mv-new-project__section" aria-labelledby="mv-new-production">
-					<div class="mv-new-project__section-head">
-						<span>02</span>
-						<div><h2 id="mv-new-production">{ i18n.T(ctx, "studioui.new.production") }</h2><p>{ i18n.T(ctx, "studioui.new.production_help") }</p></div>
-					</div>
-					<fieldset class="mv-new-project__genres">
-						<legend>{ i18n.T(ctx, "studioui.new.genres") }</legend>
-						for _, genre := range genreValues {
-							@ui.Checkbox(ui.CheckProps{ID: "genre-" + genre, Name: "genres", Value: genre, Checked: contains(v.Values.Genres, genre), Label: i18n.T(ctx, "studioui.genre." + genre)})
-						}
-						if v.Errors["genres"] != "" {
-							<span class="mv-field__error" role="alert">{ v.Errors["genres"] }</span>
-						}
-					</fieldset>
-					<div class="mv-new-project__triplet">
-						@ui.Field(ui.FieldProps{ID: "style", Label: i18n.T(ctx, "studioui.new.style"), Error: v.Errors["style"]}) {
-							@ui.Select(ui.SelectProps{ID: "style", Name: "style", Value: v.Values.Style, Options: selectOptions(ctx, "studioui.style.", styleValues), Invalid: v.Errors["style"] != ""})
-						}
-						@ui.Field(ui.FieldProps{ID: "format", Label: i18n.T(ctx, "studioui.new.format"), Error: v.Errors["format"]}) {
-							@ui.Select(ui.SelectProps{ID: "format", Name: "format", Value: v.Values.Format, Options: selectOptions(ctx, "studioui.format.", formatValues), Invalid: v.Errors["format"] != ""})
-						}
-						@ui.Field(ui.FieldProps{ID: "language", Label: i18n.T(ctx, "studioui.new.language"), Error: v.Errors["language"]}) {
-							@ui.Select(ui.SelectProps{ID: "language", Name: "language", Value: v.Values.Language, Options: selectOptions(ctx, "studioui.language.", languageValues), Invalid: v.Errors["language"] != ""})
-						}
-					</div>
-					@ui.Field(ui.FieldProps{ID: "pages_target", Label: i18n.T(ctx, "studioui.new.pages"), Hint: i18n.T(ctx, "studioui.new.pages_hint"), Error: v.Errors["pages_target"]}) {
-						@ui.Input(ui.InputProps{ID: "pages_target", Name: "pages_target", Type: "number", Value: strconv.Itoa(v.Values.PagesTarget), Inputmode: "numeric", Invalid: v.Errors["pages_target"] != "", Attrs: templ.Attributes{"min": "1", "max": "256"}})
-					}
-				</section>
-				<div class="mv-new-project__actions">
-					<p>{ i18n.T(ctx, "studioui.new.submit_help") }</p>
-					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Icon: "sparkles"}) { { i18n.T(ctx, "studioui.new.submit") } }
-				</div>
-			</form>
-			<aside class="mv-new-project__brief" aria-labelledby="mv-new-brief">
-				<span class="mv-label-mono">{ i18n.T(ctx, "studioui.new.brief_label") }</span>
-				<h2 id="mv-new-brief">{ i18n.T(ctx, "studioui.new.brief_title") }</h2>
-				<p>{ i18n.T(ctx, "studioui.new.brief_body") }</p>
-				<dl>
-					<div><dt>{ i18n.T(ctx, "studioui.new.brief_output") }</dt><dd>{ i18n.T(ctx, "studioui.new.brief_script") }</dd></div>
-					<div><dt>{ i18n.T(ctx, "studioui.new.brief_route") }</dt><dd>{ i18n.T(ctx, "studioui.new.brief_auto") }</dd></div>
-					<div><dt>{ i18n.T(ctx, "studioui.new.brief_save") }</dt><dd>{ i18n.T(ctx, "studioui.new.brief_manual") }</dd></div>
-				</dl>
-				@ui.Notice(ui.ToneInfo, "shield-lock") { <p>{ i18n.T(ctx, "studioui.new.private_source") }</p> }
-			</aside>
+		{ children... }
+	</section>
+}
+
+templ wizardPremise(v newProjectView) {
+	@ui.Field(ui.FieldProps{ID: "title", Label: i18n.T(ctx, "studioui.new.title_label"), Error: v.Errors["title"]}) {
+		@ui.Input(ui.InputProps{ID: "title", Name: "title", Value: v.Values.Title, Placeholder: i18n.T(ctx, "studioui.new.title_placeholder"), Required: true, MaxLength: 160, Invalid: v.Errors["title"] != "", Attrs: templ.Attributes{"data-summary-source": "title"}})
+	}
+	<div class="mv-field">
+		<span class="mv-field__label">{ i18n.T(ctx, "studioui.new.mode") }</span>
+		@ui.Segmented(ui.SegmentedProps{Name: "mode", Value: v.Values.Mode, Label: i18n.T(ctx, "studioui.new.mode"), Full: true, Options: []ui.Option{
+			{Value: "premise", Label: i18n.T(ctx, "studioui.new.mode_premise")},
+			{Value: "adapt", Label: i18n.T(ctx, "studioui.new.mode_adapt")},
+		}})
+		if v.Errors["mode"] != "" {
+			<span class="mv-field__error" role="alert">
+				@ui.Icon("alert-triangle", 14)
+				<span>{ v.Errors["mode"] }</span>
+			</span>
+		}
+	</div>
+	<div class="mv-wizard__mode" data-mode-panel="premise">
+		@ui.Field(ui.FieldProps{ID: "premise", Label: i18n.T(ctx, "studioui.new.premise_label"), Error: v.Errors["premise"], Class: "mv-wizard__premise"}) {
+			@ui.Textarea(ui.TextareaProps{ID: "premise", Name: "premise", Value: v.Values.Premise, Placeholder: i18n.T(ctx, "studioui.new.premise_placeholder"), Rows: 6, MaxLength: 4000, Invalid: v.Errors["premise"] != "", Attrs: templ.Attributes{"data-summary-source": "premise"}})
+		}
+		<p class="mv-wizard__hint">{ i18n.T(ctx, "studioui.new.premise_hint") }</p>
+		<div class="mv-wizard__tries" data-premise-tries hidden>
+			<span class="mv-wizard__hint">{ i18n.T(ctx, "studioui.new.premise_try") }</span>
+			for _, key := range premiseSuggestions {
+				<button type="button" class="mv-wizard__try" data-premise-suggestion={ i18n.T(ctx, "studioui.new.try."+key) }>{ i18n.T(ctx, "studioui.new.try." + key) }</button>
+			}
 		</div>
-	</main>
+	</div>
+	<div class="mv-wizard__mode mv-wizard__adapt" data-mode-panel="adapt">
+		@ui.Field(ui.FieldProps{ID: "source_text", Label: i18n.T(ctx, "studioui.new.source_label"), Hint: i18n.T(ctx, "studioui.new.source_hint"), Error: v.Errors["source_text"]}) {
+			@ui.Textarea(ui.TextareaProps{ID: "source_text", Name: "source_text", Value: v.Values.SourceText, Placeholder: i18n.T(ctx, "studioui.new.source_placeholder"), Rows: 6, Invalid: v.Errors["source_text"] != ""})
+		}
+		<span class="mv-wizard__or">{ i18n.T(ctx, "studioui.new.or") }</span>
+		@ui.Field(ui.FieldProps{ID: "source_file", Label: i18n.T(ctx, "studioui.new.upload_label"), Hint: i18n.T(ctx, "studioui.new.upload_hint"), Error: v.Errors["source_file"]}) {
+			@ui.Input(ui.InputProps{ID: "source_file", Name: "source_file", Type: "file", Invalid: v.Errors["source_file"] != "", Attrs: templ.Attributes{"accept": ".txt,text/plain"}})
+		}
+		@ui.Notice(ui.ToneInfo, "shield-lock") {
+			<p>{ i18n.T(ctx, "studioui.new.private_source") }</p>
+		}
+	</div>
+}
+
+templ wizardGenre(v newProjectView) {
+	<fieldset class="mv-wizard__fieldset">
+		<legend class="mv-sr-only">{ i18n.T(ctx, "studioui.new.genres") }</legend>
+		<div class="mv-chips">
+			for _, genre := range genreValues {
+				<label class="mv-chip">
+					<input type="checkbox" name="genres" value={ genre } checked?={ contains(v.Values.Genres, genre) }/>
+					@ui.Icon("check", 16)
+					<span data-label>{ i18n.T(ctx, "genre." + genre) }</span>
+				</label>
+			}
+		</div>
+		if v.Errors["genres"] != "" {
+			<span class="mv-field__error" role="alert">
+				@ui.Icon("alert-triangle", 14)
+				<span>{ v.Errors["genres"] }</span>
+			</span>
+		}
+	</fieldset>
+}
+
+templ wizardStyle(v newProjectView) {
+	<fieldset class="mv-wizard__fieldset">
+		<legend class="mv-sr-only">{ i18n.T(ctx, "studioui.new.style") }</legend>
+		<div class="mv-choices mv-choices--3">
+			for _, style := range styleValues {
+				<label class="mv-choice">
+					<input type="radio" name="style" value={ style } checked?={ v.Values.Style == style }/>
+					@ui.Icon(styleIcon(style), 22)
+					<span>
+						<span class="mv-choice__title" data-label>{ styleLabel(ctx, style) }</span>
+						<span class="mv-choice__desc">{ i18n.T(ctx, "style." + style + ".desc") }</span>
+					</span>
+				</label>
+			}
+		</div>
+		if v.Errors["style"] != "" {
+			<span class="mv-field__error" role="alert">
+				@ui.Icon("alert-triangle", 14)
+				<span>{ v.Errors["style"] }</span>
+			</span>
+		}
+	</fieldset>
+}
+
+templ wizardFormat(v newProjectView) {
+	<fieldset class="mv-wizard__fieldset">
+		<legend class="mv-sr-only">{ i18n.T(ctx, "studioui.new.format") }</legend>
+		<div class="mv-wizard__formats">
+			for _, format := range formatValues {
+				<label class="mv-choice mv-fmt">
+					<input type="radio" name="format" value={ format } checked?={ v.Values.Format == format }/>
+					@formatThumb(format)
+					<span class="mv-fmt__head">
+						<strong class="mv-fmt__title" data-label>{ formatLabel(ctx, format) }</strong>
+						<span class="mv-fmt__radio" aria-hidden="true"></span>
+					</span>
+					<span class="mv-fmt__desc">{ i18n.T(ctx, "studioui.new.format." + format + ".desc") }</span>
+				</label>
+			}
+		</div>
+		if v.Errors["format"] != "" {
+			<span class="mv-field__error" role="alert">
+				@ui.Icon("alert-triangle", 14)
+				<span>{ v.Errors["format"] }</span>
+			</span>
+		}
+	</fieldset>
+	<div class="mv-wizard__triple">
+		@ui.Field(ui.FieldProps{ID: "page_size", Label: i18n.T(ctx, "studioui.new.page_size"), Hint: i18n.T(ctx, "studioui.new.page_size_hint"), Error: v.Errors["page_size"]}) {
+			@ui.Select(ui.SelectProps{ID: "page_size", Name: "page_size", Value: v.Values.PageSize, Options: pageSizeOptions(ctx), Invalid: v.Errors["page_size"] != "", Attrs: hintAttrs("page_size", v.Errors["page_size"] == "")})
+		}
+		<div class="mv-field is-soon">
+			<label class="mv-field__label" for="chapters_plan">
+				<span>{ i18n.T(ctx, "studioui.new.chapters_plan") }</span>
+				@ui.SoonTag()
+			</label>
+			@ui.Input(ui.InputProps{ID: "chapters_plan", Type: "number", Value: "1", Disabled: true, Described: true})
+			<span class="mv-field__hint" id="chapters_plan-hint">{ i18n.T(ctx, "studioui.new.chapters_plan_hint") }</span>
+		</div>
+		@ui.Field(ui.FieldProps{ID: "pages_target", Label: i18n.T(ctx, "studioui.new.pages_per_chapter"), Hint: i18n.T(ctx, "studioui.new.pages_hint"), Error: v.Errors["pages_target"]}) {
+			@ui.Input(ui.InputProps{ID: "pages_target", Name: "pages_target", Type: "number", Value: strconv.Itoa(v.Values.PagesTarget), Inputmode: "numeric", Invalid: v.Errors["pages_target"] != "", Described: true, Attrs: templ.Attributes{"min": "1", "max": "256"}})
+		}
+	</div>
+}
+
+// formatThumb draws the format card's thumbnail from the screentone
+// placeholder: a paper page (or a spread) of toned panels, or a webtoon strip.
+templ formatThumb(format string) {
+	<span class="mv-fmt__thumb" aria-hidden="true">
+		switch format {
+			case "webtoon":
+				<span class="mv-fmt__strip">
+					<span class="mv-tone mv-fmt__cell mv-fmt__cell--1"></span>
+					<span class="mv-tone mv-fmt__cell mv-fmt__cell--2"></span>
+					<span class="mv-tone mv-fmt__cell mv-fmt__cell--3"></span>
+				</span>
+			case "manga_rtl":
+				@pageThumb()
+				@pageThumb()
+			default:
+				@pageThumb()
+		}
+	</span>
+}
+
+templ pageThumb() {
+	<span class="mv-fmt__page" data-theme="light">
+		<span class="mv-tone mv-fmt__panel mv-fmt__panel--1"></span>
+		<span class="mv-tone mv-fmt__panel mv-fmt__panel--2"></span>
+		<span class="mv-tone mv-fmt__panel mv-fmt__panel--3"></span>
+		<span class="mv-tone mv-fmt__panel mv-fmt__panel--4"></span>
+		<span class="mv-tone mv-fmt__panel mv-fmt__panel--5"></span>
+	</span>
+}
+
+templ wizardGenerate(v newProjectView) {
+	<div class="mv-wizard__pair">
+		@ui.Field(ui.FieldProps{ID: "chapter_title", Label: i18n.T(ctx, "studioui.new.chapter_label"), Error: v.Errors["chapter_title"]}) {
+			@ui.Input(ui.InputProps{ID: "chapter_title", Name: "chapter_title", Value: v.Values.ChapterTitle, Placeholder: i18n.T(ctx, "studioui.new.chapter_placeholder"), Required: true, MaxLength: 160, Invalid: v.Errors["chapter_title"] != ""})
+		}
+		@ui.Field(ui.FieldProps{ID: "language", Label: i18n.T(ctx, "studioui.new.language"), Error: v.Errors["language"]}) {
+			@ui.Select(ui.SelectProps{ID: "language", Name: "language", Value: v.Values.Language, Options: selectOptions(ctx, "studioui.language.", languageValues), Invalid: v.Errors["language"] != ""})
+		}
+	</div>
+}
+
+// wizardSummary is the designed "Your manga so far" panel. The studio script
+// keeps it in step with the form; the server renders the submitted values.
+templ wizardSummary(v newProjectView) {
+	<aside class="mv-wizard__summary" aria-labelledby="mv-summary-label">
+		<span class="mv-label-mono" id="mv-summary-label">{ i18n.T(ctx, "studioui.new.summary.label") }</span>
+		<span class="mv-wizard__sumtitle" data-summary="title" data-empty={ i18n.T(ctx, "studioui.new.summary.untitled") }>{ titleSummary(ctx, v.Values.Title) }</span>
+		<p
+			class="mv-wizard__sumpremise"
+			data-summary="premise"
+			data-empty={ i18n.T(ctx, "studioui.new.summary.no_premise") }
+			data-quote={ i18n.T(ctx, "studioui.new.summary.quoted") }
+			data-adapt={ i18n.T(ctx, "studioui.new.summary.adapt") }
+		>{ premiseSummary(ctx, v.Values) }</p>
+		<dl class="mv-wizard__sumrows">
+			<div>
+				<dt>{ stepName(ctx, "genre") }</dt>
+				<dd data-summary="genres" data-empty={ i18n.T(ctx, "studioui.new.summary.none") }>{ genreSummary(ctx, v.Values.Genres) }</dd>
+			</div>
+			<div>
+				<dt>{ stepName(ctx, "style") }</dt>
+				<dd data-summary="style">{ styleLabel(ctx, v.Values.Style) }</dd>
+			</div>
+			<div>
+				<dt>{ stepName(ctx, "format") }</dt>
+				<dd data-summary="format">{ formatLabel(ctx, v.Values.Format) }</dd>
+			</div>
+		</dl>
+		<div class="mv-wizard__makes">
+			<strong>{ i18n.T(ctx, "studioui.new.makes.title") }</strong>
+			<span>{ i18n.T(ctx, "studioui.new.makes.body") }</span>
+			@ui.RouteChip(i18n.T(ctx, "studioui.route.auto"), i18n.T(ctx, "studioui.route.pick"), "", "")
+		</div>
+	</aside>
 }
 
 templ NoChapterPage(v noChapterView) {
@@ -147,69 +526,182 @@ templ NoChapterPage(v noChapterView) {
 			if v.CanEdit {
 				<form class="mv-story__chapter-form" method="post" action={ templ.URL(storyPath(v.Project.ID, "") + "/chapters") } novalidate>
 					@FormNotice(v.Error)
-					@ui.Field(ui.FieldProps{ID: "chapter_title", Label: i18n.T(ctx, "studioui.new.chapter_label")}) { @ui.Input(ui.InputProps{ID: "chapter_title", Name: "chapter_title", Placeholder: i18n.T(ctx, "studioui.new.chapter_placeholder"), Required: true, MaxLength: 160}) }
-					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "plus"}) { { i18n.T(ctx, "studioui.chapter.create") } }
+					@ui.Field(ui.FieldProps{ID: "chapter_title", Label: i18n.T(ctx, "studioui.new.chapter_label")}) {
+						@ui.Input(ui.InputProps{ID: "chapter_title", Name: "chapter_title", Placeholder: i18n.T(ctx, "studioui.new.chapter_placeholder"), Required: true, MaxLength: 160})
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "plus"}) {
+						{ i18n.T(ctx, "studioui.chapter.create") }
+					}
 				</form>
 			}
 		}
 	</main>
 }
 
+// StoryPage is C1: the chapter/scene tree, the script in the centre (Prose or
+// Panels) and the Script assistant, which is not built yet and shows as Soon.
 templ StoryPage(v storyView) {
-	<main class="mv-story">
-		<header class="mv-story__head">
-			<div><span class="mv-label-mono">{ v.Project.Title }</span><h1>{ v.Chapter.Title }</h1><p>{ i18n.T(ctx, "studioui.story.chapter", "number", v.Chapter.Number) }</p></div>
-			<div class="mv-story__status">
-				if v.Chapter.Locked {
-					@ui.StatusBadge(ui.StatusLocked, i18n.T(ctx, "studioui.story.locked"))
-				}
-				if label := v.Chapter.AILabel["script"]; label != "" {
-					@ui.ProvenanceBadge(label, provenanceText(ctx, label))
-				}
-			</div>
-		</header>
-		<div class="mv-story__layout">
-			<nav class="mv-story__rail" aria-label={ i18n.T(ctx, "studioui.story.chapters") }>
-				<span class="mv-label-mono">{ i18n.T(ctx, "studioui.story.chapters") }</span>
-				<ol>
-					for _, chapter := range v.Chapters {
-						<li>
-							<a href={ templ.URL(storyPath(v.Project.ID, chapter.ID)) }
-								if chapter.ID == v.Chapter.ID {
-									aria-current="page"
-								}
-							><span>{ chapterNumber(chapter.Number) }</span><strong>{ chapter.Title }</strong></a>
-						</li>
+	<div class="mv-c1" data-story-views>
+		@storyTree(v)
+		<section class="mv-c1__centre" aria-labelledby="mv-c1-title">
+			<header class="mv-c1__bar">
+				<div class="mv-c1__heading">
+					<span class="mv-c1__crumbline">
+						<span class="mv-c1__crumb">{ i18n.T(ctx, "studioui.story.crumb", "project", v.Project.Title, "number", v.Chapter.Number) }</span>
+						if v.Chapter.Locked {
+							@ui.StatusBadge(ui.StatusLocked, i18n.T(ctx, "studioui.story.locked"))
+						}
+						if label := v.Chapter.AILabel["script"]; label != "" {
+							@ui.ProvenanceBadge(label, provenanceText(ctx, label))
+						}
+					</span>
+					<h1 class="mv-c1__title" id="mv-c1-title">{ v.Chapter.Title }</h1>
+				</div>
+				<div class="mv-c1__tools">
+					if len(v.Script.Scenes) > 0 {
+						<div class="mv-c1__toggle" data-view-toggle>
+							@ui.SegmentedLinks(i18n.T(ctx, "studioui.story.view"), []ui.SegLink{
+								{Href: storyPath(v.Project.ID, v.Chapter.ID) + "?view=prose", Label: i18n.T(ctx, "studioui.story.prose"), Current: storyViewIs(v, viewProse)},
+								{Href: storyPath(v.Project.ID, v.Chapter.ID), Label: i18n.T(ctx, "studioui.story.panels"), Current: storyViewIs(v, viewPanels)},
+							})
+						</div>
+						@makePagesButton(v, "mv-hide-mobile", false)
 					}
-				</ol>
-			</nav>
-			<section class="mv-story__manuscript" aria-label={ i18n.T(ctx, "studioui.story.manuscript") }>
+				</div>
+			</header>
+			<div class="mv-c1__body">
 				@FormNotice(v.Error)
 				if v.Conflict {
-					@ui.Notice(ui.ToneWarning, "refresh") { <strong>{ i18n.T(ctx, "studioui.script.unsaved") }</strong><p>{ i18n.T(ctx, "studioui.script.conflict_help") }</p><a href={ templ.URL(storyPath(v.Project.ID, v.Chapter.ID)) }>{ i18n.T(ctx, "studioui.script.reload") }</a> }
+					@ui.Notice(ui.ToneWarning, "refresh") {
+						<strong>{ i18n.T(ctx, "studioui.script.unsaved") }</strong>
+						<p>{ i18n.T(ctx, "studioui.script.conflict_help") }</p>
+						<a href={ templ.URL(storyPath(v.Project.ID, v.Chapter.ID)) }>{ i18n.T(ctx, "studioui.script.reload") }</a>
+					}
 				}
 				if len(v.Script.Scenes) > 0 {
+					@ScriptProse(v)
 					@ScriptEditor(v)
-				} else if v.Job != nil {
-					@JobPanel(v.Job)
-					if !v.Job.Active && v.CanGenerate && !v.Chapter.Locked {
-						@GenerationStart(v)
-					}
-				} else if v.CanGenerate && !v.Chapter.Locked {
-					@GenerationStart(v)
+					@makePagesButton(v, "mv-show-mobile mv-c1__mobile-make", true)
 				} else {
-					@ui.State(ui.StateProps{Title: i18n.T(ctx, "studioui.story.no_script"), Body: i18n.T(ctx, "studioui.story.read_only"), Boxed: true})
+					<div class="mv-c1__gen">
+						if v.Job != nil {
+							@JobPanel(v.Job)
+							if !v.Job.Active && v.CanGenerate && !v.Chapter.Locked {
+								@GenerationStart(v)
+							}
+						} else if v.CanGenerate && !v.Chapter.Locked {
+							@GenerationStart(v)
+						} else {
+							@ui.State(ui.StateProps{Title: i18n.T(ctx, "studioui.story.no_script"), Body: i18n.T(ctx, "studioui.story.read_only"), Boxed: true})
+						}
+					</div>
 				}
-			</section>
+			</div>
+		</section>
+		@scriptAssistant()
+	</div>
+}
+
+// storyTree lists the chapters (arcs are not modelled yet, so chapters are
+// the top level) and the open chapter's scenes, which link into the centre.
+templ storyTree(v storyView) {
+	<nav class="mv-c1__tree" aria-label={ i18n.T(ctx, "studioui.story.tree") }>
+		<ul class="mv-list-plain">
+			for _, chapter := range v.Chapters {
+				<li>
+					<a
+						class="mv-c1__node mv-c1__node--chapter"
+						href={ templ.URL(storyPath(v.Project.ID, chapter.ID)) }
+						if chapter.ID == v.Chapter.ID {
+							aria-current="page"
+						}
+					>
+						@ui.Icon("file", 15)
+						<span>{ i18n.T(ctx, "studioui.story.chapter_node", "number", chapter.Number, "title", chapter.Title) }</span>
+					</a>
+					if chapter.ID == v.Chapter.ID && len(v.Script.Scenes) > 0 {
+						<ul class="mv-list-plain">
+							for sceneIndex, scene := range v.Script.Scenes {
+								<li>
+									<a
+										class="mv-c1__node mv-c1__node--scene"
+										href={ templ.URL(sceneHref(v, scene.ID)) }
+										data-scene-link
+										data-panels-href={ "#scene-" + scene.ID }
+										data-prose-href={ "#prose-" + scene.ID }
+									>
+										@ui.Icon("point", 15)
+										<span>{ i18n.T(ctx, "studioui.story.scene_node", "number", sceneIndex + 1, "title", scene.Title) }</span>
+									</a>
+								</li>
+							}
+						</ul>
+					}
+				</li>
+			}
+		</ul>
+	</nav>
+}
+
+// makePagesButton keeps "Make pages from script" in its designed place. Until
+// the pages-from-script endpoint exists it renders disabled with a Soon tag.
+templ makePagesButton(v storyView, class string, full bool) {
+	{{ action := storyPath(v.Project.ID, v.Chapter.ID) + "/pages" }}
+	if !ui.ReadyMethod(ctx, "POST", action) {
+		<div class={ ui.Cls("mv-c1__make", class) }>
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Icon: "layout-board", Full: full, Disabled: true, Class: "is-soon", Attrs: templ.Attributes{"title": i18n.T(ctx, "ui.soon_hint")}}) {
+				{ i18n.T(ctx, "studioui.story.make_pages") }
+				@ui.SoonTag()
+			}
 		</div>
-	</main>
+	} else if v.CanGenerate && !v.Chapter.Locked {
+		<form class={ ui.Cls("mv-c1__make", class) } method="post" action={ templ.URL(action) }>
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Type: "submit", Icon: "layout-board", Full: full}) {
+				{ i18n.T(ctx, "studioui.story.make_pages") }
+			}
+		</form>
+	} else {
+		<div class={ ui.Cls("mv-c1__make", class) }>
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Icon: "layout-board", Full: full, Disabled: true}) {
+				{ i18n.T(ctx, "studioui.story.make_pages") }
+			}
+		</div>
+	}
+}
+
+// scriptAssistant is the designed right pane. The assistant is not built, so
+// its route chip and input render disabled with a Soon tag.
+templ scriptAssistant() {
+	<aside class="mv-c1__assist" aria-labelledby="mv-c1-assist-title">
+		<header class="mv-c1__assisthead">
+			<h2 id="mv-c1-assist-title">{ i18n.T(ctx, "studioui.assist.title") }</h2>
+			<span class="mv-c1__route is-soon" aria-disabled="true">
+				@ui.RouteChip(i18n.T(ctx, "studioui.route.auto"), i18n.T(ctx, "studioui.route.pick"), "", "")
+				@ui.SoonTag()
+			</span>
+		</header>
+		<div class="mv-c1__assistbody">
+			<p>{ i18n.T(ctx, "studioui.assist.body") }</p>
+		</div>
+		<div class="mv-c1__assistfoot">
+			<label class="mv-sr-only" for="mv-c1-ask">{ i18n.T(ctx, "studioui.assist.ask") }</label>
+			<div class="mv-c1__ask">
+				@ui.Input(ui.InputProps{ID: "mv-c1-ask", Placeholder: i18n.T(ctx, "studioui.assist.ask"), Disabled: true})
+				@ui.SoonTag()
+			</div>
+		</div>
+	</aside>
 }
 
 templ GenerationStart(v storyView) {
 	@ui.State(ui.StateProps{SFX: "INK", Title: i18n.T(ctx, "studioui.generate.title"), Body: i18n.T(ctx, "studioui.generate.body"), Art: "speedlines", Boxed: true}) {
 		<form class="mv-story__generate" method="post" action={ templ.URL(storyPath(v.Project.ID, v.Chapter.ID) + "/generate") } novalidate>
-			@ui.Field(ui.FieldProps{ID: "pages_target", Label: i18n.T(ctx, "studioui.new.pages"), Hint: i18n.T(ctx, "studioui.new.pages_hint")}) { @ui.Input(ui.InputProps{ID: "pages_target", Name: "pages_target", Type: "number", Value: strconv.Itoa(defaultPagesTarget), Inputmode: "numeric", Attrs: templ.Attributes{"min": "1", "max": "256"}}) }
-			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "sparkles"}) { { i18n.T(ctx, "studioui.generate.submit") } }
+			@ui.Field(ui.FieldProps{ID: "pages_target", Label: i18n.T(ctx, "studioui.new.pages"), Hint: i18n.T(ctx, "studioui.new.pages_hint")}) {
+				@ui.Input(ui.InputProps{ID: "pages_target", Name: "pages_target", Type: "number", Value: strconv.Itoa(defaultPagesTarget), Inputmode: "numeric", Described: true, Attrs: templ.Attributes{"min": "1", "max": "256"}})
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "sparkles"}) {
+				{ i18n.T(ctx, "studioui.generate.submit") }
+			}
 		</form>
 	}
 }
@@ -218,61 +710,158 @@ templ JobPanel(v *jobView) {
 	<div class="mv-story-job" id={ "job-" + v.Job.ID } aria-live="polite" { jobPollAttrs(v)... }>
 		@ui.GenState(ui.GenProps{State: v.State, Position: v.Position, Progress: v.Job.Progress, Step: v.Job.Step, Steps: v.Job.Steps, ProgressText: v.Progress, Title: v.Title, Detail: v.Detail, ResultLabel: v.ResultLabel, SFX: "FZZT", JobID: v.Job.ID})
 		<div class="mv-story-job__actions">
-			<a href={ templ.URL(v.StoryURL) } class="mv-btn mv-btn--quiet">@ui.Icon("refresh", 16) { i18n.T(ctx, "studioui.job.refresh") }</a>
+			<a href={ templ.URL(v.StoryURL) } class="mv-btn mv-btn--quiet">
+				@ui.Icon("refresh", 16)
+				{ i18n.T(ctx, "studioui.job.refresh") }
+			</a>
 			if v.Retryable {
-				<form method="post" action={ templ.URL(v.RetryURL) } novalidate>@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Type: "submit", Icon: "refresh"}) { { i18n.T(ctx, "studioui.job.retry") } }</form>
+				<form method="post" action={ templ.URL(v.RetryURL) } novalidate>
+					@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Type: "submit", Icon: "refresh"}) {
+						{ i18n.T(ctx, "studioui.job.retry") }
+					}
+				</form>
 			}
 		</div>
 	</div>
 }
 
-templ ScriptEditor(v storyView) {
-	<form class="mv-script" method="post" action={ templ.URL(storyPath(v.Project.ID, v.Chapter.ID) + "/script") } novalidate>
-		<input type="hidden" name="revision" value={ formRevision(v) }/>
-		<header class="mv-script__head"><div><span class="mv-label-mono">{ i18n.T(ctx, "studioui.script.label") }</span><h2>{ i18n.T(ctx, "studioui.script.title") }</h2></div><p>{ i18n.T(ctx, "studioui.script.no_autosave") }</p></header>
-		@ui.Field(ui.FieldProps{ID: "chapter_summary", Label: i18n.T(ctx, "studioui.script.summary")}) { @ui.Textarea(ui.TextareaProps{ID: "chapter_summary", Name: "chapter_summary", Value: v.Script.ChapterSummary, Rows: 4, MaxLength: 4000, Attrs: readOnlyAttrs(v.ReadOnly)}) }
+// ScriptProse is the read-only Prose view of the same script. Each text node
+// names the field it shows (data-mirror) so the studio script can refresh it
+// from unsaved edits when the view switches.
+templ ScriptProse(v storyView) {
+	<article class="mv-c1__prose" data-view-panel="prose" hidden?={ !storyViewIs(v, viewProse) } aria-label={ i18n.T(ctx, "studioui.story.prose") }>
+		<p class="mv-c1__prose-summary" data-mirror="chapter_summary">{ v.Script.ChapterSummary }</p>
 		for sceneIndex, scene := range v.Script.Scenes {
-			<section class="mv-script__scene" aria-labelledby={ "scene-title-" + scene.ID }>
-				<header><span class="mv-script__index">{ i18n.T(ctx, "studioui.script.scene", "number", sceneIndex + 1) }</span><h3 id={ "scene-title-" + scene.ID }>{ scene.Title }</h3></header>
-				<div class="mv-script__scene-fields">
-					@ui.Field(ui.FieldProps{ID: "scene-title-input-" + scene.ID, Label: i18n.T(ctx, "studioui.script.scene_title")}) { @ui.Input(ui.InputProps{ID: "scene-title-input-" + scene.ID, Name: sceneField(scene.ID, "title"), Value: scene.Title, ReadOnly: v.ReadOnly, MaxLength: 160}) }
-					@ui.Field(ui.FieldProps{ID: "scene-time-" + scene.ID, Label: i18n.T(ctx, "studioui.script.time")}) { @ui.Input(ui.InputProps{ID: "scene-time-" + scene.ID, Name: sceneField(scene.ID, "time_of_day"), Value: scene.TimeOfDay, ReadOnly: v.ReadOnly, MaxLength: 160}) }
-				</div>
-				@ui.Field(ui.FieldProps{ID: "scene-summary-" + scene.ID, Label: i18n.T(ctx, "studioui.script.scene_summary")}) { @ui.Textarea(ui.TextareaProps{ID: "scene-summary-" + scene.ID, Name: sceneField(scene.ID, "summary"), Value: scene.Summary, Rows: 3, MaxLength: 4000, Attrs: readOnlyAttrs(v.ReadOnly)}) }
+			<section class="mv-c1__prose-scene" id={ "prose-" + scene.ID } aria-labelledby={ "prose-title-" + scene.ID }>
+				<span class="mv-c1__crumb">
+					{ i18n.T(ctx, "studioui.story.scene_crumb", "chapter", v.Chapter.Number, "scene", sceneIndex + 1) }
+					<span class="mv-c1__prose-time" data-mirror={ sceneField(scene.ID, "time_of_day") }>{ scene.TimeOfDay }</span>
+				</span>
+				<h2 class="mv-c1__prose-title" id={ "prose-title-" + scene.ID } data-mirror={ sceneField(scene.ID, "title") }>{ scene.Title }</h2>
+				<p class="mv-c1__prose-summary" data-mirror={ sceneField(scene.ID, "summary") }>{ scene.Summary }</p>
 				for _, panel := range scene.Panels {
-					<article class="mv-script__panel">
-						<header><span>{ i18n.T(ctx, "studioui.script.panel", "label", panel.Label) }</span><span class="mv-mono">{ panel.ID }</span></header>
-						<div class="mv-script__panel-grid">
-							@ui.Field(ui.FieldProps{ID: "page-" + panel.ID, Label: i18n.T(ctx, "studioui.script.page")}) { @ui.Input(ui.InputProps{ID: "page-" + panel.ID, Name: panelField(panel.ID, "page_number"), Type: "number", Value: strconv.Itoa(panel.PageNumber), ReadOnly: v.ReadOnly, Attrs: templ.Attributes{"min": "1", "max": "9999"}}) }
-							@ui.Field(ui.FieldProps{ID: "camera-" + panel.ID, Label: i18n.T(ctx, "studioui.script.camera")}) { @ui.Input(ui.InputProps{ID: "camera-" + panel.ID, Name: panelField(panel.ID, "camera"), Value: panel.Camera, ReadOnly: v.ReadOnly, MaxLength: 240}) }
-							@ui.Field(ui.FieldProps{ID: "shot-" + panel.ID, Label: i18n.T(ctx, "studioui.script.shot")}) { @ui.Input(ui.InputProps{ID: "shot-" + panel.ID, Name: panelField(panel.ID, "shot"), Value: panel.Shot, ReadOnly: v.ReadOnly, MaxLength: 240}) }
-							@ui.Field(ui.FieldProps{ID: "emotion-" + panel.ID, Label: i18n.T(ctx, "studioui.script.emotion")}) { @ui.Input(ui.InputProps{ID: "emotion-" + panel.ID, Name: panelField(panel.ID, "emotion"), Value: panel.Emotion, ReadOnly: v.ReadOnly, MaxLength: 240}) }
+					<div class="mv-c1__prose-panel">
+						<span class="mv-c1__prose-label">{ panel.Label }</span>
+						<div class="mv-c1__prose-text">
+							<p class="mv-c1__prose-action" data-mirror={ panelField(panel.ID, "action") }>{ panel.Action }</p>
+							for dialogueIndex, line := range panel.Dialogue {
+								<p class={ ui.Cls("mv-c1__prose-line", "mv-c1__prose-line--"+dialogueKind(line.Kind)) }>
+									<strong data-mirror={ dialogueField(panel.ID, dialogueIndex, "speaker") } data-fallback={ i18n.T(ctx, "studioui.dialogue."+dialogueKind(line.Kind)) }>{ lineFallback(ctx, line) }</strong>
+									<span data-mirror={ dialogueField(panel.ID, dialogueIndex, "text") }>{ line.Text }</span>
+								</p>
+							}
 						</div>
-						@ui.Field(ui.FieldProps{ID: "action-" + panel.ID, Label: i18n.T(ctx, "studioui.script.action")}) { @ui.Textarea(ui.TextareaProps{ID: "action-" + panel.ID, Name: panelField(panel.ID, "action"), Value: panel.Action, Rows: 3, MaxLength: 2000, Attrs: readOnlyAttrs(v.ReadOnly)}) }
-						for dialogueIndex, line := range panel.Dialogue {
-							<fieldset class="mv-script__dialogue"><legend>{ i18n.T(ctx, "studioui.script.dialogue", "number", dialogueIndex + 1) }</legend>
-								@ui.Input(ui.InputProps{ID: "speaker-" + panel.ID + "-" + strconv.Itoa(dialogueIndex), Name: dialogueField(panel.ID, dialogueIndex, "speaker"), Value: line.Speaker, ReadOnly: v.ReadOnly, MaxLength: 160})
-								@ui.Select(ui.SelectProps{ID: "kind-" + panel.ID + "-" + strconv.Itoa(dialogueIndex), Name: dialogueField(panel.ID, dialogueIndex, "kind"), Value: line.Kind, Disabled: v.ReadOnly, Options: selectOptions(ctx, "studioui.dialogue.", []string{"speech", "thought", "caption"})})
-								@ui.Textarea(ui.TextareaProps{ID: "line-" + panel.ID + "-" + strconv.Itoa(dialogueIndex), Name: dialogueField(panel.ID, dialogueIndex, "text"), Value: line.Text, Rows: 2, MaxLength: 2000, Attrs: readOnlyAttrs(v.ReadOnly)})
-							</fieldset>
-						}
-						for sfxIndex, effect := range panel.SFX {
-							<fieldset class="mv-script__sfx"><legend>{ i18n.T(ctx, "studioui.script.sfx", "number", sfxIndex + 1) }</legend>
-								@ui.Input(ui.InputProps{ID: "sfx-" + panel.ID + "-" + strconv.Itoa(sfxIndex), Name: sfxField(panel.ID, sfxIndex, "text"), Value: effect.Text, ReadOnly: v.ReadOnly, MaxLength: 240})
-								@ui.Input(ui.InputProps{ID: "sfx-note-" + panel.ID + "-" + strconv.Itoa(sfxIndex), Name: sfxField(panel.ID, sfxIndex, "note"), Value: effect.Note, ReadOnly: v.ReadOnly, MaxLength: 240})
-							</fieldset>
-						}
-						@ui.Field(ui.FieldProps{ID: "notes-" + panel.ID, Label: i18n.T(ctx, "studioui.script.notes")}) { @ui.Textarea(ui.TextareaProps{ID: "notes-" + panel.ID, Name: panelField(panel.ID, "notes"), Value: panel.Notes, Rows: 2, MaxLength: 2000, Attrs: readOnlyAttrs(v.ReadOnly)}) }
-					</article>
+						<span class="mv-c1__prose-sfx">
+							for sfxIndex, effect := range panel.SFX {
+								<span class="mv-c1__prose-sfxword" data-mirror={ sfxField(panel.ID, sfxIndex, "text") }>{ effect.Text }</span>
+							}
+						</span>
+					</div>
 				}
 			</section>
 		}
-		<footer class="mv-script__actions">
+	</article>
+}
+
+// ScriptEditor is the Panels view: the compact panel table of every scene in
+// the chapter, posted as one form because a save replaces the whole chapter.
+templ ScriptEditor(v storyView) {
+	<form class="mv-c1__script" data-view-panel="panels" hidden?={ !storyViewIs(v, viewPanels) } method="post" action={ templ.URL(storyPath(v.Project.ID, v.Chapter.ID) + "/script") } novalidate>
+		<h2 class="mv-sr-only">{ i18n.T(ctx, "studioui.script.title") }</h2>
+		<input type="hidden" name="revision" value={ formRevision(v) }/>
+		<div class="mv-c1__summary">
+			<label class="mv-c1__minilabel" for="chapter_summary">{ i18n.T(ctx, "studioui.script.summary") }</label>
+			@ui.Textarea(ui.TextareaProps{ID: "chapter_summary", Name: "chapter_summary", Value: v.Script.ChapterSummary, Class: "mv-c1__cell mv-c1__cell--summary", Attrs: cellAttrs(v.ReadOnly, 4000, cellRows(v.Script.ChapterSummary, 90, 2, 8))})
+		</div>
+		for sceneIndex, scene := range v.Script.Scenes {
+			@sceneTable(v, sceneIndex, scene)
+		}
+		<footer class="mv-c1__save">
 			if v.ReadOnly {
 				<span>{ i18n.T(ctx, "studioui.script.read_only") }</span>
 			} else {
-				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Icon: "device-floppy"}) { { i18n.T(ctx, "studioui.script.save") } }
+				<span>{ i18n.T(ctx, "studioui.script.no_autosave") }</span>
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "device-floppy"}) {
+					{ i18n.T(ctx, "studioui.script.save") }
+				}
 			}
 		</footer>
 	</form>
+}
+
+templ sceneTable(v storyView, sceneIndex int, scene studio.ScriptScene) {
+	{{ sceneName := i18n.T(ctx, "studioui.script.scene", "number", sceneIndex+1) }}
+	<section class="mv-c1__scene" id={ "scene-" + scene.ID } aria-labelledby={ "scene-crumb-" + scene.ID }>
+		<header class="mv-c1__scenehead">
+			<span class="mv-c1__crumb" id={ "scene-crumb-" + scene.ID }>{ i18n.T(ctx, "studioui.story.scene_crumb", "chapter", v.Chapter.Number, "scene", sceneIndex + 1) }</span>
+			<label class="mv-sr-only" for={ "scene-title-input-" + scene.ID }>{ cellLabel(sceneName, i18n.T(ctx, "studioui.script.scene_title")) }</label>
+			@ui.Input(ui.InputProps{ID: "scene-title-input-" + scene.ID, Name: sceneField(scene.ID, "title"), Value: scene.Title, ReadOnly: v.ReadOnly, MaxLength: 160, Placeholder: i18n.T(ctx, "studioui.script.scene_title"), Class: "mv-c1__cell mv-c1__cell--title"})
+			<div class="mv-c1__scenemeta">
+				<label class="mv-c1__minilabel" for={ "scene-time-" + scene.ID }>{ i18n.T(ctx, "studioui.script.time") }</label>
+				@ui.Input(ui.InputProps{ID: "scene-time-" + scene.ID, Name: sceneField(scene.ID, "time_of_day"), Value: scene.TimeOfDay, ReadOnly: v.ReadOnly, MaxLength: 160, Class: "mv-c1__cell mv-c1__cell--meta"})
+			</div>
+			<label class="mv-sr-only" for={ "scene-summary-" + scene.ID }>{ cellLabel(sceneName, i18n.T(ctx, "studioui.script.scene_summary")) }</label>
+			@ui.Textarea(ui.TextareaProps{ID: "scene-summary-" + scene.ID, Name: sceneField(scene.ID, "summary"), Value: scene.Summary, Placeholder: i18n.T(ctx, "studioui.script.scene_summary"), Class: "mv-c1__cell mv-c1__cell--summary", Attrs: cellAttrs(v.ReadOnly, 4000, cellRows(scene.Summary, 90, 1, 6))})
+		</header>
+		<div class="mv-c1__table" role="table" aria-label={ i18n.T(ctx, "studioui.story.panels_table", "number", sceneIndex + 1) }>
+			<div class="mv-c1__row mv-c1__row--head" role="row">
+				<span role="columnheader">{ i18n.T(ctx, "studioui.story.col.panel") }</span>
+				<span role="columnheader">{ i18n.T(ctx, "studioui.story.col.camera") }</span>
+				<span role="columnheader">{ i18n.T(ctx, "studioui.story.col.action") }</span>
+				<span role="columnheader" class="mv-c1__end">{ i18n.T(ctx, "studioui.story.col.sfx") }</span>
+			</div>
+			for _, panel := range scene.Panels {
+				@panelRow(v, panel)
+			}
+		</div>
+	</section>
+}
+
+templ panelRow(v storyView, panel studio.ScriptPanel) {
+	{{ panelName := i18n.T(ctx, "studioui.script.panel", "label", panel.Label) }}
+	<div class="mv-c1__row" role="row" id={ "panel-" + panel.ID }>
+		<div class="mv-c1__col mv-c1__col--panel" role="cell">
+			<span class="mv-c1__label">{ panel.Label }</span>
+			<label class="mv-c1__page" for={ "page-" + panel.ID }>
+				<span aria-hidden="true">{ i18n.T(ctx, "studioui.script.page") }</span>
+				<span class="mv-sr-only">{ cellLabel(panelName, i18n.T(ctx, "studioui.script.page")) }</span>
+			</label>
+			@ui.Input(ui.InputProps{ID: "page-" + panel.ID, Name: panelField(panel.ID, "page_number"), Type: "number", Value: strconv.Itoa(panel.PageNumber), ReadOnly: v.ReadOnly, Inputmode: "numeric", Class: "mv-c1__cell mv-c1__cell--page", Attrs: templ.Attributes{"min": "1", "max": "9999"}})
+		</div>
+		<div class="mv-c1__col mv-c1__col--camera" role="cell">
+			<label class="mv-sr-only" for={ "shot-" + panel.ID }>{ cellLabel(panelName, i18n.T(ctx, "studioui.script.shot")) }</label>
+			@ui.Input(ui.InputProps{ID: "shot-" + panel.ID, Name: panelField(panel.ID, "shot"), Value: panel.Shot, ReadOnly: v.ReadOnly, MaxLength: 240, Placeholder: i18n.T(ctx, "studioui.script.shot"), Class: "mv-c1__cell mv-c1__cell--badge"})
+			<label class="mv-sr-only" for={ "camera-" + panel.ID }>{ cellLabel(panelName, i18n.T(ctx, "studioui.script.camera")) }</label>
+			@ui.Input(ui.InputProps{ID: "camera-" + panel.ID, Name: panelField(panel.ID, "camera"), Value: panel.Camera, ReadOnly: v.ReadOnly, MaxLength: 240, Placeholder: i18n.T(ctx, "studioui.script.camera"), Class: "mv-c1__cell mv-c1__cell--meta"})
+			<label class="mv-sr-only" for={ "emotion-" + panel.ID }>{ cellLabel(panelName, i18n.T(ctx, "studioui.script.emotion")) }</label>
+			@ui.Input(ui.InputProps{ID: "emotion-" + panel.ID, Name: panelField(panel.ID, "emotion"), Value: panel.Emotion, ReadOnly: v.ReadOnly, MaxLength: 240, Placeholder: i18n.T(ctx, "studioui.script.emotion"), Class: "mv-c1__cell mv-c1__cell--meta"})
+		</div>
+		<div class="mv-c1__col mv-c1__col--action" role="cell">
+			<label class="mv-sr-only" for={ "action-" + panel.ID }>{ cellLabel(panelName, i18n.T(ctx, "studioui.script.action")) }</label>
+			@ui.Textarea(ui.TextareaProps{ID: "action-" + panel.ID, Name: panelField(panel.ID, "action"), Value: panel.Action, Placeholder: i18n.T(ctx, "studioui.script.action"), Class: "mv-c1__cell mv-c1__cell--action", Attrs: cellAttrs(v.ReadOnly, 2000, cellRows(panel.Action, 60, 1, 8))})
+			for dialogueIndex, line := range panel.Dialogue {
+				{{ lineName := cellLabel(panelName, i18n.T(ctx, "studioui.script.dialogue", "number", dialogueIndex+1)) }}
+				<div class="mv-c1__line">
+					<label class="mv-sr-only" for={ indexID("speaker-", panel.ID, dialogueIndex) }>{ cellLabel(lineName, i18n.T(ctx, "studioui.script.speaker")) }</label>
+					@ui.Input(ui.InputProps{ID: indexID("speaker-", panel.ID, dialogueIndex), Name: dialogueField(panel.ID, dialogueIndex, "speaker"), Value: line.Speaker, ReadOnly: v.ReadOnly, MaxLength: 160, Placeholder: i18n.T(ctx, "studioui.script.speaker"), Class: "mv-c1__cell mv-c1__cell--speaker", Attrs: templ.Attributes{"size": strconv.Itoa(speakerSize(line.Speaker))}})
+					<span class="mv-c1__colon" aria-hidden="true">:</span>
+					<label class="mv-sr-only" for={ indexID("line-", panel.ID, dialogueIndex) }>{ cellLabel(lineName, i18n.T(ctx, "studioui.script.line")) }</label>
+					@ui.Textarea(ui.TextareaProps{ID: indexID("line-", panel.ID, dialogueIndex), Name: dialogueField(panel.ID, dialogueIndex, "text"), Value: line.Text, Placeholder: i18n.T(ctx, "studioui.script.line"), Class: "mv-c1__cell mv-c1__cell--line", Attrs: cellAttrs(v.ReadOnly, 2000, cellRows(line.Text, 48, 1, 6))})
+					<label class="mv-sr-only" for={ indexID("kind-", panel.ID, dialogueIndex) }>{ cellLabel(lineName, i18n.T(ctx, "studioui.script.kind")) }</label>
+					@ui.Select(ui.SelectProps{ID: indexID("kind-", panel.ID, dialogueIndex), Name: dialogueField(panel.ID, dialogueIndex, "kind"), Value: line.Kind, Disabled: v.ReadOnly, Class: "mv-c1__kind", Options: selectOptions(ctx, "studioui.dialogue.", []string{"speech", "thought", "caption"})})
+				</div>
+			}
+			<label class="mv-sr-only" for={ "notes-" + panel.ID }>{ cellLabel(panelName, i18n.T(ctx, "studioui.script.notes")) }</label>
+			@ui.Textarea(ui.TextareaProps{ID: "notes-" + panel.ID, Name: panelField(panel.ID, "notes"), Value: panel.Notes, Placeholder: i18n.T(ctx, "studioui.script.notes"), Class: "mv-c1__cell mv-c1__cell--notes", Attrs: cellAttrs(v.ReadOnly, 2000, cellRows(panel.Notes, 60, 1, 6))})
+		</div>
+		<div class="mv-c1__col mv-c1__col--sfx" role="cell">
+			for sfxIndex, effect := range panel.SFX {
+				{{ sfxName := cellLabel(panelName, i18n.T(ctx, "studioui.script.sfx", "number", sfxIndex+1)) }}
+				<label class="mv-sr-only" for={ indexID("sfx-", panel.ID, sfxIndex) }>{ cellLabel(sfxName, i18n.T(ctx, "studioui.script.sfx_text")) }</label>
+				@ui.Input(ui.InputProps{ID: indexID("sfx-", panel.ID, sfxIndex), Name: sfxField(panel.ID, sfxIndex, "text"), Value: effect.Text, ReadOnly: v.ReadOnly, MaxLength: 240, Class: "mv-c1__cell mv-c1__cell--sfx"})
+				<label class="mv-sr-only" for={ indexID("sfx-note-", panel.ID, sfxIndex) }>{ cellLabel(sfxName, i18n.T(ctx, "studioui.script.sfx_note")) }</label>
+				@ui.Input(ui.InputProps{ID: indexID("sfx-note-", panel.ID, sfxIndex), Name: sfxField(panel.ID, sfxIndex, "note"), Value: effect.Note, ReadOnly: v.ReadOnly, MaxLength: 240, Placeholder: i18n.T(ctx, "studioui.script.sfx_note"), Class: "mv-c1__cell mv-c1__cell--meta mv-c1__end"})
+			}
+		</div>
+	</div>
 }

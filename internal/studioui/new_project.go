@@ -2,6 +2,7 @@ package studioui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"mime"
@@ -12,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/ai"
+	"github.com/MaramHarsha/MangaVeyra/internal/authui"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/gen"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
@@ -25,25 +27,88 @@ const (
 	newProjectMaxBody = maxSourceBytes + newProjectSlop
 )
 
+// The wizard offers exactly the genres and art styles of onboarding (A5), so a
+// creator meets one list and one set of labels ("genre.*", "style.*").
 var (
-	genreValues    = []string{"action", "adventure", "drama", "fantasy", "mystery", "romance", "slice_of_life", "science_fiction"}
-	styleValues    = []string{"bw_screentone", "seinen", "shoujo", "color_webtoon"}
+	genreValues    = authui.Genres
+	styleValues    = artStyleValues()
 	formatValues   = []string{"manga_rtl", "comic_ltr", "webtoon"}
 	languageValues = []string{"en", "ja"}
 )
+
+// pageSize maps a paged print size to the project's canvas. B5 keeps the
+// page-document default (1600 × 2400); the A sizes keep the 1600 px base width
+// at their own aspect ratio. Webtoon projects always use the strip canvas.
+type pageSize struct {
+	Value         string
+	Width, Height int
+}
+
+var pageSizes = []pageSize{{"b5", 1600, 2400}, {"a5", 1600, 2270}, {"a4", 1600, 2263}}
+
+func artStyleValues() []string {
+	out := make([]string, 0, len(authui.ArtStyles))
+	for _, style := range authui.ArtStyles {
+		out = append(out, style.Value)
+	}
+	return out
+}
+
+func styleIcon(value string) string {
+	for _, style := range authui.ArtStyles {
+		if style.Value == value {
+			return style.Icon
+		}
+	}
+	return "palette"
+}
+
+func pageSizeFor(value string) (pageSize, bool) {
+	for _, size := range pageSizes {
+		if size.Value == value {
+			return size, true
+		}
+	}
+	return pageSizes[0], false
+}
 
 func (m *Module) newProjectRedirect(w http.ResponseWriter, r *http.Request) error {
 	core.Redirect(w, r, "/studio/new/premise")
 	return nil
 }
 
+// newProjectPage renders the B3 wizard. Every step URL serves the same
+// complete form; the step only decides which one opens first.
 func (m *Module) newProjectPage(w http.ResponseWriter, r *http.Request) error {
-	user := core.UserFrom(r.Context())
+	ctx := r.Context()
+	user := core.UserFrom(ctx)
 	if user == nil || !user.CanCreate() {
-		return core.ErrForbidden(i18n.T(r.Context(), "studioui.error.creator_required"))
+		return core.ErrForbidden(i18n.T(ctx, "studioui.error.creator_required"))
 	}
-	v := newProjectView{Values: defaultNewProjectValues(i18n.LocaleFrom(r.Context())), Errors: web.FormErrors{}}
+	step := r.PathValue("step")
+	if !contains(wizardSteps, step) {
+		return core.ErrNotFound()
+	}
+	values := defaultNewProjectValues(i18n.LocaleFrom(ctx))
+	if style := m.onboardingStyle(ctx, user.ID); style != "" {
+		values.Style = style
+	}
+	v := newProjectView{Values: values, Errors: web.FormErrors{}, Step: step}
 	return m.renderNewProject(w, r, http.StatusOK, v)
+}
+
+// onboardingStyle is the default art style the creator picked in onboarding
+// (A5 step 3 asks for the default style of new projects), if any.
+func (m *Module) onboardingStyle(ctx context.Context, userID string) string {
+	var raw string
+	if err := m.d.DB.Get(ctx, &raw, `SELECT onboarding FROM users WHERE id = ?`, userID); err != nil {
+		return ""
+	}
+	var o authui.Onboarding
+	if json.Unmarshal([]byte(raw), &o) != nil || !contains(styleValues, o.ArtStyle) {
+		return ""
+	}
+	return o.ArtStyle
 }
 
 func (m *Module) createProject(w http.ResponseWriter, r *http.Request) error {
@@ -68,7 +133,8 @@ func (m *Module) createProject(w http.ResponseWriter, r *http.Request) error {
 		return m.renderNewProject(w, r, http.StatusUnprocessableEntity, newProjectView{Values: values, Errors: formErrors})
 	}
 
-	pageSize, width, height := "b5", 1600, 2400
+	size, _ := pageSizeFor(values.PageSize)
+	pageSize, width, height := size.Value, size.Width, size.Height
 	if values.Format == "webtoon" {
 		pageSize, width, height = "webtoon", 1600, 2400
 	}
@@ -140,6 +206,10 @@ func parseNewProjectForm(w http.ResponseWriter, r *http.Request) (newProjectValu
 	values.Style = strings.TrimSpace(r.PostFormValue("style"))
 	values.Format = strings.TrimSpace(r.PostFormValue("format"))
 	values.Language = strings.TrimSpace(r.PostFormValue("language"))
+	// A disabled page-size control (webtoon) posts nothing; keep the default.
+	if size := strings.TrimSpace(r.PostFormValue("page_size")); size != "" {
+		values.PageSize = size
+	}
 	values.SourceText = r.PostFormValue("source_text")
 	values.Genres = normalizeFormList(r.MultipartForm.Value["genres"])
 	values.PagesTarget, err = strconv.Atoi(strings.TrimSpace(r.PostFormValue("pages_target")))
@@ -158,6 +228,9 @@ func parseNewProjectForm(w http.ResponseWriter, r *http.Request) (newProjectValu
 	}
 	if !contains(formatValues, values.Format) {
 		formErrors.Add("format", i18n.T(r.Context(), "studioui.new.error.format"))
+	}
+	if _, ok := pageSizeFor(values.PageSize); !ok {
+		formErrors.Add("page_size", i18n.T(r.Context(), "studioui.new.error.page_size"))
 	}
 	if !contains(languageValues, values.Language) {
 		formErrors.Add("language", i18n.T(r.Context(), "studioui.new.error.language"))

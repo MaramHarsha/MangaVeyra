@@ -15,6 +15,12 @@ import (
 
 const defaultPagesTarget = 24
 
+// Story editor views (C1 Prose / Panels toggle).
+const (
+	viewProse  = "prose"
+	viewPanels = "panels"
+)
+
 type newProjectValues struct {
 	Title        string
 	ChapterTitle string
@@ -24,6 +30,7 @@ type newProjectValues struct {
 	Genres       []string
 	Style        string
 	Format       string
+	PageSize     string
 	Language     string
 	PagesTarget  int
 }
@@ -31,6 +38,59 @@ type newProjectValues struct {
 type newProjectView struct {
 	Values newProjectValues
 	Errors web.FormErrors
+	// Step is the wizard step named in the URL (/studio/new/{step}).
+	Step string
+}
+
+// wizardSteps are the five B3 steps in order; each is also a URL slug.
+var wizardSteps = []string{"premise", "genre", "style", "format", "generate"}
+
+// stepOfField maps every field the wizard posts to the step that holds it, so
+// a rejected submit reopens the step with the error. The form-level message
+// ("") belongs to the final step, beside the Generate button.
+var stepOfField = map[string]string{
+	"title": "premise", "mode": "premise", "premise": "premise", "source_text": "premise", "source_file": "premise",
+	"genres": "genre", "style": "style", "format": "format", "page_size": "format", "pages_target": "format",
+	"chapter_title": "generate", "language": "generate", "": "generate",
+}
+
+// openStep is the step the wizard opens on: the first step holding an error,
+// else the step from the URL, else the first step.
+func (v newProjectView) openStep() string {
+	if steps := v.errorSteps(); len(steps) > 0 {
+		return steps[0]
+	}
+	if contains(wizardSteps, v.Step) {
+		return v.Step
+	}
+	return wizardSteps[0]
+}
+
+// errorSteps lists, in wizard order, the steps that hold a validation error.
+func (v newProjectView) errorSteps() []string {
+	var out []string
+	for _, step := range wizardSteps {
+		for field := range v.Errors {
+			target, ok := stepOfField[field]
+			if !ok {
+				target = "generate"
+			}
+			if target == step {
+				out = append(out, step)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func stepIndex(step string) int {
+	for i, s := range wizardSteps {
+		if s == step {
+			return i
+		}
+	}
+	return 0
 }
 
 type noChapterView struct {
@@ -52,6 +112,9 @@ type storyView struct {
 	Conflict    bool
 	Notice      string
 	Error       string
+	// View is "prose" for the read-only prose rendering; otherwise the
+	// editable panel table shows.
+	View string
 	// SubmittedRevision is set when the editor is re-rendered from a rejected
 	// save. The form must post back the revision the user started from, never
 	// the chapter's current one, or a resubmit would silently overwrite a save
@@ -87,12 +150,17 @@ func defaultNewProjectValues(ctxLocale string) newProjectValues {
 	if strings.HasPrefix(ctxLocale, "ja") {
 		chapter = "第1話"
 	}
+	language := "en"
+	if contains(languageValues, ctxLocale) {
+		language = ctxLocale
+	}
 	return newProjectValues{
 		ChapterTitle: chapter,
 		Mode:         "premise",
-		Style:        "bw_screentone",
+		Style:        styleValues[0],
 		Format:       "manga_rtl",
-		Language:     ctxLocale,
+		PageSize:     pageSizes[0].Value,
+		Language:     language,
 		PagesTarget:  defaultPagesTarget,
 	}
 }

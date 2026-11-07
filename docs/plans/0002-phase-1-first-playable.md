@@ -88,6 +88,15 @@ contains `ProjectID`, `LayerID`, mask, prompt and generation options. Its `jobs.
 resolves `layer → panel → page → chapter → project`, verifies the resolved project, checks every lock and rejects
 lettering layers. Server-derived ancestry may be indexed internally; it is never trusted from the request.
 
+## Design rule (all gates)
+
+Every screen built in Gate B, Gate C and later phases follows the approved design in `../MangaVeyra_All_Pages/`
+exactly, as required by "Design fidelity" in `AGENTS.md`. Agents implement the desktop artboards listed in
+`docs/SCREENS.md` and do not create new designs; mobile artboards are not final, so phones get the responsive
+version of the desktop design. On the owner's decision (2026-11-07) there are no milestone
+simplifications: the wizard (B3), story editor (C1) and Models page (G2) follow their artboards, and parts that
+depend on unbuilt features use the disabled "Soon" state (ADR 0004 §7). See `../MangaVeyra-design-alignment.md`.
+
 ## Waves and ownership
 
 Each agent works in its own git worktree and branch, edits only its paths, and adds new per-module locale files

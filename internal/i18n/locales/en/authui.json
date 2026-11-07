@@ -112,5 +112,6 @@
   "style.chibi": "Chibi · 4-koma",
   "style.chibi.desc": "Round shapes for gags and side stories",
   "style.sketch": "Rough sketch",
-  "style.sketch.desc": "Pencil look, for storyboards and drafts"
+  "style.sketch.desc": "Pencil look, for storyboards and drafts",
+  "auth.page.login.passkey": "Use a passkey"
 }

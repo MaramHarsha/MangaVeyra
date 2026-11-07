@@ -129,5 +129,7 @@
   "xp.title.storyteller": "ストーリーテラー",
   "xp.title.mangaka": "漫画家",
   "xp.title.veteran": "ベテラン",
-  "xp.title.legend": "レジェンド"
+  "xp.title.legend": "レジェンド",
+  "ui.soon": "近日",
+  "ui.soon_hint": "今後のリリースで追加されます"
 }

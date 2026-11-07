@@ -22,6 +22,8 @@
 
 ## Visual contract
 
+- Approved screen design: the HTML handoff in `../MangaVeyra_All_Pages/` (screen IDs → routes in `docs/SCREENS.md`).
+  Build to it; never create a new design (see "Design fidelity" in `AGENTS.md`).
 - Project `DESIGN.md`: `DESIGN.md`.
 - Token ownership model: existing runtime CSS is canonical; `DESIGN.md` mirrors it.
 - Runtime design-system/token source: `web/src/styles/tokens.css`, `fonts.css`, `base.css`, `components.css`, and `internal/web/ui`.

@@ -66,9 +66,6 @@ templ AccountSection(v accountView) {
 				</div>
 			</div>
 		</div>
-		@ui.Field(ui.FieldProps{ID: "bio", Label: i18n.T(ctx, "settings.account.bio"), Aside: i18n.T(ctx, "settings.optional"), Error: v.Errors["bio"]}) {
-			@ui.Textarea(ui.TextareaProps{ID: "bio", Name: "bio", Value: v.Bio, Rows: 3, MaxLength: 280, Invalid: v.Errors["bio"] != ""})
-		}
 		<div class="mv-row mv-row--end">
 			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Size: ui.SM}) {
 				{ i18n.T(ctx, "settings.save") }
@@ -88,6 +85,11 @@ templ AccountSection(v accountView) {
 					@ui.LinkButton("/settings/account/2fa", ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "shield-lock"}) {
 						{ i18n.T(ctx, "settings.account.2fa_setup") }
 					}
+				}
+			}
+			@ui.SetRow(i18n.T(ctx, "settings.account.passkey"), i18n.T(ctx, "settings.account.passkey_desc")) {
+				@ui.LinkButton("/settings/account/passkeys", ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "fingerprint"}) {
+					{ i18n.T(ctx, "settings.account.passkey_add") }
 				}
 			}
 		</div>
@@ -585,12 +587,20 @@ templ DataSection(v dataView) {
 		<h3 class="mv-box__title" id="export-h">{ i18n.T(ctx, "settings.data.export") }</h3>
 		<p class="mv-small mv-accent-text">{ i18n.T(ctx, "settings.data.export_desc") }</p>
 		<div class="mv-row mv-row--wrap">
-			<form method="post" action="/api/v1/export/me">
-				<input type="hidden" name="scope" value="everything"/>
-				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "download"}) {
+			if ui.ReadyMethod(ctx, "POST", "/api/v1/export/me") {
+				<form method="post" action="/api/v1/export/me">
+					<input type="hidden" name="scope" value="everything"/>
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "download"}) {
+						{ i18n.T(ctx, "settings.data.export_all") }
+					}
+				</form>
+			} else {
+				<span class="mv-btn mv-btn--primary is-soon" aria-disabled="true" title={ i18n.T(ctx, "ui.soon_hint") }>
+					@ui.Icon("download", 18)
 					{ i18n.T(ctx, "settings.data.export_all") }
-				}
-			</form>
+					@ui.SoonTag()
+				</span>
+			}
 			@ui.LinkButton("/studio/projects?action=export", ui.ButtonProps{Variant: ui.Quiet, Icon: "file-export"}) {
 				{ i18n.T(ctx, "settings.data.export_project") }
 			}

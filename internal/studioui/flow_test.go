@@ -26,7 +26,7 @@ func postWizard(t *testing.T, client *testutil.Client) *testutil.Response {
 	for key, value := range map[string]string{
 		"title": "Harbor Ghosts", "chapter_title": "The Quiet Bell", "mode": "premise",
 		"premise": "A courier follows a bell into the drowned streets beneath the harbor.",
-		"style":   "bw_screentone", "format": "manga_rtl", "language": "en", "pages_target": "12",
+		"style":   "seinen_bw", "format": "manga_rtl", "language": "en", "pages_target": "12",
 	} {
 		if err := mw.WriteField(key, value); err != nil {
 			t.Fatal(err)

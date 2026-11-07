@@ -143,6 +143,10 @@ func TestFailedScriptJobExplainsCauseAndOffersGenerate(t *testing.T) {
 		if !strings.Contains(page, f.storyURL+"/generate") {
 			t.Fatal("no way to generate a new script after a failed job")
 		}
+		// The job states live in C1's centre pane with a polite live region.
+		if !strings.Contains(page, `<div class="mv-c1__gen">`) || !strings.Contains(page, `id="job-`+job.ID+`" aria-live="polite"`) {
+			t.Fatal("failed job is not shown in the centre pane's live region")
+		}
 		if r := postForm(f.client, retryURL, nil); r.StatusCode != http.StatusConflict {
 			t.Fatalf("retry of a non-retryable failure = %d, want 409", r.StatusCode)
 		}

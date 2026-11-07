@@ -85,6 +85,9 @@ func (m *Module) chapterStory(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return pageObjectError(err)
 	}
+	if r.URL.Query().Get("view") == viewProse {
+		v.View = viewProse
+	}
 	return m.renderStory(w, r, http.StatusOK, v)
 }
 
@@ -364,12 +367,15 @@ func (m *Module) makeJobView(ctx context.Context, job *jobs.Job, position int) *
 
 func (m *Module) renderNoChapter(w http.ResponseWriter, r *http.Request, status int, v noChapterView) error {
 	return m.ui.Page(w, r, status, web.PageOpts{Title: v.Project.Title, Section: layout.SectionStudio,
-		Nav: layout.NavHome, BackURL: "/studio"}, NoChapterPage(v))
+		Nav: layout.NavProjects, BackURL: "/studio"}, NoChapterPage(v))
 }
 
+// renderStory renders C1 inside the Studio shell with Projects highlighted,
+// as designed. The phone header names the chapter.
 func (m *Module) renderStory(w http.ResponseWriter, r *http.Request, status int, v storyView) error {
-	return m.ui.Page(w, r, status, web.PageOpts{Title: v.Chapter.Title, MobileTitle: v.Project.Title,
-		Section: layout.SectionStudio, Nav: layout.NavHome, BackURL: storyPath(v.Project.ID, "")}, StoryPage(v))
+	mobileTitle := i18n.T(r.Context(), "studioui.story.chapter_node", "number", v.Chapter.Number, "title", v.Chapter.Title)
+	return m.ui.Page(w, r, status, web.PageOpts{Title: v.Chapter.Title, MobileTitle: mobileTitle,
+		Section: layout.SectionStudio, Nav: layout.NavProjects, BackURL: "/studio"}, StoryPage(v))
 }
 
 func pageObjectError(err error) error {

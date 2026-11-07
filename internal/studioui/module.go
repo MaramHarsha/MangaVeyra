@@ -49,11 +49,11 @@ func (m *Module) Init(context.Context) error {
 	return nil
 }
 
-// Routes mounts the session-only Gate A browser slice. Bearer tokens are
+// Routes mounts the session-only Studio browser screens. Bearer tokens are
 // deliberately rejected by core.RequireSession before any handler runs.
 func (m *Module) Routes(r *core.Router) {
 	r.Page("GET /studio/new", m.newProjectRedirect, core.RequireSession)
-	r.Page("GET /studio/new/premise", m.newProjectPage, core.RequireSession)
+	r.Page("GET /studio/new/{step}", m.newProjectPage, core.RequireSession)
 	r.Page("POST /studio/new/premise", m.createProject, core.RequireSession)
 	r.Page("GET /studio/p/{project}/story", m.projectStory, core.RequireSession)
 	r.Page("POST /studio/p/{project}/story/chapters", m.createChapter, core.RequireSession)

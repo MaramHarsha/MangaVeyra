@@ -13,6 +13,7 @@ import { normalizeToast, showToast } from './lib/toast';
 import { shortcutFor } from './lib/keys';
 import { Realtime, wsURL } from './lib/realtime';
 import { passwordStrength } from './lib/password';
+import './lib/studio';
 import { mountIslands, unmountIslands } from './islands/registry';
 
 declare global {

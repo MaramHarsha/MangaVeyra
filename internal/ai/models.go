@@ -3,7 +3,9 @@ package ai
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/setup"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/layout"
@@ -21,10 +24,64 @@ const providerTestTimeout = 15 * time.Second
 
 var _ setup.ModelStep = (*Module)(nil)
 
+// Designed destinations that are not built yet. They are distinct paths that
+// no route serves, so ui.Ready renders every control that leads to them as a
+// disabled "Soon" item (ADR 0004 §7). Ready checks paths, not queries.
+const (
+	modelsCustomHref  = "/models/providers/custom"
+	falConnectHref    = "/models/providers/new/fal"
+	googleConnectHref = "/models/providers/new/google"
+	xaiConnectHref    = "/models/providers/new/xai"
+	ollamaConnectHref = "/models/providers/new/ollama"
+)
+
+// Capability tabs of G2, in design order. Text is the only populated one.
+const (
+	capImage = "image"
+	capText  = "text"
+	capVideo = "video"
+	capVoice = "voice"
+	capOCR   = "ocr"
+)
+
+var modelCapabilities = []string{capImage, capText, capVideo, capVoice, capOCR}
+
+// Summary tile states.
+const (
+	tileOn    = "on"
+	tileOff   = "off"
+	tileError = "error"
+)
+
 type modelsPageView struct {
-	Providers []providerView
+	// Server is the host shown in the subtitle (the sidebar's server name).
+	Server    string
 	CanAdd    bool
 	LocalOnly bool
+	// Cap is the selected capability tab.
+	Cap       string
+	Tiles     []modelsTileView
+	Providers []providerView
+}
+
+// capCount is the number of model rows behind one capability tab: the
+// built-in placeholder plus every manageable connection for text, none yet
+// for the other capabilities.
+func (v modelsPageView) capCount(capability string) int {
+	if capability == capText {
+		return 1 + len(v.Providers)
+	}
+	return 0
+}
+
+// modelsTileView is one summary tile. A tile with an Href is a designed
+// provider that is not built: it renders as Soon while Href is not served.
+type modelsTileView struct {
+	Icon   string
+	Name   string
+	Detail string
+	State  string
+	Href   string
 }
 
 type providerFormView struct {
@@ -37,7 +94,9 @@ type providerFormView struct {
 	Errors    web.FormErrors
 }
 
-type providerCardView struct {
+// providerRowView is one connection's rows in the model table. Notice is the
+// result of the action that produced this fragment (test, toggle, key).
+type providerRowView struct {
 	Provider  providerView
 	LocalOnly bool
 	Tone      ui.Tone
@@ -56,22 +115,95 @@ func (m *Module) modelsPage(w http.ResponseWriter, r *http.Request) error {
 	if m.ui == nil {
 		return core.ErrInternal(errors.New("ai: web UI unavailable"))
 	}
-	actor, err := browserProviderActor(r.Context())
+	ctx := r.Context()
+	actor, err := browserProviderActor(ctx)
 	if err != nil {
-		return core.ErrForbidden(i18n.T(r.Context(), "models.error.session"))
+		return core.ErrForbidden(i18n.T(ctx, "models.error.session"))
 	}
-	providers, err := m.providers.ListManageable(r.Context(), actor)
-	if err != nil {
-		return err
-	}
-	inst, err := loadRemoteSettings(r.Context(), m.d.Settings)
+	providers, err := m.providers.ListManageable(ctx, actor)
 	if err != nil {
 		return err
 	}
-	v := modelsPageView{Providers: providers, LocalOnly: inst.LocalOnly,
-		CanAdd: actor.Admin || inst.UsersMayAddProviders}
-	return m.ui.Page(w, r, http.StatusOK, web.PageOpts{Title: i18n.T(r.Context(), "models.title"),
-		Section: layout.SectionStudio, Nav: layout.NavModels}, ModelsPage(v))
+	inst, err := loadRemoteSettings(ctx, m.d.Settings)
+	if err != nil {
+		return err
+	}
+	publicURL := ""
+	if m.d.Cfg != nil {
+		publicURL = m.d.Cfg.PublicURL
+	}
+	v := modelsPageView{Server: web.ServerHost(inst.PublicURL, publicURL, r.Host), Providers: providers,
+		LocalOnly: inst.LocalOnly, CanAdd: actor.Admin || inst.UsersMayAddProviders,
+		Cap: modelsCapability(r.URL.Query().Get("cap"))}
+	v.Tiles = m.modelsTiles(ctx, actor, providers, inst)
+	return m.ui.Page(w, r, http.StatusOK, web.PageOpts{Title: i18n.T(ctx, "models.title"),
+		MobileTitle: i18n.T(ctx, "models.mobile_title"), BackURL: "/settings",
+		Section: layout.SectionStudio, Nav: layout.NavModels, Tab: layout.TabMe}, ModelsPage(v))
+}
+
+// modelsCapability returns the selected capability tab (text by default).
+func modelsCapability(raw string) string {
+	for _, c := range modelCapabilities {
+		if raw == c {
+			return c
+		}
+	}
+	return capText
+}
+
+// modelsTiles builds the designed row of four summary tiles with real status:
+// the local worker from the job queue, OpenRouter from the connections this
+// user's jobs may route to, and fal and Ollama as designed but unbuilt.
+func (m *Module) modelsTiles(ctx context.Context, actor providerActor, manageable []providerView, inst settings.Instance) []modelsTileView {
+	compute := m.ui.Compute(ctx)
+	local := modelsTileView{Icon: "cpu", Name: i18n.T(ctx, "models.tile.local"), State: tileOff,
+		Detail: i18n.T(ctx, "models.tile.local_none")}
+	if compute.WorkersOnline > 0 {
+		local.State = tileOn
+		if compute.GPU != "" {
+			local.Detail = compute.GPU
+		} else {
+			local.Detail = i18n.T(ctx, "models.tile.local_cpu", "count", compute.WorkersOnline)
+		}
+	}
+
+	openRouter := modelsTileView{Icon: "route", Name: providerKindName(providerKindOpenRouter), State: tileOff,
+		Detail: i18n.T(ctx, "models.tile.not_connected")}
+	candidates, err := m.providers.Candidates(ctx, actor.UserID)
+	if err != nil && m.d.Log != nil {
+		m.d.Log.WarnContext(ctx, "list providers for models tiles", "err", err)
+	}
+	if count := connectedTextModels(candidates, providerKindOpenRouter); count > 0 {
+		openRouter.State = tileOn
+		openRouter.Detail = i18n.T(ctx, "models.tile.text_models", "count", count)
+		if providerKindStatus(manageable, providerKindOpenRouter) == setup.ProviderError {
+			openRouter.State = tileError
+		}
+	}
+	if inst.LocalOnly {
+		openRouter.State, openRouter.Detail = tileOff, i18n.T(ctx, "models.tile.blocked")
+	}
+
+	return []modelsTileView{
+		local,
+		openRouter,
+		{Icon: "bolt", Name: "fal", Detail: i18n.T(ctx, "models.tile.fal"), State: tileOff, Href: falConnectHref},
+		{Icon: "server-2", Name: "Ollama", Detail: i18n.T(ctx, "models.tile.ollama"), State: tileOff, Href: ollamaConnectHref},
+	}
+}
+
+// connectedTextModels counts the distinct text models reachable through the
+// enabled connections of one kind (every route has exactly one model).
+func connectedTextModels(candidates []providerCandidate, kind string) int {
+	models := map[string]bool{}
+	for _, c := range candidates {
+		if c.Kind == kind {
+			if model := providerKindModel(c.Kind); model != "" {
+				models[model] = true
+			}
+		}
+	}
+	return len(models)
 }
 
 func (m *Module) newProviderPage(w http.ResponseWriter, r *http.Request) error {
@@ -189,20 +321,20 @@ func (m *Module) testProvider(w http.ResponseWriter, r *http.Request) error {
 	if settingsErr != nil {
 		return settingsErr
 	}
-	card := providerCardView{Provider: view, LocalOnly: inst.LocalOnly}
+	row := providerRowView{Provider: view, LocalOnly: inst.LocalOnly}
 	if testErr != nil {
-		card.Tone, card.Notice = ui.ToneError, i18n.T(ctx, "models.test.failed")
+		row.Tone, row.Notice = ui.ToneError, i18n.T(ctx, "models.test.failed")
 	} else {
-		card.Tone, card.Notice = ui.ToneSuccess, i18n.T(ctx, "models.test.ok")
+		row.Tone, row.Notice = ui.ToneSuccess, i18n.T(ctx, "models.test.ok")
 	}
 	if core.IsHTMX(r) {
-		return web.Render(w, r, http.StatusOK, ProviderCard(card), nil)
+		return web.Render(w, r, http.StatusOK, ProviderRows(row), nil)
 	}
 	kind := "success"
 	if testErr != nil {
 		kind = "error"
 	}
-	web.Flash(w, r, kind, card.Notice, "")
+	web.Flash(w, r, kind, row.Notice, "")
 	core.Redirect(w, r, "/models")
 	return nil
 }
@@ -238,7 +370,7 @@ func (m *Module) setProviderEnabled(w http.ResponseWriter, r *http.Request) erro
 		message = i18n.T(ctx, "models.flash.enabled")
 	}
 	if core.IsHTMX(r) {
-		return web.Render(w, r, http.StatusOK, ProviderCard(providerCardView{Provider: view, LocalOnly: inst.LocalOnly,
+		return web.Render(w, r, http.StatusOK, ProviderRows(providerRowView{Provider: view, LocalOnly: inst.LocalOnly,
 			Tone: ui.ToneSuccess, Notice: message}), nil)
 	}
 	web.Flash(w, r, "success", message, "")
@@ -265,12 +397,12 @@ func (m *Module) replaceProviderKey(w http.ResponseWriter, r *http.Request) erro
 		if getErr != nil {
 			return m.providerPageError(getErr)
 		}
-		card := providerCardView{Provider: view, LocalOnly: inst.LocalOnly, Tone: ui.ToneError,
+		row := providerRowView{Provider: view, LocalOnly: inst.LocalOnly, Tone: ui.ToneError,
 			Notice: i18n.T(ctx, "models.form.key_invalid")}
 		if core.IsHTMX(r) {
-			return web.Render(w, r, http.StatusUnprocessableEntity, ProviderCard(card), nil)
+			return web.Render(w, r, http.StatusUnprocessableEntity, ProviderRows(row), nil)
 		}
-		web.Flash(w, r, "error", card.Notice, "")
+		web.Flash(w, r, "error", row.Notice, "")
 		core.Redirect(w, r, "/models")
 		return nil
 	}
@@ -280,7 +412,7 @@ func (m *Module) replaceProviderKey(w http.ResponseWriter, r *http.Request) erro
 	}
 	message := i18n.T(ctx, "models.flash.key_replaced")
 	if core.IsHTMX(r) {
-		return web.Render(w, r, http.StatusOK, ProviderCard(providerCardView{Provider: view, LocalOnly: inst.LocalOnly,
+		return web.Render(w, r, http.StatusOK, ProviderRows(providerRowView{Provider: view, LocalOnly: inst.LocalOnly,
 			Tone: ui.ToneSuccess, Notice: message}), nil)
 	}
 	web.Flash(w, r, "success", message, "")
@@ -313,20 +445,41 @@ func (m *Module) providerPageError(err error) error {
 	return err
 }
 
+// setupProviderKinds maps a setup card kind to the connection kind whose
+// status it shows. Cards without an entry are designed but not built.
+var setupProviderKinds = map[string]string{
+	providerKindOpenRouter: providerKindOpenRouter,
+	"vendor":               providerKindOpenAI,
+}
+
 // Providers implements setup.ModelStep without making a network call. It
-// returns one card per remote route kind with that kind's connection status.
+// returns the five provider rows of design G8 step 3 in design order:
+// OpenRouter, fal, direct vendor keys (OpenAI today), Ollama and custom
+// connections. fal, Ollama and custom link to paths no route serves yet, so
+// their Connect buttons render as "Soon".
 func (m *Module) Providers(ctx context.Context) ([]setup.ProviderCard, error) {
-	cards := make([]setup.ProviderCard, 0, len(remoteRoutes))
-	for _, route := range remoteRoutes {
-		cards = append(cards, setup.ProviderCard{Kind: route.Kind, NameKey: "setup.provider." + route.Kind + ".name",
-			DescKey: "setup.provider." + route.Kind + ".desc", Icon: providerKindIcon(route.Kind),
-			Href: "/models/providers/new?kind=" + route.Kind + "&next=/setup/models"})
+	const next = "&next=/setup/models"
+	cards := []setup.ProviderCard{
+		{Kind: providerKindOpenRouter, NameKey: "setup.provider.openrouter.name", DescKey: "setup.provider.openrouter.desc",
+			Icon: "route", Href: "/models/providers/new?kind=" + providerKindOpenRouter + next},
+		{Kind: "fal", NameKey: "setup.provider.fal.name", DescKey: "setup.provider.fal.desc", Icon: "bolt", Href: falConnectHref},
+		{Kind: "vendor", NameKey: "setup.provider.vendor.name", DescKey: "setup.provider.vendor.desc",
+			Icon: "brand-openai", Href: "/models/providers/new?kind=" + providerKindOpenAI + next},
+		{Kind: "ollama", NameKey: "setup.provider.ollama.name", DescKey: "setup.provider.ollama.desc", Icon: "server-2",
+			Href: ollamaConnectHref},
+		{Kind: "custom", NameKey: "setup.provider.custom.name", DescKey: "setup.provider.custom.desc", Icon: "adjustments",
+			Href: modelsCustomHref},
+	}
+	setStatus := func(status func(kind string) string) {
+		for i := range cards {
+			if kind, ok := setupProviderKinds[cards[i].Kind]; ok {
+				cards[i].Status = status(kind)
+			}
+		}
 	}
 	actor, err := browserProviderActor(ctx)
 	if err != nil {
-		for i := range cards {
-			cards[i].Status = setup.ProviderError
-		}
+		setStatus(func(string) string { return setup.ProviderError })
 		return cards, nil
 	}
 	providers, err := m.providers.ListManageable(ctx, actor)
@@ -334,14 +487,10 @@ func (m *Module) Providers(ctx context.Context) ([]setup.ProviderCard, error) {
 		if m.d.Log != nil {
 			m.d.Log.WarnContext(ctx, "list providers for setup", "err", err)
 		}
-		for i := range cards {
-			cards[i].Status = setup.ProviderError
-		}
+		setStatus(func(string) string { return setup.ProviderError })
 		return cards, nil
 	}
-	for i := range cards {
-		cards[i].Status = providerKindStatus(providers, cards[i].Kind)
-	}
+	setStatus(func(kind string) string { return providerKindStatus(providers, kind) })
 	return cards, nil
 }
 
@@ -376,18 +525,28 @@ func providerKindName(kind string) string {
 	return kind
 }
 
-func providerKindIcon(kind string) string {
-	if kind == providerKindOpenAI {
-		return "brand-openai"
-	}
-	return "route"
-}
-
 func providerKindModel(kind string) string {
 	if route, ok := routeForKind(kind); ok {
 		return route.Model
 	}
 	return ""
+}
+
+// providerCostLabel is the COST column for a remote route: the hard per-call
+// reservation from the route table, rounded up to whole cents so the "≤"
+// stays true. It is the user's own spend on their key, not a price.
+func providerCostLabel(ctx context.Context, kind string) string {
+	route, ok := routeForKind(kind)
+	if !ok {
+		return ""
+	}
+	return i18n.T(ctx, "models.cost.per_call", "amount", formatUSD(math.Ceil(route.ReserveUSD*100)/100))
+}
+
+// formatUSD formats a dollar amount for spend limits and estimates ("$20",
+// "$0.45").
+func formatUSD(v float64) string {
+	return "$" + strings.TrimSuffix(strconv.FormatFloat(v, 'f', 2, 64), ".00")
 }
 
 // Recommend implements setup.ModelStep using the setup package's deterministic

@@ -83,8 +83,8 @@ func testWizard(t *testing.T, dialect string) {
 	}
 
 	models := c.Get("/setup/models")
-	contains(t, models, "Connect a model provider", "No GPU worker connected yet", "OpenRouter",
-		"Structured script generation through many models with one key", `name="local_only"`)
+	contains(t, models, "Connect at least one image model", "No GPU worker connected yet", "OpenRouter",
+		"One key for 30+ image models and text models", `name="local_only"`)
 	location(t, post(c, "/setup/models", url.Values{"local_only": {"on"}}), "/setup/finish")
 	inst = ta.Deps.Settings.MustInstance(ctx)
 	if !inst.LocalOnly || inst.RoutingMode != settings.RoutingLocalOnly {

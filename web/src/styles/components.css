@@ -1491,3 +1491,30 @@
 .mv-shortcuts { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; align-items: center; font-size: .875rem; }
 
 @keyframes mvSpin { to { transform: rotate(360deg); } }
+
+/* Designed destinations that are not built yet (ADR 0004 §7): the item keeps
+   its designed place and look, is not a link, and carries a small Soon tag. */
+.mv-soon {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: auto;
+  padding: 0 var(--mv-space-1);
+  border: 1px solid var(--mv-line);
+  font-family: var(--mv-font-mono);
+  font-size: var(--mv-fs-mono);
+  font-weight: 500;
+  letter-spacing: .06em;
+  line-height: 1.6;
+  text-transform: uppercase;
+  color: var(--mv-text-3);
+  white-space: nowrap;
+}
+.mv-btn .mv-soon { margin-inline-start: var(--mv-space-2); }
+.is-soon { cursor: default; }
+.is-soon:not(.mv-btn) { color: var(--mv-text-3); }
+a.is-soon:not(.mv-btn):hover { color: var(--mv-text-3); background: transparent; }
+.mv-btn.is-soon { opacity: .6; }
+.mv-search.is-soon .mv-search__input { cursor: default; }
+@media (max-width: 1024px) {
+  .mv-sidebar .mv-soon { display: none; }
+}

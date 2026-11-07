@@ -23,7 +23,7 @@ var dynamicKeys = map[string][]string{
 	"setup.step.":                   {"admin", "instance", "models", "finish", "admin.short", "instance.short", "models.short", "finish.short"},
 	"settings.nav.":                 {"account", "appearance", "language", "reading", "notifications", "accessibility", "world", "data"},
 	"settings.theme.":               {"dark", "light", "system"},
-	"settings.notifications.group.": {"generation", "comments", "review", "chapter", "follow", "system", "update"},
+	"settings.notifications.group.": {"generation", "lock", "comments", "review", "chapter", "world", "update", "spend"},
 	"settings.notifications.":       {"in_app", "email", "push"},
 	"onboarding.creator.":           {"writer", "artist", "reader", "team", "writer.desc", "artist.desc", "reader.desc", "team.desc"},
 	"genre.":                        {"action", "fantasy", "mystery", "romance", "horror", "scifi", "slice_of_life", "comedy", "sports", "historical", "isekai", "thriller", "drama", "mecha", "supernatural"},
