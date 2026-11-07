@@ -213,22 +213,32 @@ function clampRect(r: Rect, page: Page): Rect {
 
 export function newBubble(page: Page, panelID: string, kind: Bubble['kind'], lang: string): Bubble {
   const panel = page.panels.find(p => p.id === panelID);
-  const area = panel ? bounds(panel.points) : {x: 0, y: 0, w: page.width, h: page.height};
   const box = placeBubble(page, panelID, bubbleSize(page, panel, kind));
-  const below = Math.min(area.y + area.h, page.height, box.y + box.h + Math.min(48, area.h * .06));
-  const tipY = below > box.y + box.h ? below : Math.max(0, box.y - Math.min(48, area.h * .06));
   return {
     id: newID(), panel_id: panel?.id, kind, order: page.bubbles.length, box, shape: bubbleShape(kind),
-    tail: {enabled: kind === 'speech' || kind === 'shout', tip: {x: box.x + box.w * (page.direction === 'rtl' ? .4 : .6), y: tipY}},
+    tail: {enabled: kind === 'speech' || kind === 'shout', tip: defaultTailTip(page, panelID, box)},
     style: {auto_fit: true, font: defaultFont(lang, kind), size: 0},
     vertical: verticalByDefault(lang),
     texts: {[lang]: {text: '', source: 'human', status: 'draft'}},
   };
 }
 
+function defaultTailTip(page: Page, panelID: string | undefined, box: Rect): Point {
+  const panel = page.panels.find(p => p.id === panelID);
+  const area = panel ? bounds(panel.points) : {x: 0, y: 0, w: page.width, h: page.height};
+  const below = Math.min(area.y + area.h, page.height, box.y + box.h + Math.min(48, area.h * .06));
+  const tipY = below > box.y + box.h ? below : Math.max(0, box.y - Math.min(48, area.h * .06));
+  return {x: box.x + box.w * (page.direction === 'rtl' ? .4 : .6), y: tipY};
+}
+
 /** setBubbleKind changes a bubble's type and shape, keeping its text and box. */
-export function setBubbleKind(bubble: Bubble, kind: Bubble['kind'], lang: string): void {
+export function setBubbleKind(bubble: Bubble, kind: Bubble['kind'], lang: string, page: Page): void {
   const wasDefaultFont = !bubble.style.font || bubble.style.font === defaultFont(lang, bubble.kind);
+  // Server auto-placed captions have no tail and store its unused tip at (0, 0).
+  // Give them the same nearby tip as a newly created speech bubble on conversion.
+  if (!bubble.tail.enabled && (kind === 'speech' || kind === 'shout') && bubble.tail.tip.x === 0 && bubble.tail.tip.y === 0) {
+    bubble.tail.tip = defaultTailTip(page, bubble.panel_id, bubble.box);
+  }
   bubble.kind = kind;
   bubble.shape = bubbleShape(kind);
   if (wasDefaultFont) bubble.style.font = defaultFont(lang, kind);

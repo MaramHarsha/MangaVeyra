@@ -405,7 +405,8 @@
  }
  function chooseKind(kind: Bubble['kind']) {
   nextKind = kind;
-  if (page && bubble && bubbleWritable(page, bubble)) { if (bubble.kind !== kind) editBubble(b => setBubbleKind(b, kind, lang)); }
+  const currentPage = page;
+  if (currentPage && bubble && bubbleWritable(currentPage, bubble)) { if (bubble.kind !== kind) editBubble(b => setBubbleKind(b, kind, lang, currentPage)); }
   else addBubble(kind);
  }
  function orderBubble(id: string, delta: number) { if (!page || busy || !initial.permissions.letter || initial.chapter.locked || !canReorderBubble(page, id, delta)) return; mark(reorderBubble(page, id, delta)); }

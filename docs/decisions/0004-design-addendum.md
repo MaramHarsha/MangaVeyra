@@ -233,6 +233,8 @@ nearest designed screen would put it.
   is not shown because tails do not follow speakers yet (the tail tip is edited under Geometry). "Keep bubbles off
   faces" stays Soon until face detection exists. Reading-order rows reorder by drag or with the arrow keys on the
   grip, and the order persists. Empty bubbles read "No text yet" (muted) in the reading order.
+  Converting an auto-placed caption to Speech or Shout initializes its unused tail near the bubble, using the same
+  placement as a new speech bubble. Previously positioned tails remain where the creator put them.
 - **D8 Variations:** the status line reads "{ready} of 4 ready · {seconds} s · {model}" from the job's real timing.
   Lock captions and DRIFT appear only when a job reports lock scores. The queue lists the user's recent panel and
   region jobs in the chapter; Open queue is Soon. Repeating an identical panel or region request while its job is

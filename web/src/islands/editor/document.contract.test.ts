@@ -115,15 +115,36 @@ describe('content language defaults', () => {
   });
 
   it('changes a bubble type and shape while keeping its text, box and a chosen font', () => {
-    const b = newBubble(page(), 'panel', 'speech', 'en');
+    const p = page(), b = newBubble(p, 'panel', 'speech', 'en');
     b.texts.en.text = 'Run!';
     const box = {...b.box};
-    setBubbleKind(b, 'sfx', 'en');
+    setBubbleKind(b, 'sfx', 'en', p);
     expect([b.kind, b.shape, b.style.font, b.tail.enabled, b.texts.en.text]).toEqual(['sfx', 'none', 'sfx', false, 'Run!']);
     expect(b.box).toEqual(box);
     b.style.font = 'jp';
-    setBubbleKind(b, 'shout', 'en');
+    setBubbleKind(b, 'shout', 'en', p);
     expect([b.shape, b.style.font, b.tail.enabled]).toEqual(['burst', 'jp', true]);
+  });
+
+  it('gives an auto-placed caption a nearby tail when converted to speech or shout', () => {
+    for (const kind of ['speech', 'shout'] as const) {
+      const p = page(), b = newBubble(p, 'panel', 'caption', 'en');
+      b.tail.tip = {x: 0, y: 0};
+      setBubbleKind(b, kind, 'en', p);
+      expect(b.tail.enabled).toBe(true);
+      expect(b.tail.tip.x).toBeGreaterThanOrEqual(b.box.x);
+      expect(b.tail.tip.x).toBeLessThanOrEqual(b.box.x + b.box.w);
+      expect(Math.abs(b.tail.tip.y - (b.box.y + b.box.h))).toBeLessThanOrEqual(48);
+      expect(b.tail.tip.y).toBeLessThanOrEqual(p.height);
+    }
+  });
+
+  it('preserves a positioned tail when changing bubble types', () => {
+    const p = page(), b = newBubble(p, 'panel', 'caption', 'en');
+    const tip = {x: b.box.x - 40, y: b.box.y + b.box.h + 80};
+    b.tail.tip = {...tip};
+    setBubbleKind(b, 'speech', 'en', p);
+    expect(b.tail.tip).toEqual(tip);
   });
 });
 
