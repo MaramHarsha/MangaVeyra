@@ -61,6 +61,11 @@ func TestPlaceholderScriptHasDialogueInEveryContentLanguage(t *testing.T) {
 				if !scriptOf(lang, p.Action) || !scriptOf(lang, p.Notes) {
 					t.Fatalf("%s: panel text not localised: %q", lang, p.Action)
 				}
+				// The action opens with a short beat (naming the panel's character
+				// when there is one), never with "Placeholder panel N of M".
+				if strings.Contains(strings.ToLower(p.Action), "placeholder") || len(characters) > 0 && !strings.HasPrefix(p.Action, characters[0].Name) && !strings.HasPrefix(p.Action, "Pip") {
+					t.Fatalf("%s: action does not start with a beat: %q", lang, p.Action)
+				}
 				for _, d := range p.Dialogue {
 					kinds[d.Kind] = true
 					if !scriptOf(lang, d.Text) {
@@ -106,6 +111,72 @@ func TestPlaceholderScriptHasDialogueInEveryContentLanguage(t *testing.T) {
 	// A premise always wins over the template summary.
 	if doc := placeholderDoc(t, ScriptInput{Mode: "premise", Premise: "灯台守の物語。", Language: "ja", PagesTarget: 1}); doc.ChapterSummary != "灯台守の物語。" {
 		t.Fatal("premise ignored")
+	}
+}
+
+// editorCamera and editorShot mirror cameraOption/shotOption in
+// web/src/islands/editor/document.ts, which map stored values to the
+// editor's segmented controls.
+func editorCamera(v string) string {
+	v = strings.ToLower(v)
+	switch {
+	case strings.Contains(v, "bird"):
+		return "bird"
+	case strings.Contains(v, "low"):
+		return "low"
+	case strings.Contains(v, "high"):
+		return "high"
+	case strings.Contains(v, "eye") || strings.Contains(v, "level"):
+		return "eye"
+	}
+	return ""
+}
+
+func editorShot(v string) string {
+	v = strings.ToLower(v)
+	switch {
+	case strings.Contains(v, "close"):
+		return "close"
+	case strings.Contains(v, "medium"):
+		return "medium"
+	case strings.Contains(v, "wide"):
+		return "wide"
+	}
+	return ""
+}
+
+func TestPlaceholderPanelsUseEditorFramingAndOpenWithABeat(t *testing.T) {
+	for _, lang := range pagedoc.ContentLanguages {
+		doc := placeholderDoc(t, ScriptInput{Mode: "premise", Premise: "A courier crosses the harbour.", Language: lang, PagesTarget: 8,
+			Characters: []ScriptCharacter{{ID: "char-sora", Name: "Sora"}}})
+		cameras, shots, beats := map[string]bool{}, map[string]bool{}, map[string]bool{}
+		for _, p := range doc.Scenes[0].Panels {
+			camera, shot := editorCamera(p.Camera), editorShot(p.Shot)
+			if camera == "" || shot == "" {
+				t.Fatalf("%s: camera %q / shot %q do not map to editor options", lang, p.Camera, p.Shot)
+			}
+			cameras[camera], shots[shot] = true, true
+			if !strings.HasPrefix(p.Action, "Sora") || !strings.HasSuffix(p.Action, "A courier crosses the harbour.") {
+				t.Fatalf("%s: action %q", lang, p.Action)
+			}
+			beat := strings.TrimSuffix(p.Action, "A courier crosses the harbour.")
+			if len([]rune(beat)) > 60 || beats[beat] {
+				t.Fatalf("%s: beat %q is long or repeated", lang, beat)
+			}
+			beats[beat] = true
+			if len(p.CharacterIDs) == 0 || p.CharacterIDs[0] != "char-sora" {
+				t.Fatalf("%s: the beat's character is not on the panel", lang)
+			}
+		}
+		if len(cameras) < 3 || len(shots) != 3 {
+			t.Fatalf("%s: framing does not vary: %v %v", lang, cameras, shots)
+		}
+		plain := placeholderDoc(t, ScriptInput{Mode: "premise", Language: lang, PagesTarget: 2})
+		for i, p := range plain.Scenes[0].Panels {
+			if want := placeholderActions[lang][i][1]; !strings.HasPrefix(p.Action, want) {
+				t.Fatalf("%s: plain beat %q, want prefix %q", lang, p.Action, want)
+			}
+		}
 	}
 }
 
