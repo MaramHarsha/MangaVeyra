@@ -1,0 +1,158 @@
+/* Gate A provider management: G2 distilled to connected provider cards. */
+
+.mv-models,
+.mv-provider-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mv-space-5);
+  width: min(100%, 1120px);
+  margin-inline: auto;
+}
+
+.mv-models__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--mv-space-4);
+}
+
+.mv-models__empty {
+  padding-block: var(--mv-space-2);
+  font-size: var(--mv-fs-small);
+}
+
+.mv-model-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mv-space-4);
+  min-width: 0;
+  padding: var(--mv-space-5);
+  border: 1px solid var(--mv-line);
+  background: var(--mv-surface);
+}
+
+.mv-model-card--builtin {
+  border-color: color-mix(in srgb, var(--mv-accent) 42%, var(--mv-line));
+  border-inline-start-width: 3px;
+  background: var(--mv-surface);
+}
+
+.mv-model-card__head,
+.mv-model-card__identity,
+.mv-model-card__actions,
+.mv-provider-form__actions {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mv-space-3);
+}
+
+.mv-model-card__head {
+  justify-content: space-between;
+}
+
+.mv-model-card__identity {
+  min-width: 0;
+}
+
+.mv-model-card__identity > .ti {
+  margin-top: 2px;
+  color: var(--mv-acc-text);
+}
+
+.mv-model-card__identity h2 {
+  overflow-wrap: anywhere;
+}
+
+.mv-model-card__identity p {
+  margin-top: var(--mv-space-1);
+  color: var(--mv-text-2);
+  font-size: var(--mv-fs-small);
+  line-height: 1.5;
+}
+
+.mv-model-card__meta {
+  display: grid;
+  gap: var(--mv-space-2);
+  padding-block: var(--mv-space-3);
+  border-block: 1px solid var(--mv-line);
+}
+
+.mv-model-card__meta .mv-kv__value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mv-model-card__actions {
+  flex-wrap: wrap;
+}
+
+.mv-model-card__actions form {
+  margin: 0;
+}
+
+.mv-model-card__key {
+  padding-top: var(--mv-space-2);
+  border-top: 1px solid var(--mv-line);
+}
+
+.mv-model-card__key > summary {
+  display: inline-flex;
+  cursor: pointer;
+  font-size: var(--mv-fs-small);
+  font-weight: 600;
+}
+
+.mv-model-card__key-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--mv-space-3);
+  margin-top: var(--mv-space-3);
+}
+
+.mv-provider-form {
+  width: min(100%, 720px);
+}
+
+.mv-provider-form__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mv-space-5);
+  padding: var(--mv-space-5);
+  border: 1px solid var(--mv-line);
+  background: var(--mv-surface);
+}
+
+.mv-provider-form__actions {
+  justify-content: flex-end;
+  padding-top: var(--mv-space-2);
+  border-top: 1px solid var(--mv-line);
+}
+
+@media (max-width: 760px) {
+  .mv-models__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mv-model-card,
+  .mv-provider-form__body {
+    padding: var(--mv-space-4);
+  }
+
+  .mv-model-card__head {
+    flex-direction: column;
+  }
+
+  .mv-model-card__key-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mv-model-card__key-form .mv-btn,
+  .mv-provider-form__actions .mv-btn {
+    width: 100%;
+  }
+
+  .mv-provider-form__actions {
+    flex-direction: column-reverse;
+  }
+}
+

@@ -1,0 +1,97 @@
+package studio_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/auth"
+	"github.com/MaramHarsha/MangaVeyra/internal/studio"
+	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
+)
+
+func TestCreateProjectOwnerMembershipAndPrivateSource(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		svc := studioService(ta)
+		owner := ta.CreateUser(t, "", auth.RoleCreator)
+		actor, err := svc.ActorFromUser(ctx, owner.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		const source = "Private draft: the gate opens at low tide."
+		project, err := svc.CreateProject(ctx, actor, newProjectInput("Tide Gate", source))
+		if err != nil {
+			t.Fatalf("CreateProject: %v", err)
+		}
+		var role string
+		if err := ta.Deps.DB.Get(ctx, &role, `SELECT role FROM project_members WHERE project_id = ? AND user_id = ?`, project.ID, owner.ID); err != nil {
+			t.Fatalf("owner membership was not committed with project: %v", err)
+		}
+		if role != studio.RoleOwner {
+			t.Fatalf("owner role = %q", role)
+		}
+		gotSource, err := svc.SourceText(ctx, project.ID)
+		if err != nil || gotSource != source {
+			t.Fatalf("SourceText = %q, %v", gotSource, err)
+		}
+		encoded, err := json.Marshal(project)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(encoded, []byte(source)) || bytes.Contains(encoded, []byte("script_source_text")) {
+			t.Fatalf("project DTO leaked source: %s", encoded)
+		}
+
+		projects, err := svc.ListProjects(ctx, owner.ID, 10)
+		if err != nil || len(projects) != 1 || projects[0].Role != studio.RoleOwner {
+			t.Fatalf("ListProjects = %#v, %v", projects, err)
+		}
+		second, err := svc.CreateProject(ctx, actor, newProjectInput("Tide Gate", ""))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if second.Slug == project.Slug || !strings.HasPrefix(second.Slug, project.Slug+"-") {
+			t.Fatalf("colliding slugs = %q, %q", project.Slug, second.Slug)
+		}
+	})
+}
+
+func TestCreateProjectAuthorizationAndValidationAreAtomic(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		svc := studioService(ta)
+		reader := ta.CreateUser(t, "", auth.RoleReader)
+		before := 0
+		if err := ta.Deps.DB.Get(ctx, &before, `SELECT COUNT(*) FROM projects`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.CreateProject(ctx, studio.Actor{UserID: reader.ID, SiteRole: auth.RoleAdmin}, newProjectInput("Spoofed", "")); !errors.Is(err, studio.ErrForbidden) {
+			t.Fatalf("reader create error = %v, want ErrForbidden", err)
+		}
+		tooLarge := newProjectInput("Too Large", strings.Repeat("x", (1<<20)+1))
+		creator := ta.CreateUser(t, "", auth.RoleCreator)
+		if _, err := svc.CreateProject(ctx, studio.Actor{UserID: creator.ID}, tooLarge); !errors.Is(err, studio.ErrInvalid) {
+			t.Fatalf("large source error = %v, want ErrInvalid", err)
+		}
+		after := 0
+		if err := ta.Deps.DB.Get(ctx, &after, `SELECT COUNT(*) FROM projects`); err != nil {
+			t.Fatal(err)
+		}
+		if after != before {
+			t.Fatalf("failed creates changed project count: before=%d after=%d", before, after)
+		}
+
+		_, restricted, err := ta.Deps.Auth.CreateToken(ctx, auth.TokenInput{UserID: creator.ID, Kind: auth.TokenAgent,
+			Name: "restricted creator", Scopes: []string{"projects:write"}, ProjectIDs: []string{"existing-only"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.CreateProject(ctx, studio.Actor{UserID: creator.ID, TokenID: restricted.ID}, newProjectInput("Restricted", "")); !errors.Is(err, studio.ErrForbidden) {
+			t.Fatalf("restricted token create error = %v, want ErrForbidden", err)
+		}
+	})
+}

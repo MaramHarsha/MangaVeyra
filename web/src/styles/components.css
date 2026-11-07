@@ -227,7 +227,7 @@
 .mv-textarea {
   min-height: 96px;
   padding: 9px 11px;
-  resize: vertical;
+  resize: none;
   line-height: 1.5;
 }
 

@@ -28,6 +28,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/setup"
 	"github.com/MaramHarsha/MangaVeyra/internal/social"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
+	"github.com/MaramHarsha/MangaVeyra/internal/studioui"
 	"github.com/MaramHarsha/MangaVeyra/internal/translate"
 	"github.com/MaramHarsha/MangaVeyra/internal/update"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
@@ -73,6 +74,7 @@ func FeatureModules(d *core.Deps) []core.Module {
 		lettering.New(d),
 		editor.New(d),
 		gen.New(d),
+		studioui.New(d),
 		translate.New(d),
 		animate.New(d),
 		// Publishing, reading and community.

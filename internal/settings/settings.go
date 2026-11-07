@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -184,13 +185,24 @@ func (i Instance) Validate() error {
 	if i.Limits.RunningGPUJobs < 1 || i.Limits.RunningJobs < 1 {
 		errs = append(errs, errors.New("running job limits must be at least 1"))
 	}
-	if i.Limits.MonthlyRemoteSpendUSD < 0 || i.Limits.StorageQuotaMB < 0 || i.Limits.MaxUploadMB < 0 {
+	if !validRemoteSpendLimit(i.Limits.MonthlyRemoteSpendUSD) || !validRemoteSpendLimit(i.Limits.ServerMonthlyRemoteSpendUSD) {
+		errs = append(errs, errors.New("remote spend limits must be finite, non-negative and fit in microdollars"))
+	}
+	if i.Limits.StorageQuotaMB < 0 || i.Limits.MaxUploadMB < 0 {
 		errs = append(errs, errors.New("limits cannot be negative"))
 	}
 	if i.NightMode.StartHour < 0 || i.NightMode.StartHour > 23 || i.NightMode.EndHour < 0 || i.NightMode.EndHour > 23 {
 		errs = append(errs, errors.New("night mode hours must be 0–23"))
 	}
 	return errors.Join(errs...)
+}
+
+func validRemoteSpendLimit(v float64) bool {
+	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
+		return false
+	}
+	scaled := v * 1_000_000
+	return !math.IsInf(scaled, 0) && scaled < float64(math.MaxInt64)
 }
 
 // ExplorePublic reports whether Explore and public series are visible to anonymous visitors.
@@ -229,11 +241,32 @@ func (s *Service) Instance(ctx context.Context) (Instance, error) {
 	}
 	s.mu.Unlock()
 
+	inst, err := loadInstance(ctx, s.db)
+	if err != nil {
+		return DefaultInstance(), err
+	}
+	s.mu.Lock()
+	s.cached, s.cachedAt = &inst, time.Now()
+	s.mu.Unlock()
+	return inst, nil
+}
+
+// InstanceTx reads the current instance settings uncached through tx. Policy
+// decisions that linearize under a database lock use this method so a cached
+// snapshot cannot outlive a concurrent committed settings update.
+func (s *Service) InstanceTx(ctx context.Context, tx *db.Tx) (Instance, error) {
+	if s == nil || tx == nil {
+		return DefaultInstance(), errors.New("settings: transaction is not configured")
+	}
+	return loadInstance(ctx, tx)
+}
+
+func loadInstance(ctx context.Context, q db.Querier) (Instance, error) {
 	rows := []struct {
 		Key   string `db:"key"`
 		Value string `db:"value"`
 	}{}
-	if err := s.db.Select(ctx, &rows, `SELECT key, value FROM instance_settings WHERE key NOT LIKE '%.%'`); err != nil {
+	if err := q.Select(ctx, &rows, `SELECT key, value FROM instance_settings WHERE key NOT LIKE '%.%'`); err != nil {
 		return DefaultInstance(), fmt.Errorf("settings: load: %w", err)
 	}
 	merged := map[string]json.RawMessage{}
@@ -250,9 +283,6 @@ func (s *Service) Instance(ctx context.Context) (Instance, error) {
 	if err := json.Unmarshal(b, &inst); err != nil {
 		return DefaultInstance(), fmt.Errorf("settings: decode: %w", err)
 	}
-	s.mu.Lock()
-	s.cached, s.cachedAt = &inst, time.Now()
-	s.mu.Unlock()
 	return inst, nil
 }
 

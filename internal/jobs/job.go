@@ -54,7 +54,8 @@ type Scope struct {
 	PageID    string `json:"page_id,omitempty"`
 	PanelID   string `json:"panel_id,omitempty"`
 	LayerID   string `json:"layer_id,omitempty"`
-	// Region is the edit region (mask key, polygon or box) for region scope.
+	// Region is the edit region (mask asset, polygon or box) for region scope.
+	// A region targets LayerID; its page/panel ancestry is resolved server-side.
 	Region json.RawMessage `json:"region,omitempty"`
 }
 
@@ -77,6 +78,9 @@ func (s Scope) Validate() error {
 	needRegion := func() error {
 		if !regionSet || bytes.Equal(region, []byte("null")) {
 			return errors.New("jobs: region scope needs region")
+		}
+		if !json.Valid(region) || region[0] != '{' {
+			return errors.New("jobs: region scope needs a JSON object")
 		}
 		return nil
 	}
@@ -120,11 +124,11 @@ func (s Scope) Validate() error {
 	case ScopeRegion:
 		return errors.Join(
 			need(s.ProjectID, "project_id"),
-			need(s.PanelID, "panel_id"),
+			need(s.LayerID, "layer_id"),
 			needRegion(),
 			forbid(s.ChapterID != "", "chapter_id"),
 			forbid(s.PageID != "", "page_id"),
-			forbid(s.LayerID != "", "layer_id"),
+			forbid(s.PanelID != "", "panel_id"),
 		)
 	case ScopeProject:
 		return errors.Join(

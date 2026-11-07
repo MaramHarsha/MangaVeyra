@@ -1,9 +1,11 @@
 # Phase 1: First playable — premise → exported chapter
 
-- Status: Active
-- Supersedes the scope of plan 0001 (its contracts for text generation, the script document, the script service,
-  provider secrets and spend reservations are kept and are part of this plan).
-- Decisions: ADR 0001 (scope), 0002 (embedder), 0003 (spend reservations), 0004 (design addendum).
+- Status: Active — Gate A complete; Gate B is next
+- Gate A: plan 0001 is the mandatory first vertical slice and remains normative for structured text generation,
+  project/chapter/script persistence, authorization, provider secrets, spend reservations and atomic job completion.
+  Gate A is green as of 2026-11-07; page-pipeline and visual-generation work may now begin under Gate B.
+- Decisions: ADR 0001 (scope), 0002 (embedder), 0003 (spend reservations), 0004 (design addendum),
+  0005 (Gate A OpenRouter text boundary).
 
 ## Handoff status (2026-11-07)
 
@@ -12,14 +14,27 @@
   in `internal/app/modules.go`, embedded lettering fonts in `internal/lettering/fonts/` (OFL), and the
   `github.com/tdewolff/canvas` dependency (pure-Go vector drawing with WOFF2 fonts, vertical Japanese via
   `RichText.SetWritingMode(canvas.VerticalRL)`, PNG and PDF renderers — spike verified).
-- **Not started:** Waves 1–3 below.
-- **Approved contract addition, not yet in `internal/studio/contract.go`:** add
+- **Gate A complete in the current Phase 1 worktree:** durable spend reservations and reconciliation (`0200`),
+  strict spend-limit validation, stored-token re-resolution, Studio data services, fixed OpenRouter text,
+  deterministic placeholder generation, provider lifecycle UI, project/adaptation wizard, job status/retry,
+  editable persisted manuscript and real dashboard project data are implemented.
+- **Root prerequisites complete:** the stored-token resolver now rechecks revocation, expiry and active ownership
+  without the raw secret and preserves worker-token semantics. ADR 0005 freezes the Gate A OpenRouter model,
+  endpoint, structured-output request, context/output bounds, price ceilings, hard reservation estimate and
+  non-generation key test.
+- **Gate A integrity and authorization hardening complete:** generated jobs carry the enqueue-time chapter revision,
+  compare it under the persistence row lock and cannot overwrite a newer manuscript. Studio/dashboard routes and
+  manual retry are session-only; bearer job reads and cancellation enforce scopes and project allow-lists.
+- **Gate A verification complete:** the full Go suite and focused race tests pass with both SQLite and PostgreSQL;
+  Go build/vet, module and templ drift, edition checks, frontend check/test/build, strict UI audit, and worker tests
+  are green. The placeholder browser flow proves create → generate → edit → reload.
+- **Contract addition now present in `internal/studio/contract.go`:**
   `NewProject{Title, Premise, Logline, Style, Format, PageSize, Language string; Genres, Tags []string; PageWidth,
   PageHeight int; SourceText string}`, `NewCharacter{ProjectID, Name, Kanji, Role, RoleLine, Age, Look, Personality,
   SpeechStyle, Category string}` and the Service methods `CreateProject(ctx, actor, NewProject) (Project, error)`
   (owner membership in the same tx), `CreateChapter(ctx, actor, projectID, title) (Chapter, error)`,
   `CreateCharacter(ctx, actor, NewCharacter) (Character, error)` and `SourceText(ctx, projectID) (string, error)`.
-  The demo seed and the end-to-end test need them.
+  The Gate A end-to-end browser test exercises them; the full Phase 1 demo seed remains Gate B/C integration work.
 - **Review rule from PR #5:** every data-layer test runs on both dialects through a `forEach` helper over
   `testdb.Dialects()` with `testutil.WithDialect` (see `internal/jobs/jobs_test.go`), so PostgreSQL is exercised
   whenever `MV_TEST_POSTGRES_URL` is set.
@@ -58,37 +73,71 @@ animation (Phase 5), World (Phase 7). The XP/rank layer stays deferred.
 Changing a contract requires updating this file first. Services are registered with `core.Provide` in the
 providing module's `New` and looked up with `core.MustUse` in `Init` or handlers.
 
+Gate A's story form uses `studio.EditScript` with an optimistic chapter revision.
+It updates only the existing script structure and preserves scene/panel IDs. Job
+rediscovery uses `jobs.Filter.ChapterID` together with project, user and type filters;
+the UI never scans an arbitrary project-wide prefix for the active chapter job.
+
+Region edits identify the unique target layer, not client-supplied page/panel ancestry. `gen.RegionEditRequest`
+contains `ProjectID`, `LayerID`, mask, prompt and generation options. Its `jobs.ScopeRegion` requires `ProjectID`,
+`LayerID` and a non-null region object, while forbidding chapter/page/panel IDs. At enqueue and persistence, Studio
+resolves `layer → panel → page → chapter → project`, verifies the resolved project, checks every lock and rejects
+lettering layers. Server-derived ancestry may be indexed internally; it is never trusted from the request.
+
 ## Waves and ownership
 
 Each agent works in its own git worktree and branch, edits only its paths, and adds new per-module locale files
 (`internal/i18n/locales/{en,ja}/<module>.json`) and, if needed, one new stylesheet `web/src/styles/<module>.css`
 plus one `@import` line in `web/src/styles/index.css`. Root owns `internal/core/**`, `internal/app/**`,
 `internal/assets`, `internal/pagedoc`, all contract files, `go.mod/go.sum` (agents may add a dependency and report
-it), migrations other than those assigned, and integration.
+it), every migration, setup integration and final integration.
 
-### Wave 1 (parallel)
+### Root prerequisites
 
-- **AI** — `internal/ai/**`, migration `0200_spend_reservations.sql`: model catalogue (embedded manifests),
-  provider registry with sealed keys, adapters (placeholder text+image, OpenRouter text+image, fal image,
-  OpenAI-compatible text e.g. Ollama, local worker image via child worker jobs), router with modes, local-only,
-  licence guard, explanations and fallback, hard spend reservations (ADR 0003), G2 Models & providers and a minimal
-  provider-connect flow, and the setup wizard's model step (`setup.ModelStep`).
-- **Studio** — `internal/studio/**`: projects (+ owner membership), chapters, characters (refs, outfits, uploads),
-  setting items, script service, `CheckScopeWritable` validator, screens B1 (claim `/studio`), B2, B3 wizard
-  (premise or adapt text), C1 story editor, C2/C3/C4 characters, C5 Setting.
+Before feature work, root lands and verifies the spend-reservation store and `0200` migration, settings validation,
+stored-token resolver, canonical contracts and plan alignment. Root also owns setup integration, app/core wiring and
+all migrations; feature agents do not edit those paths.
+
+### Gate A · Wave A1 (parallel foundations)
+
+- **AI text** — `internal/ai/**` except `contract.go`: provider registry and sealed OpenRouter keys, deterministic
+  placeholder text, ADR-0005 OpenRouter text, routing/local-only guards, spend integration and minimal
+  provider-connect flow. `TextPlan.RoutingMode` is retained and enforced at dispatch; `Decision` is never an
+  authorization input.
+- **Studio script** — `internal/studio/**` except `contract.go`: project/owner membership, chapter, minimal character
+  inputs, private adaptation source text, script persistence, authorization and `CheckScopeWritable`. Complete and
+  verified in the current worktree on SQLite and PostgreSQL.
+
+### Gate A · Wave A2
+
+- **Complete · Generation** — the `script.generate` path in `internal/gen/**`, using lease-fenced, revision-bound
+  atomic persistence.
+- **Complete · Minimal UI and acceptance** — provider connection, project creation and story editor prove the
+  placeholder/OpenRouter → editable persisted script path. All plan-0001 acceptance criteria are green.
+
+### Gate B (after Gate A is green)
+
+- **AI image expansion** — `internal/ai/**` except `contract.go`: model catalogue, placeholder/OpenRouter/fal image,
+  OpenAI-compatible text such as Ollama, local-worker image through child jobs, full routing modes, licence guard,
+  explanations and fallback.
+- **Studio expansion** — `internal/studio/**` except `contract.go`: character refs/outfits/uploads, setting items and
+  the remaining B1/B2/B3/C1–C5 screens not needed by Gate A.
 - **Page pipeline** — `internal/pagestore/**`, `internal/lettering/**`, `internal/compose/**`, `internal/export/**`:
   page persistence with locks and snapshots, lettering engine with embedded fonts, compositor, PNG/PDF/CBZ export
   with trims and credits page, the `export.chapter` job and the E2 export screen route.
 
-### Wave 2 (parallel, after Wave 1 merges)
+The `0200` migration, spend store and `setup.ModelStep` are root-owned prerequisites/integration, not feature-agent
+ownership.
 
-- **Generation** — `internal/gen/**`: script, character sheet, pages-from-script (layout suggestion, prompts from the
+### Gate C (parallel, after Gate B merges)
+
+- **Generation** — `internal/gen/**`: character sheet, pages-from-script (layout suggestion, prompts from the
   script, auto-lettering), panel art with variations, region edit; candidates and apply.
 - **Editor** — `internal/editor/**`, `web/src/islands/editor/**`: page JSON API over pagestore + lettering layouts,
   the D1 editor island (PixiJS canvas, filmstrip, layers, properties, change scope), D2 layout picker, D8
   variations, D13 region edit (mask painting), D3 lettering mode, undo/redo, shortcuts.
 
-### Wave 3 (root)
+### Final integration (root)
 
 Integration, `seed --demo` (Tidebreak Courier), Playwright end-to-end flow on the placeholder provider, README
 status, full verification, PR.

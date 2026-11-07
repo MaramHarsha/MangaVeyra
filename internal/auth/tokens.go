@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"database/sql"
+	"math"
 	"strings"
 	"time"
 
@@ -86,6 +87,9 @@ func (s *Service) CreateToken(ctx context.Context, in TokenInput) (string, *Toke
 	if in.ProjectIDs == nil {
 		in.ProjectIDs = []string{}
 	}
+	if in.ApproveOverUSD != nil && !validApprovalThreshold(*in.ApproveOverUSD) {
+		return "", nil, fieldError("approve_over_usd", "error.validation")
+	}
 	u, err := s.UserByID(ctx, in.UserID)
 	if err != nil {
 		return "", nil, err
@@ -143,20 +147,70 @@ func (s *Service) VerifyToken(ctx context.Context, raw, ip string) (*httpx.Token
 		return nil, nil, err
 	}
 	now := s.now()
-	if t.RevokedAt != nil || (t.ExpiresAt != nil && !t.ExpiresAt.After(now)) {
-		return nil, nil, ErrTokenInvalid
-	}
-	u, err := s.UserByID(ctx, t.UserID)
-	if err != nil || u.Status != StatusActive {
-		return nil, nil, ErrTokenInvalid
+	tok, u, err := s.validateStoredToken(ctx, s.db, &t, now)
+	if err != nil {
+		return nil, nil, err
 	}
 	if t.LastUsedAt == nil || now.Sub(*t.LastUsedAt) > time.Minute {
 		_, _ = s.db.Exec(ctx, `UPDATE api_tokens SET last_used_at = ?, last_used_ip = ? WHERE id = ?`, now, ip, t.ID)
 	}
-	if t.Kind == TokenWorker {
-		return t.Token(), nil, nil
+	return tok, u, nil
+}
+
+// ResolveStoredToken re-resolves a stored bearer token by ID without requiring
+// its raw secret. It applies the same revocation, expiry, and active-owner checks
+// as VerifyToken, but deliberately does not update last-used fields. The
+// MV_WORKER_TOKEN environment token is not stored and cannot be resolved here.
+func (s *Service) ResolveStoredToken(ctx context.Context, tokenID string) (*httpx.Token, *User, error) {
+	return s.resolveStoredToken(ctx, s.db, tokenID, s.now())
+}
+
+// ResolveStoredTokenTx is ResolveStoredToken using tx for every token and owner
+// read, so callers can revalidate authorization against changes in their current
+// transaction without opening an out-of-transaction database read.
+func (s *Service) ResolveStoredTokenTx(ctx context.Context, tx *db.Tx, tokenID string) (*httpx.Token, *User, error) {
+	return s.resolveStoredToken(ctx, tx, tokenID, s.now())
+}
+
+func (s *Service) resolveStoredToken(ctx context.Context, q db.Querier, tokenID string, now time.Time) (*httpx.Token, *User, error) {
+	if tokenID == "" || tokenID == EnvWorkerTokenID {
+		return nil, nil, ErrTokenInvalid
 	}
-	return t.Token(), u, nil
+	var t TokenInfo
+	if err := q.Get(ctx, &t, `SELECT `+tokenCols+` FROM api_tokens WHERE id = ?`, tokenID); err != nil {
+		if db.IsNotFound(err) {
+			return nil, nil, ErrTokenInvalid
+		}
+		return nil, nil, err
+	}
+	return s.validateStoredToken(ctx, q, &t, now)
+}
+
+func (s *Service) validateStoredToken(ctx context.Context, q db.Querier, t *TokenInfo, now time.Time) (*httpx.Token, *User, error) {
+	if t.RevokedAt != nil || (t.ExpiresAt != nil && !t.ExpiresAt.After(now)) {
+		return nil, nil, ErrTokenInvalid
+	}
+	if t.ApproveOverUSD.Valid && !validApprovalThreshold(t.ApproveOverUSD.Float64) {
+		return nil, nil, ErrTokenInvalid
+	}
+	r, err := s.row(ctx, q, `id = ?`, t.UserID)
+	if err != nil || r.Status != StatusActive {
+		return nil, nil, ErrTokenInvalid
+	}
+	u := r.user()
+	tok := t.Token()
+	if t.Kind == TokenWorker {
+		return tok, nil, nil
+	}
+	return tok, u, nil
+}
+
+func validApprovalThreshold(v float64) bool {
+	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
+		return false
+	}
+	scaled := v * 1_000_000
+	return !math.IsInf(scaled, 0) && scaled < float64(math.MaxInt64)
 }
 
 // ListTokens lists a user's tokens of kind ("" = all kinds), newest first. Admins pass userID "" to list every worker token.

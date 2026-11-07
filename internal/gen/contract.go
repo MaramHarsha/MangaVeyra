@@ -31,6 +31,10 @@ type ScriptRequest struct {
 	SourceText  string `json:"source_text,omitempty"`
 	PagesTarget int    `json:"pages_target,omitempty"`
 	RoutingMode string `json:"routing_mode,omitempty"`
+	// Pins force the Gate A placeholder/OpenRouter provider or model after all
+	// authorization, local-only and availability checks still pass.
+	PinProviderID string `json:"pin_provider_id,omitempty"`
+	PinModelID    string `json:"pin_model_id,omitempty"`
 }
 
 // CharacterSheetRequest generates reference sheets for a character.
@@ -74,9 +78,9 @@ type PanelRequest struct {
 // RegionEditRequest changes only a masked region of a panel image.
 type RegionEditRequest struct {
 	ProjectID string `json:"project_id"`
-	PageID    string `json:"page_id"`
-	PanelID   string `json:"panel_id"`
 	LayerID   string `json:"layer_id"`
+	// Page/panel/chapter ancestry is resolved from LayerID server-side so a
+	// client cannot spoof a less-restricted parent scope.
 	// MaskAssetID is a PNG mask (white = change) in the layer image's pixel space.
 	MaskAssetID string `json:"mask_asset_id"`
 	Prompt      string `json:"prompt"`

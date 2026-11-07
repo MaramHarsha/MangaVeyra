@@ -1,10 +1,15 @@
 # Milestone 0001: Provider to persisted script
 
-- Status: Active (Wave 0 complete; feature implementation is blocked on the
-  root-owned prerequisites below)
+- Status: Complete — Gate A of umbrella Phase 1 plan 0002 (verified 2026-11-07)
 - Base commit: `a84023348c126908d6ebab1a12a3bd8cfd4d979a`
 - Decision record: `docs/decisions/0001-mvp-scope.md`
 - Spend decision: `docs/decisions/0003-hard-remote-spend-reservations.md`
+- OpenRouter decision: `docs/decisions/0005-gate-a-openrouter-text.md`
+
+Plan 0002 defines the full Phase 1 outcome. This plan remains the normative
+contract for its first vertical slice: provider → persisted script. Gate A passed
+before image generation, page persistence, lettering, compositing, export, or
+editor implementation began. This plan is Complete rather than Superseded.
 
 ## Outcome
 
@@ -19,8 +24,10 @@ compositing, publishing, reading, export, hosted billing, or World.
 ## Frozen feature contracts
 
 Feature packages expose narrow services through `core.Provide`/`core.Use`; they do
-not edit `internal/app/modules.go`. The names and fields below are the Wave 1
-contract. Changing them requires updating this plan before parallel work resumes.
+not edit `internal/app/modules.go`. The source contracts in
+`internal/ai/contract.go` and `internal/studio/contract.go` are canonical. The
+names and fields below describe their Gate A subset. Changing them requires
+updating this plan before parallel work resumes.
 
 ### AI structured-text service
 
@@ -34,11 +41,12 @@ type TextService interface {
 
 type TextPlanRequest struct {
     Task, Schema, ActorID, ProjectID, RoutingMode string
+    PinProviderID, PinModelID string
     Input json.RawMessage
 }
 
 type TextPlan struct {
-    Task, Schema, ProviderID, ModelID string
+    Task, Schema, RoutingMode, ProviderID, ModelID string
     Remote bool
     Decision json.RawMessage
     Estimate jobs.Cost
@@ -46,7 +54,9 @@ type TextPlan struct {
 
 type TextGenerateRequest struct {
     Plan TextPlan
-    ActorID, ProjectID string
+    ActorID, JobID string
+    ProjectID string
+    Attempt int
     Input json.RawMessage
 }
 
@@ -64,6 +74,11 @@ type GenerateError struct {
 }
 ```
 
+The pins support an explicit provider/model choice. `JobID` and `Attempt` bind
+every remote call to a durable spend reservation and the claimed job attempt.
+The umbrella AI contract also defines image generation, but that implementation
+belongs to Phase 1 Gate B after this script slice passes.
+
 `GenerateError.Error()` exposes only `SafeMessage`; raw upstream bodies, headers,
 URLs, and secret-bearing request data are never persisted or logged. `Actual`
 records billable usage even when a call or bounded repair fails.
@@ -72,8 +87,16 @@ records billable usage even when a call or bounded repair fails.
 `GenerateText` treats the plan as untrusted, re-resolves the provider and key, and
 rechecks settings immediately before every outbound call, repair, or failover.
 The deterministic placeholder is local and remains available without a key.
-OpenRouter text is the only remote adapter in this milestone. Its fixed official
-endpoint is used; custom base URLs are out of scope.
+OpenRouter text is the only remote adapter in this milestone. ADR 0005 freezes
+`openai/gpt-4.1-mini`, the official endpoint, strict structured output, price
+ceilings, a 16,384-token completion limit and the conservative per-call spend
+upper bound. Custom base URLs and other remote models are out of scope.
+
+`TextPlan.RoutingMode` preserves the validated request mode so generation can
+enforce request-local `local_only` without trusting `Decision`, which is only an
+explanation. A remote plan whose full prompt/schema envelope cannot fit the ADR
+0005 context bound is excluded; an explicit OpenRouter pin returns `bad_input`
+rather than truncating source material.
 
 For this milestone, `jobs.decision` is the canonical routing record. The separate
 `routing_decisions` history is deferred until routing analytics are implemented.
@@ -140,19 +163,36 @@ relationships, locks, and transactional invariants.
 ### Studio script service
 
 `internal/studio` owns the persisted document types corresponding to
-`mangaveyra.script.v1` and exposes:
+`mangaveyra.script.v1`. Its shared `studio.Service`, `Actor`, `Action`, and
+`Authorize` contract replaces the narrower proposed `Script*` names so the same
+authorization boundary serves later Phase 1 features. Its Gate A subset is:
 
 ```go
-type ScriptService interface {
-    AuthorizeScript(context.Context, ScriptActor, string, string, ScriptAction) error
+type Service interface {
+    Authorize(context.Context, Actor, string, Action) error
+    CreateProject(context.Context, Actor, NewProject) (Project, error)
+    CreateChapter(context.Context, Actor, string, string) (Chapter, error)
+    CreateCharacter(context.Context, Actor, NewCharacter) (Character, error)
+    SourceText(context.Context, string) (string, error)
     ReplaceGeneratedScriptTx(context.Context, *db.Tx, ReplaceScriptInput) (ReplaceScriptResult, error)
+    EditScript(context.Context, EditScriptInput) (Chapter, error)
 }
 ```
 
-`ScriptActor` contains the current user ID and optional bearer-token ID.
-`ReplaceScriptInput` contains actor, project/chapter IDs, the fully validated Studio
-document, job ID, attempt, provider/model IDs, and provenance. It never accepts a
-raw model document.
+`Actor` contains the current user ID, optional bearer-token ID, and site role.
+`ReplaceScriptInput` contains actor, project/chapter IDs, the fully validated
+Studio document, the enqueue-time chapter revision, job ID, provider/model IDs,
+and provenance. It intentionally does not accept an attempt number:
+`jobs.Run.CommitSideEffect` is the authoritative attempt fence, so caller-supplied
+attempt state cannot be trusted. The chapter revision is compared under the same
+row lock as replacement, preventing two jobs planned from the same revision from
+overwriting one another. It never accepts a raw model document.
+
+`NewProject.SourceText` is private adaptation material stored under
+`projects.settings.script_source_text`, never exposed by project/list DTOs or
+logs. It is valid UTF-8, at most 1 MiB, omitted when empty, and settings updates
+preserve unknown keys. `SourceText` returns an empty string when absent and is
+called only after project/script authorization.
 
 Project creation inserts the owner into `project_members` with role `owner` in the
 same transaction. The authorization matrix is:
@@ -169,13 +209,23 @@ cost crosses `approve_over_usd`, this milestone returns `approval_required` rath
 than bypassing the threshold. The enqueue input stores the token ID, not its secret.
 The handler re-resolves it and rejects revoked, expired, wrong-project, or
 insufficient-scope tokens. Session jobs store no token ID and recheck that the user
-is active.
+is active. Browser Studio routes and manual retry require a signed-in session.
+Bearer job reads require `projects:read` and honor the token project allow-list;
+bearer cancel requires `projects:write` plus `generate`.
 
 Before the transaction, Studio validates the whole document. Inside the transaction
 it rechecks project/chapter ownership, current membership, chapter lock, and the
 character allow-list. It then replaces only that chapter's scenes and script panels,
 updates the chapter summary/status/script provenance, and leaves arcs, title, and
 unrelated story data unchanged. Any error preserves the previous script exactly.
+
+Human edits use `EditScript` with the chapter `updated_at` value as an optimistic
+revision. Gate A edits only an existing script's recognized text fields while
+preserving its structure and ordering; scene and panel IDs remain stable so later
+page references cannot be orphaned. The same authorization, ancestry, lock and
+character checks run inside the transaction.
+A stale revision returns `ErrConflict`, and editing AI output changes script
+provenance from `ai` to `ai_assisted` rather than claiming it is wholly human.
 
 ### Generation handler
 
@@ -208,6 +258,16 @@ HTTP call, repair, failover, and provider connection test. Disabled or deleted
 providers and keys are re-resolved at dispatch. Counting-transport tests must prove
 zero requests for each failure mode.
 
+OpenRouter connection testing uses authenticated `GET /api/v1/key`, not a
+completion. Generation sends `provider.require_parameters=true`, the ADR 0005
+`provider.max_price` ceilings, strict JSON Schema output and usage accounting.
+Missing or invalid returned cost reconciles at the reserved estimate. The text
+plan's estimate covers the initial call plus its one possible repair for a single
+claimed attempt, while each outbound call receives its own per-call reservation.
+Generation multiplies that bound by the job's three attempts before enqueue; the
+durable job estimate and bearer-token approval therefore cover the full automatic-
+retry action.
+
 Remote spend caps are hard, not advisory. A root-owned `0200` migration adds durable
 reservations keyed by job ID, attempt, and call sequence. Each outbound call atomically
 reserves its estimate against user and server monthly caps, then reconciles actual
@@ -226,10 +286,10 @@ agents edit in parallel:
    is still running at the same attempt, runs a supplied Studio callback, stores the
    job output/actual cost, and marks the job done. The normal pool completion path
    detects that this already committed. A stale attempt can never persist.
-3. [ ] Add the spend-reservation migration and shared transaction helpers. The
+3. [x] Add the spend-reservation migration and shared transaction helpers. The
    accepted design and parity-test matrix are in
    `docs/decisions/0003-hard-remote-spend-reservations.md`.
-4. [ ] Add an auth helper that re-resolves a stored token ID and enforces active,
+4. [x] Add an auth helper that re-resolves a stored token ID and enforces active,
    unexpired, unrevoked state without needing the raw token.
 5. [x] Reserve `internal/testutil/**` and shared fake transports for the root. Feature
    agents keep private test helpers unless the root deliberately promotes one.
@@ -252,23 +312,28 @@ PostgreSQL.
 
 ### Wave 1: parallel foundations
 
-- Wave 1 starts only after every root-owned prerequisite above is green.
-- AI agent owns `internal/ai/**` and new module-specific locale files.
-- Studio agent owns `internal/studio/**` and new module-specific locale files.
+- Every root-owned prerequisite above is green.
+- AI text/provider implementation and its focused test, race, vet and diff checks
+  are complete in `internal/ai/**`, including PostgreSQL parity.
+- Studio implementation and its SQLite/PostgreSQL tests are complete in
+  `internal/studio/**`.
 - Root owns shared interfaces, setup integration, app/core files, migrations, and
   global locale/catalogue changes.
 
 ### Wave 2: generation
 
-- Gen agent owns `internal/gen/**` and new module-specific locale files.
-- It works against the frozen AI/Studio contracts and fakes before integration.
+- The `script.generate` enqueue/handler path is complete in `internal/gen/**`,
+  including aggregate approval bounds, strict decoding, live authorization and
+  lock rechecks, actual-cost preservation, and lease-fenced Studio persistence.
+- Focused Generation tests, race, vet and diff checks pass on SQLite and PostgreSQL.
 
 ### Wave 3: minimal UI and integration
 
-- One UI agent receives exclusive templ/route ownership after backend contracts
-  pass focused tests.
-- Root performs generated-file updates, integration fixes, and full verification.
-- A read-only verifier reviews the integrated diff before completion.
+- A UI agent implemented the provider, project wizard, job-state and editable
+  manuscript routes after backend contracts passed focused tests.
+- Root completed generated-file updates, integration hardening and full verification.
+- A read-only verifier reviewed the integrated authorization, retry, multipart,
+  stable-ID and chapter/job race boundaries before completion.
 
 ## Acceptance criteria
 
@@ -283,8 +348,9 @@ PostgreSQL.
   job; a stale attempt cannot persist.
 - Invalid provider output leaves the existing script unchanged.
 - Placeholder generation is deterministic and requires no network or key.
-- Concurrent hard spend caps, failed calls, repairs, retries, failover, duplicate
-  reconciliation, and stale-reservation repair are tested.
+- Concurrent hard spend caps, cap/local-only changes during lock contention,
+  failed calls, repairs, retries, failover, duplicate reconciliation, and
+  stale-reservation repair are tested.
 - The dashboard shows the created project.
 - Focused SQLite tests pass; data behavior is also exercised against PostgreSQL.
 - Full applicable gates in `AGENTS.md` are green before the milestone is marked
@@ -301,3 +367,18 @@ PostgreSQL.
 - The spend reservation table is the one accepted schema defect; no other migration
   is added merely to avoid using the existing schema.
 - Editor or visual-design work cannot expand this milestone's scope.
+
+## Completion evidence (2026-11-07)
+
+- Full Go tests passed with `MV_TEST_POSTGRES_URL` set, exercising SQLite and
+  PostgreSQL data paths; focused jobs/Studio/AI/Generation/Studio UI race tests passed.
+- An adversarial concurrency review confirmed policy is reloaded uncached inside
+  the spend-locked transaction; cap reductions and local-only changes committed
+  during contention reject the waiting reservation on both dialects.
+- The placeholder end-to-end test covers wizard → queued generation → persisted
+  manuscript → stable-ID edit → save/reload, including IDOR, stale-revision and
+  locked/read-only failure paths.
+- `go build ./...`, `go vet ./...`, `go mod tidy` drift, templ generation,
+  edition checks, frontend typecheck/tests/build and strict premium UI audit passed.
+- Worker tests passed under Python 3.12: 153 passed, with only optional PyTorch and
+  WebSockets backend tests skipped because those extras were not installed.

@@ -174,7 +174,7 @@ templ ModelsStep(v modelsView) {
 	} else {
 		@head(i18n.T(ctx, "setup.models.title"), i18n.T(ctx, "setup.models.sub_none"))
 	}
-	<form class="mv-setup__form" method="post" action="/setup/models">
+	<form class="mv-setup__form" method="post" action="/setup/models" novalidate>
 		if v.Compute.GPU != "" {
 			<div class="mv-gpu mv-gpu--found">
 				@ui.Icon("cpu", 28)
@@ -229,9 +229,16 @@ templ ModelsStep(v modelsView) {
 							case ProviderError:
 								@ui.Badge(ui.ToneError, "alert-triangle", i18n.T(ctx, "setup.provider.error"))
 							default:
-								@ui.LinkButton(p.ConnectHref(), ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Class: ui.If(v.LocalOnly, "is-disabled")}) {
-									{ i18n.T(ctx, "setup.provider.connect") }
-									<span class="mv-sr-only">{ providerName(ctx, p) }</span>
+								if v.LocalOnly {
+									@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Disabled: true}) {
+										{ i18n.T(ctx, "setup.provider.connect") }
+										<span class="mv-sr-only">{ providerName(ctx, p) }</span>
+									}
+								} else {
+									@ui.LinkButton(p.ConnectHref(), ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM}) {
+										{ i18n.T(ctx, "setup.provider.connect") }
+										<span class="mv-sr-only">{ providerName(ctx, p) }</span>
+									}
 								}
 						}
 					</div>
@@ -260,7 +267,7 @@ templ ModelsStep(v modelsView) {
 templ FinishStep(checks []Check) {
 	@stepBar(StepFinish)
 	@head(i18n.T(ctx, "setup.finish.title"), i18n.T(ctx, "setup.finish.sub"))
-	<form class="mv-setup__form" method="post" action="/setup/finish">
+	<form class="mv-setup__form" method="post" action="/setup/finish" novalidate>
 		<ul class="mv-list-plain mv-box mv-box--pad" role="list">
 			for _, c := range checks {
 				<li class="mv-setrow">

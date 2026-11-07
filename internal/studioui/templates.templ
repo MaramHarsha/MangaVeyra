@@ -1,0 +1,276 @@
+package studioui
+
+import (
+	"context"
+	"strconv"
+	"time"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+func selectOptions(ctx context.Context, prefix string, values []string) []ui.Option {
+	out := make([]ui.Option, 0, len(values))
+	for _, value := range values {
+		out = append(out, ui.Option{Value: value, Label: i18n.T(ctx, prefix+value)})
+	}
+	return out
+}
+
+func readOnlyAttrs(readOnly bool) templ.Attributes {
+	if readOnly {
+		return templ.Attributes{"readonly": true}
+	}
+	return nil
+}
+
+func jobPollAttrs(v *jobView) templ.Attributes {
+	if !v.Active {
+		return nil
+	}
+	return templ.Attributes{"hx-get": v.StatusURL, "hx-trigger": "load delay:2s", "hx-swap": "outerHTML"}
+}
+
+func provenanceText(ctx context.Context, value string) string {
+	switch value {
+	case ui.ProvenanceAI:
+		return i18n.T(ctx, "studioui.script.provenance.ai")
+	case ui.ProvenanceAIAssisted:
+		return i18n.T(ctx, "studioui.script.provenance.assisted")
+	default:
+		return i18n.T(ctx, "studioui.script.provenance.human")
+	}
+}
+
+templ FormNotice(message string) {
+	if message != "" {
+		@ui.Notice(ui.ToneError, "alert-triangle") {
+			<strong>{ i18n.T(ctx, "studioui.form.check") }</strong>
+			<p>{ message }</p>
+		}
+	}
+}
+
+// NewProjectPage is the focused B3 workbench: one form and one production brief.
+templ NewProjectPage(v newProjectView) {
+	<main class="mv-new-project">
+		<header class="mv-new-project__head">
+			<a href="/studio" class="mv-new-project__back">@ui.Icon("arrow-left", 18) { i18n.T(ctx, "studioui.new.back") }</a>
+			<span class="mv-label-mono">{ i18n.T(ctx, "studioui.new.eyebrow") }</span>
+			<h1>{ i18n.T(ctx, "studioui.new.heading") }</h1>
+			<p>{ i18n.T(ctx, "studioui.new.intro") }</p>
+		</header>
+		<div class="mv-new-project__grid">
+			<form class="mv-new-project__form" method="post" action="/studio/new/premise" enctype="multipart/form-data" novalidate>
+				@FormNotice(v.Errors.Form())
+				<section class="mv-new-project__section" aria-labelledby="mv-new-story">
+					<div class="mv-new-project__section-head">
+						<span>01</span>
+						<div><h2 id="mv-new-story">{ i18n.T(ctx, "studioui.new.story") }</h2><p>{ i18n.T(ctx, "studioui.new.story_help") }</p></div>
+					</div>
+					@ui.Field(ui.FieldProps{ID: "title", Label: i18n.T(ctx, "studioui.new.title_label"), Error: v.Errors["title"]}) {
+						@ui.Input(ui.InputProps{ID: "title", Name: "title", Value: v.Values.Title, Placeholder: i18n.T(ctx, "studioui.new.title_placeholder"), Required: true, MaxLength: 160, Invalid: v.Errors["title"] != ""})
+					}
+					@ui.Field(ui.FieldProps{ID: "chapter_title", Label: i18n.T(ctx, "studioui.new.chapter_label"), Error: v.Errors["chapter_title"]}) {
+						@ui.Input(ui.InputProps{ID: "chapter_title", Name: "chapter_title", Value: v.Values.ChapterTitle, Placeholder: i18n.T(ctx, "studioui.new.chapter_placeholder"), Required: true, MaxLength: 160, Invalid: v.Errors["chapter_title"] != ""})
+					}
+					<fieldset class="mv-new-project__modes">
+						<legend>{ i18n.T(ctx, "studioui.new.mode") }</legend>
+						@ui.Radio(ui.CheckProps{ID: "mode-premise", Name: "mode", Value: "premise", Checked: v.Values.Mode == "premise", Label: i18n.T(ctx, "studioui.new.mode_premise")})
+						@ui.Radio(ui.CheckProps{ID: "mode-adapt", Name: "mode", Value: "adapt", Checked: v.Values.Mode == "adapt", Label: i18n.T(ctx, "studioui.new.mode_adapt")})
+					</fieldset>
+					@ui.Field(ui.FieldProps{ID: "premise", Label: i18n.T(ctx, "studioui.new.premise_label"), Hint: i18n.T(ctx, "studioui.new.premise_hint"), Error: v.Errors["premise"]}) {
+						@ui.Textarea(ui.TextareaProps{ID: "premise", Name: "premise", Value: v.Values.Premise, Placeholder: i18n.T(ctx, "studioui.new.premise_placeholder"), Rows: 7, MaxLength: 4000, Invalid: v.Errors["premise"] != "", Class: "mv-new-project__premise"})
+					}
+					<div class="mv-new-project__adapt">
+						@ui.Field(ui.FieldProps{ID: "source_text", Label: i18n.T(ctx, "studioui.new.source_label"), Hint: i18n.T(ctx, "studioui.new.source_hint"), Error: v.Errors["source_text"]}) {
+							@ui.Textarea(ui.TextareaProps{ID: "source_text", Name: "source_text", Value: v.Values.SourceText, Placeholder: i18n.T(ctx, "studioui.new.source_placeholder"), Rows: 6, Invalid: v.Errors["source_text"] != ""})
+						}
+						<span class="mv-new-project__or">{ i18n.T(ctx, "studioui.new.or") }</span>
+						@ui.Field(ui.FieldProps{ID: "source_file", Label: i18n.T(ctx, "studioui.new.upload_label"), Hint: i18n.T(ctx, "studioui.new.upload_hint"), Error: v.Errors["source_file"]}) {
+							@ui.Input(ui.InputProps{ID: "source_file", Name: "source_file", Type: "file", Invalid: v.Errors["source_file"] != "", Attrs: templ.Attributes{"accept": ".txt,text/plain"}})
+						}
+					</div>
+				</section>
+				<section class="mv-new-project__section" aria-labelledby="mv-new-production">
+					<div class="mv-new-project__section-head">
+						<span>02</span>
+						<div><h2 id="mv-new-production">{ i18n.T(ctx, "studioui.new.production") }</h2><p>{ i18n.T(ctx, "studioui.new.production_help") }</p></div>
+					</div>
+					<fieldset class="mv-new-project__genres">
+						<legend>{ i18n.T(ctx, "studioui.new.genres") }</legend>
+						for _, genre := range genreValues {
+							@ui.Checkbox(ui.CheckProps{ID: "genre-" + genre, Name: "genres", Value: genre, Checked: contains(v.Values.Genres, genre), Label: i18n.T(ctx, "studioui.genre." + genre)})
+						}
+						if v.Errors["genres"] != "" {
+							<span class="mv-field__error" role="alert">{ v.Errors["genres"] }</span>
+						}
+					</fieldset>
+					<div class="mv-new-project__triplet">
+						@ui.Field(ui.FieldProps{ID: "style", Label: i18n.T(ctx, "studioui.new.style"), Error: v.Errors["style"]}) {
+							@ui.Select(ui.SelectProps{ID: "style", Name: "style", Value: v.Values.Style, Options: selectOptions(ctx, "studioui.style.", styleValues), Invalid: v.Errors["style"] != ""})
+						}
+						@ui.Field(ui.FieldProps{ID: "format", Label: i18n.T(ctx, "studioui.new.format"), Error: v.Errors["format"]}) {
+							@ui.Select(ui.SelectProps{ID: "format", Name: "format", Value: v.Values.Format, Options: selectOptions(ctx, "studioui.format.", formatValues), Invalid: v.Errors["format"] != ""})
+						}
+						@ui.Field(ui.FieldProps{ID: "language", Label: i18n.T(ctx, "studioui.new.language"), Error: v.Errors["language"]}) {
+							@ui.Select(ui.SelectProps{ID: "language", Name: "language", Value: v.Values.Language, Options: selectOptions(ctx, "studioui.language.", languageValues), Invalid: v.Errors["language"] != ""})
+						}
+					</div>
+					@ui.Field(ui.FieldProps{ID: "pages_target", Label: i18n.T(ctx, "studioui.new.pages"), Hint: i18n.T(ctx, "studioui.new.pages_hint"), Error: v.Errors["pages_target"]}) {
+						@ui.Input(ui.InputProps{ID: "pages_target", Name: "pages_target", Type: "number", Value: strconv.Itoa(v.Values.PagesTarget), Inputmode: "numeric", Invalid: v.Errors["pages_target"] != "", Attrs: templ.Attributes{"min": "1", "max": "256"}})
+					}
+				</section>
+				<div class="mv-new-project__actions">
+					<p>{ i18n.T(ctx, "studioui.new.submit_help") }</p>
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Icon: "sparkles"}) { { i18n.T(ctx, "studioui.new.submit") } }
+				</div>
+			</form>
+			<aside class="mv-new-project__brief" aria-labelledby="mv-new-brief">
+				<span class="mv-label-mono">{ i18n.T(ctx, "studioui.new.brief_label") }</span>
+				<h2 id="mv-new-brief">{ i18n.T(ctx, "studioui.new.brief_title") }</h2>
+				<p>{ i18n.T(ctx, "studioui.new.brief_body") }</p>
+				<dl>
+					<div><dt>{ i18n.T(ctx, "studioui.new.brief_output") }</dt><dd>{ i18n.T(ctx, "studioui.new.brief_script") }</dd></div>
+					<div><dt>{ i18n.T(ctx, "studioui.new.brief_route") }</dt><dd>{ i18n.T(ctx, "studioui.new.brief_auto") }</dd></div>
+					<div><dt>{ i18n.T(ctx, "studioui.new.brief_save") }</dt><dd>{ i18n.T(ctx, "studioui.new.brief_manual") }</dd></div>
+				</dl>
+				@ui.Notice(ui.ToneInfo, "shield-lock") { <p>{ i18n.T(ctx, "studioui.new.private_source") }</p> }
+			</aside>
+		</div>
+	</main>
+}
+
+templ NoChapterPage(v noChapterView) {
+	<main class="mv-story">
+		<header class="mv-pagehead"><div class="mv-pagehead__text"><span class="mv-label-mono">{ i18n.T(ctx, "studioui.story.project") }</span><h1 class="mv-pagehead__title">{ v.Project.Title }</h1></div></header>
+		@ui.State(ui.StateProps{SFX: "シーン…", JP: true, Title: i18n.T(ctx, "studioui.chapter.empty"), Body: i18n.T(ctx, "studioui.chapter.empty_body"), Art: "splash", Boxed: true}) {
+			if v.CanEdit {
+				<form class="mv-story__chapter-form" method="post" action={ templ.URL(storyPath(v.Project.ID, "") + "/chapters") } novalidate>
+					@FormNotice(v.Error)
+					@ui.Field(ui.FieldProps{ID: "chapter_title", Label: i18n.T(ctx, "studioui.new.chapter_label")}) { @ui.Input(ui.InputProps{ID: "chapter_title", Name: "chapter_title", Placeholder: i18n.T(ctx, "studioui.new.chapter_placeholder"), Required: true, MaxLength: 160}) }
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "plus"}) { { i18n.T(ctx, "studioui.chapter.create") } }
+				</form>
+			}
+		}
+	</main>
+}
+
+templ StoryPage(v storyView) {
+	<main class="mv-story">
+		<header class="mv-story__head">
+			<div><span class="mv-label-mono">{ v.Project.Title }</span><h1>{ v.Chapter.Title }</h1><p>{ i18n.T(ctx, "studioui.story.chapter", "number", v.Chapter.Number) }</p></div>
+			<div class="mv-story__status">
+				if v.Chapter.Locked {
+					@ui.StatusBadge(ui.StatusLocked, i18n.T(ctx, "studioui.story.locked"))
+				}
+				if label := v.Chapter.AILabel["script"]; label != "" {
+					@ui.ProvenanceBadge(label, provenanceText(ctx, label))
+				}
+			</div>
+		</header>
+		<div class="mv-story__layout">
+			<nav class="mv-story__rail" aria-label={ i18n.T(ctx, "studioui.story.chapters") }>
+				<span class="mv-label-mono">{ i18n.T(ctx, "studioui.story.chapters") }</span>
+				<ol>
+					for _, chapter := range v.Chapters {
+						<li>
+							<a href={ templ.URL(storyPath(v.Project.ID, chapter.ID)) }
+								if chapter.ID == v.Chapter.ID {
+									aria-current="page"
+								}
+							><span>{ chapterNumber(chapter.Number) }</span><strong>{ chapter.Title }</strong></a>
+						</li>
+					}
+				</ol>
+			</nav>
+			<section class="mv-story__manuscript" aria-label={ i18n.T(ctx, "studioui.story.manuscript") }>
+				@FormNotice(v.Error)
+				if v.Conflict {
+					@ui.Notice(ui.ToneWarning, "refresh") { <strong>{ i18n.T(ctx, "studioui.script.unsaved") }</strong><p>{ i18n.T(ctx, "studioui.script.conflict_help") }</p><a href={ templ.URL(storyPath(v.Project.ID, v.Chapter.ID)) }>{ i18n.T(ctx, "studioui.script.reload") }</a> }
+				}
+				if len(v.Script.Scenes) > 0 {
+					@ScriptEditor(v)
+				} else if v.Job != nil {
+					@JobPanel(v.Job)
+				} else if v.CanGenerate && !v.Chapter.Locked {
+					@GenerationStart(v)
+				} else {
+					@ui.State(ui.StateProps{Title: i18n.T(ctx, "studioui.story.no_script"), Body: i18n.T(ctx, "studioui.story.read_only"), Boxed: true})
+				}
+			</section>
+		</div>
+	</main>
+}
+
+templ GenerationStart(v storyView) {
+	@ui.State(ui.StateProps{SFX: "INK", Title: i18n.T(ctx, "studioui.generate.title"), Body: i18n.T(ctx, "studioui.generate.body"), Art: "speedlines", Boxed: true}) {
+		<form class="mv-story__generate" method="post" action={ templ.URL(storyPath(v.Project.ID, v.Chapter.ID) + "/generate") } novalidate>
+			@ui.Field(ui.FieldProps{ID: "pages_target", Label: i18n.T(ctx, "studioui.new.pages"), Hint: i18n.T(ctx, "studioui.new.pages_hint")}) { @ui.Input(ui.InputProps{ID: "pages_target", Name: "pages_target", Type: "number", Value: strconv.Itoa(defaultPagesTarget), Inputmode: "numeric", Attrs: templ.Attributes{"min": "1", "max": "256"}}) }
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "sparkles"}) { { i18n.T(ctx, "studioui.generate.submit") } }
+		</form>
+	}
+}
+
+templ JobPanel(v *jobView) {
+	<div class="mv-story-job" id={ "job-" + v.Job.ID } aria-live="polite" { jobPollAttrs(v)... }>
+		@ui.GenState(ui.GenProps{State: v.State, Position: v.Position, Progress: v.Job.Progress, Step: v.Job.Step, Steps: v.Job.Steps, ProgressText: v.Progress, Title: v.Title, Detail: v.Detail, ResultLabel: v.ResultLabel, SFX: "FZZT", JobID: v.Job.ID})
+		<div class="mv-story-job__actions">
+			<a href={ templ.URL(v.StoryURL) } class="mv-btn mv-btn--quiet">@ui.Icon("refresh", 16) { i18n.T(ctx, "studioui.job.refresh") }</a>
+			if v.Retryable {
+				<form method="post" action={ templ.URL(v.RetryURL) } novalidate>@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Type: "submit", Icon: "refresh"}) { { i18n.T(ctx, "studioui.job.retry") } }</form>
+			}
+		</div>
+	</div>
+}
+
+templ ScriptEditor(v storyView) {
+	<form class="mv-script" method="post" action={ templ.URL(storyPath(v.Project.ID, v.Chapter.ID) + "/script") } novalidate>
+		<input type="hidden" name="revision" value={ v.Chapter.UpdatedAt.Format(time.RFC3339Nano) }/>
+		<header class="mv-script__head"><div><span class="mv-label-mono">{ i18n.T(ctx, "studioui.script.label") }</span><h2>{ i18n.T(ctx, "studioui.script.title") }</h2></div><p>{ i18n.T(ctx, "studioui.script.no_autosave") }</p></header>
+		@ui.Field(ui.FieldProps{ID: "chapter_summary", Label: i18n.T(ctx, "studioui.script.summary")}) { @ui.Textarea(ui.TextareaProps{ID: "chapter_summary", Name: "chapter_summary", Value: v.Script.ChapterSummary, Rows: 4, MaxLength: 4000, Attrs: readOnlyAttrs(v.ReadOnly)}) }
+		for sceneIndex, scene := range v.Script.Scenes {
+			<section class="mv-script__scene" aria-labelledby={ "scene-title-" + scene.ID }>
+				<header><span class="mv-script__index">{ i18n.T(ctx, "studioui.script.scene", "number", sceneIndex + 1) }</span><h3 id={ "scene-title-" + scene.ID }>{ scene.Title }</h3></header>
+				<div class="mv-script__scene-fields">
+					@ui.Field(ui.FieldProps{ID: "scene-title-input-" + scene.ID, Label: i18n.T(ctx, "studioui.script.scene_title")}) { @ui.Input(ui.InputProps{ID: "scene-title-input-" + scene.ID, Name: sceneField(scene.ID, "title"), Value: scene.Title, ReadOnly: v.ReadOnly, MaxLength: 160}) }
+					@ui.Field(ui.FieldProps{ID: "scene-time-" + scene.ID, Label: i18n.T(ctx, "studioui.script.time")}) { @ui.Input(ui.InputProps{ID: "scene-time-" + scene.ID, Name: sceneField(scene.ID, "time_of_day"), Value: scene.TimeOfDay, ReadOnly: v.ReadOnly, MaxLength: 160}) }
+				</div>
+				@ui.Field(ui.FieldProps{ID: "scene-summary-" + scene.ID, Label: i18n.T(ctx, "studioui.script.scene_summary")}) { @ui.Textarea(ui.TextareaProps{ID: "scene-summary-" + scene.ID, Name: sceneField(scene.ID, "summary"), Value: scene.Summary, Rows: 3, MaxLength: 4000, Attrs: readOnlyAttrs(v.ReadOnly)}) }
+				for _, panel := range scene.Panels {
+					<article class="mv-script__panel">
+						<header><span>{ i18n.T(ctx, "studioui.script.panel", "label", panel.Label) }</span><span class="mv-mono">{ panel.ID }</span></header>
+						<div class="mv-script__panel-grid">
+							@ui.Field(ui.FieldProps{ID: "page-" + panel.ID, Label: i18n.T(ctx, "studioui.script.page")}) { @ui.Input(ui.InputProps{ID: "page-" + panel.ID, Name: panelField(panel.ID, "page_number"), Type: "number", Value: strconv.Itoa(panel.PageNumber), ReadOnly: v.ReadOnly, Attrs: templ.Attributes{"min": "1", "max": "9999"}}) }
+							@ui.Field(ui.FieldProps{ID: "camera-" + panel.ID, Label: i18n.T(ctx, "studioui.script.camera")}) { @ui.Input(ui.InputProps{ID: "camera-" + panel.ID, Name: panelField(panel.ID, "camera"), Value: panel.Camera, ReadOnly: v.ReadOnly, MaxLength: 240}) }
+							@ui.Field(ui.FieldProps{ID: "shot-" + panel.ID, Label: i18n.T(ctx, "studioui.script.shot")}) { @ui.Input(ui.InputProps{ID: "shot-" + panel.ID, Name: panelField(panel.ID, "shot"), Value: panel.Shot, ReadOnly: v.ReadOnly, MaxLength: 240}) }
+							@ui.Field(ui.FieldProps{ID: "emotion-" + panel.ID, Label: i18n.T(ctx, "studioui.script.emotion")}) { @ui.Input(ui.InputProps{ID: "emotion-" + panel.ID, Name: panelField(panel.ID, "emotion"), Value: panel.Emotion, ReadOnly: v.ReadOnly, MaxLength: 240}) }
+						</div>
+						@ui.Field(ui.FieldProps{ID: "action-" + panel.ID, Label: i18n.T(ctx, "studioui.script.action")}) { @ui.Textarea(ui.TextareaProps{ID: "action-" + panel.ID, Name: panelField(panel.ID, "action"), Value: panel.Action, Rows: 3, MaxLength: 2000, Attrs: readOnlyAttrs(v.ReadOnly)}) }
+						for dialogueIndex, line := range panel.Dialogue {
+							<fieldset class="mv-script__dialogue"><legend>{ i18n.T(ctx, "studioui.script.dialogue", "number", dialogueIndex + 1) }</legend>
+								@ui.Input(ui.InputProps{ID: "speaker-" + panel.ID + "-" + strconv.Itoa(dialogueIndex), Name: dialogueField(panel.ID, dialogueIndex, "speaker"), Value: line.Speaker, ReadOnly: v.ReadOnly, MaxLength: 160})
+								@ui.Select(ui.SelectProps{ID: "kind-" + panel.ID + "-" + strconv.Itoa(dialogueIndex), Name: dialogueField(panel.ID, dialogueIndex, "kind"), Value: line.Kind, Disabled: v.ReadOnly, Options: selectOptions(ctx, "studioui.dialogue.", []string{"speech", "thought", "caption"})})
+								@ui.Textarea(ui.TextareaProps{ID: "line-" + panel.ID + "-" + strconv.Itoa(dialogueIndex), Name: dialogueField(panel.ID, dialogueIndex, "text"), Value: line.Text, Rows: 2, MaxLength: 2000, Attrs: readOnlyAttrs(v.ReadOnly)})
+							</fieldset>
+						}
+						for sfxIndex, effect := range panel.SFX {
+							<fieldset class="mv-script__sfx"><legend>{ i18n.T(ctx, "studioui.script.sfx", "number", sfxIndex + 1) }</legend>
+								@ui.Input(ui.InputProps{ID: "sfx-" + panel.ID + "-" + strconv.Itoa(sfxIndex), Name: sfxField(panel.ID, sfxIndex, "text"), Value: effect.Text, ReadOnly: v.ReadOnly, MaxLength: 240})
+								@ui.Input(ui.InputProps{ID: "sfx-note-" + panel.ID + "-" + strconv.Itoa(sfxIndex), Name: sfxField(panel.ID, sfxIndex, "note"), Value: effect.Note, ReadOnly: v.ReadOnly, MaxLength: 240})
+							</fieldset>
+						}
+						@ui.Field(ui.FieldProps{ID: "notes-" + panel.ID, Label: i18n.T(ctx, "studioui.script.notes")}) { @ui.Textarea(ui.TextareaProps{ID: "notes-" + panel.ID, Name: panelField(panel.ID, "notes"), Value: panel.Notes, Rows: 2, MaxLength: 2000, Attrs: readOnlyAttrs(v.ReadOnly)}) }
+					</article>
+				}
+			</section>
+		}
+		<footer class="mv-script__actions">
+			if v.ReadOnly {
+				<span>{ i18n.T(ctx, "studioui.script.read_only") }</span>
+			} else {
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Icon: "device-floppy"}) { { i18n.T(ctx, "studioui.script.save") } }
+			}
+		</footer>
+	</form>
+}

@@ -1,9 +1,9 @@
 package ai
 
 // This file is the frozen Phase 1 contract other modules code against
-// (docs/plans/0002-phase-1-first-playable.md). Implementations live in this
-// package; consumers obtain them with core.MustUse[ai.TextService](d) and
-// core.MustUse[ai.ImageService](d).
+// (docs/plans/0002-phase-1-first-playable.md). TextService is Gate A;
+// ImageService is Gate B. Implementations live in this package; consumers use
+// core.MustUse[ai.TextService](d) and core.MustUse[ai.ImageService](d).
 
 import (
 	"context"
@@ -63,18 +63,25 @@ type TextPlanRequest struct {
 
 // TextPlan is a routing decision for one text job.
 type TextPlan struct {
-	Task       string          `json:"task"`
-	Schema     string          `json:"schema"`
-	ProviderID string          `json:"provider_id"`
-	ModelID    string          `json:"model_id"`
-	Remote     bool            `json:"remote"`
-	Decision   json.RawMessage `json:"decision"`
-	Estimate   jobs.Cost       `json:"estimate"`
+	Task   string `json:"task"`
+	Schema string `json:"schema"`
+	// RoutingMode is copied from the validated request so dispatch can enforce
+	// request-local local_only without trusting the explanatory Decision JSON.
+	RoutingMode string          `json:"routing_mode"`
+	ProviderID  string          `json:"provider_id"`
+	ModelID     string          `json:"model_id"`
+	Remote      bool            `json:"remote"`
+	Decision    json.RawMessage `json:"decision"`
+	// Estimate bounds one claimed attempt, including its one possible repair
+	// call. The job owner accounts for its full automatic-retry envelope.
+	Estimate jobs.Cost `json:"estimate"`
 }
 
 // TextGenerateRequest runs a plan. Input is the task input (for TaskScript see ScriptInput).
 type TextGenerateRequest struct {
-	Plan           TextPlan
+	Plan TextPlan
+	// JobID and Attempt bind remote calls to the durable reservation and the
+	// currently claimed attempt; both are revalidated at dispatch.
 	ActorID, JobID string
 	ProjectID      string
 	Attempt        int
@@ -220,6 +227,7 @@ func (e *GenerateError) Unwrap() error { return e.Err }
 
 // Error codes.
 const (
+	CodeBadInput       = "bad_input"        // invalid or unsupported request input
 	CodeNoProvider     = "no_provider"      // nothing can serve the task
 	CodeLocalOnly      = "local_only"       // remote provider blocked by local-only mode
 	CodeSpendLimit     = "spend_limit"      // monthly remote spend cap reached

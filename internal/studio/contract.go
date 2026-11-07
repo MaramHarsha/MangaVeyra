@@ -84,6 +84,24 @@ type Project struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// NewProject is the validated input for creating a project. SourceText is
+// optional private adaptation material (valid UTF-8, at most 1 MiB), stored as
+// projects.settings.script_source_text and never returned in project DTOs.
+type NewProject struct {
+	Title      string
+	Premise    string
+	Logline    string
+	Style      string
+	Format     string
+	PageSize   string
+	Language   string
+	Genres     []string
+	Tags       []string
+	PageWidth  int
+	PageHeight int
+	SourceText string
+}
+
 // ProjectSummary is a project row for lists and the dashboard.
 type ProjectSummary struct {
 	Project
@@ -131,6 +149,20 @@ type Character struct {
 	Refs            []CharacterRef `json:"refs"`
 	Outfits         []Outfit       `json:"outfits"`
 	Order           int            `json:"order"`
+}
+
+// NewCharacter is the validated input for a project character.
+type NewCharacter struct {
+	ProjectID   string
+	Name        string
+	Kanji       string
+	Role        string
+	RoleLine    string
+	Age         string
+	Look        string
+	Personality string
+	SpeechStyle string
+	Category    string
 }
 
 // CharacterRef is one reference image.
@@ -214,10 +246,16 @@ type ScriptSFX struct {
 // ReplaceScriptInput replaces a chapter's scenes and script panels with a
 // generated (already validated) document.
 type ReplaceScriptInput struct {
-	Actor      Actor
-	ProjectID  string
-	ChapterID  string
-	Doc        ScriptDoc
+	Actor     Actor
+	ProjectID string
+	ChapterID string
+	Doc       ScriptDoc
+	// ExpectedUpdatedAt, when non-zero, binds generation to the chapter revision
+	// that was planned. The comparison happens under the same row lock as the
+	// replacement, so concurrent jobs cannot overwrite a newer manuscript.
+	ExpectedUpdatedAt time.Time
+	// JobID records provenance. The claimed attempt is deliberately not input:
+	// jobs.Run.CommitSideEffect is the authoritative attempt/lease fence.
 	JobID      string
 	ProviderID string
 	ModelID    string
@@ -232,6 +270,16 @@ type ReplaceScriptResult struct {
 	Pages  int `json:"pages"`
 }
 
+// EditScriptInput updates the editable fields of an existing script. Scene and
+// panel IDs are stable; ExpectedUpdatedAt is an optimistic concurrency fence.
+type EditScriptInput struct {
+	Actor             Actor
+	ProjectID         string
+	ChapterID         string
+	Doc               ScriptDoc
+	ExpectedUpdatedAt time.Time
+}
+
 // Service is the studio's API for other modules.
 type Service interface {
 	// Authorize checks the actor may perform action in project (membership, site
@@ -240,20 +288,31 @@ type Service interface {
 	// ActorFromUser builds an Actor for a user ID (looks up the site role).
 	ActorFromUser(ctx context.Context, userID string) (Actor, error)
 
+	// CreateProject creates the project and its owner membership atomically.
+	CreateProject(ctx context.Context, actor Actor, in NewProject) (Project, error)
 	GetProject(ctx context.Context, id string) (Project, error)
 	ListProjects(ctx context.Context, userID string, limit int) ([]ProjectSummary, error)
+	// SourceText returns optional private adaptation material retained with the
+	// project. Callers authorize project/script access before calling it.
+	SourceText(ctx context.Context, projectID string) (string, error)
 
+	CreateChapter(ctx context.Context, actor Actor, projectID, title string) (Chapter, error)
 	GetChapter(ctx context.Context, id string) (Chapter, error)
 	ListChapters(ctx context.Context, projectID string) ([]Chapter, error)
 
 	GetScript(ctx context.Context, chapterID string) (ScriptDoc, error)
 	// ValidateScript checks a document against the project (character allow-list, limits).
 	ValidateScript(ctx context.Context, projectID string, doc ScriptDoc) error
-	// ReplaceGeneratedScriptTx rechecks authorization and chapter lock inside tx,
-	// then replaces only that chapter's scenes and script panels. On any error
-	// the previous script is untouched.
+	// ReplaceGeneratedScriptTx rechecks authorization, chapter lock and the
+	// optional ExpectedUpdatedAt revision inside tx, then replaces only that
+	// chapter's scenes and script panels. On any error the previous script is
+	// untouched.
 	ReplaceGeneratedScriptTx(ctx context.Context, tx *db.Tx, in ReplaceScriptInput) (ReplaceScriptResult, error)
+	// EditScript updates an existing script atomically without changing scene or
+	// panel IDs. It rejects stale ExpectedUpdatedAt revisions with ErrConflict.
+	EditScript(ctx context.Context, in EditScriptInput) (Chapter, error)
 
+	CreateCharacter(ctx context.Context, actor Actor, in NewCharacter) (Character, error)
 	ListCharacters(ctx context.Context, projectID string) ([]Character, error)
 	GetCharacter(ctx context.Context, id string) (Character, error)
 	// AddCharacterRefTx attaches a stored image to a character's references.
@@ -267,6 +326,8 @@ type Service interface {
 	SetChapterAILabelTx(ctx context.Context, tx *db.Tx, chapterID, role, value string) error
 
 	// CheckScopeWritable rejects jobs whose scope touches a locked chapter, page,
-	// panel or layer. It is registered as a jobs.Validator by the studio module.
+	// panel or layer. Region scopes resolve layer ancestry server-side, verify
+	// the project and reject lettering layers. It is registered as a
+	// jobs.Validator by the studio module.
 	CheckScopeWritable(ctx context.Context, s jobs.Scope) error
 }

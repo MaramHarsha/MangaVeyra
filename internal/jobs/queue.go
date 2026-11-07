@@ -160,7 +160,26 @@ func (q *Queue) SetAccess(fn func(ctx context.Context, id httpx.Identity, j *Job
 
 // CanAccess reports whether id may see j.
 func (q *Queue) CanAccess(ctx context.Context, id httpx.Identity, j *Job) bool {
-	if id.User == nil {
+	if id.User == nil || j == nil {
+		return false
+	}
+	if token := id.Token; token != nil {
+		if token.UserID != "" && token.UserID != id.User.ID {
+			return false
+		}
+		if j.Scope.ProjectID == "" {
+			if len(token.ProjectIDs) != 0 {
+				return false
+			}
+		} else if !token.AllowsProject(j.Scope.ProjectID) {
+			return false
+		}
+		if j.UserID == id.User.ID {
+			return true
+		}
+		if id.User.IsAdmin() && token.HasScope("admin") {
+			return true
+		}
 		return false
 	}
 	if id.User.IsAdmin() || j.UserID == id.User.ID {
@@ -342,14 +361,16 @@ func (q *Queue) Events(ctx context.Context, jobID string) ([]Event, error) {
 
 // Filter selects jobs for List.
 type Filter struct {
-	UserID    string
-	ProjectID string
-	PageID    string
-	States    []string
-	Types     []string
-	Executor  string
-	Before    string // id cursor (exclusive)
-	Limit     int
+	UserID     string
+	ProjectID  string
+	ProjectIDs []string
+	ChapterID  string
+	PageID     string
+	States     []string
+	Types      []string
+	Executor   string
+	Before     string // id cursor (exclusive)
+	Limit      int
 }
 
 // List returns jobs newest first.
@@ -361,6 +382,12 @@ func (q *Queue) List(ctx context.Context, f Filter) ([]*Job, error) {
 	}
 	if f.ProjectID != "" {
 		add("project_id = ?", f.ProjectID)
+	}
+	if len(f.ProjectIDs) != 0 {
+		add("project_id IN (?)", f.ProjectIDs)
+	}
+	if f.ChapterID != "" {
+		add("chapter_id = ?", f.ChapterID)
 	}
 	if f.PageID != "" {
 		add("page_id = ?", f.PageID)
