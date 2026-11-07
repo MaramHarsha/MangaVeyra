@@ -190,7 +190,7 @@ func (s *service) scriptPages(ctx context.Context, req PagesFromScriptRequest) (
 				for _, fx := range sp.SFX {
 					lines = append(lines, lettering.Line{Kind: pagedoc.BubbleSFX, Text: fx.Text, ScriptPanelID: sp.ID})
 				}
-				bubbles, err := s.lettering.AutoPlace(page, pn.ID, lines, project.Language, strings.HasPrefix(project.Language, "ja"))
+				bubbles, err := s.lettering.AutoPlace(page, pn.ID, lines, project.Language, pagedoc.VerticalByDefault(project.Language))
 				if err != nil {
 					return nil, err
 				}
