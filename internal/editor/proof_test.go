@@ -40,12 +40,17 @@ func TestEditorNoJSProofIsCompleteAndLocalized(t *testing.T) {
 			`class="mv-ed__help mv-ed__loading"`, `<noscript><p class="mv-ed__help mv-ed__nojs">`,
 			`aria-label="Page 1"`, `aria-label="Page 2"`, `class="mv-ed__thumb-number" aria-hidden="true"`,
 			"Panel 1.1", "Background · rooftop", "Lettering",
+			`<span class="mv-ed__footer-end">Self-host · 127.0.0.1</span>`, "/pages/" + page.ID + "/thumb?v=",
 		} {
 			if !strings.Contains(body, want) {
 				t.Fatalf("no-JS editor is missing %q", want)
 			}
 		}
-		for _, raw := range []string{"<span>manga_rtl</span>", "<span>b5</span>", "<strong>1 · The Lighthouse Debt</strong>"} {
+		thumb := c.Get(base + "/pages/" + page.ID + "/thumb?v=2")
+		if thumb.StatusCode != 200 || thumb.Header.Get("Content-Type") != "image/png" || len(thumb.Body) < 100 {
+			t.Fatalf("thumbnail=%d %s", thumb.StatusCode, thumb.Header.Get("Content-Type"))
+		}
+		for _, raw := range []string{"<span>manga_rtl</span>", "<span>b5</span>", "<strong>1 · The Lighthouse Debt</strong>", `<span class="mv-ed__footer-end">Lettering`} {
 			if strings.Contains(body, raw) {
 				t.Fatalf("no-JS editor shows raw value %q", raw)
 			}
@@ -130,6 +135,45 @@ func TestEditorBootstrapCarriesDesignContext(t *testing.T) {
 		}
 		if err := json.Unmarshal(c.Get(base+"/pages/"+page.ID+"/layouts").Body, &picker); err != nil || len(picker.Layouts) == 0 {
 			t.Fatalf("layouts endpoint: %v", err)
+		}
+		// Suggestions follow the page: a one-panel page is offered layouts
+		// close to one panel, best fit first, and a blank page says so.
+		splash := doc(t, c.PostJSON(base+"/pages", map[string]string{"layout_id": "splash"}), 201).Page
+		var fit struct {
+			Layouts []struct {
+				ID        string `json:"id"`
+				Panels    int    `json:"panels"`
+				Suggested bool   `json:"suggested"`
+				Rank      int    `json:"rank"`
+			} `json:"layouts"`
+			Blank bool `json:"blank"`
+		}
+		if err := json.Unmarshal(c.Get(base+"/pages/"+splash.ID+"/layouts").Body, &fit); err != nil {
+			t.Fatal(err)
+		}
+		best := ""
+		for _, l := range fit.Layouts {
+			if l.Suggested && (l.Panels > 3 || l.Rank == 0) {
+				t.Fatalf("a %d-panel layout was suggested for a one-panel page: %+v", l.Panels, l)
+			}
+			if l.Rank == 1 {
+				best = l.ID
+			}
+		}
+		if best != "splash" || fit.Blank {
+			t.Fatalf("best=%q blank=%v", best, fit.Blank)
+		}
+		blank := doc(t, c.PostJSON(base+"/pages", map[string]string{"layout_id": ""}), 201).Page
+		if err := json.Unmarshal(c.Get(base+"/pages/"+blank.ID+"/layouts").Body, &fit); err != nil || !fit.Blank {
+			t.Fatalf("blank page not reported: %v", err)
+		}
+		var route struct {
+			Available   bool   `json:"available"`
+			ModelName   string `json:"model_name"`
+			Placeholder bool   `json:"placeholder"`
+		}
+		if err := json.Unmarshal(c.Get(base+"/pages/"+page.ID+"/route?kind=panel&panel_id="+page.Panels[0].ID).Body, &route); err != nil || !route.Available || route.ModelName != "Placeholder art" || !route.Placeholder {
+			t.Fatalf("route=%+v %v", route, err)
 		}
 		var queue struct {
 			Compute struct {

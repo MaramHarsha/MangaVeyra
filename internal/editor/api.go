@@ -38,6 +38,8 @@ type layoutView struct {
 	Panels    int               `json:"panels"`
 	Points    [][]pagedoc.Point `json:"points"`
 	Suggested bool              `json:"suggested"`
+	// Rank orders suggested layouts, best fit first (0 when not suggested).
+	Rank int `json:"rank,omitempty"`
 }
 type pageResponse struct {
 	Page      pagedoc.Page             `json:"page"`
@@ -64,6 +66,8 @@ type bootstrapData struct {
 	Compute computeView `json:"compute"`
 	// Beats summarise the script panels per page number (D2 hint).
 	Beats map[int]beat `json:"beats"`
+	// ScriptActions maps script panels to their action text (short titles).
+	ScriptActions map[string]string `json:"script_actions"`
 }
 type resource struct {
 	Actor   studio.Actor
@@ -231,6 +235,7 @@ func (m *Module) data(r *http.Request, res resource) (bootstrapData, error) {
 	v.Print = printFor(ctx, res.Project)
 	v.Compute = m.compute(r)
 	v.Beats = m.beats(ctx, res.Chapter.ID)
+	v.ScriptActions = m.scriptActions(ctx, res.Chapter.ID)
 	panels, number := 0, 0
 	if v.Current != nil {
 		panels, number = len(v.Current.Page.Panels), v.Current.Page.Number

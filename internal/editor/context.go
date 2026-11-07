@@ -134,26 +134,51 @@ func (m *Module) beats(ctx context.Context, chapterID string) map[int]beat {
 	return out
 }
 
-// maxSuggested is how many layouts the Suggested tab shows (design D2).
-const maxSuggested = 7
+// maxSuggested is how many layouts the Suggested tab shows (design D2), and
+// maxDistance how far a suggested layout's panel count may be from the target.
+const (
+	maxSuggested = 7
+	maxDistance  = 2
+)
 
-// layouts returns every built-in layout with localised names, marking the
-// best fits for a page of n panels as suggested. The 3 × 3 grid is a plain
-// preset; it is never suggested in place of the designed custom-grid tile.
+// layouts returns every built-in layout with localised names. Layouts whose
+// panel count is within two of n are suggested and ranked, best fit first
+// (rank 1 is the closest). The 3 × 3 grid is a plain preset; it is never
+// suggested in place of the designed custom-grid tile.
 func layouts(ctx context.Context, p studio.Project, n int) []layoutView {
 	direction := pagedoc.DirectionForFormat(p.Format)
-	chosen := map[string]bool{}
-	count := 0
+	rank := map[string]int{}
 	for _, l := range pagedoc.Suggest(n, direction) {
-		if l.ID == "grid-9" || count == maxSuggested {
+		d := l.Panels - n
+		if d < 0 {
+			d = -d
+		}
+		if l.ID == "grid-9" || d > maxDistance || len(rank) == maxSuggested {
 			continue
 		}
-		chosen[l.ID] = true
-		count++
+		rank[l.ID] = len(rank) + 1
 	}
 	out := []layoutView{}
 	for _, l := range pagedoc.Layouts() {
-		out = append(out, layoutView{ID: l.ID, Name: labelOr(ctx, "editor.layout."+l.ID, l.Name), Panels: l.Panels, Points: l.PanelPoints(p.PageWidth, p.PageHeight, direction), Suggested: chosen[l.ID]})
+		out = append(out, layoutView{ID: l.ID, Name: labelOr(ctx, "editor.layout."+l.ID, l.Name), Panels: l.Panels, Points: l.PanelPoints(p.PageWidth, p.PageHeight, direction), Suggested: rank[l.ID] > 0, Rank: rank[l.ID]})
+	}
+	return out
+}
+
+// scriptActions maps each script panel of the chapter to its action text
+// (bounded), from which the island derives short panel titles and labels.
+func (m *Module) scriptActions(ctx context.Context, chapterID string) map[string]string {
+	out := map[string]string{}
+	doc, err := m.studio.GetScript(ctx, chapterID)
+	if err != nil {
+		return out
+	}
+	for _, scene := range doc.Scenes {
+		for _, p := range scene.Panels {
+			if p.ID != "" && strings.TrimSpace(p.Action) != "" {
+				out[p.ID] = truncate(p.Action, 240)
+			}
+		}
 	}
 	return out
 }
@@ -186,7 +211,9 @@ func (m *Module) pageLayouts(w http.ResponseWriter, r *http.Request) error {
 		return mapped(r, err)
 	}
 	b, ok := m.beats(r.Context(), res.Chapter.ID)[res.Page.Number]
-	out := map[string]any{"layouts": layouts(r.Context(), res.Project, panelTarget(b, ok, len(res.Page.Panels)))}
+	// A page with no panels and no script beat is blank: suggestions are
+	// common page shapes, not a fit for a panel count it does not have.
+	out := map[string]any{"layouts": layouts(r.Context(), res.Project, panelTarget(b, ok, len(res.Page.Panels))), "blank": !ok && len(res.Page.Panels) == 0}
 	if ok {
 		out["beat"] = b
 	}

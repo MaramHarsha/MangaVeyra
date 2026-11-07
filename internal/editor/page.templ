@@ -25,8 +25,8 @@ templ EditorDocument(c *layout.Chrome, data bootstrapData, props string) {
 				<div class="mv-seg mv-ed__modes" role="group" aria-label={ label(ctx, "mode") }>
 					<span class="mv-seg__item" aria-current="true">{ label(ctx, "pages") }</span>
 					<span class="mv-seg__item is-soon">{ label(ctx, "lettering") }</span>
-					<span class="mv-seg__item is-soon">{ label(ctx, "translate") }</span>
-					<span class="mv-seg__item is-soon">{ label(ctx, "animate") }</span>
+					<span class="mv-seg__item is-soon">{ label(ctx, "translate") }<span class="mv-soon">{ label(ctx, "soon") }</span></span>
+					<span class="mv-seg__item is-soon">{ label(ctx, "animate") }<span class="mv-soon">{ label(ctx, "soon") }</span></span>
 				</div>
 				<div class="mv-ed__bar-end">
 					@ui.LinkButton(exportHref(data), ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Icon: "download"}) {
@@ -40,16 +40,7 @@ templ EditorDocument(c *layout.Chrome, data bootstrapData, props string) {
 					for _, page := range data.Pages {
 						<a class="mv-ed__page-thumb" href={ templ.URL(pageHref(data, page.Number)) } aria-current={ pageCurrent(data, page.ID) } aria-label={ label(ctx, "page.number", "number", page.Number) }>
 							<span class="mv-ed__thumb-frame">
-								if page.Thumb != nil && page.Thumb.URL != "" {
-									<img src={ page.Thumb.URL } alt=""/>
-								} else {
-									<svg class="mv-ed__thumb-layout" viewBox={ thumbView(data) } aria-hidden="true">
-										<rect width={ fmt.Sprint(data.Project.PageWidth) } height={ fmt.Sprint(data.Project.PageHeight) } class="mv-ed__layout-paper"></rect>
-										for _, points := range thumbPolygons(data, page) {
-											<polygon points={ polygonString(points) } class="mv-ed__thumb-panel" fill="#dce3f3"></polygon>
-										}
-									</svg>
-								}
+								<img src={ thumbHref(data, page) } alt="" width="88" height="124" loading="lazy"/>
 								if page.Locked {
 									<span class="mv-ed__thumb-lock">
 										@ui.Icon("lock", 11)
@@ -114,7 +105,7 @@ templ EditorDocument(c *layout.Chrome, data bootstrapData, props string) {
 				}
 				<span>{ data.Print.FormatLabel }</span>
 				<span>{ data.Print.SizeLabel }</span>
-				<span class="mv-ed__footer-end">{ label(ctx, "lettering_independent") }</span>
+				<span class="mv-ed__footer-end">{ label(ctx, "footer.selfhost", "host", data.Compute.Host) }</span>
 			</footer>
 		</div>
 	}

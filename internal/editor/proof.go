@@ -128,26 +128,10 @@ func proofImages(pn pagedoc.Panel) []proofImage {
 	return out
 }
 
-// thumbPolygons returns the panel outlines a page thumbnail draws: the open
-// page's own panels, otherwise its layout's.
-func thumbPolygons(data bootstrapData, s pagestore.PageSummary) [][]pagedoc.Point {
-	if data.Current != nil && data.Current.Page.ID == s.ID {
-		out := make([][]pagedoc.Point, 0, len(data.Current.Page.Panels))
-		for _, pn := range data.Current.Page.Panels {
-			out = append(out, pn.Points)
-		}
-		return out
-	}
-	for _, l := range data.Layouts {
-		if l.ID == s.LayoutID {
-			return l.Points
-		}
-	}
-	return nil
-}
-
-func thumbView(data bootstrapData) string {
-	return fmt.Sprintf("0 0 %d %d", data.Project.PageWidth, data.Project.PageHeight)
+// thumbHref is a page's rendered thumbnail (art and lettering), versioned so
+// a saved change refreshes it.
+func thumbHref(data bootstrapData, s pagestore.PageSummary) string {
+	return fmt.Sprintf("%s/pages/%s/thumb?v=%d", data.API, s.ID, s.Version)
 }
 
 func chapterLabel(ctx context.Context, c studio.Chapter) string {
