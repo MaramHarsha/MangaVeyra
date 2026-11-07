@@ -26,6 +26,55 @@ type localTextConfig struct {
 	Model         string `json:"model"`
 	ContextTokens int    `json:"context_tokens"`
 	OutputTokens  int    `json:"output_tokens"`
+	// Modes are the routing modes in which auto-routing may pick this
+	// connection (G12 step 4). Empty keeps the original behaviour: every mode
+	// except Best, which prefers the strongest remote route.
+	Modes []string `json:"modes,omitempty"`
+}
+
+// localRouteModes are the modes a custom local text connection can join, in
+// G11 order. Local only is absent: it permits no HTTP at all in this phase.
+var localRouteModes = []string{ModeBalanced, ModeBest, ModeFastest, ModeFreeOnly}
+
+// defaultLocalModes is the routing a connection gets when nobody chose.
+var defaultLocalModes = []string{ModeBalanced, ModeFastest, ModeFreeOnly}
+
+// routeModes is the effective mode list of a connection.
+func (c localTextConfig) routeModes() []string {
+	if len(c.Modes) == 0 {
+		return defaultLocalModes
+	}
+	return c.Modes
+}
+
+// allowsMode reports whether auto-routing may pick the connection in mode.
+func (c localTextConfig) allowsMode(mode string) bool {
+	for _, m := range c.routeModes() {
+		if m == mode {
+			return true
+		}
+	}
+	return false
+}
+
+// validLocalModes accepts a non-empty, duplicate-free subset of
+// localRouteModes.
+func validLocalModes(modes []string) bool {
+	if len(modes) > len(localRouteModes) {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, m := range modes {
+		known := false
+		for _, allowed := range localRouteModes {
+			known = known || m == allowed
+		}
+		if !known || seen[m] {
+			return false
+		}
+		seen[m] = true
+	}
+	return true
 }
 
 func (r providerRecord) localConfig() localTextConfig {
@@ -41,11 +90,25 @@ func (r providerRecord) localConfig() localTextConfig {
 	return c
 }
 func validateLocalTextConfig(base string, c localTextConfig) error {
-	u, err := url.Parse(base)
-	if err != nil || u.User != nil || u.Hostname() == "" || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https") || strings.TrimRight(u.Path, "/") != "/v1" || !validModelID(strings.ReplaceAll(c.Model, ":", "-")) || c.ContextTokens < 4096 || c.ContextTokens > 1_048_576 || c.OutputTokens < 256 || c.OutputTokens > 16384 || c.OutputTokens >= c.ContextTokens {
+	if validateLocalEndpoint(base) != nil || !validLocalModel(c.Model) || c.ContextTokens < 4096 || c.ContextTokens > 1_048_576 || c.OutputTokens < 256 || c.OutputTokens > 16384 || c.OutputTokens >= c.ContextTokens || !validLocalModes(c.Modes) {
 		return errProviderInvalid
 	}
 	return nil
+}
+
+// validateLocalEndpoint checks the shape of an OpenAI-compatible base URL:
+// http(s), a host, the /v1 path and no credentials, query or fragment.
+func validateLocalEndpoint(base string) error {
+	u, err := url.Parse(base)
+	if err != nil || u.User != nil || u.Hostname() == "" || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https") || strings.TrimRight(u.Path, "/") != "/v1" {
+		return errProviderInvalid
+	}
+	return nil
+}
+
+// validLocalModel accepts an installed model ID such as "qwen3:8b".
+func validLocalModel(model string) bool {
+	return validModelID(strings.ReplaceAll(model, ":", "-"))
 }
 
 func localTextFits(in ScriptInput, c localTextConfig) bool {
@@ -80,9 +143,6 @@ func (s *textService) planLocalText(ctx context.Context, req TextPlanRequest, in
 		if candidate.Kind != providerKindLocalText || req.PinProviderID != "" && req.PinProviderID != candidate.ID || req.PinModelID != "" && req.PinModelID != candidate.Model {
 			continue
 		}
-		if req.PinProviderID == "" && req.PinModelID == "" && mode == ModeBest {
-			continue
-		}
 		if inst.LocalOnly || mode == ModeLocalOnly {
 			if req.PinProviderID != "" || req.PinModelID != "" {
 				return TextPlan{}, true, localOnlyError(nil)
@@ -91,6 +151,9 @@ func (s *textService) planLocalText(ctx context.Context, req TextPlanRequest, in
 		}
 		p, err := s.providers.ResolveDispatch(ctx, req.ActorID, candidate.ID)
 		if err != nil {
+			continue
+		}
+		if req.PinProviderID == "" && req.PinModelID == "" && !p.Local.allowsMode(mode) {
 			continue
 		}
 		if !localTextFits(in, p.Local) {

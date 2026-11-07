@@ -37,42 +37,72 @@ func TestCustomProviderFourStepsAndRoutingPermissions(t *testing.T) {
 				assertEveryTargetIsServed(t, ta, mainOf(t, r))
 			}
 			response := postModelsForm(admin, "/models/providers/new/connect", url.Values{"name": {"Original local writer"}, "endpoint": {endpoint.URL + "/v1"}, "model": {"qwen3:8b"}, "key": {"custom-sealed-secret"}, "scope": {"server"}})
-			if response.StatusCode != http.StatusSeeOther {
+			if response.StatusCode != http.StatusSeeOther || !strings.Contains(response.Header.Get("Location"), "/test?id=") {
 				t.Fatalf("connect=%d %s", response.StatusCode, response.Body)
 			}
 			id := providerIDByName(t, ta, "Original local writer")
-			if calls.Load() != 0 {
-				t.Fatal("Connect sent an unsolicited request")
+			// "Next: test" runs the connection check, so step 2 opens on its
+			// designed result: Status Success · Time · Cost and "Next: describe".
+			if calls.Load() != 1 {
+				t.Fatalf("Next: test made %d model-list requests", calls.Load())
 			}
 			body := mainOf(t, admin.Get("/models/providers/new/test?id="+id))
-			mustContain(t, body, "Step 2 of 4", "Text connection check", "ComfyUI", "Hugging Face", "Soon")
-			mustNotContain(t, body, "custom-sealed-secret")
+			mustContain(t, body, "Step 2 of 4", "ComfyUI", "Hugging Face", "Soon", "MODEL LIST · “qwen3:8b” installed",
+				`<dd class="mv-aicustom__status--ok">Success</dd>`, "<dt>Time</dt>", "<dt>Cost</dt>", "<dd>Local</dd>", "Next: describe",
+				`href="/models/providers/new/connect?id=`+id+`"`)
+			mustNotContain(t, body, "custom-sealed-secret", "Capability", "Test and continue", "Checks the installed model list")
 			var sealed string
 			if err := ta.Deps.DB.Get(t.Context(), &sealed, `SELECT key_enc FROM providers WHERE id = ?`, id); err != nil || sealed == "" || strings.Contains(sealed, "custom-sealed-secret") {
 				t.Fatalf("key not sealed: %v", err)
 			}
+			// Back on step 2 returns to step 1 with the draft, not to /models.
+			back := mainOf(t, admin.Get("/models/providers/new/connect?id="+id))
+			mustContain(t, back, "Step 1 of 4", `value="Original local writer"`, `value="`+endpoint.URL+`/v1"`, `value="qwen3:8b"`, "A key is saved", `name="id" value="`+id+`"`)
+			mustNotContain(t, back, "custom-sealed-secret")
 			jump := postModelsForm(admin, "/models/providers/new/route", url.Values{"id": {id}})
 			if jump.StatusCode != http.StatusForbidden {
 				t.Fatalf("skipped testing: %d", jump.StatusCode)
 			}
-			tested := postModelsForm(admin, "/models/providers/new/test", url.Values{"id": {id}})
-			if tested.StatusCode != http.StatusSeeOther || !strings.Contains(tested.Header.Get("Location"), "/describe") {
-				t.Fatalf("test=%d %s", tested.StatusCode, tested.Body)
+			// Re-saving step 1 updates the same draft (blank key keeps it) and retests.
+			resaved := postModelsForm(admin, "/models/providers/new/connect", url.Values{"id": {id}, "name": {"Original local writer"}, "endpoint": {endpoint.URL + "/v1"}, "model": {"qwen3:8b"}, "scope": {"server"}})
+			if resaved.StatusCode != http.StatusSeeOther || calls.Load() != 2 {
+				t.Fatalf("resave=%d calls=%d %s", resaved.StatusCode, calls.Load(), resaved.Body)
 			}
-			if calls.Load() != 1 {
-				t.Fatalf("test calls=%d", calls.Load())
+			var drafts int
+			if err := ta.Deps.DB.Get(t.Context(), &drafts, `SELECT COUNT(*) FROM providers WHERE name = ? AND key_enc = ?`, "Original local writer", sealed); err != nil || drafts != 1 {
+				t.Fatalf("resave duplicated the draft or dropped its key: %d %v", drafts, err)
+			}
+			next := postModelsForm(admin, "/models/providers/new/test", url.Values{"id": {id}, "action": {"next"}})
+			if next.StatusCode != http.StatusSeeOther || !strings.Contains(next.Header.Get("Location"), "/describe") {
+				t.Fatalf("next=%d %s", next.StatusCode, next.Body)
+			}
+			if calls.Load() != 2 {
+				t.Fatalf("Next: describe re-ran the test: %d", calls.Load())
 			}
 			described := postModelsForm(admin, "/models/providers/new/describe", url.Values{"id": {id}, "name": {"Original local writer"}, "context": {"32768"}, "output": {"4096"}})
 			if described.StatusCode != http.StatusSeeOther {
 				t.Fatalf("describe=%d %s", described.StatusCode, described.Body)
 			}
-			routed := postModelsForm(admin, "/models/providers/new/route", url.Values{"id": {id}})
+			// Step 4 offers the routing modes, defaulting to every mode but Best.
+			route := mainOf(t, admin.Get("/models/providers/new/route?id="+id))
+			mustContain(t, route, "Step 4 of 4", "Auto-routing may use it in", `name="modes" value="balanced" checked`,
+				`name="modes" value="fastest" checked`, `name="modes" value="free_only" checked`, "Everyone on this server", "Connect provider")
+			mustNotContain(t, route, `name="modes" value="best" checked`, `name="modes" value="local_only"`)
+			none := postModelsForm(admin, "/models/providers/new/route", url.Values{"id": {id}})
+			if none.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(string(none.Body), "Choose at least one routing mode.") {
+				t.Fatalf("route without modes=%d", none.StatusCode)
+			}
+			routed := postModelsForm(admin, "/models/providers/new/route", url.Values{"id": {id}, "modes": {"best", "balanced", "local_only"}})
 			if routed.StatusCode != http.StatusSeeOther {
 				t.Fatalf("route=%d %s", routed.StatusCode, routed.Body)
 			}
 			var enabled bool
+			var config string
 			if err := ta.Deps.DB.Get(t.Context(), &enabled, `SELECT enabled FROM providers WHERE id = ?`, id); err != nil || !enabled {
 				t.Fatalf("not enabled %v", err)
+			}
+			if err := ta.Deps.DB.Get(t.Context(), &config, `SELECT config FROM providers WHERE id = ?`, id); err != nil || !strings.Contains(config, `"modes":["balanced","best"]`) {
+				t.Fatalf("routing modes not stored: %s %v", config, err)
 			}
 			models := mainOf(t, admin.Get("/models?cap=text"))
 			mustContain(t, models, "qwen3:8b", "Original local writer")

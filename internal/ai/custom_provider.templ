@@ -1,0 +1,315 @@
+package ai
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+func customProgress(ctx context.Context, step string) []ui.Step {
+	steps := []ui.Step{}
+	for i, s := range customSteps {
+		steps = append(steps, ui.Step{Label: fmt.Sprintf("%d. %s", i+1, i18n.T(ctx, "aiimage.custom.step."+s)), Current: s == step, Done: i+1 < customStepNumber(step)})
+	}
+	return steps
+}
+
+// CustomProviderPage is G12: the four-step custom provider wizard. Step 1
+// saves a disabled draft and runs the connection check, so step 2 opens on
+// its result (Status · Time · Cost) as designed. Step 4 chooses the routing
+// modes in which auto-routing may use the connection. Every step is a plain
+// form and works without JavaScript.
+templ CustomProviderPage(v customProviderView) {
+	<div class="mv-aicustom">
+		@ui.PageHead(i18n.T(ctx, "aiimage.custom.title"), i18n.T(ctx, "aiimage.custom.progress", "number", customStepNumber(v.Step), "name", i18n.T(ctx, "aiimage.custom.step."+v.Step)), nil)
+		@ui.Steps(i18n.T(ctx, "aiimage.custom.steps"), customProgress(ctx, v.Step))
+		if v.LocalOnly {
+			@ui.Notice(ui.ToneWarning, "shield-lock") {
+				{ i18n.T(ctx,"models.local_only.body") }
+			}
+		}
+		if v.Notice!="" {
+			@ui.Notice(ui.ToneWarning, "alert-triangle") {
+				{ v.Notice }
+			}
+		}
+		if v.Errors.Form()!="" {
+			@ui.Notice(ui.ToneError, "alert-triangle") {
+				{ v.Errors.Form() }
+			}
+		}
+		<form method="post" action={ templ.URL(customURL(v.Step, "")) } novalidate class="mv-aicustom__columns" hx-disabled-elt="find button[type=submit]">
+			<input type="hidden" name="id" value={ v.ID }/>
+			<div class="mv-aicustom__fields">
+				@customTypes()
+				switch v.Step {
+					case "connect":
+						@customConnectFields(v)
+					case "describe":
+						@customNameField(v)
+						@ui.Field(ui.FieldProps{ID: "custom-context", Label: i18n.T(ctx, "aiimage.custom.context"), Hint: i18n.T(ctx, "aiimage.custom.context_hint"), Error: v.Errors["context"]}) {
+							@ui.Input(ui.InputProps{ID: "custom-context", Name: "context", Type: "number", Value: fmt.Sprint(v.Context), Required: true, Described: true, Invalid: v.Errors["context"] != "", Attrs: templ.Attributes{"min": "4096", "max": "1048576"}})
+						}
+						@ui.Field(ui.FieldProps{ID: "custom-output", Label: i18n.T(ctx, "aiimage.custom.output")}) {
+							@ui.Input(ui.InputProps{ID: "custom-output", Name: "output", Type: "number", Value: fmt.Sprint(v.Output), Required: true, Attrs: templ.Attributes{"min": "256", "max": "16384"}})
+						}
+					case "route":
+						@customRouteFields(v)
+					default:
+						@customConnectionSummary(v)
+				}
+			</div>
+			@customResult(v)
+		</form>
+	</div>
+}
+
+// customTypes is the designed connection-type switch. Only OpenAI-compatible
+// servers are built; the other types keep their place as Soon.
+templ customTypes() {
+	<fieldset class="mv-field">
+		<legend class="mv-field__label">{ i18n.T(ctx,"aiimage.custom.type") }</legend>
+		<div class="mv-aicustom__types">
+			<span class="is-current">{ i18n.T(ctx,"aiimage.custom.compatible") }</span>
+			<span aria-disabled="true">
+				ComfyUI
+				@ui.SoonTag()
+			</span>
+			<span aria-disabled="true">
+				Hugging Face
+				@ui.SoonTag()
+			</span>
+			<span aria-disabled="true">
+				HTTP
+				@ui.SoonTag()
+			</span>
+		</div>
+	</fieldset>
+}
+
+func customKeyHint(ctx context.Context, v customProviderView) string {
+	if v.HasKey {
+		return i18n.T(ctx, "aiimage.custom.key_saved")
+	}
+	return i18n.T(ctx, "models.form.key_hint")
+}
+
+// customConnectFields is step 1. While private-network endpoints are off, an
+// admin gets the switch that allows them (on, because this wizard always
+// connects a server on this machine or network) and anyone else is told to
+// ask an admin.
+templ customConnectFields(v customProviderView) {
+	@customNameField(v)
+	@ui.Field(ui.FieldProps{ID: "custom-endpoint", Label: i18n.T(ctx, "aiimage.custom.endpoint"), Error: v.Errors["endpoint"], Hint: i18n.T(ctx, "aiimage.custom.endpoint_hint")}) {
+		@ui.Input(ui.InputProps{ID: "custom-endpoint", Name: "endpoint", Value: v.Endpoint, Required: true, Invalid: v.Errors["endpoint"] != "", Described: true, MaxLength: 2048})
+	}
+	if !v.PrivateAllowed {
+		if v.Admin {
+			<div class="mv-aicustom__private">
+				@ui.Toggle(ui.ToggleProps{ID: "custom-allow-private", Name: "allow_private", Value: "true", Checked: v.AllowPrivate, Label: i18n.T(ctx, "aiimage.custom.allow_private"), Attrs: templ.Attributes{"aria-describedby": "custom-allow-private-hint"}})
+				<span class="mv-field__hint" id="custom-allow-private-hint">{ i18n.T(ctx,"aiimage.custom.allow_private_hint") }</span>
+			</div>
+		} else {
+			@ui.Notice(ui.ToneWarning, "shield-lock") {
+				<strong>{ i18n.T(ctx,"aiimage.custom.private_off_title") }</strong>
+				<p>{ i18n.T(ctx,"aiimage.custom.private_off_user") }</p>
+			}
+		}
+	}
+	@ui.Field(ui.FieldProps{ID: "custom-model", Label: i18n.T(ctx, "aiimage.custom.model"), Hint: i18n.T(ctx, "aiimage.custom.model_hint"), Error: v.Errors["model"]}) {
+		@ui.Input(ui.InputProps{ID: "custom-model", Name: "model", Value: v.Model, Required: true, MaxLength: 160, Described: true, Invalid: v.Errors["model"] != "", Placeholder: "qwen3:8b"})
+	}
+	@ui.Field(ui.FieldProps{ID: "custom-key", Label: i18n.T(ctx, "aiimage.custom.key"), Error: v.Errors["key"], Hint: customKeyHint(ctx, v)}) {
+		@ui.Input(ui.InputProps{ID: "custom-key", Name: "key", Type: "password", Autocomplete: "off", MaxLength: maxProviderKeyBytes, Described: true, Invalid: v.Errors["key"] != ""})
+	}
+	if v.Admin {
+		@ui.Field(ui.FieldProps{ID: "custom-scope", Label: i18n.T(ctx, "models.form.scope"), Error: v.Errors["scope"]}) {
+			@ui.Select(ui.SelectProps{ID: "custom-scope", Name: "scope", Value: v.Scope, Options: providerScopeOptions(ctx)})
+		}
+	} else {
+		<input type="hidden" name="scope" value={ providerScopeUser }/>
+	}
+}
+
+// customConnectionSummary is the left column of step 2: the connection the
+// result on the right belongs to, read-only (Back edits it).
+templ customConnectionSummary(v customProviderView) {
+	@ui.Field(ui.FieldProps{ID: "custom-endpoint", Label: i18n.T(ctx, "aiimage.custom.endpoint")}) {
+		@ui.Input(ui.InputProps{ID: "custom-endpoint", Value: v.Endpoint, ReadOnly: true})
+	}
+	@ui.Field(ui.FieldProps{ID: "custom-model", Label: i18n.T(ctx, "aiimage.custom.model")}) {
+		@ui.Input(ui.InputProps{ID: "custom-model", Value: v.Model, ReadOnly: true})
+	}
+}
+
+func customModeChecked(v customProviderView, mode string) bool {
+	for _, m := range v.Modes {
+		if m == mode {
+			return true
+		}
+	}
+	return false
+}
+
+func customScopeText(ctx context.Context, scope string) string {
+	if scope == providerScopeUser {
+		return i18n.T(ctx, "aiimage.custom.scope_user")
+	}
+	return i18n.T(ctx, "aiimage.custom.scope_server")
+}
+
+// customRouteFields is step 4 (no artboard): the routing-mode chips of G11 as
+// a multi-choice of where auto-routing may pick this connection, and the
+// designed pins rows summarising what it is used for.
+templ customRouteFields(v customProviderView) {
+	<fieldset class="mv-field mv-aicustom__modes" aria-describedby="custom-modes-hint">
+		<legend class="mv-field__label">{ i18n.T(ctx,"aiimage.custom.modes") }</legend>
+		<div class="mv-chips">
+			for _, mode := range localRouteModes {
+				<label class="mv-chip">
+					<input type="checkbox" name="modes" value={ mode } checked?={ customModeChecked(v, mode) }/>
+					@ui.Icon("check", 16)
+					<span>{ i18n.T(ctx, "aiimage.mode." + mode) }</span>
+				</label>
+			}
+			<span class="mv-chip mv-aicustom__chip-off" aria-disabled="true">{ i18n.T(ctx,"aiimage.mode.local_only") }</span>
+		</div>
+		if v.Errors["modes"] != "" {
+			<span class="mv-field__error" role="alert">
+				@ui.Icon("alert-triangle", 14)
+				<span>{ v.Errors["modes"] }</span>
+			</span>
+		}
+		<span class="mv-field__hint" id="custom-modes-hint">{ i18n.T(ctx,"aiimage.custom.modes_hint") }</span>
+	</fieldset>
+	<dl class="mv-aicustom__routes">
+		<div><dt>{ i18n.T(ctx,"models.col.use") }</dt><dd>{ i18n.T(ctx,"models.use.scripts") }</dd></div>
+		<div><dt>{ i18n.T(ctx,"aiimage.custom.server_mode") }</dt><dd>{ i18n.T(ctx,"aiimage.mode." + v.ServerMode) }</dd></div>
+		<div><dt>{ i18n.T(ctx,"aiimage.custom.available_to") }</dt><dd>{ customScopeText(ctx, v.Scope) }</dd></div>
+	</dl>
+}
+
+func customStatus(ctx context.Context, state string) string {
+	switch state {
+	case "ok":
+		return i18n.T(ctx, "aiimage.custom.status.ok")
+	case "error":
+		return i18n.T(ctx, "aiimage.custom.status.error")
+	}
+	return i18n.T(ctx, "models.status.unchecked")
+}
+
+// customTime is the measured test duration ("18.4 s", "0.02 s" for a fast
+// local server), or a dash before any test.
+func customTime(ctx context.Context, v customProviderView) string {
+	if v.TestState == "" {
+		return "—"
+	}
+	precision := 1
+	if v.DurationMS < 1000 {
+		precision = 2
+	}
+	ms := v.DurationMS
+	if ms < 10 {
+		ms = 10 // never claim zero time
+	}
+	return i18n.T(ctx, "aiimage.custom.seconds", "seconds", strconv.FormatFloat(float64(ms)/1000, 'f', precision, 64))
+}
+
+func customBack(v customProviderView) string {
+	switch v.Step {
+	case "connect":
+		return "/models"
+	case "test":
+		return customURL("connect", v.ID)
+	}
+	return customURL(customSteps[customStepNumber(v.Step)-2], v.ID)
+}
+
+// customAction is the primary button of the step: step 2 continues after a
+// passed test and otherwise tests (again).
+func customAction(ctx context.Context, v customProviderView) (label, action string) {
+	if v.Step != "test" {
+		return i18n.T(ctx, "aiimage.custom.next."+v.Step), ""
+	}
+	switch v.TestState {
+	case "ok":
+		return i18n.T(ctx, "aiimage.custom.next.test"), "next"
+	case "error":
+		return i18n.T(ctx, "aiimage.custom.retest"), "test"
+	}
+	return i18n.T(ctx, "aiimage.custom.run_test"), "test"
+}
+
+func customActionDisabled(v customProviderView) bool {
+	if v.Step == "connect" {
+		return !v.PrivateAllowed && !v.Admin
+	}
+	return v.LocalOnly && v.Step == "test" && v.TestState != "ok"
+}
+
+func customActionAttrs(action string) templ.Attributes {
+	if action == "" {
+		return nil
+	}
+	return templ.Attributes{"name": "action", "value": action}
+}
+
+// customResult is the designed right column: the test result preview, the
+// Status · Time · Cost tiles and Back / Next.
+templ customResult(v customProviderView) {
+	{{ label, action := customAction(ctx, v) }}
+	<div class="mv-aicustom__result">
+		<h2>{ i18n.T(ctx,"aiimage.custom.result") }</h2>
+		<div class={ "mv-aicustom__preview", "mv-aicustom__preview--" + customPreviewState(v) } role="status">
+			switch v.TestState {
+				case "ok":
+					@ui.ToneBox(i18n.T(ctx, "aiimage.custom.found", "model", v.Model), "", "mv-aicustom__tone")
+				case "error":
+					@ui.ToneBox(i18n.T(ctx, "aiimage.custom.missing", "model", v.Model), "", "mv-aicustom__tone") {
+						<div class="mv-aicustom__message">
+							@ui.Icon("alert-triangle", 28)
+							<strong>{ i18n.T(ctx,"aiimage.custom.status.error") }</strong>
+							<span>{ i18n.T(ctx,"aiimage.custom.test_failed") }</span>
+						</div>
+					}
+				default:
+					<div class="mv-aicustom__message">
+						@ui.Icon("plug-connected", 32)
+						<strong>{ i18n.T(ctx,"aiimage.custom.text_check") }</strong>
+						<span>{ i18n.T(ctx,"aiimage.custom.non_generation") }</span>
+					</div>
+			}
+		</div>
+		<dl class="mv-aicustom__metrics">
+			<div><dt>{ i18n.T(ctx,"models.col.status") }</dt><dd class={ "mv-aicustom__status--" + customPreviewState(v) }>{ customStatus(ctx,v.TestState) }</dd></div>
+			<div><dt>{ i18n.T(ctx,"aiimage.custom.time") }</dt><dd>{ customTime(ctx, v) }</dd></div>
+			<div><dt>{ i18n.T(ctx,"models.col.cost") }</dt><dd>{ i18n.T(ctx,"aiimage.custom.cost_local") }</dd></div>
+		</dl>
+		<div class="mv-aicustom__actions">
+			@ui.LinkButton(customBack(v), ui.ButtonProps{Variant: ui.Ghost}) {
+				{ i18n.T(ctx,"aiimage.back") }
+			}
+			@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Primary, Icon: "arrow-right", Disabled: customActionDisabled(v), Attrs: customActionAttrs(action)}) {
+				{ label }
+			}
+		</div>
+	</div>
+}
+
+func customPreviewState(v customProviderView) string {
+	switch v.TestState {
+	case "ok", "error":
+		return v.TestState
+	}
+	return "none"
+}
+
+templ customNameField(v customProviderView) {
+	@ui.Field(ui.FieldProps{ID: "custom-name", Label: i18n.T(ctx, "models.form.name"), Error: v.Errors["name"]}) {
+		@ui.Input(ui.InputProps{ID: "custom-name", Name: "name", Value: v.Name, Required: true, MaxLength: maxProviderNameRunes, Invalid: v.Errors["name"] != ""})
+	}
+}

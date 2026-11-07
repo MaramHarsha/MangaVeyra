@@ -65,7 +65,7 @@ func TestLocalTextConnectionOptionalKeyAndValidatedScript(t *testing.T) {
 
 func TestLocalTextCannotForgeRemoteRouteOrLeakURLs(t *testing.T) {
 	for _, base := range []string{"http://user:secret@localhost/v1", "http://localhost/v1?key=secret", "http://localhost/v1#secret", "file:///v1"} {
-		if validateLocalTextConfig(base, localTextConfig{"qwen3:8b", 32768, 4096}) == nil {
+		if validateLocalTextConfig(base, localTextConfig{Model: "qwen3:8b", ContextTokens: 32768, OutputTokens: 4096}) == nil {
 			t.Fatalf("accepted %s", base)
 		}
 	}

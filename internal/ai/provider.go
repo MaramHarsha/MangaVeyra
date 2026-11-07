@@ -65,6 +65,8 @@ type providerTestState struct {
 	Step      string    `json:"step,omitempty"`
 	Time      time.Time `json:"time,omitempty"`
 	RequestID string    `json:"request_id,omitempty"`
+	// DurationMS is how long the last custom connection test took (G12).
+	DurationMS int64 `json:"duration_ms,omitempty"`
 }
 
 // providerView is the only representation suitable for a response or page.
