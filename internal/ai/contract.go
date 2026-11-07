@@ -150,15 +150,21 @@ type ImagePlanRequest struct {
 	Needs                                 ImageNeeds
 	// PublicSeries enables the licence guard (non-commercial models are skipped).
 	PublicSeries bool
+	CharacterIDs []string
+	PanelType    string
 }
 
 // ImagePlan is a routing decision for one image job.
 type ImagePlan struct {
-	Task        string `json:"task"`
-	RoutingMode string `json:"routing_mode"`
-	ProviderID  string `json:"provider_id"`
-	ModelID     string `json:"model_id"`
-	Remote      bool   `json:"remote"`
+	Task          string     `json:"task"`
+	RoutingMode   string     `json:"routing_mode"`
+	Needs         ImageNeeds `json:"needs"`
+	PublicSeries  bool       `json:"public_series"`
+	PinProviderID string     `json:"pin_provider_id,omitempty"`
+	PinModelID    string     `json:"pin_model_id,omitempty"`
+	ProviderID    string     `json:"provider_id"`
+	ModelID       string     `json:"model_id"`
+	Remote        bool       `json:"remote"`
 	// Executor is "go" (remote or placeholder, run inline) or "worker" (local GPU worker).
 	Executor string          `json:"executor"`
 	Decision json.RawMessage `json:"decision"`

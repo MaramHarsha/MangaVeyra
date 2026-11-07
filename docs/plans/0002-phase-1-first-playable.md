@@ -108,6 +108,14 @@ These additions are frozen before parallel implementation; existing Gate A signa
   description/asset/tags; `CreateSettingItem` authorizes and validates the same-project asset.
   Profile/outfit/setting text follows `ActEditScript`; image reference mutations follow `ActEditArt`.
 - `ai.ImagePlan.RoutingMode` preserves the effective request policy independently of explanatory JSON, like text.
+  It also carries `Needs`, `PublicSeries`, `PinProviderID`, and `PinModelID`; `ImagePlanRequest` accepts optional
+  `CharacterIDs` and `PanelType` for scoped routing pins. Durable generation payloads preserve these typed fields
+  and every retry/fallback revalidates them. The explanatory `Decision` never authorizes a route.
+  Local only rejects remote HTTP/custom text calls and worker dispatch/claims; until same-host worker locality can
+  be proven, the deterministic in-process placeholder is its safe image route. Balanced/best/fastest/free-only may
+  use an explicitly connected worker, with no paid remote fallback from a zero-spend action.
+  New image jobs have a bounded retry/fallback envelope included in their aggregate estimate/approval; old text
+  jobs retain their original three-attempt envelope. AI provides `jobs.ManifestLookup` for app worker-claim wiring.
 - Assets gain `Stage(ctx, SaveParams) (*StagedAsset, error)`, `StagedAsset.Asset() Asset`,
   `CommitStagedTx(ctx, tx, staged) (Asset, error)` and `DiscardStaged(ctx, staged) error`. Storage I/O happens before
   the job's commit fence; only the asset-row INSERT occurs inside it. Failed fenced writes discard staged objects.
