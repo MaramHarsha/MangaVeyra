@@ -37,20 +37,20 @@ and remote-provider live calls. GitHub Actions stay disabled while the repositor
 Agents work in separate git worktrees from the commit that adds this plan, never edit outside their list, make
 logical commits, and return changed files, tests run and the ADR 0004 text they need. The root integrator alone
 edits `docs/**`, `README.md`, `go.mod`/`go.sum`, `web/package*.json`, `internal/core/**`, `internal/app/**`,
-`internal/pagedoc/languages*.go`, `components.css`, migrations, and cherry-picks results.
+`internal/pagedoc/languages*.go`, migrations, `e2e/**`, and cherry-picks results.
 
 1. [ ] **L — Languages and lettering.** `internal/lettering/**` (fonts, fallback, shaping, line breaking for
    Korean/Chinese/Devanagari, vertical punctuation), `internal/compose/**` (empty panels render the same as the
    editor), `internal/export/service.go|http.go|contract.go` (Unicode filenames with ASCII fallback, language
    options and ComicInfo for all languages), `internal/studio/**` (project language validation), `internal/gen/**`
-   and the placeholder text provider file in `internal/ai/` (placeholder scripts in the project language with
+   and `internal/ai/placeholder.go` (placeholder scripts in the project language with
    dialogue, so auto-lettering runs without keys), `internal/seed/**` (demo label overlap), `internal/pagedoc/**`
    except languages.go. Font binaries may be added under `internal/lettering/fonts/` with OFL notices.
 2. [ ] **E — Editor (D1/D2/D3/D8/D13 + no-JS proof).** `web/src/islands/editor/**`, `web/src/styles/editor.css`,
    `internal/editor/**`, editor locales. Top-bar overflow, bubble placement, localized layer names, font/vertical
    defaults per contract, panel/region generation de-duplication, every D-screen gap from the QA report.
-3. [ ] **S — Studio and models (B2/B3/C1–C5/G2/G11/G12).** `internal/studioui/**`, `internal/ai/**` UI and
-   routing files (not the placeholder text file), `internal/web/ui/**`, `web/src/lib/**` (not export.ts),
+3. [ ] **S — Studio and models (B2/B3/C1–C5/G2/G11/G12).** `internal/studioui/**`, `internal/ai/**` except
+   `placeholder.go`, `internal/web/ui/**`, `web/src/lib/**` (not export.ts), `web/src/styles/components.css`,
    studio/models styles and locales. Story→editor dead end, C1 dialogue lines, wizard language options, live
    counters, G11 placeholder decisions, G12 flow and private-endpoint path, every B/C/G gap from the QA report.
 4. [ ] **X — Export screen (E2).** `internal/export/templates.templ` (+ generated), `web/src/styles/exportui.css`,
