@@ -34,7 +34,7 @@
 
 ## Current status
 
-> **MangaVeyra is pre-alpha development software.** You can connect OpenRouter or use the offline placeholder,
+> **MangaVeyra is pre-alpha development software.** You can connect OpenRouter or OpenAI, or use the offline placeholder,
 > create a project and chapter from a premise or private text source, generate a structured script, and edit the
 > persisted manuscript. You cannot yet turn it into illustrated pages or an exported, publishable chapter.
 
@@ -46,8 +46,8 @@
   the PWA/static-asset shell.
 - **Working screens:** first-run setup, provider connections, login/signup/onboarding, account/settings, project
   creation/adaptation, the real Studio dashboard, generation state and the editable chapter manuscript.
-- **Gate A generation:** deterministic offline script generation and fixed-model OpenRouter structured text, with
-  hard spend reservations, project/token authorization, revision fencing and honest AI provenance.
+- **Gate A generation:** deterministic offline script generation and fixed-model OpenRouter or OpenAI structured
+  text, with hard spend reservations, project/token authorization, revision fencing and honest AI provenance.
 - **Python AI worker:** deterministic placeholder output, diffusers and ComfyUI adapters, LoRA training, panel and
   bubble detection, OCR, image helpers and Character Lock scoring. The real GPU path still needs hardware validation.
 - **Frontend foundation:** design tokens, responsive components, themes, motion, HTMX integration and the Svelte
@@ -127,7 +127,8 @@ cp .env.example .env
 docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 ```
 
-Open <http://localhost:8080>, follow first-run setup, and either keep the offline placeholder or connect OpenRouter.
+Open <http://localhost:8080>, follow first-run setup, and either keep the offline placeholder or connect OpenRouter or
+OpenAI.
 
 The Python worker can be started and exercised independently through its protocol and local CLI. Gate A script jobs
 run in the Go process; Studio image-generation flows do not route to the worker yet:
@@ -193,7 +194,7 @@ The **worker side** is implemented: its local catalogue includes supported diffu
 diffusers, ComfyUI, mock and vision backends. It can register, claim jobs, report progress and upload results through
 the worker protocol.
 
-The **Gate A server-side text path is implemented**: it includes an encrypted OpenRouter provider registry and
+The **Gate A server-side text path is implemented**: it includes an encrypted OpenRouter/OpenAI provider registry and
 management UI, deterministic offline placeholder generation, a fixed structured-output text model, explicit routing,
 durable spend reservations and persisted script jobs. Image-provider catalogues, capability-based automatic routing
 and visual generation remain Gate B work.

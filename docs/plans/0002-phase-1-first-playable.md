@@ -5,7 +5,7 @@
   project/chapter/script persistence, authorization, provider secrets, spend reservations and atomic job completion.
   Gate A is green as of 2026-11-07; page-pipeline and visual-generation work may now begin under Gate B.
 - Decisions: ADR 0001 (scope), 0002 (embedder), 0003 (spend reservations), 0004 (design addendum),
-  0005 (Gate A OpenRouter text boundary).
+  0005 (Gate A OpenRouter text boundary), 0006 (OpenAI direct text route; strict-schema fix for both routes).
 
 ## Handoff status (2026-11-07)
 

@@ -185,7 +185,7 @@ func TestPlaceholderIsDeterministicAndSchemaStrict(t *testing.T) {
 
 func TestOpenRouterEnvelopeIsExactAndContextBounded(t *testing.T) {
 	in := testScriptInput()
-	req, err := buildOpenRouterRequest(in, false)
+	req, err := buildOpenRouterRequest(in, scriptAttempt{})
 	if err != nil {
 		t.Fatal(err)
 	}

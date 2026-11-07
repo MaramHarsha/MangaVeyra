@@ -450,3 +450,24 @@ var scriptResponseSchema = json.RawMessage(`{
     }
   }
 }`)
+
+// scriptOutputReason returns the fixed validation label of a decode failure,
+// for example "duplicate panel key". Every label is a literal in this file
+// and never contains provider output, so it is safe to show to users.
+func scriptOutputReason(err error) string {
+	if err == nil || !errors.Is(err, errInvalidScriptOutput) {
+		return ""
+	}
+	prefix := errInvalidScriptOutput.Error() + ": "
+	if msg := err.Error(); strings.HasPrefix(msg, prefix) {
+		return msg[len(prefix):]
+	}
+	return ""
+}
+
+func invalidScriptMessage(reason string) string {
+	if reason == "" {
+		return "The text provider returned an invalid script."
+	}
+	return "The text provider returned an invalid script (" + reason + ")."
+}

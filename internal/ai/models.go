@@ -28,6 +28,7 @@ type modelsPageView struct {
 }
 
 type providerFormView struct {
+	Kind      string
 	Name      string
 	Scope     string
 	Next      string
@@ -77,7 +78,8 @@ func (m *Module) newProviderPage(w http.ResponseWriter, r *http.Request) error {
 	if m.ui == nil {
 		return core.ErrInternal(errors.New("ai: web UI unavailable"))
 	}
-	if r.URL.Query().Get("kind") != providerKindOpenRouter {
+	kind := r.URL.Query().Get("kind")
+	if !validProviderKind(kind) {
 		return core.ErrNotFound()
 	}
 	actor, err := browserProviderActor(r.Context())
@@ -95,7 +97,7 @@ func (m *Module) newProviderPage(w http.ResponseWriter, r *http.Request) error {
 	if actor.Admin {
 		scope = providerScopeServer
 	}
-	v := providerFormView{Name: "OpenRouter", Scope: scope,
+	v := providerFormView{Kind: kind, Name: providerKindName(kind), Scope: scope,
 		Next: core.SafeRedirectTarget(r.URL.Query().Get("next"), "/models"), Admin: actor.Admin,
 		LocalOnly: inst.LocalOnly, Errors: web.FormErrors{}}
 	return m.renderProviderForm(w, r, http.StatusOK, v)
@@ -121,7 +123,14 @@ func (m *Module) createProvider(w http.ResponseWriter, r *http.Request) error {
 	if !actor.Admin && scope != providerScopeUser {
 		return core.ErrForbidden(i18n.T(ctx, "models.error.scope"))
 	}
-	v := providerFormView{Name: web.FormValue(r, "name"), Scope: scope,
+	kind := web.FormValue(r, "kind")
+	if kind == "" {
+		kind = providerKindOpenRouter
+	}
+	if !validProviderKind(kind) {
+		return core.ErrNotFound()
+	}
+	v := providerFormView{Kind: kind, Name: web.FormValue(r, "name"), Scope: scope,
 		Next: core.SafeRedirectTarget(web.FormValue(r, "next"), "/models"), Admin: actor.Admin,
 		LocalOnly: inst.LocalOnly, Errors: web.FormErrors{}}
 	key := strings.TrimSpace(r.PostFormValue("key"))
@@ -137,7 +146,7 @@ func (m *Module) createProvider(w http.ResponseWriter, r *http.Request) error {
 	if v.Errors.Has() {
 		return m.renderProviderForm(w, r, http.StatusUnprocessableEntity, v)
 	}
-	if _, err := m.providers.Create(ctx, actor, providerCreate{Name: v.Name, Key: key, Scope: v.Scope}); err != nil {
+	if _, err := m.providers.Create(ctx, actor, providerCreate{Kind: kind, Name: v.Name, Key: key, Scope: v.Scope}); err != nil {
 		switch {
 		case errors.Is(err, errProviderInvalid):
 			v.Errors.Add("", i18n.T(ctx, "models.error.invalid"))
@@ -154,7 +163,7 @@ func (m *Module) createProvider(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (m *Module) renderProviderForm(w http.ResponseWriter, r *http.Request, status int, v providerFormView) error {
-	return m.ui.Page(w, r, status, web.PageOpts{Title: i18n.T(r.Context(), "models.form.title"),
+	return m.ui.Page(w, r, status, web.PageOpts{Title: i18n.T(r.Context(), "models."+v.Kind+".connect"),
 		BackURL: "/models", Section: layout.SectionStudio, Nav: layout.NavModels}, ProviderFormPage(v))
 }
 
@@ -304,41 +313,81 @@ func (m *Module) providerPageError(err error) error {
 	return err
 }
 
-// Providers implements setup.ModelStep without making a network call.
+// Providers implements setup.ModelStep without making a network call. It
+// returns one card per remote route kind with that kind's connection status.
 func (m *Module) Providers(ctx context.Context) ([]setup.ProviderCard, error) {
-	card := setup.ProviderCard{Kind: providerKindOpenRouter, NameKey: "setup.provider.openrouter.name",
-		DescKey: "setup.provider.openrouter.desc", Icon: "route",
-		Href: "/models/providers/new?kind=openrouter&next=/setup/models"}
+	cards := make([]setup.ProviderCard, 0, len(remoteRoutes))
+	for _, route := range remoteRoutes {
+		cards = append(cards, setup.ProviderCard{Kind: route.Kind, NameKey: "setup.provider." + route.Kind + ".name",
+			DescKey: "setup.provider." + route.Kind + ".desc", Icon: providerKindIcon(route.Kind),
+			Href: "/models/providers/new?kind=" + route.Kind + "&next=/setup/models"})
+	}
 	actor, err := browserProviderActor(ctx)
 	if err != nil {
-		card.Status = setup.ProviderError
-		return []setup.ProviderCard{card}, nil
+		for i := range cards {
+			cards[i].Status = setup.ProviderError
+		}
+		return cards, nil
 	}
 	providers, err := m.providers.ListManageable(ctx, actor)
 	if err != nil {
 		if m.d.Log != nil {
 			m.d.Log.WarnContext(ctx, "list providers for setup", "err", err)
 		}
-		card.Status = setup.ProviderError
-		return []setup.ProviderCard{card}, nil
+		for i := range cards {
+			cards[i].Status = setup.ProviderError
+		}
+		return cards, nil
 	}
+	for i := range cards {
+		cards[i].Status = providerKindStatus(providers, cards[i].Kind)
+	}
+	return cards, nil
+}
+
+// providerKindStatus summarises the enabled connections of one kind exactly
+// as the single-kind card did: a verified connection wins, a failed check
+// marks the card as an error, and an unchecked connection counts as connected
+// only while nothing failed.
+func providerKindStatus(providers []providerView, kind string) string {
+	status := setup.ProviderNotConnected
 	for _, provider := range providers {
-		if !provider.Enabled {
+		if provider.Kind != kind || !provider.Enabled {
 			continue
 		}
-		if provider.LastTest.State == "ok" {
-			card.Status = setup.ProviderConnected
-			return []setup.ProviderCard{card}, nil
-		}
-		if provider.LastTest.State == "error" {
-			card.Status = setup.ProviderError
-			continue
-		}
-		if card.Status == setup.ProviderNotConnected {
-			card.Status = setup.ProviderConnected
+		switch provider.LastTest.State {
+		case "ok":
+			return setup.ProviderConnected
+		case "error":
+			status = setup.ProviderError
+		default:
+			if status == setup.ProviderNotConnected {
+				status = setup.ProviderConnected
+			}
 		}
 	}
-	return []setup.ProviderCard{card}, nil
+	return status
+}
+
+func providerKindName(kind string) string {
+	if route, ok := routeForKind(kind); ok {
+		return route.Label
+	}
+	return kind
+}
+
+func providerKindIcon(kind string) string {
+	if kind == providerKindOpenAI {
+		return "brand-openai"
+	}
+	return "route"
+}
+
+func providerKindModel(kind string) string {
+	if route, ok := routeForKind(kind); ok {
+		return route.Model
+	}
+	return ""
 }
 
 // Recommend implements setup.ModelStep using the setup package's deterministic

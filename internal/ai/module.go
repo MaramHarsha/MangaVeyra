@@ -32,10 +32,12 @@ func newModule(d *core.Deps, doer httpDoer, now func() time.Time) *Module {
 	}
 	providers := newProviderStore(d.DB, d.Secrets, d.Settings, now)
 	client := newOpenRouterClient(doer)
+	openai := newOpenAIClient(doer)
 	spend := NewSpendStore(d.DB, d.Settings)
 	spend.Now = now
-	text := newTextService(d.DB, d.Settings, providers, client, spend, now)
-	m := &Module{d: d, providers: providers, providerAPI: &providerService{store: providers, settings: d.Settings, client: client},
+	text := newTextService(d.DB, d.Settings, providers, client, spend, now).withClient(providerKindOpenAI, openai)
+	m := &Module{d: d, providers: providers, providerAPI: &providerService{store: providers, settings: d.Settings, client: client,
+		testers: map[string]remoteKeyTester{providerKindOpenAI: openai}},
 		text: text, spend: spend, now: now, repairEvery: time.Minute, repairBatch: 1000}
 	core.Provide[TextService](d, text)
 	core.Provide[setup.ModelStep](d, m)

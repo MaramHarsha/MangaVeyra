@@ -13,6 +13,10 @@ limits and request features are external facts, so they are frozen here from the
 current official OpenRouter documentation rather than inferred from old planning
 notes.
 
+> **Amended by ADR 0006 (2026-11-07):** a direct OpenAI route was added beside OpenRouter. Both routes now send a
+> strict-mode-compatible schema: no `minLength`/`maxLength`, and `const` as a one-value `enum`. The server still
+> validates every bound. `openai/gpt-4.1-mini` is marked deprecated upstream, so replacing it needs a fresh decision.
+
 ## Decision
 
 Gate A supports exactly two text choices:

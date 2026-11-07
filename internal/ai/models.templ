@@ -8,9 +8,14 @@ import (
 
 templ modelsAddAction(canAdd bool) {
 	if canAdd {
-		@ui.LinkButton("/models/providers/new?kind=openrouter", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
-			{ i18n.T(ctx, "models.add") }
-		}
+		<div class="mv-models__add">
+			@ui.LinkButton("/models/providers/new?kind=openrouter", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				{ i18n.T(ctx, "models.openrouter.connect") }
+			}
+			@ui.LinkButton("/models/providers/new?kind=openai", ui.ButtonProps{Variant: ui.Secondary, Icon: "plus"}) {
+				{ i18n.T(ctx, "models.openai.connect") }
+			}
+		</div>
 	}
 }
 
@@ -138,10 +143,10 @@ templ ProviderCard(v providerCardView) {
 	<article class="mv-model-card" id={ providerCardID(v.Provider.ID) }>
 		<header class="mv-model-card__head">
 			<div class="mv-model-card__identity">
-				@ui.Icon("route", 24)
+				@ui.Icon(providerKindIcon(v.Provider.Kind), 24)
 				<div>
 					<h2>{ v.Provider.Name }</h2>
-					<p>{ i18n.T(ctx, "models.openrouter.description") }</p>
+					<p>{ i18n.T(ctx, "models." + v.Provider.Kind + ".description") }</p>
 				</div>
 			</div>
 			@ui.Badge(providerStatusTone(v.Provider), providerStatusIcon(v.Provider), i18n.T(ctx, providerStateKey(v.Provider)))
@@ -153,6 +158,7 @@ templ ProviderCard(v providerCardView) {
 		}
 		<div class="mv-model-card__meta">
 			@ui.KV(i18n.T(ctx, "models.field.scope"), i18n.T(ctx, "models.scope."+v.Provider.Scope))
+			@ui.KV(i18n.T(ctx, "models.field.model"), providerKindModel(v.Provider.Kind))
 			@ui.KV(i18n.T(ctx, "models.field.key"), v.Provider.KeyHint)
 			@ui.KVC(i18n.T(ctx, "models.field.check")) {
 				@ui.Badge(providerTestTone(v.Provider), providerTestIcon(v.Provider), i18n.T(ctx, providerTestKey(v.Provider)))
@@ -208,10 +214,10 @@ func providerScopeOptions(ctx context.Context) []ui.Option {
 	}
 }
 
-// ProviderFormPage is the single-page Gate A OpenRouter connection flow.
+// ProviderFormPage is the single-page connection flow for one remote kind.
 templ ProviderFormPage(v providerFormView) {
 	<div class="mv-provider-form">
-		@ui.PageHead(i18n.T(ctx, "models.form.title"), i18n.T(ctx, "models.form.subtitle"), nil)
+		@ui.PageHead(i18n.T(ctx, "models."+v.Kind+".connect"), i18n.T(ctx, "models."+v.Kind+".form_subtitle"), nil)
 		if v.LocalOnly {
 			@ui.Notice(ui.ToneWarning, "shield-lock") {
 				<strong>{ i18n.T(ctx, "models.local_only.title") }</strong>
@@ -220,6 +226,7 @@ templ ProviderFormPage(v providerFormView) {
 		}
 		<form class="mv-provider-form__body" method="post" action="/models/providers" novalidate>
 			<input type="hidden" name="next" value={ v.Next }/>
+			<input type="hidden" name="kind" value={ v.Kind }/>
 			if v.Errors.Form() != "" {
 				@ui.Notice(ui.ToneError, "alert-triangle") { { v.Errors.Form() } }
 			}
@@ -252,7 +259,7 @@ templ ProviderFormPage(v providerFormView) {
 			<div class="mv-provider-form__actions">
 				@ui.LinkButton("/models", ui.ButtonProps{Variant: ui.Ghost}) { { i18n.T(ctx, "ui.cancel") } }
 				@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Primary, Icon: "plug-connected"}) {
-					{ i18n.T(ctx, "models.form.submit") }
+					{ i18n.T(ctx, "models."+v.Kind+".connect") }
 				}
 			</div>
 		</form>

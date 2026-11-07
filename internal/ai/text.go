@@ -26,9 +26,10 @@ type textService struct {
 	db        *db.DB
 	settings  instanceReader
 	providers *providerStore
-	client    *openRouterClient
-	spend     remoteSpendStore
-	now       func() time.Time
+	// clients holds one transport per remote provider kind (remoteRoutes).
+	clients map[string]remoteTextClient
+	spend   remoteSpendStore
+	now     func() time.Time
 }
 
 type textDecision struct {
@@ -43,6 +44,7 @@ type pinChoice struct {
 	placeholder bool
 	remote      bool
 	providerID  string
+	modelID     string
 	explicit    bool
 }
 
@@ -51,7 +53,22 @@ func newTextService(d *db.DB, st instanceReader, providers *providerStore, clien
 	if now == nil {
 		now = db.Now
 	}
-	return &textService{db: d, settings: st, providers: providers, client: client, spend: spend, now: now}
+	clients := map[string]remoteTextClient{}
+	if client != nil {
+		clients[providerKindOpenRouter] = client
+	}
+	return &textService{db: d, settings: st, providers: providers, clients: clients, spend: spend, now: now}
+}
+
+// withClient registers the transport for another remote provider kind.
+func (s *textService) withClient(kind string, client remoteTextClient) *textService {
+	if s.clients == nil {
+		s.clients = map[string]remoteTextClient{}
+	}
+	if client != nil && validProviderKind(kind) {
+		s.clients[kind] = client
+	}
+	return s
 }
 
 func (s *textService) PlanText(ctx context.Context, req TextPlanRequest) (TextPlan, error) {
@@ -113,18 +130,25 @@ func (s *textService) PlanText(ctx context.Context, req TextPlanRequest) (TextPl
 		}
 		return placeholderPlan(req, "remote access unavailable"), nil
 	}
-	if !openRouterInputFits(in) {
-		if pin.remote {
-			return zero, badInputError(errors.New("ai: script input exceeds remote context"))
-		}
-		return placeholderPlan(req, "input exceeds remote context"), nil
-	}
-
-	providerID := pin.providerID
-	if providerID != "" {
-		if _, err := s.providers.Candidate(ctx, req.ActorID, providerID); err != nil {
+	// Pick the provider: an explicit pin, or the first eligible connection in
+	// store order (personal before server, oldest first). A candidate whose
+	// frozen route cannot hold this input, or does not match a model pin, is
+	// skipped rather than truncating private source text.
+	var chosen providerCandidate
+	tooLarge := false
+	if pin.providerID != "" {
+		candidate, err := s.providers.Candidate(ctx, req.ActorID, pin.providerID)
+		if err != nil {
 			return zero, noProviderError(err)
 		}
+		route, ok := routeForKind(candidate.Kind)
+		if !ok || (pin.modelID != "" && pin.modelID != route.Model) {
+			return zero, noProviderError(nil)
+		}
+		if !route.fits(in) {
+			return zero, badInputError(errors.New("ai: script input exceeds remote context"))
+		}
+		chosen = candidate
 	} else {
 		candidates, err := s.providers.Candidates(ctx, req.ActorID)
 		if err != nil {
@@ -133,18 +157,36 @@ func (s *textService) PlanText(ctx context.Context, req TextPlanRequest) (TextPl
 			}
 			return placeholderPlan(req, "provider lookup unavailable"), nil
 		}
-		if len(candidates) == 0 {
+		for _, candidate := range candidates {
+			route, ok := routeForKind(candidate.Kind)
+			if !ok || (pin.modelID != "" && pin.modelID != route.Model) {
+				continue
+			}
+			if !route.fits(in) {
+				tooLarge = true
+				continue
+			}
+			chosen = candidate
+			break
+		}
+		if chosen.ID == "" {
 			if pin.remote {
+				if tooLarge {
+					return zero, badInputError(errors.New("ai: script input exceeds remote context"))
+				}
 				return zero, noProviderError(nil)
+			}
+			if tooLarge {
+				return placeholderPlan(req, "input exceeds remote context"), nil
 			}
 			return placeholderPlan(req, "no remote provider connected"), nil
 		}
-		providerID = candidates[0].ID
 	}
-	decision := marshalDecision(textDecision{Mode: req.RoutingMode, ProviderID: providerID, ModelID: openRouterModel,
-		Remote: true, Reason: "eligible OpenRouter connection"})
-	return TextPlan{Task: req.Task, Schema: req.Schema, RoutingMode: req.RoutingMode, ProviderID: providerID,
-		ModelID: openRouterModel, Remote: true, Decision: decision, Estimate: jobs.Cost{USD: openRouterPlanUSD}}, nil
+	route, _ := routeForKind(chosen.Kind)
+	decision := marshalDecision(textDecision{Mode: req.RoutingMode, ProviderID: chosen.ID, ModelID: route.Model,
+		Remote: true, Reason: "eligible " + route.Label + " connection"})
+	return TextPlan{Task: req.Task, Schema: req.Schema, RoutingMode: req.RoutingMode, ProviderID: chosen.ID,
+		ModelID: route.Model, Remote: true, Decision: decision, Estimate: jobs.Cost{USD: route.PlanUSD}}, nil
 }
 
 func (s *textService) GenerateText(ctx context.Context, req TextGenerateRequest) (TextResult, error) {
@@ -167,7 +209,8 @@ func (s *textService) GenerateText(ctx context.Context, req TextGenerateRequest)
 		}
 		return TextResult{Document: doc, ProviderID: PlaceholderID, ModelID: PlaceholderText}, nil
 	}
-	if !req.Plan.Remote || req.Plan.ProviderID == "" || req.Plan.ModelID != openRouterModel || req.JobID == "" || req.Attempt <= 0 {
+	route, known := routeForModel(req.Plan.ModelID)
+	if !req.Plan.Remote || req.Plan.ProviderID == "" || !known || req.JobID == "" || req.Attempt <= 0 {
 		return zero, badInputError(nil)
 	}
 	if req.Plan.RoutingMode == ModeLocalOnly {
@@ -176,7 +219,7 @@ func (s *textService) GenerateText(ctx context.Context, req TextGenerateRequest)
 	if req.Plan.RoutingMode == ModeFreeOnly {
 		return zero, noProviderError(nil)
 	}
-	if !openRouterInputFits(in) {
+	if !route.fits(in) {
 		return zero, badInputError(errors.New("ai: script input exceeds remote context"))
 	}
 
@@ -184,30 +227,39 @@ func (s *textService) GenerateText(ctx context.Context, req TextGenerateRequest)
 	if err != nil {
 		return zero, upstreamError(err, false, jobs.Cost{})
 	}
-	initial, initialErr := s.remoteCall(ctx, req, in, false, purpose)
+	initial, initialErr := s.remoteCall(ctx, req, in, scriptAttempt{}, purpose)
 	total := initial.cost
+	reason := ""
 	if initialErr == nil {
 		_, normalized, decodeErr := decodeScriptDocument(initial.content, in)
 		if decodeErr == nil {
-			return TextResult{Document: normalized, ProviderID: req.Plan.ProviderID, ModelID: openRouterModel, Actual: total}, nil
+			return TextResult{Document: normalized, ProviderID: req.Plan.ProviderID, ModelID: route.Model, Actual: total}, nil
 		}
+		reason = scriptOutputReason(decodeErr)
 		initialErr = badOutputAdapterError(true)
 	}
 	if !isRepairable(initialErr) {
 		return zero, generateErrorFrom(initialErr, total)
 	}
 
-	repair, repairErr := s.remoteCall(ctx, req, in, true, SpendPurposeRepair)
+	repair, repairErr := s.remoteCall(ctx, req, in, scriptAttempt{Repair: true, Reason: reason}, SpendPurposeRepair)
 	total = total.Add(repair.cost)
 	if repairErr != nil {
 		return zero, generateErrorFrom(repairErr, total)
 	}
 	_, normalized, decodeErr := decodeScriptDocument(repair.content, in)
 	if decodeErr != nil {
-		return zero, &GenerateError{Code: CodeBadOutput, SafeMessage: "The text provider returned an invalid script.",
+		if repairReason := scriptOutputReason(decodeErr); repairReason != "" {
+			if reason != "" && reason != repairReason {
+				reason += "; repair: " + repairReason
+			} else {
+				reason = repairReason
+			}
+		}
+		return zero, &GenerateError{Code: CodeBadOutput, SafeMessage: invalidScriptMessage(reason),
 			Retryable: false, Actual: total, Err: errInvalidScriptOutput}
 	}
-	return TextResult{Document: normalized, ProviderID: req.Plan.ProviderID, ModelID: openRouterModel, Actual: total}, nil
+	return TextResult{Document: normalized, ProviderID: req.Plan.ProviderID, ModelID: route.Model, Actual: total}, nil
 }
 
 type remoteCallResult struct {
@@ -215,10 +267,15 @@ type remoteCallResult struct {
 	cost    jobs.Cost
 }
 
-func (s *textService) remoteCall(ctx context.Context, req TextGenerateRequest, in ScriptInput, repair bool, purpose string) (remoteCallResult, error) {
+func (s *textService) remoteCall(ctx context.Context, req TextGenerateRequest, in ScriptInput, attempt scriptAttempt, purpose string) (remoteCallResult, error) {
 	var out remoteCallResult
 	if err := s.remoteGuard(ctx, req); err != nil {
 		return out, err
+	}
+	route, known := routeForModel(req.Plan.ModelID)
+	client := s.clients[route.Kind]
+	if !known || client == nil {
+		return out, badInputAdapterError()
 	}
 	reservationID := db.NewID()
 	reserveParams := ReserveRemoteCallParams{
@@ -227,8 +284,8 @@ func (s *textService) remoteCall(ctx context.Context, req TextGenerateRequest, i
 		Attempt:       req.Attempt,
 		Purpose:       purpose,
 		ProviderID:    req.Plan.ProviderID,
-		ModelID:       openRouterModel,
-		EstimateUSD:   openRouterReserveUSD,
+		ModelID:       route.Model,
+		EstimateUSD:   route.ReserveUSD,
 		ExpiresAt:     s.timeNow().Add(reservationTTL),
 	}
 	reservation, err := s.reserveRemoteCall(ctx, reserveParams)
@@ -261,6 +318,9 @@ func (s *textService) remoteCall(ctx context.Context, req TextGenerateRequest, i
 		return out, err
 	}
 	provider, err := s.providers.ResolveDispatch(ctx, req.ActorID, req.Plan.ProviderID)
+	if err == nil && provider.Kind != route.Kind {
+		err = errProviderUnavailable
+	}
 	if err != nil {
 		zero := 0.0
 		closed, reconcileErr := s.reconcile(reservation.ID, SpendOutcomeFailure, &zero)
@@ -271,7 +331,7 @@ func (s *textService) remoteCall(ctx context.Context, req TextGenerateRequest, i
 		return out, noProviderError(err)
 	}
 
-	call, callErr := s.client.Complete(ctx, provider.Key, in, repair)
+	call, callErr := client.Complete(ctx, provider.Key, in, attempt)
 	outcome := SpendOutcomeSuccess
 	if callErr != nil {
 		outcome = SpendOutcomeFailure
@@ -372,11 +432,16 @@ func (s *textService) remoteGuard(ctx context.Context, req TextGenerateRequest) 
 	if req.Plan.RoutingMode == ModeFreeOnly {
 		return noProviderError(nil)
 	}
-	if req.Plan.ModelID != openRouterModel || req.Plan.ProviderID == "" || req.Plan.ProviderID == PlaceholderID {
+	route, known := routeForModel(req.Plan.ModelID)
+	if !known || req.Plan.ProviderID == "" || req.Plan.ProviderID == PlaceholderID {
 		return badInputAdapterError()
 	}
-	if _, err := s.providers.Candidate(ctx, req.ActorID, req.Plan.ProviderID); err != nil {
+	candidate, err := s.providers.Candidate(ctx, req.ActorID, req.Plan.ProviderID)
+	if err != nil {
 		return noProviderError(err)
+	}
+	if candidate.Kind != route.Kind {
+		return noProviderError(errProviderUnavailable)
 	}
 	return nil
 }
@@ -397,7 +462,7 @@ func (s *textService) timeNow() time.Time {
 func validatePins(providerID, modelID string) (pinChoice, error) {
 	providerID = strings.TrimSpace(providerID)
 	modelID = strings.TrimSpace(modelID)
-	choice := pinChoice{providerID: providerID, explicit: providerID != "" || modelID != ""}
+	choice := pinChoice{providerID: providerID, modelID: modelID, explicit: providerID != "" || modelID != ""}
 	if !choice.explicit {
 		return choice, nil
 	}
@@ -411,7 +476,7 @@ func validatePins(providerID, modelID string) (pinChoice, error) {
 		choice.placeholder = true
 		return choice, nil
 	}
-	if modelID != "" && modelID != openRouterModel {
+	if _, known := routeForModel(modelID); modelID != "" && !known {
 		return pinChoice{}, errInvalidScriptInput
 	}
 	if providerID == PlaceholderID {

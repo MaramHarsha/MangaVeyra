@@ -228,3 +228,46 @@ func TestModelsLifecycleIDORAndLocalOnlyTestGuard(t *testing.T) {
 		}
 	})
 }
+
+func TestModelsOpenAIConnectionFlow(t *testing.T) {
+	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
+		admin := ta.Login(t, ta.Admin.Username)
+		page := admin.Get("/models")
+		if page.StatusCode != http.StatusOK || !strings.Contains(string(page.Body), `href="/models/providers/new?kind=openai"`) ||
+			!strings.Contains(string(page.Body), "Connect OpenAI") {
+			t.Fatalf("models page lacks the OpenAI action: %d", page.StatusCode)
+		}
+		form := admin.Get("/models/providers/new?kind=openai")
+		if form.StatusCode != http.StatusOK || !strings.Contains(string(form.Body), `name="kind" value="openai"`) ||
+			!strings.Contains(string(form.Body), "storage turned off") {
+			t.Fatalf("OpenAI form = %d", form.StatusCode)
+		}
+		if got := admin.Get("/models/providers/new?kind=custom"); got.StatusCode != http.StatusNotFound {
+			t.Fatalf("unknown kind form = %d, want 404", got.StatusCode)
+		}
+		if got := postModelsForm(admin, "/models/providers", url.Values{"kind": {"custom"}, "name": {"Elsewhere"},
+			"key": {"sk-unknown-kind"}, "scope": {"server"}}); got.StatusCode != http.StatusNotFound {
+			t.Fatalf("unknown kind create = %d, want 404", got.StatusCode)
+		}
+
+		secret := "sk-openai-form-secret-never-render"
+		created := postModelsForm(admin, "/models/providers", url.Values{"kind": {"openai"}, "name": {"Studio OpenAI"},
+			"key": {secret}, "scope": {"server"}})
+		if created.StatusCode != http.StatusSeeOther {
+			t.Fatalf("OpenAI create = %d: %.1500s", created.StatusCode, created.Body)
+		}
+		var kind string
+		if err := ta.Deps.DB.Get(context.Background(), &kind, `SELECT kind FROM providers WHERE name = ?`, "Studio OpenAI"); err != nil {
+			t.Fatal(err)
+		}
+		if kind != "openai" {
+			t.Fatalf("stored kind = %q", kind)
+		}
+		listed := admin.Get("/models")
+		body := string(listed.Body)
+		if !strings.Contains(body, "Studio OpenAI") || !strings.Contains(body, "gpt-6-luna") ||
+			!strings.Contains(body, "ti-brand-openai") || strings.Contains(body, secret) {
+			t.Fatalf("OpenAI card missing or leaked its key")
+		}
+	})
+}

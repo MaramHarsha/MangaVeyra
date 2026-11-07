@@ -41,6 +41,8 @@ type providerActor struct {
 }
 
 type providerCreate struct {
+	// Kind is a remote route kind (remoteRoutes); empty means OpenRouter.
+	Kind  string
 	Name  string
 	Key   string
 	Scope string
@@ -94,6 +96,7 @@ type providerRecord struct {
 
 type providerCandidate struct {
 	ID    string
+	Kind  string
 	Scope string
 }
 
@@ -131,7 +134,11 @@ func (s *providerStore) Create(ctx context.Context, actor providerActor, in prov
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	in.Key = strings.TrimSpace(in.Key)
-	if !validProviderName(in.Name) || in.Key == "" || len(in.Key) > maxProviderKeyBytes {
+	in.Kind = strings.TrimSpace(in.Kind)
+	if in.Kind == "" {
+		in.Kind = providerKindOpenRouter
+	}
+	if !validProviderKind(in.Kind) || !validProviderName(in.Name) || in.Key == "" || len(in.Key) > maxProviderKeyBytes {
 		return zero, errProviderInvalid
 	}
 	owner, err := s.ownerForCreate(ctx, actor, in.Scope)
@@ -144,7 +151,7 @@ func (s *providerStore) Create(ctx context.Context, actor providerActor, in prov
 	_, err = s.db.Exec(ctx, `INSERT INTO providers (
 		id, kind, name, base_url, key_enc, key_hint, config, enabled, scope, owner_id, last_test, created_at, updated_at
 	) VALUES (?, ?, ?, '', ?, ?, '{}', TRUE, ?, ?, '{}', ?, ?)`,
-		id, providerKindOpenRouter, in.Name, keyEnc, secrets.Hint(in.Key), in.Scope, db.NullString(owner), now, now)
+		id, in.Kind, in.Name, keyEnc, secrets.Hint(in.Key), in.Scope, db.NullString(owner), now, now)
 	if err != nil {
 		return zero, fmt.Errorf("ai: create provider: %w", err)
 	}
@@ -274,8 +281,8 @@ func (s *providerStore) ListManageable(ctx context.Context, actor providerActor)
 	if s == nil || s.db == nil || strings.TrimSpace(actor.UserID) == "" {
 		return nil, errProviderUnavailable
 	}
-	query := `SELECT ` + providerColumns + ` FROM providers WHERE kind = ? AND `
-	args := []any{providerKindOpenRouter}
+	query := `SELECT ` + providerColumns + ` FROM providers WHERE kind IN (?, ?) AND `
+	args := []any{providerKindOpenRouter, providerKindOpenAI}
 	if actor.Admin {
 		query += `((scope = 'server' AND owner_id IS NULL) OR (scope = 'user' AND owner_id = ?))`
 		args = append(args, actor.UserID)
@@ -307,16 +314,16 @@ func (s *providerStore) Candidates(ctx context.Context, actorID string) ([]provi
 	}
 	var rows []providerRecord
 	err := s.db.Select(ctx, &rows, `SELECT `+providerColumns+` FROM providers
-		WHERE kind = ? AND enabled = TRUE AND key_enc <> '' AND base_url = ''
+		WHERE kind IN (?, ?) AND enabled = TRUE AND key_enc <> '' AND base_url = ''
 			AND ((scope = 'user' AND owner_id = ?) OR (scope = 'server' AND owner_id IS NULL))
-		ORDER BY CASE WHEN scope = 'user' THEN 0 ELSE 1 END, id`, providerKindOpenRouter, actorID)
+		ORDER BY CASE WHEN scope = 'user' THEN 0 ELSE 1 END, id`, providerKindOpenRouter, providerKindOpenAI, actorID)
 	if err != nil {
 		return nil, fmt.Errorf("ai: list providers: %w", err)
 	}
 	out := make([]providerCandidate, 0, len(rows))
 	for _, r := range rows {
 		if validateProviderRecord(r) == nil {
-			out = append(out, providerCandidate{ID: r.ID, Scope: r.Scope})
+			out = append(out, providerCandidate{ID: r.ID, Kind: r.Kind, Scope: r.Scope})
 		}
 	}
 	return out, nil
@@ -337,7 +344,7 @@ func (s *providerStore) Candidate(ctx context.Context, actorID, id string) (prov
 	if r.Scope == providerScopeUser && (!r.OwnerID.Valid || r.OwnerID.String != actorID) {
 		return zero, errProviderUnavailable
 	}
-	return providerCandidate{ID: r.ID, Scope: r.Scope}, nil
+	return providerCandidate{ID: r.ID, Kind: r.Kind, Scope: r.Scope}, nil
 }
 
 func (s *providerStore) ResolveDispatch(ctx context.Context, actorID, id string) (dispatchProvider, error) {
@@ -449,7 +456,7 @@ func providerByID(ctx context.Context, q db.Querier, id string, lock bool) (prov
 }
 
 func validateProviderRecord(r providerRecord) error {
-	if !db.ValidID(r.ID) || r.Kind != providerKindOpenRouter || !validProviderName(r.Name) || r.BaseURL != "" || r.Config != "{}" {
+	if !db.ValidID(r.ID) || !validProviderKind(r.Kind) || !validProviderName(r.Name) || r.BaseURL != "" || r.Config != "{}" {
 		return errProviderInvalid
 	}
 	switch r.Scope {

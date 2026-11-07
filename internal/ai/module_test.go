@@ -91,7 +91,8 @@ func TestSetupModelStepFallsBackSafelyAndRecommendsWithoutNetwork(t *testing.T) 
 		module := newModule(&core.Deps{DB: d, Settings: fixture.settings, Secrets: fixture.box}, doer, nil)
 
 		cards, err := module.Providers(context.Background())
-		if err != nil || len(cards) != 1 || cards[0].Kind != providerKindOpenRouter || cards[0].Status != setup.ProviderError {
+		if err != nil || len(cards) != 2 || cards[0].Kind != providerKindOpenRouter || cards[1].Kind != providerKindOpenAI ||
+			cards[0].Status != setup.ProviderError || cards[1].Status != setup.ProviderError {
 			t.Fatalf("provider fallback = %+v, %v", cards, err)
 		}
 		if doer.count() != 0 {

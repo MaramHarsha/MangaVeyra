@@ -9,6 +9,12 @@
   margin-inline: auto;
 }
 
+.mv-models__add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mv-space-2);
+}
+
 .mv-models__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
