@@ -344,17 +344,6 @@ func (s *service) attachCandidateTx(ctx context.Context, tx *db.Tx, j *jobs.Job,
 			return err
 		}
 		out.Version = page.Version
-		label := "ai"
-		for _, pn := range page.Panels {
-			for _, l := range pn.Layers {
-				if l.Kind != pagedoc.LayerLettering && l.Asset != nil && l.Provenance != pagedoc.ProvenanceAI {
-					label = "ai_assisted"
-				}
-			}
-		}
-		if err = s.studio.SetChapterAILabelTx(ctx, tx, page.ChapterID, "art", label); err != nil {
-			return err
-		}
 	}
 	chosen := index
 	out.AppliedIndex = &chosen

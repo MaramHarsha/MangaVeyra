@@ -287,11 +287,6 @@ func (s *service) handlePages(ctx context.Context, run *jobs.Run) error {
 			out.Pages = append(out.Pages, page.ID)
 			stored[page.ID] = page
 		}
-		if p.Request.Letter {
-			if err = s.studio.SetChapterAILabelTx(ctx, tx, p.Request.ChapterID, "lettering", "ai"); err != nil {
-				return nil, err
-			}
-		}
 		for _, child := range children {
 			page, ok := stored[child.PageID]
 			if !ok {

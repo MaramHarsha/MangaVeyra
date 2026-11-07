@@ -143,6 +143,9 @@ func (s *store) CreatePagesTx(ctx context.Context, tx *db.Tx, chapterID string, 
 	if err := touchChapter(ctx, tx, chapterID); err != nil {
 		return nil, err
 	}
+	if err := refreshChapterProvenance(ctx, tx, chapterID); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -255,6 +258,10 @@ func (s *store) save(ctx context.Context, tx *db.Tx, input pagedoc.Page, baseVer
 		if err := s.authorize(ctx, tx, projectID, studio.ActEditArt, ch); err != nil {
 			return pagedoc.Page{}, err
 		}
+	}
+	markHumanLettering(old, &p, ch)
+	if err := p.Validate(); err != nil {
+		return pagedoc.Page{}, ErrInvalid
 	}
 	p.Version = old.Version + 1
 	if err := persistPage(ctx, tx, p, ch); err != nil {
@@ -597,6 +604,9 @@ func persistPage(ctx context.Context, tx *db.Tx, p pagedoc.Page, ch Change) erro
 		return err
 	}
 	if err := snapshot(ctx, tx, p, ch, now); err != nil {
+		return err
+	}
+	if err := refreshChapterProvenance(ctx, tx, p.ChapterID); err != nil {
 		return err
 	}
 	return touchChapter(ctx, tx, p.ChapterID)

@@ -278,6 +278,9 @@ func (s *store) DeletePage(ctx context.Context, id string, ch Change) error {
 				return err
 			}
 		}
+		if err := refreshChapterProvenance(ctx, tx, p.ChapterID); err != nil {
+			return err
+		}
 		return touchChapter(ctx, tx, p.ChapterID)
 	})
 }
