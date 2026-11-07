@@ -27,6 +27,9 @@ func countImages(n int) (int, error) {
 }
 func requestJSON(v any) json.RawMessage { b, _ := json.Marshal(v); return b }
 func (s *service) plan(ctx context.Context, p *imagePayload, mode, pin string, width, height, count int) error {
+	if mode != "" && !validRoutingMode(mode) {
+		return studio.ErrInvalid
+	}
 	task := p.Plan.Task
 	charIDs := []string{}
 	if p.CharacterID != "" {
@@ -40,6 +43,9 @@ func (s *service) plan(ctx context.Context, p *imagePayload, mode, pin string, w
 	plan, err := s.images.PlanImage(ctx, ai.ImagePlanRequest{Task: task, ActorID: p.Actor.UserID, ProjectID: p.Scope.ProjectID, RoutingMode: mode, PinModelID: pin, CharacterIDs: charIDs, PanelType: p.PanelType, Needs: ai.ImageNeeds{Width: width, Height: height, Count: count, References: len(p.References), BW: strings.Contains(p.Style, "bw"), Edit: p.InitAssetID != "", Mask: p.MaskAssetID != ""}})
 	if err != nil {
 		return sanitizePlanningError(ctx, err)
+	}
+	if mode != "" && plan.RoutingMode != mode && plan.RoutingMode != ai.ModeLocalOnly {
+		return studio.ErrInvalid
 	}
 	if validateImagePlan(plan) != nil || plan.Task != task || plan.Needs.Width != width || plan.Needs.Height != height || plan.Needs.Count != count || plan.Needs.References != len(p.References) || plan.Needs.Edit != (p.InitAssetID != "") || plan.Needs.Mask != (p.MaskAssetID != "") || (pin != "" && plan.PinModelID != pin) {
 		return studio.ErrInvalid

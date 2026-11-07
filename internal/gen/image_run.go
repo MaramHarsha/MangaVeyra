@@ -109,7 +109,7 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 		return mapImageJobError(ctx, studio.ErrInvalid)
 	}
 	p, err := decodeImagePayload(j.Input)
-	if err != nil || p.Plan.Task != j.Type || p.Actor.UserID != j.UserID || stringJSON(p.Scope) != stringJSON(j.Scope) {
+	if err != nil || p.Plan.Task != j.Type || p.Actor.UserID != j.UserID || p.BatchID != j.ParentID || stringJSON(p.Scope) != stringJSON(j.Scope) {
 		return mapImageJobError(ctx, studio.ErrInvalid)
 	}
 	plan := currentImagePlan(p, j)
@@ -196,7 +196,7 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 		if err = s.db.WithTx(ctx, func(tx *db.Tx) error { return s.checkImageTx(ctx, tx, p, actor) }); err != nil {
 			return mapImageJobError(ctx, err)
 		}
-		result, err := s.images.GenerateImage(ctx, ai.ImageGenerateRequest{Plan: plan, ActorID: actor.UserID, JobID: j.ID, ProjectID: p.Scope.ProjectID, Attempt: j.Attempts, Prompt: c.Prompt, Negative: "Lettering, speech balloons, captions, text. Other layer content.", Width: plan.Needs.Width, Height: plan.Needs.Height, Count: plan.Needs.Count, Seed: seedFor(j.ID, i), Style: p.Style, References: references, Init: initRef, Mask: maskRef})
+		result, err := s.images.GenerateImage(ctx, ai.ImageGenerateRequest{Plan: plan, ActorID: actor.UserID, JobID: j.ID, ProjectID: p.Scope.ProjectID, Attempt: j.Attempts, CallSlot: i, Prompt: c.Prompt, Negative: "Lettering, speech balloons, captions, text. Other layer content.", Width: plan.Needs.Width, Height: plan.Needs.Height, Count: plan.Needs.Count, Seed: seedFor(j.ID, i), Style: p.Style, References: references, Init: initRef, Mask: maskRef})
 		if err != nil {
 			return mapAIJobError(ctx, run, err)
 		}
@@ -317,19 +317,27 @@ func (s *service) attachCandidateTx(ctx context.Context, tx *db.Tx, j *jobs.Job,
 				return studio.ErrInvalid
 			}
 			seed := l.Seed
+			maskToKeep := ""
 			provenance := pagedoc.ProvenanceAI
 			if p.InitAssetID != "" {
 				page, err := s.pages.GetPageTx(ctx, tx, p.PageID)
 				if err != nil {
 					return err
 				}
-				if current := page.Panel(p.PanelID).Layer(l.LayerID); current != nil && current.Provenance != pagedoc.ProvenanceAI {
-					provenance = pagedoc.ProvenanceMixed
+				if current := page.Panel(p.PanelID).Layer(l.LayerID); current != nil {
+					if current.Provenance != pagedoc.ProvenanceAI {
+						provenance = pagedoc.ProvenanceMixed
+					}
+					if current.Mask != nil {
+						maskToKeep = current.Mask.ID
+					}
 				}
 			}
-			if _, err := s.pages.SetLayerAssetTx(ctx, tx, pagestore.SetLayerAsset{PageID: p.PageID, PanelID: p.PanelID, LayerID: l.LayerID, Kind: l.Kind, CharacterID: l.CharacterID, Name: l.Name, AssetID: l.AssetID, Seed: &seed, Prompt: l.Prompt, Provenance: provenance, ModelID: j.ModelID, ProviderID: j.ProviderID, JobID: j.ID}, ch); err != nil {
+			stored, err := s.pages.SetLayerAssetTx(ctx, tx, pagestore.SetLayerAsset{PageID: p.PageID, PanelID: p.PanelID, LayerID: l.LayerID, Kind: l.Kind, CharacterID: l.CharacterID, Name: l.Name, AssetID: l.AssetID, MaskAssetID: maskToKeep, Seed: &seed, Prompt: l.Prompt, Provenance: provenance, ModelID: j.ModelID, ProviderID: j.ProviderID, JobID: j.ID}, ch)
+			if err != nil {
 				return err
 			}
+			out.Candidates[index].Layers[i].LayerID = stored.ID
 		}
 		page, err := s.pages.GetPageTx(ctx, tx, p.PageID)
 		if err != nil {
@@ -366,13 +374,13 @@ func (s *service) candidateJob(ctx context.Context, actor studio.Actor, id strin
 		return nil, p, out, studio.ErrForbidden
 	}
 	p, err = decodeImagePayload(j.Input)
-	if err != nil || p.Plan.Task != j.Type || stringJSON(p.Scope) != stringJSON(j.Scope) || p.Actor.UserID != j.UserID {
+	if err != nil || p.Plan.Task != j.Type || p.BatchID != j.ParentID || stringJSON(p.Scope) != stringJSON(j.Scope) || p.Actor.UserID != j.UserID {
 		return nil, p, out, studio.ErrInvalid
 	}
 	if err = s.studio.Authorize(ctx, actor, j.Scope.ProjectID, studio.ActRead); err != nil {
 		return nil, p, out, err
 	}
-	if _, err = strictDecodeJSON(j.Output, 1<<20, &out); err != nil || len(out.Candidates) < 1 || len(out.Candidates) > 4 {
+	if _, err = strictDecodeJSON(j.Output, 2<<20, &out); err != nil || len(out.Candidates) < 1 || len(out.Candidates) > 4 {
 		return nil, p, out, studio.ErrInvalid
 	}
 	return j, p, out, nil

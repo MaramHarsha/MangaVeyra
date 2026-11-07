@@ -36,8 +36,8 @@ func (m *Module) Name() string { return "gen" }
 // Routes implements core.Module. No routes yet.
 func (m *Module) Routes(r *core.Router) {}
 
-// Init resolves the two Gate A feature services after all modules have been
-// constructed. Gen deliberately installs no queue failover policy.
+// Init resolves feature services after construction and installs fallback only
+// for validated, versioned image parents. Script jobs retain their Gate A policy.
 func (m *Module) Init(context.Context) error {
 	m.svc.text = core.MustUse[ai.TextService](m.d)
 	m.svc.studio = core.MustUse[studio.Service](m.d)
@@ -51,8 +51,7 @@ func (m *Module) Init(context.Context) error {
 	return nil
 }
 
-// JobHandlers implements core.JobHandlers. Later generation handlers remain
-// deferred until their owning gates are implemented.
+// JobHandlers implements the Phase 1 durable generation handlers.
 func (m *Module) JobHandlers() map[string]jobs.Handler {
 	return map[string]jobs.Handler{JobScript: m.svc.handleScript, JobCharacterSheet: m.svc.handleImage, JobPanel: m.svc.handleImage, JobRegionEdit: m.svc.handleImage, JobPagesFromScript: m.svc.handlePages}
 }

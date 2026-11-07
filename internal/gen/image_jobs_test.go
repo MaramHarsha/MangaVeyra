@@ -30,6 +30,7 @@ type fakeImages struct {
 	requests []ai.ImageGenerateRequest
 	hook     func()
 	planHook func(*ai.ImagePlan)
+	fail     int
 }
 
 func (f *fakeImages) PlanImage(_ context.Context, r ai.ImagePlanRequest) (ai.ImagePlan, error) {
@@ -37,7 +38,7 @@ func (f *fakeImages) PlanImage(_ context.Context, r ai.ImagePlanRequest) (ai.Ima
 		r.RoutingMode = ai.ModeBalanced
 	}
 	p := ai.ImagePlan{Task: r.Task, Needs: r.Needs, RoutingMode: r.RoutingMode, ProviderID: ai.PlaceholderID, ModelID: ai.PlaceholderArt, Executor: jobs.ExecutorGo, PinModelID: r.PinModelID, PinProviderID: r.PinProviderID, PublicSeries: r.PublicSeries, Decision: json.RawMessage(`{"provider":"placeholder"}`)}
-	if f.planHook != nil {
+	if f.planHook != nil && r.PinProviderID == "" {
 		f.planHook(&p)
 	}
 	return p, nil
@@ -45,6 +46,11 @@ func (f *fakeImages) PlanImage(_ context.Context, r ai.ImagePlanRequest) (ai.Ima
 func (f *fakeImages) GenerateImage(_ context.Context, r ai.ImageGenerateRequest) (ai.ImageResult, error) {
 	f.mu.Lock()
 	f.requests = append(f.requests, r)
+	if f.fail > 0 {
+		f.fail--
+		f.mu.Unlock()
+		return ai.ImageResult{}, &ai.GenerateError{Code: ai.CodeUpstream, SafeMessage: "Temporary image failure.", Retryable: true}
+	}
 	hook := f.hook
 	f.hook = nil
 	f.mu.Unlock()
@@ -258,7 +264,7 @@ func TestRegionWhiteMaskPreservesEveryOutsidePixel(t *testing.T) {
 		}
 		originalID, maskID := save(src), save(mask)
 		err := ta.Deps.DB.WithTx(ctx, func(tx *db.Tx) error {
-			_, err := ps.SetLayerAssetTx(ctx, tx, pagestore.SetLayerAsset{PageID: p.ID, PanelID: p.Panels[0].ID, LayerID: p.Panels[0].Layers[0].ID, Kind: pagedoc.LayerBackground, AssetID: originalID, Provenance: "human"}, pagestore.Change{ActorKind: "user", ActorID: f.owner.ID, Action: "save"})
+			_, err := ps.SetLayerAssetTx(ctx, tx, pagestore.SetLayerAsset{PageID: p.ID, PanelID: p.Panels[0].ID, LayerID: p.Panels[0].Layers[0].ID, Kind: pagedoc.LayerBackground, AssetID: originalID, MaskAssetID: maskID, Provenance: "human"}, pagestore.Change{ActorKind: "user", ActorID: f.owner.ID, Action: "save"})
 			return err
 		})
 		if err != nil {
@@ -300,6 +306,14 @@ func TestRegionWhiteMaskPreservesEveryOutsidePixel(t *testing.T) {
 		}
 		if err = f.gen.ApplyVariation(ctx, f.actor, j.ID, 0); err != nil {
 			t.Fatal(err)
+		}
+		after, err := ps.GetPage(ctx, p.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		kept := after.Panels[0].Layers[0]
+		if kept.Mask == nil || kept.Mask.ID != maskID || kept.Provenance != pagedoc.ProvenanceMixed {
+			t.Fatal("region edit changed original layer mask/provenance", kept)
 		}
 	})
 }
@@ -523,6 +537,110 @@ func TestImageEnvelopeAndTokenRechecks(t *testing.T) {
 		// Replacing existing pages is always a human action, even with broad scopes.
 		if _, err = f.gen.EnqueuePagesFromScript(ctx, actor, gen.PagesFromScriptRequest{ProjectID: f.project.ID, ChapterID: f.chapter.ID, Replace: true}); err == nil {
 			t.Fatal("agent replacement accepted")
+		}
+	})
+}
+
+func TestImageFallbackPreservesPolicyAndPerCallEnvelope(t *testing.T) {
+	forEachGenDialect(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		f, ps := prepareArt(t, ta, 1)
+		p := createArtPages(t, f, ps, false)[0]
+		fake := &fakeImages{fail: 1, planHook: func(p *ai.ImagePlan) {
+			p.ProviderID = "fixture-remote"
+			p.ModelID = "fixture-image"
+			p.Remote = true
+			p.Estimate = jobs.Cost{USD: .2}
+		}}
+		gen.SetImageServiceForTest(f.gen, fake)
+		j, err := f.gen.EnqueuePanel(ctx, f.actor, gen.PanelRequest{ProjectID: f.project.ID, PageID: p.ID, PanelID: p.Panels[0].ID, Variations: 2, ExpectedVersion: p.Version, RoutingMode: ai.ModeBest})
+		if err != nil {
+			t.Fatal(err)
+		}
+		failed := runArtJob(t, ta, j.ID)
+		if failed.State != jobs.StateQueued || failed.ProviderID != ai.PlaceholderID {
+			t.Fatalf("expected bounded fallback: %+v", failed)
+		}
+		done := runArtJob(t, ta, j.ID)
+		if done.State != jobs.StateDone || done.Attempts != 2 {
+			t.Fatalf("fallback failed: %+v", done.Error)
+		}
+		fake.mu.Lock()
+		defer fake.mu.Unlock()
+		for _, r := range fake.requests {
+			if r.Plan.RoutingMode != ai.ModeBest || r.Plan.Needs.Count != 2 || r.Plan.PinModelID != "" || r.Plan.Task != ai.TaskPanel {
+				t.Fatalf("policy mutated across fallback: %+v", r.Plan)
+			}
+		}
+	})
+}
+
+func TestInteractiveArtRunsBeforeBackgroundPageBatch(t *testing.T) {
+	forEachGenDialect(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		f, ps := prepareArt(t, ta, 2)
+		gen.SetImageServiceForTest(f.gen, &fakeImages{})
+		_ = createArtPages(t, f, ps, true)
+		j, err := f.gen.EnqueueCharacterSheet(ctx, f.actor, gen.CharacterSheetRequest{ProjectID: f.project.ID, CharacterID: f.characters[0].ID, Count: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := runArtJob(t, ta, j.ID)
+		if done.State != jobs.StateDone {
+			t.Fatal("interactive action was blocked behind background panel jobs", done.State)
+		}
+		children, err := ta.Deps.Jobs.List(ctx, jobs.Filter{ProjectID: f.project.ID, Types: []string{gen.JobPanel}, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, child := range children {
+			if child.State != jobs.StateQueued || !child.Batch {
+				t.Fatal("batch ran before interactive art", child.State, child.Batch)
+			}
+		}
+	})
+}
+
+func TestLargestLayerBundleCandidateRemainsReadable(t *testing.T) {
+	forEachGenDialect(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		f := newGenFixture(t, ta, "", 1)
+		ps := core.MustUse[pagestore.Service](ta.Deps)
+		gen.SetImageServiceForTest(f.gen, &fakeImages{})
+		p := pagedoc.New(db.NewID(), f.project.ID, f.chapter.ID, 1, 100, 150, "rtl")
+		pn := pagedoc.Panel{ID: db.NewID(), Points: pagedoc.RectPoints(pagedoc.Rect{X: 5, Y: 5, W: 90, H: 140}), PromptSource: "user", Layers: []pagedoc.Layer{}}
+		for i := 0; i < 15; i++ {
+			kind, cid := pagedoc.LayerCharacter, f.characters[0].ID
+			if i == 0 {
+				kind, cid = pagedoc.LayerBackground, ""
+			}
+			if i == 14 {
+				kind, cid = pagedoc.LayerFX, ""
+			}
+			pn.Layers = append(pn.Layers, pagedoc.Layer{ID: db.NewID(), Kind: kind, CharacterID: cid, Name: "Component", Order: i, Visible: true, Opacity: 1, Provenance: "human"})
+		}
+		p.Panels = []pagedoc.Panel{pn}
+		if err := ta.Deps.DB.WithTx(ctx, func(tx *db.Tx) error {
+			_, err := ps.CreatePagesTx(ctx, tx, p.ChapterID, []pagedoc.Page{p}, pagestore.Change{ActorKind: "user", ActorID: f.owner.ID, Action: "create"})
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		p, _ = ps.GetPage(ctx, p.ID)
+		j, err := f.gen.EnqueuePanel(ctx, f.actor, gen.PanelRequest{ProjectID: p.ProjectID, PageID: p.ID, PanelID: pn.ID, Variations: 4, ExpectedVersion: p.Version, Prompt: strings.Repeat("\x00", pagedoc.MaxPromptRunes)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := runArtJob(t, ta, j.ID)
+		if done.State != jobs.StateDone {
+			t.Fatal(done.Error)
+		}
+		if len(done.Output) <= 1<<20 {
+			t.Fatal("fixture does not exercise escaped maximum-size prompt output")
+		}
+		cs, err := f.gen.Candidates(ctx, f.actor, j.ID)
+		if err != nil || len(cs) != 4 || len(cs[0].Layers) != 15 {
+			t.Fatalf("valid maximum bundle is unreadable: %d %v", len(cs), err)
 		}
 	})
 }

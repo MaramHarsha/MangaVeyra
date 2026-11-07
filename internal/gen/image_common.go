@@ -121,6 +121,9 @@ func lockSQL(tx *db.Tx) string {
 }
 func validateImagePlan(p ai.ImagePlan) error {
 	n := p.Needs
+	if !boundedIdentifier(p.PinProviderID) || !boundedIdentifier(p.PinModelID) || p.PinProviderID != "" && p.PinProviderID != p.ProviderID || p.PinModelID != "" && p.PinModelID != p.ModelID || p.RoutingMode == ai.ModeLocalOnly && p.ProviderID != ai.PlaceholderID || p.RoutingMode == ai.ModeFreeOnly && p.Remote {
+		return studio.ErrInvalid
+	}
 	if p.Task != ai.TaskPanel && p.Task != ai.TaskCharacterSheet && p.Task != ai.TaskRegionEdit {
 		return studio.ErrInvalid
 	}
@@ -180,7 +183,19 @@ func (s *service) failoverImage(ctx context.Context, j *jobs.Job, failure jobs.J
 	if validateImagePlan(plan) != nil {
 		return nil, nil
 	}
-	return s.fallback(ctx, j, plan, failure)
+	rr, err := s.fallback(ctx, j, plan, failure)
+	if err != nil || rr == nil {
+		return rr, err
+	}
+	remote := rr.ProviderID != ai.PlaceholderID && rr.ProviderID != "local-worker"
+	if !p.Plan.Remote && remote || rr.Executor != "" && rr.Executor != jobs.ExecutorGo {
+		return nil, nil
+	}
+	quoted, err := s.images.PlanImage(ctx, ai.ImagePlanRequest{Task: p.Plan.Task, ActorID: j.UserID, ProjectID: j.Scope.ProjectID, RoutingMode: p.Plan.RoutingMode, Needs: p.Plan.Needs, PublicSeries: p.Plan.PublicSeries, PinProviderID: rr.ProviderID, PinModelID: rr.ModelID})
+	if err != nil || validateImagePlan(quoted) != nil || quoted.ProviderID != rr.ProviderID || quoted.ModelID != rr.ModelID || quoted.Needs != p.Plan.Needs || quoted.Estimate.USD > p.Plan.Estimate.USD+.0000001 || quoted.Estimate.GPUSeconds > p.Plan.Estimate.GPUSeconds+.0000001 {
+		return nil, nil
+	}
+	return rr, nil
 }
 func stringJSON(v any) string { b, _ := json.Marshal(v); return string(b) }
 
@@ -262,7 +277,11 @@ func (s *service) enqueueImage(ctx context.Context, p imagePayload) (*jobs.Job, 
 	return s.queue.Enqueue(ctx, s.imageParams(p, actor, cost))
 }
 func (s *service) imageParams(p imagePayload, actor studio.Actor, cost jobs.Cost) jobs.EnqueueParams {
-	return jobs.EnqueueParams{Type: p.Plan.Task, Scope: p.Scope, UserID: actor.UserID, Executor: jobs.ExecutorGo, ProviderID: p.Plan.ProviderID, ModelID: p.Plan.ModelID, Decision: json.RawMessage(p.Plan.Decision), Input: p, Estimate: cost, MaxAttempts: imageAttempts, ParentID: p.BatchID, Guard: func(ctx context.Context, tx *db.Tx) error {
+	priority := 10
+	if p.BatchID != "" {
+		priority = -10
+	}
+	return jobs.EnqueueParams{Priority: priority, Batch: p.BatchID != "", Type: p.Plan.Task, Scope: p.Scope, UserID: actor.UserID, Executor: jobs.ExecutorGo, ProviderID: p.Plan.ProviderID, ModelID: p.Plan.ModelID, Decision: json.RawMessage(p.Plan.Decision), Input: p, Estimate: cost, MaxAttempts: imageAttempts, ParentID: p.BatchID, Guard: func(ctx context.Context, tx *db.Tx) error {
 		if err := s.checkImageTx(ctx, tx, p, actor); err != nil {
 			return err
 		}
