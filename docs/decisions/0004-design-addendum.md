@@ -309,6 +309,18 @@ filmstrip/footer and redundant history shortcut are hidden in these workbenches.
   optional training/assessment actions, queue progress and the D12 link. Similarity is explicitly not an identity
   guarantee. Missing capabilities/three distinct references keep training unavailable. No sample percentage or
   invented training duration is shown. C4 links to the real character status after keeping a reference.
+  The measurement caption names the actually selected CCIP or DINOv2 method; changing model/weight revisions
+  never mixes different methods in a displayed aggregate. A newly selected model remains unassessed until fresh
+  evidence exists. Whole-percent labels truncate measurements so a failing score cannot round up to 90%.
+  This changes no artboard geometry or components.
+  The designed 36px, twelve-bar chart now uses up to twelve recent current-method measurements, with accessible
+  numeric descriptions. Missing evidence never creates placeholder bars. D12's kept-reference thumbnails retain
+  the designed frames and contain the full images, matching the existing reference-card pattern, so a portrait's
+  face and boots are not cropped away.
+  The existing reference-upload form explains that outfit views bind the current default outfit. This is needed
+  to keep variants separate; it adds bilingual helper text using the existing form/help pattern. The measured
+  caption distinguishes learned matching to kept outfit views from raw cosine. Actual longer names wrap and
+  the necessary readiness/actions make C3 taller than the sample, without changing its grid or components.
 - **Pose input:** the existing Leap/Crouch/Run cards show their own skeletons. Sketch opens the normalized joint
   editor; arrow keys (Shift for larger steps) and pointer dragging move joints. Its helper and clear control use
   existing inspector patterns. Generated control images are machine inputs, not a new product illustration style.

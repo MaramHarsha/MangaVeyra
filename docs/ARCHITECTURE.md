@@ -252,8 +252,13 @@ Phase 2 adds `gen.ControlService` for atomic page generation, selected-character
 and attributable learned assessments. Migration 0202 stores current asset/reference/method evidence separately
 from historical page percentages. D4/D10/D12 are documented rich editor islands; C3 remains server rendered with
 ordinary POST forms. See [ADR 0010](decisions/0010-phase-2-scoped-control-and-character-evidence.md) for their fences,
-offline-model rules and remaining quality acceptance. `cmd/phase2check` is an explicitly gated, temporary-data live
+offline-model rules and initial quality assessment. `cmd/phase2check` is an explicitly gated, temporary-data live
 acceptance harness and is not part of normal application startup or routing.
+Explicit CCIP selection, method binding and validated per-view outfit matching are described in
+[ADR 0011](decisions/0011-explicit-anime-scoring-and-outfit-validation.md). Migration 0203 binds kept outfit views
+to the current default variant without assigning legacy views. The final explicit offline scorer passes the
+thirty-page acceptance; failed earlier metrics remain separate. See the
+[completion evidence](qa/phase-2-completion-2026-11-08.md) for scope, validation limits and pixel isolation.
 
 ```
 make tools     # templ, golangci-lint (optional)

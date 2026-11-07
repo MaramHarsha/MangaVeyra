@@ -1,6 +1,6 @@
 # Phase 2: Consistency and control
 
-- Status: Active — milestones 1, 2 and 4 implemented and verified; learned-consistency acceptance in 3/5 has failed.
+- Status: Complete — all five milestones verified; 30/30 identity/outfit checks and page-7 isolation acceptance pass.
 - Base: merged Phase 1, `12041ed` on `main`.
 - Branch: `phase-2/consistency-control`.
 - Owner direction: start Phase 2, follow the supplied design exactly; mobile UI is deferred.
@@ -41,12 +41,12 @@ mobile optimisation, translation, animation, World and any new visual direction 
    authority, ordinary no-JavaScript forms, safe links and recovery. Activate shell links only after routes exist.
 2. [x] **History and scoped control.** Compare/revert through the existing version fence; page regeneration with
    neighbour context; explicit page/panel locks; prove unrelated pages/layers/lettering stay unchanged.
-3. [ ] **Character consistency.** Reference-first identity/outfit assessment and drift indicators in C3/C4/D8;
+3. [x] **Character consistency.** Reference-first identity/outfit assessment and drift indicators in C3/C4/D8;
    designed D12 fix scoped to the character layer. Select and document an appropriately licensed scoring backend
    before claiming measured identity scores. Optional worker LoRA training retains honest readiness and provenance.
 4. [x] **Pose and sketch (D4).** Designed pose presets/stick sketch and sketch-to-manga with bounded inputs, explicit
    scope and protected lettering/locks. No invented quality score or unsupported backend promise.
-5. [ ] **Integrated Phase 2 verification.** Design comparison, local gates and a recorded chapter-scale quality
+5. [x] **Integrated Phase 2 verification.** Design comparison, local gates and a recorded chapter-scale quality
    assessment using configured capabilities. Mark the phase complete only when its final acceptance has evidence.
 
 Milestone 1 does not depend on GPU quality or a new provider. Later milestones depend on their service contracts
@@ -57,12 +57,18 @@ Milestone 1 results and remaining design/runtime differences are recorded in
 The remaining control implementation, verification and live acceptance results are recorded in
 [the control QA record](../qa/phase-2-control-2026-11-08.md) and
 [ADR 0010](../decisions/0010-phase-2-scoped-control-and-character-evidence.md). Character assessment/repair and
-optional training have runtime paths and protocol checks; the final consistency requirement is still unsatisfied.
-The real chapter has 30 different generated character assets. All 30 fall below 0.90 with the current learned
-metric, including after representative repairs. Do not mark Phase 2 complete, lower the threshold to make this
-test pass, substitute synthetic scores or repeat one character image across pages.
+optional training have runtime paths and protocol checks. The final
+[completion record](../qa/phase-2-completion-2026-11-08.md) verifies all remaining acceptance and software gates.
+The real chapter has 30 different generated character assets. The original DINOv2 failure and intermediate raw
+CCIP outfit failures remain preserved. The validated explicit outfit-view profile now passes all 30 identity and
+outfit checks, with zero drift/unassessed appearances. Four independently generated, reviewed canonical outfit
+views were kept only after prospective validation; no acceptance/control image entered training or the reference
+pack. These reference changes and final assessment leave all 30 page documents/art assets unchanged. The current
+page-7 corrected image retains the exact outside-mask/29-page isolation proof. No threshold, recorded measurement
+or frozen fit was changed to pass the chapter; learned outfit matches are named distinctly from raw cosine.
+Total direct OpenAI use is USD 7.278736 of the single USD 10 cap. Mobile optimisation remains deferred.
 
-## Remaining implementation contract
+## Implementation contract
 
 - Single-page regeneration stages all independent art layers and commits the page atomically. It reads only the
   immediately preceding/following pages for context; it never writes them. All target locks, authorization,
@@ -70,18 +76,28 @@ test pass, substitute synthetic scores or repeat one character image across page
 - Basic history uses D10's two-preview/history anatomy. Branch creation/merge remain visible Soon (Phase 6).
   Snapshot access is scoped to the current project/chapter/page. Restoring creates a new version.
 - Character Lock uses explicit reference-first evaluation, separate identity/outfit evidence and a named scoring
-  method. DINOv2 is the selected optional learned embedder; no restricted InsightFace weights are selected
+  method. Explicitly provisioned CCIP is the anime-specific option alongside DINOv2; no restricted InsightFace weights are selected
   automatically and no structural/mock result is presented as a measured identity percentage.
 - D12 repairs only explicitly selected character layers. D4 keeps the existing polygon layout and editable
   lettering, with upload/drawing and a composition-strength control. Unsupported detection/camera capabilities
   retain the designed disabled controls with an honest reason.
 - Optional worker training must bind the character/reference revision, compatible base model and artifact. It must
-  never report ready on a mock artifact or install/download weights automatically.
+  never report ready on a mock artifact or install/download weights automatically. Dataset preparation must retain
+  the whole character and alpha-composite on white; it must not crop away the face or silently mirror asymmetric
+  identity details. Verify both the built-in and external preparation paths.
 - The root owns `internal/{gen,editor,pagedoc,pagestore,studio,studioui,ai}`, worker scoring/training integration,
   editor islands/styles, bilingual catalogues, migrations, E2E and evidence. No concurrent editing agents.
 - Final quality assessment requires a real configured scoring backend and original chapter art. Deterministic
   tests prove scope isolation and recovery, not the roadmap's 30-page visual-quality acceptance. Prepare the
   assessment and report any missing runtime capability explicitly; do not mark that acceptance complete without it.
+- The continuation first validates the scorer on kept references, independent same/different-character examples
+  and outfit counterexamples. Keep the failed chapter evidence intact. Compare licensed anime-specific scoring
+  only after model setup is authorized; runtime installation remains explicit. The root owns the worker training,
+  scoring/protocol integration, focused regressions and the acceptance harness. Re-run the smallest affected gates
+  while working, followed by the full integration gates below. The USD 10 approval is one total cap, not a new cap
+  per continuation.
+- C3's approved twelve-bar chart displays only recent real measurements for the current method/reference; it
+  cannot reuse stale scores or manufacture a full chart. Match the handoff's 36px chart height and existing tokens.
 
 ## Ownership and verification
 

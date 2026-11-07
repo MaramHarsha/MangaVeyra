@@ -1,6 +1,7 @@
 # Phase 2 live acceptance
 
-Status: executed under owner approval on 2026-11-08; scope/pixel checks passed, learned-consistency acceptance failed.
+Status: complete under owner approval on 2026-11-08; final consistency and scope/pixel acceptance pass.
+The initial failed DINOv2 result below is retained as historical evidence.
 Parent: [plan 0006](0006-phase-2-consistency-and-control.md), milestone 5.
 
 The software checks use isolated fixtures. Final acceptance additionally needs a real 30-page original chapter,
@@ -60,3 +61,33 @@ Weights: revision `ed25f3a31f01632728cabb09d1542f84ab7b0056`, SHA256
 Environment, reproducible harness, evidence locations, design comparison and remaining work are in
 [the QA record](../qa/phase-2-control-2026-11-08.md). Further model selection/calibration must preserve honest
 evidence and the owner’s acceptance contract; this failed result must not be described as Phase 2 completion.
+
+## Authorized continuation
+
+The owner requested completion and delegated the scorer/setup choice after the explicit request to evaluate CCIP
+and install the isolated CPU test dependencies. The same USD 10 total cap remains in force. CCIP is a separately
+provisioned, opt-in anime-character scorer with OpenRAIL-tagged weights; DINOv2 remains available. No weights are
+bundled and no runtime download is enabled. Independent original identity/outfit controls are generated in a
+separate temporary project, rather than adding acceptance-page images to the kept references.
+
+The first CCIP run followed by 13 deliberate D12 layer corrections brought all 30 identity measurements above
+0.90. Ten outfit measurements remained below 0.90; combined acceptance was still open at that checkpoint. A labelled page-7
+region run retains the original evidence and again proves all 29 other documents and every outside pixel unchanged.
+Current evidence and the additional model comparisons are recorded in the continuation QA record.
+
+The initial bounded wardrobe experiments concluded without a validated replacement: the framing-corrected candidate
+passed fresh held-out identities but failed one of six fresh controls, so it is not enabled or applied to the
+chapter. Full-precision CCIP reassessment retains 30 identity passes, 20 combined passes and ten outfit failures.
+At that checkpoint the total was 113 OpenAI calls / USD 5.926425 of the original USD 10 cap, with no pending reservations.
+See [the continuation QA record](../qa/phase-2-completion-2026-11-08.md) and
+[plan 0008](0008-outfit-validation.md) for those preserved failures.
+
+The reference-coverage continuation in [plan 0009](0009-outfit-reference-coverage.md) subsequently validated the
+unchanged frozen clothing fit against each of five dedicated kept outfit views. The final fresh controls produce
+all intended pass/reject decisions, with component limitations explicitly recorded. No acceptance image enters
+fitting or the reference pack, and the 0.90 identity/outfit gates remain unchanged. Four reviewed pose views were
+kept only after validation. The final real worker/server assessment passes all thirty identity/outfit checks;
+all page documents and image assets stay unchanged. The page-7 corrected asset remains current, with 4,399 changed
+inside pixels, all 441,616 outside pixels identical and the other twenty-nine page documents/assets unchanged.
+Final total: **141 OpenAI calls / USD 7.278736 / 10**, zero pending reservations. All applicable Go, web, worker,
+browser, edition, template/module and desktop/basic-phone checks pass; mobile optimisation remains deferred.

@@ -50,9 +50,10 @@
   cancellation, admin worker pause/resume, categorized notifications and explicit read actions.
 - **Phase 2 controls:** designed D4/D10/D12 workbenches, atomic page art regeneration with neighbour context,
   snapshot comparison/restore, selected-character repair, pose presets/joint editing and sketch conversion.
-  C3 shows real learned identity/outfit evidence and optional compatible-worker training status. DINOv2 requires
-  explicit local provisioning. The live 30-page consistency threshold has **not passed**; Phase 2 remains active
-  in [plan 0006](docs/plans/0006-phase-2-consistency-and-control.md).
+  C3 shows real learned identity/outfit evidence and optional compatible-worker training status. CCIP and DINOv2 require
+  explicit local provisioning. The validated outfit-view profile passes all 30 live identity/outfit checks and the
+  page-7 isolation acceptance. See [Phase 2 completion evidence](docs/qa/phase-2-completion-2026-11-08.md) and
+  [plan 0006](docs/plans/0006-phase-2-consistency-and-control.md); mobile optimisation remains deferred.
 - **Gate A generation:** deterministic offline script generation and fixed-model OpenRouter or OpenAI structured
   text, with hard spend reservations, project/token authorization, revision fencing and honest AI provenance.
 - **Visual generation:** deterministic offline images, fixed OpenAI/OpenRouter/fal image adapters, configured worker

@@ -53,8 +53,11 @@ available identity/outfit measurements; D12 lists individual values below the ex
 
 DINOv2 is a general visual feature model, not a calibrated manga identity verifier. Similarity is not an identity
 probability or a guarantee. The approved live run produced real manga but failed the 30-page threshold, including
-after representative repairs. This is a remaining acceptance issue, not a passing quality result. See the
+after representative repairs. Preserve that initial failure rather than describing it as a passing quality result. See the
 [live acceptance plan](../plans/0007-phase-2-live-acceptance.md) and [QA record](../qa/phase-2-control-2026-11-08.md).
+The later explicit anime/outfit-view profile is defined in [ADR 0011](0011-explicit-anime-scoring-and-outfit-validation.md);
+its independently validated thirty-page pass and unchanged page-7 isolation are recorded in the
+[completion evidence](../qa/phase-2-completion-2026-11-08.md). The DINOv2 measurements themselves remain unchanged.
 
 ## Optional training, poses and sketch conversion
 
