@@ -462,20 +462,32 @@ func writeChildren(ctx context.Context, tx *db.Tx, p pagedoc.Page, now time.Time
 			points[i].X *= 100 / float64(p.Width)
 			points[i].Y *= 100 / float64(p.Height)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO panels (id, project_id, page_id, order_idx, points, script_panel_id,
+		if err := writeOne(ctx, tx, `INSERT INTO panels (id, project_id, page_id, order_idx, points, script_panel_id,
 			prompt, prompt_source, camera, shot, style, pose, locked, locked_by, alt_text, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, pn.ID, p.ProjectID, p.ID, pn.Order,
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (id) DO UPDATE SET order_idx = excluded.order_idx, points = excluded.points,
+			script_panel_id = excluded.script_panel_id, prompt = excluded.prompt, prompt_source = excluded.prompt_source,
+			camera = excluded.camera, shot = excluded.shot, style = excluded.style, pose = excluded.pose,
+			locked = excluded.locked, locked_by = excluded.locked_by, alt_text = excluded.alt_text, updated_at = excluded.updated_at
+			WHERE panels.page_id = excluded.page_id AND panels.project_id = excluded.project_id`, pn.ID, p.ProjectID, p.ID, pn.Order,
 			jsonValue(points), optional(pn.ScriptPanelID), pn.Prompt, pn.PromptSource, pn.Camera, pn.Shot, pn.Style,
 			jsonValue(pn.Pose), pn.Locked, optional(pn.LockedBy), pn.AltText, now, now); err != nil {
 			return fmt.Errorf("%w: insert panel: %w", ErrInvalid, err)
 		}
 		for _, l := range pn.Layers {
-			if _, err := tx.Exec(ctx, `INSERT INTO layers (id, panel_id, kind, name, character_id, asset_id, mask_asset_id,
+			if err := writeOne(ctx, tx, `INSERT INTO layers (id, panel_id, kind, name, character_id, asset_id, mask_asset_id,
 				order_idx, visible, locked, opacity, blend, transform, provenance, model_id, provider_id, job_id, seed,
-				prompt, lock_score, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				prompt, lock_score, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				ON CONFLICT (id) DO UPDATE SET panel_id = excluded.panel_id, kind = excluded.kind, name = excluded.name,
+				character_id = excluded.character_id, asset_id = excluded.asset_id, mask_asset_id = excluded.mask_asset_id,
+				order_idx = excluded.order_idx, visible = excluded.visible, locked = excluded.locked, opacity = excluded.opacity,
+				blend = excluded.blend, transform = excluded.transform, provenance = excluded.provenance, model_id = excluded.model_id,
+				provider_id = excluded.provider_id, job_id = excluded.job_id, seed = excluded.seed, prompt = excluded.prompt,
+				lock_score = excluded.lock_score, updated_at = excluded.updated_at
+				WHERE layers.panel_id IN (SELECT id FROM panels WHERE page_id = ?)`,
 				l.ID, pn.ID, l.Kind, l.Name, optional(l.CharacterID), assetID(l.Asset), assetID(l.Mask), l.Order, l.Visible,
 				l.Locked, l.Opacity, l.Blend, jsonValue(l.Transform), l.Provenance, l.ModelID, l.ProviderID, optional(l.JobID),
-				l.Seed, l.Prompt, l.LockScore, now, now); err != nil {
+				l.Seed, l.Prompt, l.LockScore, now, now, p.ID); err != nil {
 				return fmt.Errorf("%w: insert layer: %w", ErrInvalid, err)
 			}
 		}
@@ -488,8 +500,12 @@ func writeChildren(ctx context.Context, tx *db.Tx, p pagedoc.Page, now time.Time
 		box.H *= 100 / float64(p.Height)
 		tail.Tip.X *= 100 / float64(p.Width)
 		tail.Tip.Y *= 100 / float64(p.Height)
-		if _, err := tx.Exec(ctx, `INSERT INTO bubbles (id, page_id, panel_id, kind, speaker_character_id, script_panel_id,
-			order_idx, geometry, tail, style, vertical, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		if err := writeOne(ctx, tx, `INSERT INTO bubbles (id, page_id, panel_id, kind, speaker_character_id, script_panel_id,
+			order_idx, geometry, tail, style, vertical, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (id) DO UPDATE SET panel_id = excluded.panel_id, kind = excluded.kind,
+			speaker_character_id = excluded.speaker_character_id, script_panel_id = excluded.script_panel_id,
+			order_idx = excluded.order_idx, geometry = excluded.geometry, tail = excluded.tail, style = excluded.style,
+			vertical = excluded.vertical, updated_at = excluded.updated_at WHERE bubbles.page_id = excluded.page_id`,
 			b.ID, p.ID, optional(b.PanelID), b.Kind, optional(b.SpeakerCharacterID), optional(b.ScriptPanelID), b.Order,
 			jsonValue(box), jsonValue(tail), jsonValue(bubbleStyle{BubbleStyle: b.Style, Shape: b.Shape}), b.Vertical, now, now); err != nil {
 			return fmt.Errorf("%w: insert bubble: %w", ErrInvalid, err)
@@ -499,12 +515,75 @@ func writeChildren(ctx context.Context, tx *db.Tx, p pagedoc.Page, now time.Time
 				Ruby []pagedoc.Ruby `json:"ruby,omitempty"`
 			}{Ruby: text.Ruby}
 			if _, err := tx.Exec(ctx, `INSERT INTO bubble_texts (id, bubble_id, lang, text, status, source, fit, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, db.NewID(), b.ID, lang, text.Text, text.Status, text.Source, jsonValue(fit), now, now); err != nil {
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (bubble_id, lang) DO UPDATE SET text = excluded.text,
+				status = excluded.status, source = excluded.source, fit = excluded.fit, updated_at = excluded.updated_at`,
+				db.NewID(), b.ID, lang, text.Text, text.Status, text.Source, jsonValue(fit), now, now); err != nil {
 				return fmt.Errorf("%w: insert bubble text: %w", ErrInvalid, err)
 			}
 		}
 	}
+	// Prune only removed children, after all upserts so moving a retained layer
+	// between this page's panels never deletes it. Kept panel rows preserve
+	// continuity anchors and other metadata outside the page document.
+	panelIDs := make([]string, 0, len(p.Panels))
+	for _, pn := range p.Panels {
+		panelIDs = append(panelIDs, pn.ID)
+		layerIDs := make([]string, 0, len(pn.Layers))
+		for _, l := range pn.Layers {
+			layerIDs = append(layerIDs, l.ID)
+		}
+		if err := prune(ctx, tx, "layers", "panel_id", pn.ID, "id", layerIDs); err != nil {
+			return err
+		}
+	}
+	for _, b := range p.Bubbles {
+		langs := make([]string, 0, len(b.Texts))
+		for lang := range b.Texts {
+			langs = append(langs, lang)
+		}
+		if err := prune(ctx, tx, "bubble_texts", "bubble_id", b.ID, "lang", langs); err != nil {
+			return err
+		}
+	}
+	bubbleIDs := make([]string, 0, len(p.Bubbles))
+	for _, b := range p.Bubbles {
+		bubbleIDs = append(bubbleIDs, b.ID)
+	}
+	if err := prune(ctx, tx, "bubbles", "page_id", p.ID, "id", bubbleIDs); err != nil {
+		return err
+	}
+	return prune(ctx, tx, "panels", "page_id", p.ID, "id", panelIDs)
+}
+
+// A conflict with another page's child must fail the whole save, rather than
+// silently skipping that row or moving private content between pages.
+func writeOne(ctx context.Context, tx *db.Tx, query string, args ...any) error {
+	result, err := tx.Exec(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return ErrInvalid
+	}
 	return nil
+}
+
+// All SQL identifiers are fixed literals supplied above, never document data.
+func prune(ctx context.Context, tx *db.Tx, table, parentColumn, parentID, keyColumn string, keep []string) error {
+	query := `DELETE FROM ` + table + ` WHERE ` + parentColumn + ` = ?`
+	args := []any{parentID}
+	if len(keep) > 0 {
+		query += ` AND ` + keyColumn + ` NOT IN (` + strings.TrimSuffix(strings.Repeat("?,", len(keep)), ",") + `)`
+		for _, id := range keep {
+			args = append(args, id)
+		}
+	}
+	_, err := tx.Exec(ctx, query, args...)
+	return err
 }
 
 func persistPage(ctx context.Context, tx *db.Tx, p pagedoc.Page, ch Change) error {
@@ -512,12 +591,6 @@ func persistPage(ctx context.Context, tx *db.Tx, p pagedoc.Page, ch Change) erro
 	if _, err := tx.Exec(ctx, `UPDATE pages SET number = ?, layout_id = ?, width = ?, height = ?, version = ?,
 		locked = ?, locked_by = ?, thumb_asset_id = ?, notes = ?, updated_at = ? WHERE id = ?`, p.Number, p.LayoutID,
 		p.Width, p.Height, p.Version, p.Locked, optional(p.LockedBy), assetID(p.Thumb), p.Note, now, p.ID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM bubbles WHERE page_id = ?`, p.ID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM panels WHERE page_id = ?`, p.ID); err != nil {
 		return err
 	}
 	if err := writeChildren(ctx, tx, p, now); err != nil {
