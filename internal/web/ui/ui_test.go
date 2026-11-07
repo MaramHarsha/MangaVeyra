@@ -135,3 +135,20 @@ func TestHelpers(t *testing.T) {
 }
 
 type templWriter = io.Writer
+
+func TestFileDropAndVariationCaption(t *testing.T) {
+	drop := render(t, FileDrop(FileDropProps{ID: "ref", Name: "file", Accept: "image/png", Prompt: "Choose an image", DescribedBy: "ref-hint"}))
+	for _, want := range []string{`<label class="mv-filedrop" for="ref">`, `type="file"`, `name="file"`, `accept="image/png"`,
+		`aria-describedby="ref-hint"`, "Choose an image", "ti-upload"} {
+		if !strings.Contains(drop, want) {
+			t.Errorf("file drop lacks %q: %s", want, drop)
+		}
+	}
+	picker := render(t, VariationPicker("Pick a look", "hint", "index", "0", []Variation{
+		{Value: "0", Label: "Sheet 1", Caption: "SHEET 1 · FRONT / SIDE / FACE", ImageURL: "/media/a.png", Lock: -1},
+		{Value: "1", Label: "Sheet 2", ImageURL: "/media/b.png", Lock: -1},
+	}))
+	if strings.Count(picker, `class="mv-var__caption"`) != 1 || !strings.Contains(picker, "SHEET 1 · FRONT / SIDE / FACE") {
+		t.Errorf("variation captions: %s", picker)
+	}
+}

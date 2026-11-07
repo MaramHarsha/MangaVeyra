@@ -241,6 +241,42 @@
 }
 .mv-field__count.is-full { color: var(--mv-warning); }
 
+/* File picker in the design's dashed upload area (G10 "Import comics"); the
+   native button takes the quiet button look and still shows the file name. */
+.mv-filedrop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mv-space-2);
+  min-height: 120px;
+  padding: var(--mv-space-4);
+  border: 2px dashed var(--mv-line);
+  color: var(--mv-text-2);
+  font-size: var(--mv-fs-ui);
+  text-align: center;
+  cursor: pointer;
+}
+.mv-filedrop > .ti { font-size: 28px; }
+.mv-filedrop:hover, .mv-filedrop:focus-within { border-color: var(--mv-text-3); color: var(--mv-text); }
+.mv-filedrop.is-invalid { border-color: var(--mv-error); }
+.mv-filedrop__input { max-width: 100%; color: var(--mv-text-2); font: inherit; font-size: var(--mv-fs-small); cursor: pointer; }
+.mv-filedrop__input:focus-visible { outline: var(--mv-focus-width) solid var(--mv-focus); outline-offset: 3px; }
+.mv-filedrop__input::file-selector-button {
+  height: var(--mv-control-sm);
+  margin-inline-end: var(--mv-space-3);
+  padding: 0 12px;
+  border: 1px solid var(--mv-line);
+  border-radius: var(--mv-radius-control);
+  background: var(--mv-surface-2);
+  color: var(--mv-text);
+  font: inherit;
+  font-size: .8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mv-filedrop__input:hover::file-selector-button { border-color: var(--mv-text-3); }
+
 /* Input with prefix/suffix (http://, search icon, "/" key, strength label, Change link). */
 .mv-input-group {
   display: flex;
@@ -946,6 +982,24 @@
   color: var(--mv-success);
   font-family: var(--mv-font-mono);
   font-size: .625rem;
+}
+/* A committed image keeps its slot label, like the tone placeholder's. */
+.mv-var__caption {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  max-width: calc(100% - 16px);
+  padding: 2px 5px;
+  background: var(--mv-surface);
+  color: var(--mv-text-2);
+  font-family: var(--mv-font-mono);
+  font-size: .625rem;
+  letter-spacing: .04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mv-var:has(> input:checked) { outline: 3px solid var(--mv-accent); outline-offset: 2px; }
 .mv-var:has(> input:checked) .mv-var__key { background: var(--mv-accent); color: var(--mv-on-accent); }

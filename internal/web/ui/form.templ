@@ -202,6 +202,53 @@ templ Textarea(p TextareaProps) {
 	}
 }
 
+// FileDropProps configure a file picker in the design's dashed upload area.
+type FileDropProps struct {
+	ID     string
+	Name   string
+	Accept string
+	// Prompt is the line under the icon ("Choose an image to upload").
+	Prompt   string
+	Required bool
+	Invalid  bool
+	// DescribedBy is the id of the hint or error that explains the picker.
+	DescribedBy string
+	Class       string
+	Attrs       templ.Attributes
+}
+
+// FileDrop renders the dashed upload area of the design (G10 "Import
+// comics") around a native file input whose button uses the kit's quiet
+// button look. The native control shows the chosen file name, so it works
+// without JavaScript.
+templ FileDrop(p FileDropProps) {
+	<label class={ Cls("mv-filedrop", If(p.Invalid, "is-invalid"), p.Class) } for={ p.ID }>
+		@Icon("upload", 28)
+		if p.Prompt != "" {
+			<span class="mv-filedrop__prompt">{ p.Prompt }</span>
+		}
+		<input
+			class="mv-filedrop__input"
+			id={ p.ID }
+			type="file"
+			name={ p.Name }
+			if p.Accept != "" {
+				accept={ p.Accept }
+			}
+			if p.Required {
+				required
+			}
+			if p.Invalid {
+				aria-invalid="true"
+			}
+			if p.DescribedBy != "" {
+				aria-describedby={ p.DescribedBy }
+			}
+			{ p.Attrs... }
+		/>
+	</label>
+}
+
 // Option is one choice of a Select, Segmented control or radio group.
 type Option struct {
 	Value    string

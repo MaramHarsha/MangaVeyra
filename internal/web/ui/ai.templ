@@ -173,6 +173,8 @@ type Variation struct {
 	Label string
 	// ImageURL is an optional committed candidate image; Label remains its alt text.
 	ImageURL string
+	// Caption keeps a visible label on an image ("SHEET 1 · FRONT / SIDE / FACE").
+	Caption string
 	// Lock is the Character Lock score 0–1 (negative hides it).
 	Lock float64
 }
@@ -198,6 +200,9 @@ templ VariationPicker(title, hint, name, selected string, vars []Variation) {
 					/>
 					if v.ImageURL != "" {
 						<img class="mv-var__image" src={ v.ImageURL } alt={ v.Label } width="512" height="512"/>
+						if v.Caption != "" {
+							<span class="mv-var__caption" aria-hidden="true">{ v.Caption }</span>
+						}
 					} else {
 						@ToneBox(v.Label, "", "")
 					}
