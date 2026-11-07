@@ -109,11 +109,22 @@
 .mv-wizard__try:hover { color: var(--mv-text); border-color: var(--mv-text-3); }
 .mv-wizard__try:focus-visible { outline: var(--mv-focus-width) solid var(--mv-focus); outline-offset: 2px; }
 
+/* Adapt mode: paste box and .txt upload side by side, so step 1 keeps Next in
+   view at 1440 x 900 in this mode too. */
 .mv-wizard__adapt {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) auto minmax(0, 2fr);
+  align-items: stretch;
+  gap: var(--mv-space-3) 14px;
   padding: var(--mv-space-4);
   border: 1px dashed var(--mv-line);
 }
+.mv-wizard__adapt > .mv-field { min-width: 0; }
+.mv-wizard__adapt > .mv-notice { grid-column: 1 / -1; }
+.mv-wizard__adapt .mv-textarea { min-height: 112px; }
+.mv-wizard__adapt .mv-filedrop { flex: 1 1 auto; min-height: 112px; padding: var(--mv-space-3); gap: var(--mv-space-1); }
 .mv-wizard__or {
+  align-self: center;
   font-family: var(--mv-font-mono);
   font-size: var(--mv-fs-meta);
   color: var(--mv-text-3);

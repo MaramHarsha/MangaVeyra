@@ -259,7 +259,7 @@ templ wizardPremise(v newProjectView) {
 	</div>
 	<div class="mv-wizard__mode mv-wizard__adapt" data-mode-panel="adapt">
 		@ui.Field(ui.FieldProps{ID: "source_text", Label: i18n.T(ctx, "studioui.new.source_label"), Hint: i18n.T(ctx, "studioui.new.source_hint"), Error: v.Errors["source_text"]}) {
-			@ui.Textarea(ui.TextareaProps{ID: "source_text", Name: "source_text", Value: v.Values.SourceText, Placeholder: i18n.T(ctx, "studioui.new.source_placeholder"), Rows: 6, Invalid: v.Errors["source_text"] != ""})
+			@ui.Textarea(ui.TextareaProps{ID: "source_text", Name: "source_text", Value: v.Values.SourceText, Placeholder: i18n.T(ctx, "studioui.new.source_placeholder"), Rows: 4, Invalid: v.Errors["source_text"] != ""})
 		}
 		<span class="mv-wizard__or">{ i18n.T(ctx, "studioui.new.or") }</span>
 		@ui.Field(ui.FieldProps{ID: "source_file", Label: i18n.T(ctx, "studioui.new.upload_label"), Hint: i18n.T(ctx, "studioui.new.upload_hint"), Error: v.Errors["source_file"]}) {

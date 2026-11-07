@@ -1162,7 +1162,7 @@ func wizardPremise(v newProjectView) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = ui.Textarea(ui.TextareaProps{ID: "source_text", Name: "source_text", Value: v.Values.SourceText, Placeholder: i18n.T(ctx, "studioui.new.source_placeholder"), Rows: 6, Invalid: v.Errors["source_text"] != ""}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Textarea(ui.TextareaProps{ID: "source_text", Name: "source_text", Value: v.Values.SourceText, Placeholder: i18n.T(ctx, "studioui.new.source_placeholder"), Rows: 4, Invalid: v.Errors["source_text"] != ""}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
