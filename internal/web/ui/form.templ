@@ -172,7 +172,8 @@ type TextareaProps struct {
 	Attrs       templ.Attributes
 }
 
-// Textarea renders a multi-line field; with MaxLength it shows "n / max".
+// Textarea renders a multi-line field; with MaxLength it shows "n / max",
+// which web/src/lib/counter.ts keeps live while the user types.
 templ Textarea(p TextareaProps) {
 	<textarea
 		class={ Cls("mv-textarea", p.Class) }
@@ -197,7 +198,7 @@ templ Textarea(p TextareaProps) {
 		{ p.Attrs... }
 	>{ p.Value }</textarea>
 	if p.MaxLength > 0 {
-		<span class="mv-field__count" aria-hidden="true">{ strconv.Itoa(len([]rune(p.Value))) } / { strconv.Itoa(p.MaxLength) }</span>
+		<span class="mv-field__count" aria-hidden="true" data-count-for={ p.ID } data-max={ strconv.Itoa(p.MaxLength) }>{ strconv.Itoa(len([]rune(p.Value))) } / { strconv.Itoa(p.MaxLength) }</span>
 	}
 }
 

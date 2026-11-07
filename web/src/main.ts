@@ -16,6 +16,7 @@ import { passwordStrength } from './lib/password';
 import './lib/studio';
 import './lib/export';
 import { installForms } from './lib/forms';
+import { installCounters } from './lib/counter';
 import { mountIslands, unmountIslands } from './islands/registry';
 
 declare global {
@@ -33,6 +34,7 @@ declare global {
 const root = document.documentElement;
 root.classList.add('js');
 installForms();
+installCounters();
 
 // ---- HTMX -------------------------------------------------------------------
 
