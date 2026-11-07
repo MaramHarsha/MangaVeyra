@@ -176,13 +176,50 @@ func (r *renderer) Canvas(ctx context.Context, p pagedoc.Page, o Options) (*canv
 		if err != nil {
 			return nil, err
 		}
+		bubbles := make(map[string]string, len(p.Bubbles))
+		for _, b := range p.Bubbles {
+			bubbles[b.ID] = b.PanelID
+		}
 		for _, l := range ls {
+			opacity := letteringOpacity(p, bubbles[l.BubbleID])
+			if opacity == 0 {
+				continue
+			}
+			if opacity != 1 {
+				l.Fill = opacityColor(l.Fill, opacity)
+				l.Stroke = opacityColor(l.Stroke, opacity)
+				l.TextColor = opacityColor(l.TextColor, opacity)
+				l.TextStroke = opacityColor(l.TextStroke, opacity)
+			}
 			if err := r.lettering.Draw(cc, l); err != nil {
 				return nil, err
 			}
 		}
 	}
 	return c, nil
+}
+
+func letteringOpacity(p pagedoc.Page, panelID string) float64 {
+	if pn := p.Panel(panelID); pn != nil {
+		for _, l := range pn.Layers {
+			if l.Kind == pagedoc.LayerLettering {
+				if !l.Visible {
+					return 0
+				}
+				return l.Opacity
+			}
+		}
+	}
+	// Legacy documents and page-level captions need no explicit layer.
+	return 1
+}
+
+func opacityColor(hex string, opacity float64) string {
+	if hex == "" {
+		return ""
+	}
+	c := color.NRGBAModel.Convert(canvas.Hex(hex)).(color.NRGBA)
+	return fmt.Sprintf("#%02x%02x%02x%02x", c.R, c.G, c.B, uint8(math.Round(float64(c.A)*opacity)))
 }
 func polygonPath(points []pagedoc.Point) *canvas.Path {
 	p := &canvas.Path{}

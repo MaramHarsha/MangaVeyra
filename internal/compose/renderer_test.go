@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
@@ -210,5 +211,63 @@ func TestLetteringProofGeometry(t *testing.T) {
 		if err = os.WriteFile(filepath.Join(dir, "lettering-proof.png"), data, 0600); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestLetteringLayerVisibilityOpacityAndLegacyDocuments(t *testing.T) {
+	e, err := lettering.NewEngine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewRenderer(nil, e)
+	p := pagedoc.New("page", "project", "chapter", 1, 200, 300, "rtl")
+	p.Panels = []pagedoc.Panel{{ID: "panel", Points: pagedoc.RectPoints(pagedoc.Rect{X: 10, Y: 10, W: 180, H: 280}),
+		Layers: []pagedoc.Layer{{ID: "lettering", Kind: "lettering", Visible: true, Opacity: 1, Provenance: "human"}}}}
+	p.Bubbles = []pagedoc.Bubble{{ID: "bubble", PanelID: "panel", Kind: "speech", Shape: "ellipse",
+		Box: pagedoc.Rect{X: 30, Y: 40, W: 140, H: 100}, Style: pagedoc.BubbleStyle{AutoFit: true, Size: 24},
+		Texts: map[string]pagedoc.BubbleText{"en": {Text: "The ferry awaits.", Source: "human"}}}}
+	full, err := r.Image(context.Background(), p, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	off, err := r.PNG(context.Background(), p, Options{NoLettering: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range []struct {
+		visible bool
+		opacity float64
+	}{{false, 1}, {true, 0}} {
+		p.Panels[0].Layers[0].Visible, p.Panels[0].Layers[0].Opacity = state.visible, state.opacity
+		data, err := r.PNG(context.Background(), p, Options{})
+		if err != nil || !bytes.Equal(data, off) {
+			t.Fatalf("hidden lettering rendered: %+v %v", state, err)
+		}
+	}
+	p.Panels[0].Layers[0].Visible, p.Panels[0].Layers[0].Opacity = true, .5
+	half, err := r.Image(context.Background(), p, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	faded := 0
+	for y := 40; y < 140; y++ {
+		for x := 30; x < 170; x++ {
+			fullGray := color.GrayModel.Convert(full.At(x, y)).(color.Gray).Y
+			if fullGray < 30 {
+				halfGray := color.GrayModel.Convert(half.At(x, y)).(color.Gray).Y
+				if halfGray <= fullGray+30 || halfGray >= 240 {
+					t.Fatalf("lettering alpha not applied: full=%d half=%d", fullGray, halfGray)
+				}
+				faded++
+			}
+		}
+	}
+	if faded < 100 {
+		t.Fatal("missing text and outline samples")
+	}
+	p.Panels[0].Layers = nil
+	legacy, err := r.Image(context.Background(), p, Options{})
+	if err != nil || !reflect.DeepEqual(legacy, full) {
+		t.Fatal("legacy bubbles without a lettering layer changed", err)
 	}
 }
