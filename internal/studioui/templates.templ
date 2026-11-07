@@ -646,7 +646,15 @@ templ storyTree(v storyView) {
 // makePagesButton queues revision-bound layout and structured auto-lettering.
 templ makePagesButton(v storyView, class string, full bool) {
 	{{ action := storyPath(v.Project.ID, v.Chapter.ID) + "/pages" }}
-	if !ui.ReadyMethod(ctx, "POST", action) {
+	if v.Chapter.PageCount != 0 {
+		// Pages exist: the same designed button just opens the editor. It is a
+		// plain link, so no revision can go stale while the editor saves pages.
+		<div class={ ui.Cls("mv-c1__make", class) }>
+			@ui.LinkButton(editorPath(v.Project.ID, v.Chapter.ID), ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Icon: "layout-board", Full: full, Attrs: templ.Attributes{"data-open-editor": true}}) {
+				{ i18n.T(ctx, "studioui.story.make_pages") }
+			}
+		</div>
+	} else if !ui.ReadyMethod(ctx, "POST", action) {
 		<div class={ ui.Cls("mv-c1__make", class) }>
 			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Icon: "layout-board", Full: full, Disabled: true, Class: "is-soon", Attrs: templ.Attributes{"title": i18n.T(ctx, "ui.soon_hint")}}) {
 				{ i18n.T(ctx, "studioui.story.make_pages") }

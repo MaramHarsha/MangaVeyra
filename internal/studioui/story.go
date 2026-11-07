@@ -103,6 +103,14 @@ func (m *Module) makePages(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return pageObjectError(err)
 	}
+	editor := editorPath(view.Project.ID, view.Chapter.ID)
+	// Pages already exist, so the button only opens the editor. Every page save
+	// moves the chapter revision, so checking a revision here would turn a
+	// Story page left open during editing into a dead end.
+	if view.Chapter.PageCount != 0 {
+		core.Redirect(w, r, editor)
+		return nil
+	}
 	for _, action := range []studio.Action{studio.ActGenerate, studio.ActEditArt, studio.ActLetter} {
 		if err := m.studio.Authorize(ctx, actor, view.Project.ID, action); err != nil {
 			return pageObjectError(err)
@@ -123,11 +131,6 @@ func (m *Module) makePages(w http.ResponseWriter, r *http.Request) error {
 	}
 	if len(view.Script.Scenes) == 0 {
 		return core.ErrConflict(i18n.T(ctx, "studioui.pages.no_script"))
-	}
-	editor := "/studio/p/" + view.Project.ID + "/chapters/" + view.Chapter.ID + "/edit"
-	if view.Chapter.PageCount != 0 {
-		core.Redirect(w, r, editor)
-		return nil
 	}
 	active, err := m.d.Jobs.List(ctx, jobs.Filter{UserID: actor.UserID, ProjectID: view.Project.ID,
 		ChapterID: view.Chapter.ID, Types: []string{gen.JobPagesFromScript}, States: []string{jobs.StateQueued, jobs.StateRunning}, Limit: 1})

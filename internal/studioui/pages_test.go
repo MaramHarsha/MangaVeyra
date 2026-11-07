@@ -90,3 +90,60 @@ func TestStoryMakePagesRevisionAuthorizationAndEditorHandoff(t *testing.T) {
 		}
 	})
 }
+
+// Once pages exist, "Make pages from script" only opens the editor. Page saves
+// move the chapter revision, so a Story page left open while editing must not
+// end in a 409: the button is a plain link and a stale POST still redirects.
+func TestStoryMakePagesOpensEditorAfterPageSaves(t *testing.T) {
+	forEachStory(t, func(t *testing.T, f storyFixture) {
+		ctx := context.Background()
+		chapter, err := f.studio.GetChapter(ctx, f.chapterID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stale := url.Values{"revision": {chapter.UpdatedAt.Format(time.RFC3339Nano)}}
+		editor := "/studio/p/" + f.projectID + "/chapters/" + f.chapterID + "/edit"
+		got := postForm(f.client, f.storyURL+"/pages", stale)
+		if got.StatusCode != http.StatusSeeOther || !strings.HasPrefix(got.Header.Get("Location"), editor+"?job=") {
+			t.Fatalf("first make pages=%d %s", got.StatusCode, got.Header.Get("Location"))
+		}
+		for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+			chapter, err = f.studio.GetChapter(ctx, f.chapterID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if chapter.PageCount > 0 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("pages were not created")
+			}
+		}
+		// A page save in the editor moves the chapter revision.
+		if _, err := f.ta.Deps.DB.Exec(ctx, `UPDATE chapters SET updated_at = ? WHERE id = ?`,
+			chapter.UpdatedAt.Add(time.Minute), f.chapterID); err != nil {
+			t.Fatal(err)
+		}
+		if got := postForm(f.client, f.storyURL+"/pages", stale); got.StatusCode != http.StatusSeeOther || got.Header.Get("Location") != editor {
+			t.Fatalf("stale make pages=%d %s: %.400s", got.StatusCode, got.Header.Get("Location"), got.Body)
+		}
+		if got := postForm(f.client, f.storyURL+"/pages", url.Values{}); got.StatusCode != http.StatusSeeOther || got.Header.Get("Location") != editor {
+			t.Fatalf("make pages without revision=%d %s", got.StatusCode, got.Header.Get("Location"))
+		}
+		page := f.client.Get(f.storyURL)
+		if page.StatusCode != http.StatusOK {
+			t.Fatalf("story=%d", page.StatusCode)
+		}
+		body := string(page.Body)
+		if strings.Contains(body, `action="`+f.storyURL+`/pages"`) {
+			t.Fatal("story still renders the revision-bound make pages form once pages exist")
+		}
+		if !strings.Contains(body, `href="`+editor+`"`) || !strings.Contains(body, "data-open-editor") {
+			t.Fatal("story does not link make pages to the editor")
+		}
+		count, err := f.ta.Deps.Jobs.List(ctx, jobs.Filter{ProjectID: f.projectID, ChapterID: f.chapterID, Types: []string{gen.JobPagesFromScript}, Limit: 10})
+		if err != nil || len(count) != 1 {
+			t.Fatalf("page batches=%d %v", len(count), err)
+		}
+	})
+}

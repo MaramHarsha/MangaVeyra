@@ -183,6 +183,11 @@ func storyPath(projectID, chapterID string) string {
 	return base + "/" + url.PathEscape(chapterID)
 }
 
+// editorPath is the D1 editor of a chapter.
+func editorPath(projectID, chapterID string) string {
+	return "/studio/p/" + url.PathEscape(projectID) + "/chapters/" + url.PathEscape(chapterID) + "/edit"
+}
+
 func jobPath(projectID, chapterID, jobID string) string {
 	return storyPath(projectID, chapterID) + "/jobs/" + url.PathEscape(jobID)
 }
