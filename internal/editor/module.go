@@ -57,6 +57,7 @@ func (m *Module) Routes(r *core.Router) {
 	r.API("POST "+base+"/pages/{page}/generate", m.generate, core.RequireSession)
 	r.API("POST "+base+"/pages/{page}/masks", m.uploadMask, core.RequireSession)
 	r.API("GET "+base+"/queue", m.queue, core.RequireSession)
+	r.API("GET "+base+"/pages/{page}/layouts", m.pageLayouts, core.RequireSession)
 	r.API("GET "+base+"/pages/{page}/jobs/{job}", m.job, core.RequireSession)
 	r.API("POST "+base+"/pages/{page}/jobs/{job}/apply", m.apply, core.RequireSession)
 }

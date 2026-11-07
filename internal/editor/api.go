@@ -53,6 +53,16 @@ type bootstrapData struct {
 	API         string                  `json:"api"`
 	Lang        string                  `json:"lang"`
 	Messages    map[string]string       `json:"messages"`
+	// Chapters feed the chapter switcher in the top bar.
+	Chapters []chapterLink `json:"chapters"`
+	// Styles are the project art styles with their localised labels.
+	Styles []option `json:"styles"`
+	// Print holds the localised footer labels and the trim size in mm.
+	Print printInfo `json:"print"`
+	// Compute is the live queue and worker state (top-bar meter, footer).
+	Compute computeView `json:"compute"`
+	// Beats summarise the script panels per page number (D2 hint).
+	Beats map[int]beat `json:"beats"`
 }
 type resource struct {
 	Actor   studio.Actor
@@ -205,20 +215,21 @@ func (m *Module) data(r *http.Request, res resource) (bootstrapData, error) {
 	if selected != "" && v.Current == nil {
 		return v, studio.ErrNotFound
 	}
-	panelCount := 5
+	chapters, err := m.studio.ListChapters(ctx, res.Project.ID)
+	if err != nil {
+		return v, err
+	}
+	v.Chapters = chapterLinks(chapters, res.Project.ID)
+	v.Styles = styles(ctx, res.Project.Style)
+	v.Print = printFor(ctx, res.Project)
+	v.Compute = m.compute(r)
+	v.Beats = m.beats(ctx, res.Chapter.ID)
+	panels, number := 0, 0
 	if v.Current != nil {
-		panelCount = len(v.Current.Page.Panels)
+		panels, number = len(v.Current.Page.Panels), v.Current.Page.Number
 	}
-	suggested := pagedoc.Suggest(panelCount, pagedoc.DirectionForFormat(res.Project.Format))
-	chosen := map[string]bool{}
-	for i, l := range suggested {
-		if i < 4 {
-			chosen[l.ID] = true
-		}
-	}
-	for _, l := range pagedoc.Layouts() {
-		v.Layouts = append(v.Layouts, layoutView{ID: l.ID, Name: i18n.T(ctx, "editor.layout."+l.ID), Panels: l.Panels, Points: l.PanelPoints(res.Project.PageWidth, res.Project.PageHeight, pagedoc.DirectionForFormat(res.Project.Format)), Suggested: chosen[l.ID]})
-	}
+	b, ok := v.Beats[number]
+	v.Layouts = layouts(ctx, res.Project, panelTarget(b, ok, panels))
 	return v, nil
 }
 func (m *Module) bootstrap(w http.ResponseWriter, r *http.Request) error {

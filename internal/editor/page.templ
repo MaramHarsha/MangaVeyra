@@ -7,44 +7,115 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
 )
 
+// EditorDocument is the D1 shell. With JavaScript the editor island replaces
+// it; without, it stays a complete read-only proof of the page with page
+// navigation and export (ADR 0004 §8).
 templ EditorDocument(c *layout.Chrome, data bootstrapData, props string) {
 	@layout.EditorShell(c) {
-		<div class="mv-ed" data-island="editor" data-props={ props }>
+		<div class="mv-ed mv-ed--static" data-island="editor" data-props={ props }>
 			<header class="mv-ed__bar">
-				<a href={ templ.URL("/studio/p/" + data.Project.ID + "/story/" + data.Chapter.ID) } class="mv-ed__back" aria-label={ label(ctx, "back") }>@ui.Icon("arrow-left", 20)
-</a>
-				<span class="mv-ed__project">{ data.Project.Title }</span><strong>{ fmt.Sprintf("%d · %s",data.Chapter.Number,data.Chapter.Title) }</strong>
-				<div class="mv-seg"><span class="mv-seg__item">{ label(ctx,"pages") }</span></div>
+				<a href={ templ.URL("/studio/p/" + data.Project.ID + "/story/" + data.Chapter.ID) } class="mv-ed__back" aria-label={ label(ctx, "back") }>
+					<img src="/static/brand/mark-color-on-dark-gate-blue.svg" width="24" height="24" alt=""/>
+				</a>
+				<div class="mv-ed__crumbs">
+					<span class="mv-ed__project">{ data.Project.Title }</span>
+					@ui.Icon("chevron-right", 14)
+					<strong class="mv-ed__chapter">{ chapterLabel(ctx, data.Chapter) }</strong>
+				</div>
+				<div class="mv-seg mv-ed__modes" role="group" aria-label={ label(ctx, "mode") }>
+					<span class="mv-seg__item" aria-current="true">{ label(ctx, "pages") }</span>
+					<span class="mv-seg__item is-soon">{ label(ctx, "lettering") }</span>
+					<span class="mv-seg__item is-soon">{ label(ctx, "translate") }</span>
+					<span class="mv-seg__item is-soon">{ label(ctx, "animate") }</span>
+				</div>
 				<div class="mv-ed__bar-end">
 					@ui.LinkButton(exportHref(data), ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Icon: "download"}) {
-						{ label(ctx,"export") }
+						{ label(ctx, "export") }
 					}
 				</div>
 			</header>
 			<aside class="mv-ed__left">
-				<div class="mv-ed__section-head"><strong>{ label(ctx,"pages") }</strong></div>
+				<div class="mv-ed__section-head"><strong>{ label(ctx, "pages") }</strong></div>
 				<nav class="mv-ed__filmstrip" aria-label={ label(ctx, "pages") }>
-					for _,page:=range data.Pages {
-						<a class="mv-ed__page-thumb" href={ templ.URL(pageHref(data, page.Number)) } aria-current={ pageCurrent(data, page.ID) }>
-							if page.Thumb!=nil&&page.Thumb.URL!="" {
-								<img src={ page.Thumb.URL } alt={ fmt.Sprintf("%d", page.Number) }/>
-							} else {
-								@ui.ToneBox(fmt.Sprintf("%d", page.Number), "", "mv-ed__thumb-art")
-							}
-							<span>{ fmt.Sprintf("%d",page.Number) }</span>
+					for _, page := range data.Pages {
+						<a class="mv-ed__page-thumb" href={ templ.URL(pageHref(data, page.Number)) } aria-current={ pageCurrent(data, page.ID) } aria-label={ label(ctx, "page.number", "number", page.Number) }>
+							<span class="mv-ed__thumb-frame">
+								if page.Thumb != nil && page.Thumb.URL != "" {
+									<img src={ page.Thumb.URL } alt=""/>
+								} else {
+									<svg class="mv-ed__thumb-layout" viewBox={ thumbView(data) } aria-hidden="true">
+										<rect width={ fmt.Sprint(data.Project.PageWidth) } height={ fmt.Sprint(data.Project.PageHeight) } class="mv-ed__layout-paper"></rect>
+										for _, points := range thumbPolygons(data, page) {
+											<polygon points={ polygonString(points) } class="mv-ed__thumb-panel"></polygon>
+										}
+									</svg>
+								}
+								if page.Locked {
+									<span class="mv-ed__thumb-lock">
+										@ui.Icon("lock", 11)
+									</span>
+								}
+							</span>
+							<span class="mv-ed__thumb-number" aria-hidden="true">{ fmt.Sprint(page.Number) }</span>
 						</a>
 					}
 				</nav>
 			</aside>
 			<section class="mv-ed__stage" aria-label={ label(ctx, "canvas") }>
-				if data.Current!=nil {
+				if data.Current != nil {
 					@ReadOnlyPage(*data.Current)
 				} else {
 					@ui.State(ui.StateProps{Title: label(ctx, "empty.title"), Body: label(ctx, "empty.body")})
 				}
 			</section>
-			<aside class="mv-ed__right"><div class="mv-ed__section-head"><strong>{ label(ctx,"properties") }</strong></div><p class="mv-ed__help">{ label(ctx,"loading_editor") }</p><noscript><p class="mv-ed__help">{ label(ctx,"requires_js") }</p></noscript></aside>
-			<footer class="mv-ed__footer"><span>{ data.Project.Format }</span><span>{ data.Project.PageSize }</span><span>{ label(ctx,"lettering_independent") }</span></footer>
+			<aside class="mv-ed__right">
+				if data.Current != nil {
+					<div class="mv-ed__section-head mv-ed__inspector-head">
+						<div>
+							<strong>{ pageTitle(ctx, data.Current.Page) }</strong>
+							<small>{ label(ctx, "page.panels", "count", len(data.Current.Page.Panels)) }</small>
+						</div>
+					</div>
+				} else {
+					<div class="mv-ed__section-head"><strong>{ label(ctx, "properties") }</strong></div>
+				}
+				<p class="mv-ed__help mv-ed__loading">{ label(ctx, "loading_editor") }</p>
+				<noscript><p class="mv-ed__help mv-ed__nojs">{ label(ctx, "requires_js") }</p></noscript>
+				if data.Current != nil {
+					<div class="mv-ed__inspector-scroll mv-ed__proof-panels">
+						for i, pn := range data.Current.Page.Panels {
+							<section class="mv-ed__property">
+								<div class="mv-ed__property-head">
+									<strong>{ panelTitle(ctx, data.Current.Page, i) }</strong>
+									if pn.Locked {
+										<span class="mv-ed__mono">{ label(ctx, "locked") }</span>
+									}
+								</div>
+								if pn.Prompt != "" {
+									<p class="mv-ed__proof-prompt">{ pn.Prompt }</p>
+								}
+								<ul class="mv-ed__proof-layers" aria-label={ label(ctx, "layers") }>
+									for _, l := range orderedLayers(pn) {
+										<li class="mv-ed__layer-row">
+											@ui.Icon(layerIcon(l.Kind), 16)
+											<span>{ layerName(ctx, l, data.Characters) }</span>
+											<small>{ provenanceLabel(ctx, l, panelBubbles(data.Current.Page, pn.ID)) }</small>
+										</li>
+									}
+								</ul>
+							</section>
+						}
+					</div>
+				}
+			</aside>
+			<footer class="mv-ed__footer">
+				if data.Current != nil {
+					<span>{ pageOf(ctx, data) }</span>
+				}
+				<span>{ data.Print.FormatLabel }</span>
+				<span>{ data.Print.SizeLabel }</span>
+				<span class="mv-ed__footer-end">{ label(ctx, "lettering_independent") }</span>
+			</footer>
 		</div>
 	}
 }
@@ -56,21 +127,43 @@ func pageCurrent(data bootstrapData, id string) string {
 	return "false"
 }
 
+// ReadOnlyPage is the static page proof: panel art clipped to its polygons,
+// panel borders and the authoritative lettering paths, scaled to fit.
 templ ReadOnlyPage(v pageResponse) {
-	<svg class="mv-ed__proof" viewBox={ rectView(v.Page) } role="img" aria-label={ label(ctx, "canvas") }>
+	<svg class="mv-ed__proof" viewBox={ rectView(v.Page) } preserveAspectRatio="xMidYMid meet" role="img" aria-label={ pageTitle(ctx, v.Page) }>
+		<defs>
+			for _, pn := range v.Page.Panels {
+				<clipPath id={ clipID(pn) }>
+					<polygon points={ polygonString(pn.Points) }></polygon>
+				</clipPath>
+			}
+		</defs>
 		<rect width={ fmt.Sprint(v.Page.Width) } height={ fmt.Sprint(v.Page.Height) } fill="#ffffff"></rect>
-		for _,pn:=range v.Page.Panels {
-			<polygon points={ polygonString(pn.Points) } fill="#dce3f3" stroke="#070a12" stroke-width="4"></polygon>
+		for _, pn := range v.Page.Panels {
+			<polygon points={ polygonString(pn.Points) } fill="#dce3f3"></polygon>
+			<g clip-path={ "url(#" + clipID(pn) + ")" }>
+				for _, img := range proofImages(pn) {
+					<image href={ img.URL } width={ fmt.Sprint(img.Width) } height={ fmt.Sprint(img.Height) } transform={ img.Transform } opacity={ fmt.Sprint(img.Opacity) } preserveAspectRatio="none"></image>
+				}
+			</g>
+			<polygon points={ polygonString(pn.Points) } fill="none" stroke="#070a12" stroke-width="4"></polygon>
 		}
-		for _,l:=range v.Lettering {
-			<g transform={ rotation(l.Rotate, l.RotationCenter.X, l.RotationCenter.Y) }>
-				if l.ShapePath!="" {
+		for _, l := range v.Lettering {
+			<g transform={ rotation(l.Rotate, l.RotationCenter.X, l.RotationCenter.Y) } opacity={ fmt.Sprint(letteringOpacity(v.Page, l.BubbleID)) }>
+				if l.ShapePath != "" {
 					<path d={ l.ShapePath } fill={ l.Fill } stroke={ l.Stroke } stroke-width={ fmt.Sprint(l.StrokeWidth) }></path>
 				}
-				<path d={ l.TextPath } fill={ l.TextColor } stroke={ l.TextStroke } stroke-width={ fmt.Sprint(l.TextStrokeWidth) }></path>
+				<path d={ l.TextPath } fill={ l.TextColor } stroke={ textStroke(l.TextStroke) } stroke-width={ fmt.Sprint(l.TextStrokeWidth) }></path>
 			</g>
 		}
 	</svg>
+}
+
+func textStroke(s string) string {
+	if s == "" {
+		return "none"
+	}
+	return s
 }
 
 var _ = pagedoc.Schema

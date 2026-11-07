@@ -58,6 +58,8 @@ func pageHref(data bootstrapData, number int) string {
 func exportHref(data bootstrapData) string {
 	return fmt.Sprintf("/studio/p/%s/chapters/%s/export", data.Project.ID, data.Chapter.ID)
 }
-func label(ctx context.Context, key string) string { return i18n.T(ctx, "editor."+key) }
+func label(ctx context.Context, key string, args ...any) string {
+	return i18n.T(ctx, "editor."+key, args...)
+}
 
 var _ core.Initer = (*Module)(nil)
