@@ -54,17 +54,38 @@ func renderArt(spec artSpec) ([]byte, error) {
 		}
 	default:
 		drawCharacter(im, spec.key)
-		label(im, 24, 820, strings.ToUpper(spec.name), 3, ink)
+		characterPlate(im, strings.ToUpper(spec.name))
 	}
-	// A white label plate stays readable even when a transparent character or
-	// FX layer is moved over a dark background in the editor.
-	draw.Draw(im, image.Rect(14, 886, 626, 946), image.NewUniform(paper), image.Point{}, draw.Src)
-	line(im, 14, 886, 626, 886, ink, 2)
-	label(im, 28, 900, "DEMO PLACEHOLDER ART", 2, ink)
-	label(im, 28, 925, "ORIGINAL AUTHORED FIXTURE - NO AI GENERATION", 1, ink)
+	if spec.kind != "character_ref" {
+		// A white label plate stays readable even when a transparent FX layer
+		// is moved over a dark background in the editor.
+		draw.Draw(im, image.Rect(14, 886, 626, 946), image.NewUniform(paper), image.Point{}, draw.Src)
+		line(im, 14, 886, 626, 886, ink, 2)
+		label(im, 28, 900, "DEMO PLACEHOLDER ART", 2, ink)
+		label(im, 28, 925, "ORIGINAL AUTHORED FIXTURE - NO AI GENERATION", 1, ink)
+	}
 	var out bytes.Buffer
 	err := png.Encode(&out, im)
 	return out.Bytes(), err
+}
+
+// characterBox is the part of a character image that holds the figure and its
+// label plate; everything outside it stays transparent. Panels place each
+// character's box in its own slot, so labels never overlap or leave the panel.
+var characterBox = image.Rect(130, 160, 510, 900)
+
+// characterPlate centres the name and the placeholder notice on a small opaque
+// plate under the figure, inside characterBox.
+func characterPlate(im *image.NRGBA, name string) {
+	const nameScale, noteScale = 3, 2
+	note := "DEMO PLACEHOLDER ART"
+	w := max(len(name)*7*nameScale, len(note)*7*noteScale) + 24
+	cx := characterBox.Min.X + characterBox.Dx()/2
+	plate := image.Rect(cx-w/2, 800, cx+w/2, 894)
+	draw.Draw(im, plate, image.NewUniform(paper), image.Point{}, draw.Src)
+	box(im, plate.Min.X, plate.Min.Y, plate.Max.X-1, plate.Max.Y-1, ink, 2)
+	label(im, cx-len(name)*7*nameScale/2, 810, name, nameScale, ink)
+	label(im, cx-len(note)*7*noteScale/2, 857, note, noteScale, ink)
 }
 
 func drawHarbor(im *image.NRGBA, tower bool) {

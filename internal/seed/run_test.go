@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"image"
 	"image/png"
 	"io"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -361,15 +363,27 @@ func TestPlaceholderDeterministicAndLabelled(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// The universal label plate and its ink are inside the stored PNG,
-		// including transparent character and FX assets.
-		_, _, _, alpha := im.At(18, 910).RGBA()
+		// The label plate and its ink are inside the stored PNG. Backgrounds
+		// and FX carry the full-width plate; a character's plate sits under
+		// the figure inside characterBox, and nothing is drawn outside it.
+		plate, text := image.Pt(18, 910), image.Rect(28, 900, 330, 922)
+		if spec.kind == "character_ref" {
+			plate, text = image.Pt(characterBox.Min.X+characterBox.Dx()/2, 890), image.Rect(characterBox.Min.X, 805, characterBox.Max.X, 885)
+			for y := 0; y < im.Bounds().Dy(); y++ {
+				for x := 0; x < im.Bounds().Dx(); x++ {
+					if _, _, _, a := im.At(x, y).RGBA(); a > 0 && !image.Pt(x, y).In(characterBox) {
+						t.Fatalf("%s draws outside its character box at %d,%d", spec.key, x, y)
+					}
+				}
+			}
+		}
+		_, _, _, alpha := im.At(plate.X, plate.Y).RGBA()
 		if alpha != 65535 {
 			t.Fatalf("missing opaque placeholder plate: %s", spec.key)
 		}
 		inkPixels := 0
-		for y := 900; y < 922; y++ {
-			for x := 28; x < 330; x++ {
+		for y := text.Min.Y; y < text.Max.Y; y++ {
+			for x := text.Min.X; x < text.Max.X; x++ {
 				r, _, _, a := im.At(x, y).RGBA()
 				if a > 0 && r < 10000 {
 					inkPixels++
@@ -379,5 +393,60 @@ func TestPlaceholderDeterministicAndLabelled(t *testing.T) {
 		if inkPixels < 100 {
 			t.Fatalf("placeholder text was not drawn: %s", spec.key)
 		}
+	}
+}
+
+// QA #12: baked character labels must never overlap each other or be clipped
+// by the panel edge. Every character's box (figure and name plate) maps into
+// its own slot inside the panel.
+func TestDemoCharacterLabelsStayInsideTheirOwnSlots(t *testing.T) {
+	f := newFixture(db.NewID())
+	for _, spec := range f.artSpecs() {
+		f.art[spec.key] = db.NewID()
+	}
+	engine, err := lettering.NewEngine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.makePages(engine); err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	for _, c := range f.chapters {
+		for _, page := range c.pages {
+			for _, panel := range page.Panels {
+				b := pagedoc.Bounds(panel.Points)
+				cover := math.Max(b.W/640, b.H/960)
+				var boxes []pagedoc.Rect
+				for _, l := range panel.Layers {
+					if l.Kind != pagedoc.LayerCharacter {
+						continue
+					}
+					s := cover * l.Transform.Scale
+					x0 := b.X + b.W/2 + l.Transform.OffsetX + (float64(characterBox.Min.X)-320)*s
+					y0 := b.Y + b.H/2 + l.Transform.OffsetY + (float64(characterBox.Min.Y)-480)*s
+					r := pagedoc.Rect{X: x0, Y: y0, W: float64(characterBox.Dx()) * s, H: float64(characterBox.Dy()) * s}
+					if r.X < b.X || r.Y < b.Y || r.X+r.W > b.X+b.W || r.Y+r.H > b.Y+b.H {
+						t.Fatalf("%s: character box %+v leaves panel %+v", l.Name, r, b)
+					}
+					if r.W < b.W*.2 && len(boxes) == 0 && r.H < b.H*.5 {
+						t.Fatalf("%s: figure is needlessly small %+v in %+v", l.Name, r, b)
+					}
+					for _, o := range boxes {
+						if r.X < o.X+o.W && o.X < r.X+r.W && r.Y < o.Y+o.H && o.Y < r.Y+r.H {
+							t.Fatalf("%s: character boxes overlap in panel %+v", l.Name, b)
+						}
+					}
+					boxes = append(boxes, r)
+					checked++
+				}
+			}
+			if err := page.Validate(); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if checked < 20 {
+		t.Fatalf("only %d character layers checked", checked)
 	}
 }

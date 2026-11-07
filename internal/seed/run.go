@@ -20,7 +20,10 @@ import (
 var ErrOwner = errors.New("seed: choose an existing active admin or creator with --owner, or create an admin first")
 
 const demoID = "tidebreak-courier"
-const demoVersion = 1
+
+// demoVersion 2: character art keeps each name plate inside its figure's box
+// and panels give every character its own slot (QA #12).
+const demoVersion = 2
 
 type demoMarker struct {
 	ID      string `json:"id"`

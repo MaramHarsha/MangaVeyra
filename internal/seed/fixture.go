@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -136,10 +137,7 @@ func (f *fixture) makePages(engine lettering.Engine) error {
 						}
 						l := layer(pagedoc.LayerCharacter, name+" · demo placeholder", f.art[key])
 						l.CharacterID = id
-						if len(sp.CharacterIDs) > 1 {
-							l.Transform.Scale = .75
-							l.Transform.OffsetX = (float64(i) - float64(len(sp.CharacterIDs)-1)/2) * 240
-						}
+						l.Transform = characterSlot(pagedoc.Bounds(panel.Points), i, len(sp.CharacterIDs), page.Direction)
 						panel.Layers = append(panel.Layers, l)
 					}
 					panel.Layers = append(panel.Layers, layer(pagedoc.LayerFX, "Rain · demo placeholder", f.art["fx"]))
@@ -166,6 +164,30 @@ func (f *fixture) makePages(engine lettering.Engine) error {
 		}
 	}
 	return nil
+}
+
+// characterSlot places character i of n so that its whole characterBox
+// (figure and name plate) fits its own slot of the panel, standing on the
+// panel's lower margin: labels never overlap each other or the panel edge.
+// Slots run in reading order (right to left on RTL pages). The transform
+// follows compose: the image covers the panel box, then Scale and offsets.
+func characterSlot(b pagedoc.Rect, i, n int, direction string) pagedoc.Transform {
+	const artW, artH = 640.0, 960.0
+	margin := math.Min(b.W, b.H) * .05
+	slotW := (b.W - 2*margin) / float64(n)
+	boxW, boxH := float64(characterBox.Dx()), float64(characterBox.Dy())
+	s := math.Min(slotW/boxW, (b.H-2*margin)/boxH) * .96
+	cover := math.Max(b.W/artW, b.H/artH)
+	centre := b.X + margin + slotW*(float64(i)+.5)
+	if direction == pagedoc.DirRTL {
+		centre = b.X + b.W - margin - slotW*(float64(i)+.5)
+	}
+	boxCentreX := float64(characterBox.Min.X+characterBox.Max.X) / 2
+	return pagedoc.Transform{
+		Scale:   s / cover,
+		OffsetX: centre - b.X - b.W/2 - (boxCentreX-artW/2)*s,
+		OffsetY: b.H/2 - margin - (float64(characterBox.Max.Y)-artH/2)*s,
+	}
 }
 
 func (f *fixture) insert(ctx context.Context, tx *db.Tx, studioService studio.Service, pages pagestore.Service, a *assets.Service, staged []*assets.StagedAsset) error {
