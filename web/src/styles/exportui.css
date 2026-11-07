@@ -112,3 +112,9 @@
    acceptance target; phones get the responsive version). */
 @media(max-width:1000px){.mv-exportui__editor{grid-template-columns:minmax(0,1fr);grid-template-areas:"bar" "canvas" "status"}.mv-exportui__rail,.mv-exportui__inspector,.mv-exportui__history,.mv-exportui__modes,.mv-exportui__bar-end>:not(.mv-btn--primary){display:none}}
 @media(max-width:700px){.mv-exportui__panel.mv-modal{margin:16px auto;width:calc(100% - 24px)}.mv-exportui__panel .mv-modal__head{padding:18px 16px}.mv-exportui__close.mv-close{top:10px;right:10px;width:44px;height:44px}.mv-exportui__formats{padding:16px;gap:8px}.mv-exportui__format.mv-radio{padding:10px;gap:8px}.mv-exportui__format>.ti{display:none}.mv-exportui__fields{padding:0 16px 16px;grid-template-columns:minmax(0,1fr)}.mv-exportui__checks{padding:0 16px 16px}.mv-exportui__panel .mv-modal__foot{padding:16px;flex-wrap:wrap}.mv-exportui__limit{width:100%;margin-bottom:4px}.mv-exportui__panel .mv-btn{min-height:44px}.mv-exportui__segments .mv-seg__item{min-height:44px}.mv-exportui__notice{margin:16px}.mv-exportui__job{padding:0 16px 16px}}
+
+/* Shell parity with D1: Soon tags sit on the control's top edge so the designed tab widths and names fit at 1440. */
+.mv-exportui__modes .mv-seg__item,.mv-exportui__presence{position:relative}
+.mv-exportui__modes .mv-soon,.mv-exportui__presence .mv-soon{position:absolute;top:-7px;right:-3px;margin:0;padding:0 3px;font-size:8px;line-height:12px;background:var(--mv-bg);pointer-events:none}
+/* Keep Cancel/Export reachable when print options make the modal taller than a laptop viewport. */
+.mv-exportui__panel .mv-modal__foot{position:sticky;bottom:0;z-index:1;background:var(--mv-surface)}
