@@ -2,16 +2,15 @@ package lettering
 
 import "github.com/MaramHarsha/MangaVeyra/internal/core"
 
-// Module is the lettering feature module.
-type Module struct {
-	d *core.Deps
+type Module struct{ engine Engine }
+
+func New(d *core.Deps) *Module {
+	e, err := NewEngine()
+	if err != nil {
+		panic(err)
+	}
+	provide(d, e)
+	return &Module{engine: e}
 }
-
-// New creates the module.
-func New(d *core.Deps) *Module { return &Module{d: d} }
-
-// Name implements core.Module.
-func (m *Module) Name() string { return "lettering" }
-
-// Routes implements core.Module. No routes yet.
-func (m *Module) Routes(r *core.Router) {}
+func (*Module) Name() string        { return "lettering" }
+func (*Module) Routes(*core.Router) {}
