@@ -2,7 +2,8 @@ package ai
 
 import (
 	"context"
-	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
@@ -32,12 +33,15 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 	used := map[string]bool{}
 	out := []imageModelView{}
 	for _, model := range models {
-		row := imageModelView{Name: model.Name, ID: model.ID, Status: i18n.T(ctx, "models.tile.not_connected"), Use: i18n.T(ctx, "aiimage.use.panels"), Cost: i18n.T(ctx, "models.cost.none")}
+		row := imageModelView{Name: model.Name, ID: model.ID, Status: i18n.T(ctx, "models.tile.not_connected"), Use: i18n.T(ctx, "aiimage.use.panels"), Cost: imageEstimate(ctx, model)}
 		if model.Edit {
 			row.Use = i18n.T(ctx, "aiimage.use.edits")
 		}
 		if model.ID == PlaceholderArt {
+			// The placeholder is every image task's fallback, not only edits.
 			row.Provider = i18n.T(ctx, "aiimage.provider.placeholder")
+			row.Use = i18n.T(ctx, "aiimage.use.placeholder")
+			row.Cost = i18n.T(ctx, "models.cost.none")
 			row.Ready = true
 			row.Status = i18n.T(ctx, "models.status.ready")
 		}
@@ -51,9 +55,8 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 			if inst.LocalOnly {
 				row.Status = i18n.T(ctx, "models.tile.blocked")
 			}
-			quote, ok := quoteImage(p.Kind, model.ID, ImageNeeds{Width: 1024, Height: 1024, Count: 1, Edit: model.Edit, Mask: model.Mask})
-			if ok {
-				row.Cost = fmt.Sprintf("≤ $%.3f", quote.USD)
+			if quote, ok := quoteImage(p.Kind, model.ID, estimateNeeds(model)); ok {
+				row.Cost = imageCostLabel(ctx, quote.USD)
 			}
 			if !used[p.ID] {
 				for _, v := range manageable {
@@ -82,8 +85,8 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 					row.Connection = &copy
 					used[v.ID] = true
 				}
-				if quote, ok := quoteImage(v.Kind, model.ID, ImageNeeds{Width: 1024, Height: 1024, Count: 1, Edit: model.Edit, Mask: model.Mask}); ok {
-					row.Cost = fmt.Sprintf("≤ $%.3f", quote.USD)
+				if quote, ok := quoteImage(v.Kind, model.ID, estimateNeeds(model)); ok {
+					row.Cost = imageCostLabel(ctx, quote.USD)
 				}
 				break
 			}
@@ -105,7 +108,7 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 					}
 				}
 			}
-			row.Cost = fmt.Sprintf("~ %.0f s", model.GPUSeconds)
+			row.Cost = i18n.T(ctx, "aiimage.cost.gpu_time")
 			if inst.LocalOnly {
 				row.Status = i18n.T(ctx, "models.tile.blocked")
 			}
@@ -116,6 +119,38 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 		out = append(out, row)
 	}
 	return out, nil
+}
+
+// estimateNeeds is the one 1024 × 1024 image a COST cell estimates.
+func estimateNeeds(model ModelManifest) ImageNeeds {
+	return ImageNeeds{Width: 1024, Height: 1024, Count: 1, Edit: model.Edit, Mask: model.Mask}
+}
+
+// imageEstimate is the COST cell of a model before it is connected: the
+// published per-image price of its first remote provider, shown as the
+// compute meter's estimate of spend on the user's own key ("~$0.04 / img").
+// Local-worker models cost GPU time; anything without a published price
+// shows none.
+func imageEstimate(ctx context.Context, model ModelManifest) string {
+	for _, kind := range model.Providers {
+		if quote, ok := quoteImage(kind, model.ID, estimateNeeds(model)); ok && quote.USD > 0 {
+			return imageCostLabel(ctx, quote.USD)
+		}
+	}
+	if hasProvider(model, providerKindWorker) {
+		return i18n.T(ctx, "aiimage.cost.gpu_time")
+	}
+	return i18n.T(ctx, "models.cost.none")
+}
+
+// imageCostLabel formats a per-image estimate as designed ("~$0.13 / img"),
+// keeping a third decimal only when it carries information ("~$0.003 / img").
+func imageCostLabel(ctx context.Context, usd float64) string {
+	amount := strconv.FormatFloat(usd, 'f', 3, 64)
+	if strings.HasSuffix(amount, "0") {
+		amount = amount[:len(amount)-1]
+	}
+	return i18n.T(ctx, "aiimage.cost.per_image", "amount", "$"+amount)
 }
 
 func providerRowModel(v providerView) string {

@@ -35,7 +35,7 @@ const (
 	ollamaConnectHref = "/models/providers/new/ollama"
 )
 
-// Capability tabs of G2, in design order. Text is the only populated one.
+// Capability tabs of G2, in design order. Image and Text are populated.
 const (
 	capImage = "image"
 	capText  = "text"
@@ -155,14 +155,15 @@ func (m *Module) modelsPage(w http.ResponseWriter, r *http.Request) error {
 		Section: layout.SectionStudio, Nav: layout.NavModels, Tab: layout.TabMe}, ModelsPage(v))
 }
 
-// modelsCapability returns the selected capability tab (text by default).
+// modelsCapability returns the selected capability tab. The designed G2
+// opens on Image.
 func modelsCapability(raw string) string {
 	for _, c := range modelCapabilities {
 		if raw == c {
 			return c
 		}
 	}
-	return capText
+	return capImage
 }
 
 // modelsTiles builds the designed row of four summary tiles with real status:
@@ -612,9 +613,11 @@ func (m *Module) Recommend(_ context.Context, gpus []jobs.GPU) (*setup.Recommend
 	return setup.RecommendFor(gpus), nil
 }
 
+// modelsReturnURL brings a no-JavaScript row action back to its tab: image
+// rows post with ?cap=image; the text table's connection rows do not.
 func modelsReturnURL(r *http.Request) string {
 	if r.URL.Query().Get("cap") == capImage {
 		return "/models?cap=image"
 	}
-	return "/models"
+	return "/models?cap=text"
 }

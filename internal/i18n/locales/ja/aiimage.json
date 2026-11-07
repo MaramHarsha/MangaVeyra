@@ -1,5 +1,7 @@
 {
   "aiimage.back": "戻る",
+  "aiimage.cost.gpu_time": "GPU時間",
+  "aiimage.cost.per_image": "1枚 約{amount}",
   "aiimage.custom.allow_private": "このサーバーでプライベートネットワークの接続先を許可",
   "aiimage.custom.allow_private_hint": "OllamaやLM Studioなどのローカルサーバーは、このマシンまたは同じネットワーク上で動作します。リンクローカルとクラウドのメタデータアドレスは常にブロックされます。この設定は後からモデルのルーティングで変更できます。",
   "aiimage.custom.available_to": "利用できる人",
@@ -103,5 +105,6 @@
   "aiimage.task.region.edit": "領域編集",
   "aiimage.tile.fal": "画像生成",
   "aiimage.use.edits": "領域編集",
-  "aiimage.use.panels": "コマ・設定画・表紙"
+  "aiimage.use.panels": "コマ・設定画・表紙",
+  "aiimage.use.placeholder": "コマ・設定画・編集・フォールバック"
 }

@@ -9,7 +9,7 @@ import (
 
 templ imageModelsTable(rows []imageModelView) {
 	<table class="mv-table mv-models-table">
-		<caption class="mv-sr-only">{ i18n.T(ctx,"models.table.caption") }</caption>
+		<caption class="mv-sr-only">{ i18n.T(ctx,"models.table.image_caption") }</caption>
 		<colgroup><col class="mv-models-table__col-model"/><col class="mv-models-table__col-provider"/><col class="mv-models-table__col-use"/><col class="mv-models-table__col-status"/><col class="mv-models-table__col-cost"/><col class="mv-models-table__col-on"/></colgroup>
 		<thead><tr><th scope="col">{ i18n.T(ctx,"models.col.model") }</th><th scope="col">{ i18n.T(ctx,"models.col.provider") }</th><th scope="col">{ i18n.T(ctx,"models.col.use") }</th><th scope="col">{ i18n.T(ctx,"models.col.status") }</th><th scope="col">{ i18n.T(ctx,"models.col.cost") }</th><th scope="col">{ i18n.T(ctx,"models.col.on") }</th></tr></thead>
 		<tbody>

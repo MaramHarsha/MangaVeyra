@@ -1,5 +1,7 @@
 {
   "aiimage.back": "Back",
+  "aiimage.cost.gpu_time": "GPU time",
+  "aiimage.cost.per_image": "~{amount} / img",
   "aiimage.custom.allow_private": "Allow private-network endpoints on this server",
   "aiimage.custom.allow_private_hint": "Local servers such as Ollama or LM Studio run on this machine or your network. Link-local and cloud metadata addresses stay blocked. You can change this later in Model routing.",
   "aiimage.custom.available_to": "Available to",
@@ -103,5 +105,6 @@
   "aiimage.task.region.edit": "Region edits",
   "aiimage.tile.fal": "Image generation",
   "aiimage.use.edits": "Region edits",
-  "aiimage.use.panels": "Panels · sheets · covers"
+  "aiimage.use.panels": "Panels · sheets · covers",
+  "aiimage.use.placeholder": "Panels · sheets · edits · fallback"
 }

@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
@@ -13,7 +14,7 @@ import (
 // HTMX only swaps one connection's rows in place.
 templ ModelsPage(v modelsPageView) {
 	<div class="mv-models">
-		@ui.PageHead(i18n.T(ctx, "models.title"), i18n.T(ctx, "models.subtitle", "server", v.Server), modelsHeadActions(v))
+		@modelsHead(v)
 		if v.LocalOnly {
 			@ui.Notice(ui.ToneWarning, "shield-lock") {
 				<strong>{ i18n.T(ctx, "models.local_only.title") }</strong>
@@ -41,10 +42,31 @@ templ ModelsPage(v modelsPageView) {
 	</div>
 }
 
+// modelsSubtitle splits the designed subtitle around its "auto-routing"
+// phrase, which links to G11 Model routing (the design has no other entry).
+func modelsSubtitle(ctx context.Context, server string) (before, routing, after string) {
+	const mark = "\x00"
+	text := i18n.T(ctx, "models.subtitle", "server", server, "routing", mark)
+	before, after, _ = strings.Cut(text, mark)
+	return before, i18n.T(ctx, "models.subtitle.routing"), after
+}
+
+// modelsHead is the designed page head: title, the subtitle and the two
+// header actions (Add custom, Add provider).
+templ modelsHead(v modelsPageView) {
+	{{ before, routing, after := modelsSubtitle(ctx, v.Server) }}
+	<header class="mv-pagehead">
+		<div class="mv-pagehead__text">
+			<h1 class="mv-pagehead__title">{ i18n.T(ctx, "models.title") }</h1>
+			<span class="mv-pagehead__sub">{ before }<a href="/models/routing">{ routing }</a>{ after }</span>
+		</div>
+		<div class="mv-pagehead__actions">
+			@modelsHeadActions(v)
+		</div>
+	</header>
+}
+
 templ modelsHeadActions(v modelsPageView) {
-	@ui.LinkButton("/models/routing", ui.ButtonProps{Variant: ui.Ghost, Icon: "route"}) {
-		{ i18n.T(ctx,"aiimage.routing.title") }
-	}
 	@ui.LinkButton(modelsCustomHref, ui.ButtonProps{Variant: ui.Quiet, Icon: "plus"}) {
 		{ i18n.T(ctx, "models.add.custom") }
 	}
