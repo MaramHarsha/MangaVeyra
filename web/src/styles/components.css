@@ -898,7 +898,7 @@
   min-width: 0;
 }
 .mv-route .ti { font-size: 15px; color: var(--mv-acc-text); }
-.mv-route__auto { font-weight: 600; }
+.mv-route__auto { flex: none; font-weight: 600; white-space: nowrap; }
 .mv-route__pick { color: var(--mv-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .mv-route-line { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .8125rem; }
 

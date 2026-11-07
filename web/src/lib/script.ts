@@ -41,6 +41,7 @@ export class ScriptEditor {
   private readonly delay: number;
   private readonly retry: number;
   private readonly fetcher: Fetch;
+  private readonly flow: LineFlow;
 
   constructor(form: HTMLFormElement, opts: ScriptEditorOptions = {}) {
     this.form = form;
@@ -49,6 +50,7 @@ export class ScriptEditor {
     this.retry = opts.retry ?? 5000;
     this.fetcher = opts.fetch ?? ((...args) => fetch(...args));
     const doc = form.ownerDocument;
+    this.flow = new LineFlow(form);
     form.addEventListener('click', (e) => this.click(e));
     form.addEventListener('change', (e) => {
       const t = e.target as HTMLElement;
@@ -138,6 +140,7 @@ export class ScriptEditor {
     if (!line) return null;
     lines.append(line);
     if (control && controls) controls.append(control);
+    this.flow.watch(line);
     line.querySelector<HTMLInputElement>('input')?.focus();
     return line;
   }
@@ -241,6 +244,41 @@ export class ScriptEditor {
     this.form.removeAttribute('data-script-autosave');
     this.setState(state);
   }
+}
+
+/**
+ * LineFlow lets dialogue wrap to the column edge under the speaker, as the
+ * design sets it, instead of hanging under the line text: the speaker sits
+ * over the start of the line's first row and the text box indents its first
+ * line by the speaker's width. Without JavaScript (or before a line can be
+ * measured) the line keeps its flex layout.
+ */
+export class LineFlow {
+  private readonly observer: ResizeObserver | null;
+
+  constructor(root: ParentNode) {
+    const RO = (root as Node).ownerDocument?.defaultView?.ResizeObserver ?? (typeof ResizeObserver === 'undefined' ? undefined : ResizeObserver);
+    this.observer = RO ? new RO((entries) => entries.forEach((entry) => {
+      const line = (entry.target as HTMLElement).closest<HTMLElement>('.mv-c1__line');
+      if (line) flowLine(line);
+    })) : null;
+    root.querySelectorAll<HTMLElement>('.mv-c1__line').forEach((line) => this.watch(line));
+  }
+
+  watch(line: HTMLElement): void {
+    flowLine(line);
+    const who = line.querySelector<HTMLElement>('.mv-c1__who');
+    if (who && this.observer) this.observer.observe(who);
+  }
+}
+
+/** flowLine indents a line's text by its speaker's width (once measurable). */
+export function flowLine(line: HTMLElement): void {
+  const who = line.querySelector<HTMLElement>('.mv-c1__who');
+  if (!who || who.getBoundingClientRect().width === 0) return;
+  line.classList.add('is-flowing');
+  const width = who.getBoundingClientRect().right - line.getBoundingClientRect().left;
+  line.style.setProperty('--mv-who-w', `${Math.ceil(width + 4)}px`);
 }
 
 /** rebuildProseLines refreshes the Prose view's dialogue from the form. */

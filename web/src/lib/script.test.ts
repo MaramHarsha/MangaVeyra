@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ScriptEditor } from './script';
+import { ScriptEditor, flowLine } from './script';
 import { installAutosave } from './models';
 
 const html = `
@@ -180,5 +180,18 @@ describe('C1 script editor', () => {
     expect(event.defaultPrevented).toBe(true);
     await vi.advanceTimersByTimeAsync(0);
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('wraps a measured line under its speaker instead of a hanging indent', () => {
+    const line = form.querySelector<HTMLElement>('.mv-c1__line')!;
+    line.insertAdjacentHTML('afterbegin', '<span class="mv-c1__who"></span>');
+    const who = line.querySelector<HTMLElement>('.mv-c1__who')!;
+    flowLine(line); // not measurable yet (hidden): keeps the flex layout
+    expect(line.classList.contains('is-flowing')).toBe(false);
+    line.getBoundingClientRect = () => ({ left: 100, right: 400, width: 300 } as DOMRect);
+    who.getBoundingClientRect = () => ({ left: 100, right: 146.2, width: 46.2 } as DOMRect);
+    flowLine(line);
+    expect(line.classList.contains('is-flowing')).toBe(true);
+    expect(line.style.getPropertyValue('--mv-who-w')).toBe('51px');
   });
 });

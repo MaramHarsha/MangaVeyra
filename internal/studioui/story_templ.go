@@ -2310,7 +2310,7 @@ func panelRow(v storyView, panel studio.ScriptPanel) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if !v.ReadOnly {
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.Bare, Size: ui.SM, Icon: "message-plus", Type: "submit", Label: i18n.T(ctx, "studioui.script.add_line_to", "label", panel.Label), Tip: i18n.T(ctx, "studioui.script.add_line"), Class: "mv-c1__addline", Attrs: templ.Attributes{"name": intentAddLine, "value": panel.ID, "data-add-line": panel.ID, "formnovalidate": true}}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.Bare, Size: ui.SM, Icon: "message-plus", Type: "submit", Label: i18n.T(ctx, "studioui.script.add_line_to", "label", panel.Label), Tip: i18n.T(ctx, "studioui.script.add_line"), Class: "mv-c1__addline", Attrs: templ.Attributes{"name": intentAddLine, "value": panel.ID, "data-add-line": panel.ID, "formnovalidate": true, "data-tip-pos": "below"}}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

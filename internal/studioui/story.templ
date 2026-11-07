@@ -464,7 +464,7 @@ templ panelRow(v storyView, panel studio.ScriptPanel) {
 		<div class="mv-c1__col mv-c1__col--panel" role="cell">
 			<span class="mv-c1__label">{ panel.Label }</span>
 			if !v.ReadOnly {
-				@ui.Button(ui.ButtonProps{Variant: ui.Bare, Size: ui.SM, Icon: "message-plus", Type: "submit", Label: i18n.T(ctx, "studioui.script.add_line_to", "label", panel.Label), Tip: i18n.T(ctx, "studioui.script.add_line"), Class: "mv-c1__addline", Attrs: templ.Attributes{"name": intentAddLine, "value": panel.ID, "data-add-line": panel.ID, "formnovalidate": true}})
+				@ui.Button(ui.ButtonProps{Variant: ui.Bare, Size: ui.SM, Icon: "message-plus", Type: "submit", Label: i18n.T(ctx, "studioui.script.add_line_to", "label", panel.Label), Tip: i18n.T(ctx, "studioui.script.add_line"), Class: "mv-c1__addline", Attrs: templ.Attributes{"name": intentAddLine, "value": panel.ID, "data-add-line": panel.ID, "formnovalidate": true, "data-tip-pos": "below"}})
 			}
 		</div>
 		<div class="mv-c1__col mv-c1__col--camera" role="cell">

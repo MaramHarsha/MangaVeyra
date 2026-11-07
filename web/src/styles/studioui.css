@@ -503,13 +503,21 @@
 .mv-c1__lines:empty { display: none; }
 .mv-c1__line { display: flex; align-items: baseline; gap: 0 var(--mv-space-1); }
 .mv-c1__who { display: inline-flex; flex: none; align-items: baseline; font-weight: 700; }
-.mv-c1 .mv-c1__cell--speaker { width: auto; max-width: 14em; margin: 0; padding-right: 0; font-weight: 700; color: var(--mv-text); }
+.mv-c1 .mv-c1__cell--speaker { width: auto; max-width: 14em; margin: 0 0 0 calc(-1 * var(--mv-space-1)); padding-right: 0; font-weight: 700; color: var(--mv-text); }
+/* An empty speaker reads as a placeholder, not as a bold "Speaker:" label. */
+.mv-c1 .mv-c1__cell--speaker::placeholder { font-weight: 400; }
+.mv-c1__line:not([data-kind="caption"]) .mv-c1__who:has(> .mv-c1__cell--speaker:placeholder-shown) .mv-c1__colon { color: var(--mv-text-3); font-weight: 400; }
 .mv-c1__caption { display: none; font-size: var(--mv-fs-ui); line-height: 1.45; }
 .mv-c1__line[data-kind="caption"] .mv-c1__cell--speaker { display: none; }
 .mv-c1__line[data-kind="caption"] .mv-c1__caption { display: inline; }
 .mv-c1__colon { font-weight: 700; }
 .mv-c1 .mv-c1__line .mv-c1__cell--line { flex: 1 1 auto; width: auto; min-width: 0; margin: 0; }
 .mv-c1__line[data-kind="thought"] .mv-c1__cell--line { font-style: italic; }
+/* With JavaScript a measured line wraps to the column edge under the speaker,
+   as designed (web/src/lib/script.ts sets --mv-who-w). */
+.mv-c1__line.is-flowing { position: relative; display: block; }
+.mv-c1__line.is-flowing > .mv-c1__who { position: absolute; z-index: 1; top: 0; left: 0; }
+.mv-c1 .mv-c1__line.is-flowing .mv-c1__cell--line { display: block; width: calc(100% + 2 * var(--mv-space-1)); margin: 0 calc(-1 * var(--mv-space-1)); text-indent: var(--mv-who-w, 0px); }
 
 /* Row disclosure: page, camera angle, notes, line types, SFX notes. */
 .mv-c1__more { grid-column: 1 / -1; }
@@ -603,6 +611,7 @@
 }
 .mv-c1__assisthead {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: var(--mv-space-2);
@@ -610,7 +619,9 @@
   border-bottom: 1px solid var(--mv-line);
 }
 .mv-c1__assisthead h2 { flex: none; margin: 0; font-size: var(--mv-fs-ui); font-weight: 700; white-space: nowrap; }
-.mv-c1__route { display: inline-flex; align-items: center; gap: var(--mv-space-1); flex: 0 1 auto; min-width: 0; }
+/* The chip is never squeezed: when the title and chip do not fit on one row
+   (longer Japanese title), the chip moves under the title, whole. */
+.mv-c1__route { display: inline-flex; align-items: center; gap: var(--mv-space-1); flex: none; max-width: 100%; }
 .mv-c1__route .mv-route-line { flex-wrap: nowrap; min-width: 0; }
 .mv-c1__route .mv-route { opacity: .6; font-size: var(--mv-fs-meta); }
 .mv-c1__route .mv-soon { margin: 0; }
