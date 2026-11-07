@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
@@ -89,6 +90,66 @@ func (m *Module) chapterStory(w http.ResponseWriter, r *http.Request) error {
 		v.View = viewProse
 	}
 	return m.renderStory(w, r, http.StatusOK, v)
+}
+
+// makePages uses the saved manuscript and never implicitly deletes existing pages.
+func (m *Module) makePages(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	actor, err := browserActor(r)
+	if err != nil {
+		return core.ErrNotFound()
+	}
+	view, err := m.loadStoryView(ctx, actor, r.PathValue("project"), r.PathValue("chapter"))
+	if err != nil {
+		return pageObjectError(err)
+	}
+	for _, action := range []studio.Action{studio.ActGenerate, studio.ActEditArt, studio.ActLetter} {
+		if err := m.studio.Authorize(ctx, actor, view.Project.ID, action); err != nil {
+			return pageObjectError(err)
+		}
+	}
+	if view.Chapter.Locked {
+		return core.ErrLocked(i18n.T(ctx, "studioui.generate.locked"))
+	}
+	if err := web.ParseForm(w, r); err != nil {
+		return err
+	}
+	revision, err := time.Parse(time.RFC3339Nano, r.PostFormValue("revision"))
+	if err != nil {
+		return core.ErrBadRequest(i18n.T(ctx, "studioui.pages.invalid_revision"))
+	}
+	if !revision.Equal(view.Chapter.UpdatedAt) {
+		return core.ErrConflict(i18n.T(ctx, "studioui.generate.changed"))
+	}
+	if len(view.Script.Scenes) == 0 {
+		return core.ErrConflict(i18n.T(ctx, "studioui.pages.no_script"))
+	}
+	editor := "/studio/p/" + view.Project.ID + "/chapters/" + view.Chapter.ID + "/edit"
+	if view.Chapter.PageCount != 0 {
+		core.Redirect(w, r, editor)
+		return nil
+	}
+	active, err := m.d.Jobs.List(ctx, jobs.Filter{UserID: actor.UserID, ProjectID: view.Project.ID,
+		ChapterID: view.Chapter.ID, Types: []string{gen.JobPagesFromScript}, States: []string{jobs.StateQueued, jobs.StateRunning}, Limit: 1})
+	if err != nil {
+		return err
+	}
+	if len(active) != 0 {
+		core.Redirect(w, r, editor+"?job="+active[0].ID)
+		return nil
+	}
+	job, err := m.gen.EnqueuePagesFromScript(ctx, actor, gen.PagesFromScriptRequest{ProjectID: view.Project.ID,
+		ChapterID: view.Chapter.ID, Letter: true, ExpectedUpdatedAt: revision})
+	if err != nil {
+		if errors.Is(err, studio.ErrConflict) {
+			return core.ErrConflict(i18n.T(ctx, "studioui.generate.changed"))
+		}
+		web.Flash(w, r, "error", i18n.T(ctx, "studioui.pages.failed"), safeGenerationMessage(ctx, err))
+		core.Redirect(w, r, storyPath(view.Project.ID, view.Chapter.ID))
+		return nil
+	}
+	core.Redirect(w, r, editor+"?job="+job.ID)
+	return nil
 }
 
 func (m *Module) generateScript(w http.ResponseWriter, r *http.Request) error {
@@ -288,8 +349,16 @@ func (m *Module) loadStoryView(ctx context.Context, actor studio.Actor, projectI
 	if err != nil {
 		return storyView{}, err
 	}
+	canArt, err := m.can(ctx, actor, project.ID, studio.ActEditArt)
+	if err != nil {
+		return storyView{}, err
+	}
+	canLetter, err := m.can(ctx, actor, project.ID, studio.ActLetter)
+	if err != nil {
+		return storyView{}, err
+	}
 	v := storyView{Project: project, Chapter: chapter, Chapters: chapters, Script: doc, CanEdit: canEdit,
-		CanGenerate: canEdit && canGenerate, ReadOnly: chapter.Locked || !canEdit}
+		CanGenerate: canEdit && canGenerate, CanMakePages: canGenerate && canArt && canLetter, ReadOnly: chapter.Locked || !canEdit}
 	if len(doc.Scenes) == 0 {
 		found, err := m.d.Jobs.List(ctx, jobs.Filter{UserID: actor.UserID, ProjectID: project.ID,
 			ChapterID: chapter.ID, Types: []string{gen.JobScript}, Limit: 1})

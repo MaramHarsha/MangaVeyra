@@ -208,7 +208,7 @@ templ FormNotice(message string) {
 // step at a time with a working stepper, Back / Next and the live summary.
 templ NewProjectPage(v newProjectView) {
 	<div class="mv-wizard" data-wizard data-current={ v.openStep() }>
-		<form id="mv-wizard-form" class="mv-wizard__form" method="post" action="/studio/new/premise" enctype="multipart/form-data" novalidate>
+		<form id="mv-wizard-form" class="mv-wizard__form" method="post" action="/studio/new/premise" enctype="multipart/form-data" novalidate data-guard-unsaved>
 			<div class="mv-wizard__main">
 				<header class="mv-wizard__top">
 					<a class="mv-wizard__close" href="/studio" aria-label={ i18n.T(ctx, "studioui.new.close") }>
@@ -643,8 +643,7 @@ templ storyTree(v storyView) {
 	</nav>
 }
 
-// makePagesButton keeps "Make pages from script" in its designed place. Until
-// the pages-from-script endpoint exists it renders disabled with a Soon tag.
+// makePagesButton queues revision-bound layout and structured auto-lettering.
 templ makePagesButton(v storyView, class string, full bool) {
 	{{ action := storyPath(v.Project.ID, v.Chapter.ID) + "/pages" }}
 	if !ui.ReadyMethod(ctx, "POST", action) {
@@ -654,8 +653,9 @@ templ makePagesButton(v storyView, class string, full bool) {
 				@ui.SoonTag()
 			}
 		</div>
-	} else if v.CanGenerate && !v.Chapter.Locked {
-		<form class={ ui.Cls("mv-c1__make", class) } method="post" action={ templ.URL(action) }>
+	} else if v.CanMakePages && !v.Chapter.Locked && len(v.Script.Scenes) != 0 {
+		<form class={ ui.Cls("mv-c1__make", class) } method="post" action={ templ.URL(action) } novalidate>
+			<input type="hidden" name="revision" value={ formRevision(v) }/>
 			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Type: "submit", Icon: "layout-board", Full: full}) {
 				{ i18n.T(ctx, "studioui.story.make_pages") }
 			}
@@ -766,7 +766,7 @@ templ ScriptProse(v storyView) {
 // ScriptEditor is the Panels view: the compact panel table of every scene in
 // the chapter, posted as one form because a save replaces the whole chapter.
 templ ScriptEditor(v storyView) {
-	<form class="mv-c1__script" data-view-panel="panels" hidden?={ !storyViewIs(v, viewPanels) } method="post" action={ templ.URL(storyPath(v.Project.ID, v.Chapter.ID) + "/script") } novalidate>
+	<form class="mv-c1__script" data-view-panel="panels" hidden?={ !storyViewIs(v, viewPanels) } method="post" action={ templ.URL(storyPath(v.Project.ID, v.Chapter.ID) + "/script") } novalidate data-guard-unsaved>
 		<h2 class="mv-sr-only">{ i18n.T(ctx, "studioui.script.title") }</h2>
 		<input type="hidden" name="revision" value={ formRevision(v) }/>
 		<div class="mv-c1__summary">

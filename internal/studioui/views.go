@@ -101,17 +101,18 @@ type noChapterView struct {
 }
 
 type storyView struct {
-	Project     studio.Project
-	Chapter     studio.Chapter
-	Chapters    []studio.Chapter
-	Script      studio.ScriptDoc
-	Job         *jobView
-	CanEdit     bool
-	CanGenerate bool
-	ReadOnly    bool
-	Conflict    bool
-	Notice      string
-	Error       string
+	Project      studio.Project
+	Chapter      studio.Chapter
+	Chapters     []studio.Chapter
+	Script       studio.ScriptDoc
+	Job          *jobView
+	CanEdit      bool
+	CanGenerate  bool
+	CanMakePages bool
+	ReadOnly     bool
+	Conflict     bool
+	Notice       string
+	Error        string
 	// View is "prose" for the read-only prose rendering; otherwise the
 	// editable panel table shows.
 	View string

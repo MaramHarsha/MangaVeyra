@@ -289,18 +289,14 @@ func TestStoryEditorPanelsProseSoonAndSaveRoundTrip(t *testing.T) {
 			`for="sfx-`+panel.ID+`-0"`, `for="sfx-note-`+panel.ID+`-0"`,
 			"Panel "+panel.Label+" · Dialogue 1 · Speaker", "Panel "+panel.Label+" · Sound effect 1 · Lettering",
 		)
-		makePages := regexp.MustCompile(`<button[^>]*is-soon[^>]*disabled[^>]*>\s*<i[^>]*ti-layout-board`).FindString(body)
-		if makePages == "" {
-			t.Error("Make pages from script is not a disabled Soon control")
-		}
+		mustContain(t, body, `action="`+f.storyURL+`/pages"`, `name="revision"`)
 		ask := regexp.MustCompile(`<input[^>]*id="mv-c1-ask"[^>]*>`).FindString(body)
 		if !strings.Contains(ask, "disabled") {
 			t.Errorf("assistant input = %s", ask)
 		}
-		if strings.Count(body, `<span class="mv-soon">Soon</span>`) < 4 { // make pages ×2, chip, input
+		if strings.Count(body, `<span class="mv-soon">Soon</span>`) < 2 { // assistant chip and input
 			t.Errorf("Soon tags = %d", strings.Count(body, `<span class="mv-soon">Soon</span>`))
 		}
-		mustNotContain(t, body, `action="`+f.storyURL+`/pages"`)
 
 		prose := string(f.client.Get(f.storyURL + "?view=prose").Body)
 		mustContain(t, prose, `<article class="mv-c1__prose" data-view-panel="prose" aria-label`, `data-view-panel="panels" hidden`,

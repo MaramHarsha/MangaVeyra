@@ -65,6 +65,7 @@ func (m *Module) Routes(r *core.Router) {
 	r.Page("POST /studio/p/{project}/story/chapters", m.createChapter, core.RequireSession)
 	r.Page("GET /studio/p/{project}/story/{chapter}", m.chapterStory, core.RequireSession)
 	r.Page("POST /studio/p/{project}/story/{chapter}/generate", m.generateScript, core.RequireSession)
+	r.Page("POST /studio/p/{project}/story/{chapter}/pages", m.makePages, core.RequireSession)
 	r.Page("GET /studio/p/{project}/story/{chapter}/jobs/{job}", m.scriptJob, core.RequireSession)
 	r.Page("POST /studio/p/{project}/story/{chapter}/jobs/{job}/retry", m.retryScriptJob, core.RequireSession)
 	r.Page("POST /studio/p/{project}/story/{chapter}/script", m.editScript, core.RequireSession)
