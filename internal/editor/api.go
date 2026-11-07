@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/ai"
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
@@ -165,6 +166,12 @@ func mapped(r *http.Request, err error) error {
 		return core.ErrValidation(map[string]string{"document": i18n.T(r.Context(), "editor.error.invalid")})
 	case errors.Is(err, gen.ErrDeferredFeature):
 		return core.ErrConflict(i18n.T(r.Context(), "editor.error.unavailable"))
+	}
+	// The image router's refusals (no eligible model, spend limit, an image
+	// too small to edit) carry a safe message; they are not server faults.
+	var refused *ai.GenerateError
+	if errors.As(err, &refused) && refused.SafeMessage != "" {
+		return core.NewError(422, "generation_refused", refused.SafeMessage)
 	}
 	return err
 }

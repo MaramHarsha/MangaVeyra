@@ -249,3 +249,46 @@ func TestEditorRegionGenerationReusesTheActiveJobForTheSameMask(t *testing.T) {
 		}
 	})
 }
+
+func TestEditorGenerationRefusalIsAClientError(t *testing.T) {
+	each(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		u, c, p, _, base := fixture(t, ta)
+		page := doc(t, c.PostJSON(base+"/pages", map[string]string{"layout_id": "splash"}), 201).Page
+		store := core.MustUse[pagestore.Service](ta.Deps)
+		// A 64 × 48 layer is below the image router's minimum edit size.
+		a, err := assets.From(ta.Deps).Save(ctx, assets.SaveParams{OwnerID: u.ID, ProjectID: p.ID, Data: art(t, 64, 48), Source: assets.SourceUpload})
+		if err != nil {
+			t.Fatal(err)
+		}
+		layerID := page.Panels[0].Layers[0].ID
+		if err := ta.Deps.DB.WithTx(ctx, func(tx *db.Tx) error {
+			_, err := store.SetLayerAssetTx(ctx, tx, pagestore.SetLayerAsset{PageID: page.ID, PanelID: page.Panels[0].ID, LayerID: layerID, Kind: "background", AssetID: a.ID, Provenance: "human"}, pagestore.Change{ActorKind: "user", ActorID: u.ID, Action: "upload"})
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if page, err = store.GetPage(ctx, page.ID); err != nil {
+			t.Fatal(err)
+		}
+		path := base + "/pages/" + page.ID
+		var b bytes.Buffer
+		mw := multipart.NewWriter(&b)
+		_ = mw.WriteField("layer_id", layerID)
+		_ = mw.WriteField("base_version", strconv.Itoa(page.Version))
+		f, err := mw.CreateFormFile("file", "mask.png")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = f.Write(mask(t, 64, 48, 8))
+		_ = mw.Close()
+		var m struct {
+			ID string `json:"id"`
+		}
+		c.Do(http.MethodPost, path+"/masks", &b, mw.FormDataContentType()).JSON(t, &m)
+		r := c.PostJSON(path+"/generate", map[string]any{"kind": "region", "panel_id": page.Panels[0].ID, "layer_id": layerID, "mask_id": m.ID, "prompt": "Add a wave.", "base_version": page.Version, "routing_mode": "balanced"})
+		if r.StatusCode != http.StatusUnprocessableEntity || r.ErrorCode() != "generation_refused" {
+			t.Fatalf("refusal=%d %s", r.StatusCode, r.Body)
+		}
+	})
+}
