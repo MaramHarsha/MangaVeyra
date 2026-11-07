@@ -46,6 +46,10 @@ binary must carry the fonts. The interface itself stays English and Japanese; th
    with dialogue in the project language, so pages-from-script auto-letters without any provider key. Export
    filenames keep Unicode letters, marks and digits (80 runes) and are sent with an ASCII fallback plus
    `filename*=UTF-8''…`; ComicInfo `LanguageISO` is the canonical tag; the credits page exists in all ten languages.
+8. **Shape fitting.** Auto-fit wraps each row against the bubble's available width at that row, using a safe inner
+   ellipse for speech, whisper, cloud and burst outlines, and an inner rectangle for captions and SFX. It checks the
+   drawn glyph bounds, ruby and text stroke before accepting a size. Vertical columns keep their shared top edge.
+   Text that still cannot fit at the minimum size retains the existing explicit overflow state.
 
 ## Consequences
 

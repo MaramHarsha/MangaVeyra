@@ -1,6 +1,7 @@
 package lettering
 
 import (
+	"math"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -182,6 +183,10 @@ type shapedText struct {
 	ascent, descent float64
 	notdef          int // glyphs a font could not map (unsupported scripts)
 	fonts           map[string]bool
+	// Ink extents of the shaped glyphs in em: above and below the baseline
+	// (horizontal text), and the half width of a column about its axis
+	// (vertical text). Fitting reserves exactly this much across each line.
+	inkTop, inkBottom, inkHalf float64
 }
 
 type textLine struct {
@@ -287,6 +292,7 @@ func (e *engine) shape(s, lang, primary string, vertical bool) (*shapedText, err
 			}
 		}
 	}
+	st.measureInk()
 	keepAllHan := pagedoc.NormalizeContentLanguage(lang) == "ko"
 	for i := range st.graphemes {
 		g := &st.graphemes[i]
@@ -423,6 +429,12 @@ func (e *engine) shapeRun(rs []rune, start, end int, key, lang string, class scr
 // cluster that alone is wider than the limit breaks only between shaping
 // clusters, never inside a grapheme.
 func (st *shapedText) wrap(limit float64) []textLine {
+	return st.wrapLines(func(int) float64 { return limit })
+}
+
+// wrapLines is wrap with a limit per line index, so text follows a round
+// bubble's curve: lines near its top and bottom are shorter.
+func (st *shapedText) wrapLines(limitFor func(line int) float64) []textLine {
 	gs := st.graphemes
 	n := len(gs)
 	var lines []textLine
@@ -455,6 +467,7 @@ func (st *shapedText) wrap(limit float64) []textLine {
 			}
 		}
 		width, lastBreak, j := 0.0, -1, start
+		limit := limitFor(len(lines))
 		done := true
 		for ; j < n; j++ {
 			g := gs[j]
@@ -513,6 +526,38 @@ func (st *shapedText) emergencyBreak(start, j int) int {
 		}
 	}
 	return len(gs)
+}
+
+// measureInk records how far the shaped glyphs reach across a line, using
+// each glyph's outline bounds and its position (offsets, sideways turn or
+// manual rotation) exactly as draw places it.
+func (st *shapedText) measureInk() {
+	for _, run := range st.runs {
+		f := run.font
+		for k, g := range run.glyphs {
+			if st.invisible(run.runeAt[k], g.ID) {
+				continue
+			}
+			x0, y0, x1, y1 := f.glyphBounds(g.ID)
+			if x0 == x1 && y0 == y1 {
+				continue // white space
+			}
+			xo, yo := float64(g.XOffset)/f.upem, float64(g.YOffset)/f.upem
+			switch {
+			case !st.vertical:
+				st.inkTop = math.Max(st.inkTop, y1+yo)
+				st.inkBottom = math.Max(st.inkBottom, -(y0 + yo))
+			case run.sideways:
+				c := f.capHeight / 2
+				st.inkHalf = math.Max(st.inkHalf, math.Max(math.Abs(y0+yo-c), math.Abs(y1+yo-c)))
+			case run.rotate[k]:
+				mid := (f.ascent - f.descent) / 2
+				st.inkHalf = math.Max(st.inkHalf, math.Max(math.Abs(y0-mid), math.Abs(y1-mid)))
+			default:
+				st.inkHalf = math.Max(st.inkHalf, math.Max(math.Abs(x0+xo), math.Abs(x1+xo)))
+			}
+		}
+	}
 }
 
 // advance returns the em advance of the visible graphemes starting in [a, z).

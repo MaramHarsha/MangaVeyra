@@ -52,6 +52,21 @@ type loadedFont struct {
 	ascent, descent, capHeight float64
 	upem                       float64
 	err                        error
+	bounds                     map[uint16][4]float64 // glyph outline bounds in em (engine mutex)
+}
+
+// glyphBounds returns a glyph's outline bounds (xmin, ymin, xmax, ymax) in em.
+func (l *loadedFont) glyphBounds(id uint16) (float64, float64, float64, float64) {
+	if b, ok := l.bounds[id]; ok {
+		return b[0], b[1], b[2], b[3]
+	}
+	x0, y0, x1, y1 := l.font.GlyphBounds(id)
+	b := [4]float64{float64(x0) / l.upem, float64(y0) / l.upem, float64(x1) / l.upem, float64(y1) / l.upem}
+	if l.bounds == nil {
+		l.bounds = map[uint16][4]float64{}
+	}
+	l.bounds[id] = b
+	return b[0], b[1], b[2], b[3]
 }
 
 func (l *loadedFont) load() (*loadedFont, error) {
