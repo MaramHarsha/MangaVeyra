@@ -57,9 +57,9 @@ type biblePage struct {
 	Job                                                                           *jobs.Job
 	// RoutePick is the C4 route chip after a sheet job was routed
 	// ("Placeholder art · built-in").
-	RoutePick string
-	JobPosition                                                                   int
-	Candidates                                                                    []gen.Candidate
+	RoutePick   string
+	JobPosition int
+	Candidates  []gen.Candidate
 }
 
 func characterPath(projectID, characterID string) string {
@@ -999,6 +999,7 @@ func bibleOptions(ctx context.Context, group string, values ...string) []ui.Opti
 	}
 	return out
 }
+
 // routePick describes the route a job used: model · provider · estimate.
 func (m *Module) routePick(ctx context.Context, job *jobs.Job) string {
 	if job == nil || job.ModelID == "" {

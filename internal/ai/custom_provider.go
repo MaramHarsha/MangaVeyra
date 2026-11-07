@@ -38,7 +38,7 @@ type customProviderView struct {
 	// Blocked is a member reaching the wizard while personal providers are
 	// off: the page explains who can connect one instead of the form.
 	Blocked bool
-	Errors     web.FormErrors
+	Errors  web.FormErrors
 }
 
 var customSteps = []string{"connect", "test", "describe", "route"}
