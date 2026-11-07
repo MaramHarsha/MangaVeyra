@@ -13,6 +13,14 @@ Backends:
 * ``vision`` — OpenCV panel/bubble detection, identity scoring and pluggable OCR.
 """
 
+import os
+
+# Product policy is unconditional: optional model libraries must not send
+# telemetry. ORT's environment gate must be set before its first import; the
+# later disable_telemetry_events API cannot suppress initialization events.
+os.environ["ORT_DISABLE_TELEMETRY"] = "1"
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+
 __version__ = "1.0.0"
 
 PROTOCOL_VERSION = "v1"

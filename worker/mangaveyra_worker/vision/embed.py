@@ -269,6 +269,10 @@ def available_embedders(preference: str = "auto", model_dir: str | Path | None =
             if name == "dinov2":
                 if not dino_available(model_dir):
                     continue
+            elif name == "ccip":
+                from mangaveyra_worker.vision.ccip import ccip_available
+                if not ccip_available(model_dir):
+                    continue
             elif name == "insightface":
                 import insightface  # noqa: F401
             elif name == "clip":
@@ -286,6 +290,9 @@ def make_embedder(name: str, model_dir: str | Path | None = None) -> Embedder:
     """Construct an embedder by name."""
     if name == "dinov2":
         return DinoEmbedder(model_dir)
+    if name == "ccip":
+        from mangaveyra_worker.vision.ccip import CcipEmbedder
+        return CcipEmbedder(model_dir)
     if name == "insightface":
         return InsightFaceEmbedder()
     if name == "clip":
@@ -321,6 +328,8 @@ def score_identity(
         refs = [v for v in vecs[: len(references)] if v is not None]
         cands = vecs[len(references) :]
         c = centroid(refs)
-        scores = [round(max(0.0, min(1.0, cosine(c, v))), 4) for v in cands if v is not None]
-        return scores, emb.method if isinstance(emb, DinoEmbedder) else name
+        # Preserve the measurement for server policy decisions. Rounding a
+        # value such as .89999 to .9000 would turn drift into a false pass.
+        scores = [max(0.0, min(1.0, cosine(c, v))) for v in cands if v is not None]
+        return scores, getattr(emb, "method", name)
     raise RuntimeError("no identity embedder could process the images") from last_error

@@ -79,7 +79,12 @@ def test_bad_config_exit_code(capsys: pytest.CaptureFixture[str]) -> None:
     assert "MV_SERVER" in capsys.readouterr().err
 
 
-def test_auto_without_gpu_serves_full_mock() -> None:
+def test_auto_without_gpu_serves_full_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+    # An empty CUDA inventory does not exclude Apple MPS on a developer's Mac.
+    # Make this no-accelerator scenario explicit on every installed test extra.
+    monkeypatch.setattr(
+        "mangaveyra_worker.backends.diffusers_backend._resolve_device", lambda setting, torch: "cpu"
+    )
     backends = build_backends(Config(backends=["auto"], ocr_engine="none"), [])
     names = [b.name for b in backends]
     assert names[-1] == "mock"

@@ -53,11 +53,20 @@ worker:
     job_types: [image.generate]
 """
 
+POSE_REPO = os.environ.get("MV_TEST_OPENPOSE_MODEL", "hf-internal-testing/tiny-controlnet-sdxl")
+
 
 @pytest.fixture(scope="module")
 def backend(tmp_path_factory: pytest.TempPathFactory) -> DiffusersBackend:
     models = tmp_path_factory.mktemp("models")
-    for i, doc in enumerate(TINY.split("---")):
+    # An explicitly cached revision makes the integration test offline and
+    # reproducible. Production model selection is unaffected.
+    tiny = TINY.replace(
+        "hf-internal-testing/tiny-stable-diffusion-xl-pipe",
+        os.environ.get("MV_TEST_DIFFUSERS_MODEL", "hf-internal-testing/tiny-stable-diffusion-xl-pipe"),
+    )
+    tiny = tiny.replace("hf-internal-testing/tiny-controlnet-sdxl", POSE_REPO)
+    for i, doc in enumerate(tiny.split("---")):
         (models / f"tiny{i}.yaml").write_text(doc)
     data = tmp_path_factory.mktemp("data")
     b = DiffusersBackend(Config(device="cpu", models_dir=models, data_dir=data, embedder="structural"), [])
@@ -182,4 +191,4 @@ def test_pose_switches_to_openpose_controlnet(backend: DiffusersBackend, run_job
     r, c = run_job(backend, "image.generate", {"seed": 1, "steps": 2, "pose": pose}, model="tiny-sdxl-pose")
     assert _img(c, r.output["images"][0]["key"]).size == (64, 64)
     entry = backend.cache._entries["tiny-sdxl-pose:base"]
-    assert "text2img:hf-internal-testing/tiny-controlnet-sdxl" in entry.derived
+    assert f"text2img:{POSE_REPO}" in entry.derived

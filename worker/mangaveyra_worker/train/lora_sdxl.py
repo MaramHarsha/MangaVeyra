@@ -48,7 +48,6 @@ class PeftSdxlTrainer(Trainer):
         from diffusers.utils import convert_state_dict_to_diffusers
         from peft import LoraConfig
         from peft.utils import get_peft_model_state_dict
-        from PIL import Image
 
         random.seed(req.seed)
         torch.manual_seed(req.seed)
@@ -73,13 +72,12 @@ class PeftSdxlTrainer(Trainer):
         embeds_cache: list[tuple[torch.Tensor, torch.Tensor]] = []
         with torch.no_grad():
             for i, img in enumerate(req.images):
-                for flip in (False, True):  # horizontal flip doubles a small dataset
-                    im = square_crop(img, res)
-                    if flip:
-                        im = im.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-                    arr = torch.from_numpy(np.asarray(im, dtype=np.float32) / 127.5 - 1.0).permute(2, 0, 1)
-                    lat = vae.encode(arr.unsqueeze(0).to(device)).latent_dist.sample()
-                    latents_cache.append((lat * vae.config.scaling_factor).to("cpu"))
+                # Asymmetric hair clips, scars and costume details are identity
+                # constraints: mirroring them silently teaches the wrong side.
+                im = square_crop(img, res)
+                arr = torch.from_numpy(np.asarray(im, dtype=np.float32) / 127.5 - 1.0).permute(2, 0, 1)
+                lat = vae.encode(arr.unsqueeze(0).to(device)).latent_dist.sample()
+                latents_cache.append((lat * vae.config.scaling_factor).to("cpu"))
                 embeds_cache.append(self._encode(req.caption(i), tok1, tok2, te1, te2, device))
                 req.progress(0, req.steps, f"caching {i + 1}/{len(req.images)}")
         vae.to("cpu")
@@ -112,7 +110,7 @@ class PeftSdxlTrainer(Trainer):
         for step in range(1, req.steps + 1):
             idx = random.randrange(len(latents_cache))
             latents = latents_cache[idx].to(device, dtype=self.dtype)
-            prompt_embeds, pooled = embeds_cache[idx // 2]
+            prompt_embeds, pooled = embeds_cache[idx]
             noise = torch.randn_like(latents)
             t = torch.randint(0, scheduler.config.num_train_timesteps, (1,), device=device).long()
             noisy = scheduler.add_noise(latents, noise, t)

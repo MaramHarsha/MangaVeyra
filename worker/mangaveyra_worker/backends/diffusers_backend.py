@@ -787,7 +787,8 @@ class DiffusersBackend(Backend):
                 tests.append({"key": ctx.upload_image(f"test-{i + 1}", img, meta={"seed": s}), "seed": s})
         ctx.progress(0.97, message="scoring", force=True)
         try:
-            scores, method = score_identity(refs, test_images, self.config.embedder, self.config.dino_model_dir)
+            model_dir = self.config.ccip_model_dir if self.config.embedder == "ccip" else self.config.dino_model_dir
+            scores, method = score_identity(refs, test_images, self.config.embedder, model_dir)
             score = round(sum(scores) / len(scores), 3)
         except Exception as exc:  # scoring is advisory; the LoRA is still useful
             ctx.log.warning("could not score test images", extra={"fields": {"error": str(exc)}})

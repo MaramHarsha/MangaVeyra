@@ -44,6 +44,24 @@ def test_identical_image_scores_one() -> None:
     assert scores[0] == pytest.approx(1.0, abs=1e-4)
 
 
+def test_measurement_keeps_precision_below_the_policy_boundary(monkeypatch) -> None:
+    from mangaveyra_worker.vision import embed
+
+    class BoundaryEmbedder:
+        method = "test-boundary"
+
+        def embed(self, images):
+            value = .89999
+            return [[1., 0.], [value, (1 - value**2)**.5]]
+
+    monkeypatch.setattr(embed, "available_embedders", lambda *args: ["boundary"])
+    monkeypatch.setattr(embed, "make_embedder", lambda *args: BoundaryEmbedder())
+    image = character((100, 30, 30))
+    scores, method = score_identity([image], [image])
+    assert method == "test-boundary"
+    assert .89998 < scores[0] < .9
+
+
 def test_vector_helpers() -> None:
     assert cosine([1, 0], [0, 1]) == 0
     assert centroid([[2, 0], [0, 2]]) == pytest.approx([2**-0.5, 2**-0.5])

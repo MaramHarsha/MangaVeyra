@@ -51,8 +51,21 @@ class Trainer(abc.ABC):
 
 
 def square_crop(img: Image.Image, size: int) -> Image.Image:
-    """Resize the shorter side to ``size`` and centre-crop to a square (RGB)."""
-    return ImageOps.fit(img.convert("RGB"), (size, size), Image.Resampling.LANCZOS, centering=(0.5, 0.4))
+    """Fit the complete reference into an RGB square without losing identity details.
+
+    Keep the historical helper name for external trainers. A centre crop of a
+    tall turnaround discards the face and boots, and dropping alpha turns its
+    transparent background black. Both built-in and external trainers use this
+    preparation so the kept appearance remains the training target.
+    """
+    if size < 1:
+        raise ValueError("training resolution must be positive")
+    rgba = ImageOps.exif_transpose(img).convert("RGBA")
+    white = Image.new("RGBA", rgba.size, "white")
+    white.alpha_composite(rgba)
+    return ImageOps.pad(
+        white.convert("RGB"), (size, size), Image.Resampling.LANCZOS, color="white"
+    )
 
 
 def write_dataset(req: TrainRequest, repeats: int = 10) -> Path:
