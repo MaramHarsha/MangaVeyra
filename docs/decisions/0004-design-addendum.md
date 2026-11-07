@@ -99,6 +99,8 @@ nearest designed screen would put it.
 - **Shared controls:** unavailable primary and danger buttons that carry a Soon tag use a muted fill instead of
   40–60% opacity so label and tag stay legible (≥ 4.5:1). File uploads use the kit's dashed upload area (the G10
   "Import comics" pattern) around the native picker. Textarea character counters update while typing.
+- **Sidebar:** a Soon sidebar item whose label does not fit beside its Soon tag (Japanese "エージェントとプラグイン")
+  truncates the label; the full name stays in the tooltip and accessible name.
 - **Shared forms:** mutation buttons expose busy state and reject duplicate submission without dropping their form
   intent. Character/setting forms use the shared modal to protect unsaved edits during in-app navigation and the
   browser's unload guard when closing a tab. Validation retains safe values; files must be reselected.
@@ -108,7 +110,8 @@ nearest designed screen would put it.
   filters; with it the selects apply on change.
 - **B3 wizard:**
   - step 5 (Generate) and the premise "Try:" suggestions have no artboard; the suggestions sit on one row of dashed
-    chips so step 1 keeps Next in view at 1440×900;
+    chips so step 1 keeps Next in view at 1440×900; in Adapt mode the paste box and the .txt upload sit side by side,
+    so Next stays in view in both starting points;
   - step 5 offers the ten manga content languages of ADR 0008;
   - without JS all steps show stacked;
   - "Draft saved" reads "Not saved until you generate" (no draft saving exists);
@@ -132,6 +135,9 @@ nearest designed screen would put it.
   - once a chapter has pages, "Make pages from script" opens the editor instead of queuing new pages;
   - "Import text into this chapter" (§4) sits at the foot of the tree in the Soon state; the assistant route chip
     reads "Auto → model routing", dimmed, and its Soon tag stays on the ask field;
+  - with JavaScript dialogue wraps to the column edge under the speaker; without it each line keeps the speaker
+    beside a text box (wrapped lines indent under the text); when the script assistant's title and route chip do not
+    fit on one row (the Japanese title), the chip moves under the title;
   - on narrow screens the assistant pane hides below 1180 px and the tree on phones (responsive layout).
 - **C2–C5:** global Characters and Setting destinations show a project chooser. Empty lists, no filter results,
   editable profile/reference/outfit/setting forms, upload errors, conflicts, and queued/failed sheet states use the
@@ -140,7 +146,11 @@ nearest designed screen would put it.
   Relationships keep the designed chip row with one dashed "Relationship" chip in the Soon state. The kanji watermark
   keeps the design's light ink and blends so it stays visible over light reference art. The role line sits inside the
   Role field after the role select (C4 and the C3 profile form). While a sheet job runs, the C4 form and sheet column
-  scroll in their own tracks so the route chip and Generate stay at the foot of the viewport.
+  scroll in their own tracks so the route chip and Generate stay at the foot of the viewport. After a sheet job is
+  routed, the C4 route chip names the route it used (model · provider · estimate). C3 shows the kept reference sheet
+  in the FRONT slot until a front view is uploaded. C5 setting cards keep the designed usage line with "Panel usage"
+  in the Soon state until panel usage is tracked, followed by the item's description on the same line (truncated);
+  the item's own tags use the designed tag badge.
 - **C4 ready state:** completed reference sheets replace the in-progress job proof in the designed two-by-two
   candidate grid and keep their sheet captions; they do not retain an extra loading panel above the results. Keeping a
   look remains an explicit human action.
@@ -149,7 +159,9 @@ nearest designed screen would put it.
   subtitle's "auto-routing" links to G11. Image rows show the published per-image estimate ("~$0.04 / img") and
   local-worker rows "GPU time"; the built-in placeholder rows read "Scripts · fallback" (text) and "Panels · sheets ·
   edits · fallback" (image) with cost "None". The fal and Ollama tiles carry short descriptions; Google and xAI keep
-  disabled Soon destinations.
+  disabled Soon destinations. While members may not add their own providers, Add custom is disabled with the same
+  reason as Add provider, and G12 reached directly shows an "Ask an admin to add this provider" state built from the
+  empty-state component.
 - **G11 Routing:** the Guards box adds a "Private-network endpoints (local servers such as Ollama)" row, defaulting to
   MV_ALLOW_PRIVATE_PROVIDER_URLS; link-local and metadata addresses stay blocked. The spend row keeps "Monthly remote
   spend limit · $20" with its switch; admins edit the amount inline. With JavaScript guard and mode changes save at
