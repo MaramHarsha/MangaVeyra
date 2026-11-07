@@ -232,6 +232,13 @@ test('fresh install → script → characters → layered art → lettering → 
     await expect(page.getByRole('button', { name: /^Regenerate panel/ })).toBeEnabled();
   });
 
+  await test.step('open existing pages from the Story editor after page saves', async () => {
+    await page.goto(story);
+    await page.getByRole('link', { name: 'Make pages from script', exact: true }).first().click();
+    await page.waitForURL(/\/chapters\/[^/]+\/edit$/);
+    await expect(page.locator('[data-island=editor]')).toHaveAttribute('data-island-mounted', 'true');
+  });
+
   await test.step('keep locked lettering read-only in the editor', async () => {
     const api = `/api/v1/editor/p/${project}/chapters/${chapter}`;
     const data = await (await page.request.get(api)).json();
@@ -322,10 +329,13 @@ test('fresh install → script → characters → layered art → lettering → 
       await page.locator('[name=name]').fill('Tidebreak local test');
       await page.locator('[name=endpoint]').fill(`http://127.0.0.1:${address.port}/v1`);
       await page.locator('[name=model]').fill('tidebreak-test');
+      // Private-network endpoints are off by default; the admin enables them here.
+      await expect(page.getByRole('switch', { name: 'Allow private-network endpoints on this server', exact: true })).toBeChecked();
       await page.getByRole('button', { name: 'Next: test', exact: true }).click();
       await page.waitForURL('**/models/providers/new/test?id=*');
       await page.screenshot({ animations: 'disabled', path: info.outputPath('G12-test-desktop.png') });
-      await page.getByRole('button', { name: 'Test and continue', exact: true }).click();
+      await expect(page.getByText('Success', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Next: describe', exact: true }).click();
       await page.waitForURL('**/models/providers/new/describe?id=*');
       await page.screenshot({ animations: 'disabled', path: info.outputPath('G12-describe-desktop.png') });
       await page.getByRole('button', { name: 'Next: route', exact: true }).click();

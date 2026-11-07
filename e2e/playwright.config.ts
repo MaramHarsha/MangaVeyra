@@ -38,7 +38,6 @@ export default defineConfig({
       MV_STORAGE: 'local',
       MV_WORKER_TOKEN: 'mangaveyra-e2e-worker-only',
       MV_SMTP_HOST: '',
-      MV_ALLOW_PRIVATE_PROVIDER_URLS: 'true',
     },
   },
 });
