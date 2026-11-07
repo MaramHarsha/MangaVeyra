@@ -10,8 +10,8 @@
 
 <p align="center">
   MangaVeyra is being built as an open-source, self-hosted AI manga studio, reader and community.<br>
-  The current repository includes a tested premise-to-editable-script vertical slice,<br>
-  but it does not yet provide page art, chapter export, publishing or reading workflows.
+  Phase 1 takes an original premise through scripts, characters, layered pages and lettering<br>
+  to PNG, CBZ and print-ready PDF exports. Publishing and reading remain planned.
 </p>
 
 <p align="center">
@@ -34,9 +34,9 @@
 
 ## Current status
 
-> **MangaVeyra is pre-alpha development software.** You can connect OpenRouter or OpenAI, or use the offline placeholder,
-> create a project and chapter from a premise or private text source, generate a structured script, and edit the
-> persisted manuscript. You cannot yet turn it into illustrated pages or an exported, publishable chapter.
+> **MangaVeyra is pre-alpha development software.** The first playable studio workflow uses your own configured
+> providers or the built-in offline placeholder. Create a project, edit its script, build a character bible, make
+> pages, choose art variations, edit structured lettering and export a chapter.
 
 ### Implemented and tested
 
@@ -48,6 +48,15 @@
   creation/adaptation, the real Studio dashboard, generation state and the editable chapter manuscript.
 - **Gate A generation:** deterministic offline script generation and fixed-model OpenRouter or OpenAI structured
   text, with hard spend reservations, project/token authorization, revision fencing and honest AI provenance.
+- **Visual generation:** deterministic offline images, fixed OpenRouter/fal image adapters, configured worker jobs,
+  local OpenAI-compatible text, capability/licence filtering, routing pins and bounded fallback.
+- **Studio bibles:** project library, character reference sheets/uploads, profile edits, outfits and setting items.
+- **Page production:** polygon panels with independent background/character/FX layers, four variations, exact masked
+  region edits, revision-bound saves, locks, history/revert and a lazy Svelte/Pixi editor with undo/redo.
+- **Lettering and export:** shared shaped glyph paths, bubble shapes/tails, RTL reading order, vertical Japanese and
+  ruby; PNG ZIP, CBZ and vector-lettered PDF with B5/A5/KDP trims, actual trim/bleed boxes and optional credits.
+- **Original demo:** `mangaveyra seed --demo` creates the unpublished Tidebreak Courier project for an existing
+  account, with labelled placeholder artwork. Rerunning preserves your edits.
 - **Python AI worker:** deterministic placeholder output, diffusers and ComfyUI adapters, LoRA training, panel and
   bubble detection, OCR, image helpers and Character Lock scoring. The real GPU path still needs hardware validation.
 - **Frontend foundation:** design tokens, responsive components, themes, motion, HTMX integration and the Svelte
@@ -57,13 +66,10 @@
 
 ### Not yet an end product
 
-Image-provider expansion, character-sheet generation, page persistence, the visual editor, lettering, compositing,
-publishing, reader, export, application MCP server, backup/update flows, admin UI and World link are incomplete or
-intentional stubs. Database tables or designs for a feature do not mean that feature is available at runtime.
-
-The completed first milestone deliberately stops at an editable script: connect OpenRouter for text or use the
-deterministic offline placeholder, create a project and chapter, generate a structured script, then edit and persist
-it atomically. Gate B of Phase 1 now moves into characters and the page pipeline. See the
+Publishing, reader, application MCP server, backup/update flows, admin UI, training/Character Lock repair,
+translation, animation, EPUB/video export and the World link remain incomplete or intentional stubs. Their
+designed controls stay visible as disabled **Soon** actions. GPU/model quality still needs hardware validation;
+remote routes are regression-tested with fake transports, without paid provider calls. See the
 [accepted MVP decision](docs/decisions/0001-mvp-scope.md), the
 [hard remote-spend decision](docs/decisions/0003-hard-remote-spend-reservations.md),
 the [completed script plan](docs/plans/0001-script-vertical-slice.md), and the
@@ -73,23 +79,22 @@ the [completed script plan](docs/plans/0001-script-vertical-slice.md), and the
 
 Most AI comic tools generate a flat picture per panel. MangaVeyra's product architecture instead treats a panel as
 structured data: polygon geometry plus independent background, character, effects and lettering layers. Script,
-dialogue, provenance and edit scope travel with the page so a creator can eventually change one part without
+dialogue, provenance and edit scope travel with the page so a creator can change one part without
 rerolling everything else.
 
 The deployment target is one Go binary and a database, with optional Python workers for local AI. The open-source
 application is designed to accept the operator's own models and keys, send no telemetry, and keep the complete
-studio, reader and community self-hostable. These are repository invariants; the first script workflow is implemented
-and the page-production workflow is still being built.
+studio, reader and community self-hostable. The studio's first playable workflow is implemented; the reader and
+community are later phases.
 
 ## Product direction
 
-The following differentiators describe the intended product. They are **planned**, not claims about the current
-pre-alpha runtime.
+The first playable establishes the production workflow; the remaining roadmap adds consistency repair and reading.
 
 | Planned capability | Intended behavior |
 |---|---|
 | **Character Lock** | Score character consistency and fix a drifted character without replacing the rest of a panel. Reference-image guidance is the default; LoRA training is optional. |
-| **Scoped edits** | Target a chapter, page, panel, layer or region while preserving everything outside the explicit scope. |
+| **Scoped edits** | Phase 1 generates chapter layouts, panel/layer art and masked regions with explicit scopes and locks. |
 | **Layered panels** | Regenerate backgrounds, characters, effects and lettering independently while keeping lettering as structured text. |
 | **Explainable routing** | Choose among configured local and remote models, show why, respect spend and licence guards, and make `local_only` a hard outbound boundary. |
 | **Panel-aware reading** | Support guided mobile reading, structured alt text, read-aloud and honest per-role AI provenance. |
@@ -113,8 +118,8 @@ not a list of shipped behavior.
 
 ## Quick start
 
-These commands start the current pre-alpha for development and evaluation. The premise/adaptation → editable-script
-workflow works; page art, lettering and export remain planned Phase 1 work.
+These commands start the first playable studio for development and evaluation. No provider keys or GPU are required
+for the complete placeholder workflow.
 
 ### Docker Compose (PostgreSQL)
 
@@ -130,8 +135,7 @@ docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 Open <http://localhost:8080>, follow first-run setup, and either keep the offline placeholder or connect OpenRouter or
 OpenAI.
 
-The Python worker can be started and exercised independently through its protocol and local CLI. Gate A script jobs
-run in the Go process; Studio image-generation flows do not route to the worker yet:
+Script jobs run in Go. Configured image workers receive bounded child jobs from the Go generation orchestrator:
 
 ```sh
 # NVIDIA GPU worker
@@ -165,7 +169,8 @@ mangaveyra user set-role             Change a site role
 mangaveyra version                   Show version information
 ```
 
-`seed --demo`, `backup` and `mcp-stdio` are command placeholders and currently report that they are unavailable.
+After setup, run `./bin/mangaveyra seed --demo` (or `--owner username`) for the original demo. It creates no accounts
+and publishes nothing. `backup` and `mcp-stdio` remain unavailable command placeholders.
 
 ## Configuration
 
@@ -194,10 +199,16 @@ The **worker side** is implemented: its local catalogue includes supported diffu
 diffusers, ComfyUI, mock and vision backends. It can register, claim jobs, report progress and upload results through
 the worker protocol.
 
-The **Gate A server-side text path is implemented**: it includes an encrypted OpenRouter/OpenAI provider registry and
-management UI, deterministic offline placeholder generation, a fixed structured-output text model, explicit routing,
-durable spend reservations and persisted script jobs. Image-provider catalogues, capability-based automatic routing
-and visual generation remain Gate B work.
+The server provides sealed OpenRouter/OpenAI text connections, fixed OpenRouter/fal image routes, custom local
+OpenAI-compatible text, an offline placeholder and a model catalogue. Routing modes, scoped pins, commercial licence
+checks and fallback are enforced again at dispatch. Remote calls use durable spend reservations; the fixed boundaries
+are documented in ADRs [0005](docs/decisions/0005-gate-a-openrouter-text.md),
+[0006](docs/decisions/0006-openai-direct-text.md) and
+[0007](docs/decisions/0007-phase-1-image-and-local-routes.md).
+
+**Local only** permits the in-process placeholder and blocks custom HTTP/provider calls and worker handoff. A worker
+may be on another machine, and a nominally local text service may forward to a cloud model; configured workers/local
+services are available in eligible ordinary/free routing modes instead. The app sends no telemetry.
 
 ## Agents (MCP, planned)
 
@@ -216,14 +227,14 @@ World remains off by default, and this open-source repository never contains pay
 
 | Part | Technology | Current state |
 |---|---|---|
-| Server | Go `net/http`, embedded assets | Foundation and Phase 1 Gate A implemented |
-| Pages | templ + HTMX | Setup, auth, settings, provider management, project wizard and manuscript UI implemented |
-| Rich UI | TypeScript, Svelte 5, PixiJS | Build foundation and demo island only |
+| Server | Go `net/http`, embedded assets | First playable studio and bounded generation pipeline |
+| Pages | templ + HTMX | Setup, auth, settings, providers/routing, Studio bibles, script and export screens |
+| Rich UI | TypeScript, Svelte 5, PixiJS | Page/layout/lettering/variation/mask editor, loaded only on editor routes |
 | AI workers | Python, PyTorch/diffusers, ComfyUI adapter | Implemented; GPU path needs hardware validation |
 | Data | PostgreSQL or SQLite | Schema and migration runner implemented |
 | Files | Local disk or S3-compatible storage | Implemented |
 | Realtime | WebSockets and Yjs relay | Foundation implemented |
-| Product modules | Studio, editor, publishing, reader, export, MCP | Studio project/chapter/script slice implemented; visual editor, publishing, reader, export and MCP remain planned |
+| Product modules | Studio, editor, publishing, reader, export, MCP | Studio/editor/export implemented; publishing, reader and MCP remain planned |
 
 ```text
 cmd/mangaveyra     server and CLI           internal/   core and feature packages
@@ -245,6 +256,20 @@ make test         # Go, frontend and worker suites
 make test-pg      # add PostgreSQL coverage through a local container
 ```
 
+The browser suite starts its own server and a fresh temporary database:
+
+```sh
+make build
+cd e2e
+npm ci
+npx playwright install chromium  # once, or use an installed Chrome below
+npm test
+# MV_BROWSER_CHANNEL=chrome npm test
+```
+
+It completes setup without keys, the five-step wizard, script/character generation, layered art, lettering and PDF/CBZ
+downloads, and checks the desktop-derived layout at phone width. See [e2e/README.md](e2e/README.md) for design evidence.
+
 The workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs for pull requests and can also be started
 manually from the Actions tab.
 
@@ -253,8 +278,8 @@ manually from the Actions tab.
 - The implemented foundation has no telemetry or usage tracking.
 - Passwords use argon2id; session tokens are stored hashed; 2FA, CSRF protection, strict CSP, rate limits, encrypted
   secrets and signed media URLs are implemented.
-- Future provider, World and update code must remain opt-in. The `local_only` outbound block is a required contract
-  for the routing layer now under development, not a claim that the unfinished router has already been validated.
+- Providers are explicitly configured; `local_only` is enforced at planning, dispatch and worker claims. World and
+  update integration remain planned and opt-in.
 
 ## License
 

@@ -63,37 +63,48 @@ func checkBuiltPages(t *testing.T, dialect string) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// A disabled local draft permits every G12 screen to render without
+	// contacting a provider. The fixture is at the final wizard stage.
+	providerID := db.NewID()
+	if _, err := ta.Deps.DB.Exec(ctx, `INSERT INTO providers (id, kind, name, base_url, config, scope, enabled, last_test)
+		VALUES (?, 'openai-compatible-local', 'Lantern local test', 'http://127.0.0.1:11434/v1', ?, 'server', FALSE, ?)`,
+		providerID, `{"model":"lantern-test","context_tokens":32768,"output_tokens":4096}`, `{"step":"route","state":"ok"}`); err != nil {
+		t.Fatal(err)
+	}
 	signedIn := map[string]string{
-		"dashboard":         "/studio",
-		"new project":       "/studio/new/premise",
-		"story":             "/studio/p/" + project.ID + "/story/" + chapter.ID,
-		"models":            "/models",
-		"connect OR":        "/models/providers/new?kind=openrouter",
-		"connect OAI":       "/models/providers/new?kind=openai",
-		"connect fal":       "/models/providers/new/fal",
-		"model routing":     "/models/routing",
-		"custom provider":   "/models/providers/new/connect",
-		"project library":   "/studio/projects",
-		"global characters": "/studio/characters",
-		"global setting":    "/studio/setting",
-		"character bible":   "/studio/p/" + project.ID + "/characters",
-		"create character":  "/studio/p/" + project.ID + "/characters/new",
-		"character detail":  "/studio/p/" + project.ID + "/characters/" + character.ID,
-		"character profile": "/studio/p/" + project.ID + "/characters/" + character.ID + "?edit=1",
-		"setting bible":     "/studio/p/" + project.ID + "/setting",
-		"chapter export":    "/studio/p/" + project.ID + "/chapters/" + chapter.ID + "/export",
-		"onboarding":        "/onboarding/1",
-		"offline":           "/offline",
-		"404":               "/this-page-is-not-built",
-		"settings":          "/settings",
-		"account":           "/settings/account",
-		"appearance":        "/settings/appearance",
-		"language":          "/settings/language",
-		"reading":           "/settings/reading",
-		"notifications":     "/settings/notifications",
-		"accessibility":     "/settings/accessibility",
-		"world":             "/settings/world",
-		"data":              "/settings/data",
+		"dashboard":                "/studio",
+		"new project":              "/studio/new/premise",
+		"story":                    "/studio/p/" + project.ID + "/story/" + chapter.ID,
+		"models":                   "/models",
+		"connect OR":               "/models/providers/new?kind=openrouter",
+		"connect OAI":              "/models/providers/new?kind=openai",
+		"connect fal":              "/models/providers/new/fal",
+		"model routing":            "/models/routing",
+		"custom provider":          "/models/providers/new/connect",
+		"custom provider test":     "/models/providers/new/test?id=" + providerID,
+		"custom provider describe": "/models/providers/new/describe?id=" + providerID,
+		"custom provider route":    "/models/providers/new/route?id=" + providerID,
+		"project library":          "/studio/projects",
+		"global characters":        "/studio/characters",
+		"global setting":           "/studio/setting",
+		"character bible":          "/studio/p/" + project.ID + "/characters",
+		"create character":         "/studio/p/" + project.ID + "/characters/new",
+		"character detail":         "/studio/p/" + project.ID + "/characters/" + character.ID,
+		"character profile":        "/studio/p/" + project.ID + "/characters/" + character.ID + "?edit=1",
+		"setting bible":            "/studio/p/" + project.ID + "/setting",
+		"chapter export":           "/studio/p/" + project.ID + "/chapters/" + chapter.ID + "/export",
+		"onboarding":               "/onboarding/1",
+		"offline":                  "/offline",
+		"404":                      "/this-page-is-not-built",
+		"settings":                 "/settings",
+		"account":                  "/settings/account",
+		"appearance":               "/settings/appearance",
+		"language":                 "/settings/language",
+		"reading":                  "/settings/reading",
+		"notifications":            "/settings/notifications",
+		"accessibility":            "/settings/accessibility",
+		"world":                    "/settings/world",
+		"data":                     "/settings/data",
 	}
 	editorURL := "/studio/p/" + project.ID + "/chapters/" + chapter.ID + "/edit?page=" + page.ID
 	signedIn["page editor"] = editorURL
@@ -106,6 +117,9 @@ func checkBuiltPages(t *testing.T, dialect string) {
 	check := func(t *testing.T, client *testutil.Client, name, page string) {
 		t.Helper()
 		res := client.Get(page)
+		if strings.HasPrefix(name, "custom provider ") && res.StatusCode != http.StatusOK {
+			t.Fatalf("%s (%s) = %d", name, page, res.StatusCode)
+		}
 		if res.StatusCode >= 500 {
 			t.Fatalf("%s (%s) = %d", name, page, res.StatusCode)
 		}

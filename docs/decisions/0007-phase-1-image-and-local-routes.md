@@ -76,7 +76,7 @@ Sources: [Ollama OpenAI compatibility](https://docs.ollama.com/api/openai-compat
 [Ollama local/cloud configuration](https://docs.ollama.com/faq).
 
 A non-local-only image plan may use an explicitly connected worker and an installed compatible manifest. Its Go
-parent creates one child worker job for the current parent attempt, with bounded wait, artifact count/type/size
+parent creates one child worker job per stable component slot in the current parent attempt, with bounded wait, artifact count/type/size
 checks and cancellation on parent exit. The child has one attempt; the parent owns the retry envelope. Prompts and
 references travel through the existing authenticated worker protocol and signed file URLs. App wiring supplies the
 catalogue's `jobs.ManifestLookup` to claims. A failed or expired parent cannot persist late worker artifacts.

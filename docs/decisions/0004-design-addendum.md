@@ -130,4 +130,19 @@ nearest designed screen would put it.
   DPI and page/range fields fill the designed print options. Counts and the 64 MiB output limit replace invented
   sample size/time estimates. Without JavaScript the modal renders as a complete static panel over the same editor
   shell. EPUB, video and loops retain their designed rows in the disabled Soon state.
+- **D1 / D2 / D3 / D8 / D13:** empty chapters, queued page creation, revision conflicts, scope locks and failed jobs
+  use the existing notices, fields and status components. Numeric polygon/mask coordinates provide a keyboard
+  alternative to dragging/painting. Furigana controls use the existing fields in the lettering inspector. The shared
+  unsaved dialog protects page drafts; unlocking, deleting and reverting require an explicit human confirmation.
+  The page-level AI scope, pose/sketch, automatic object selection, training and saved-layout controls remain Soon
+  where their generation contracts belong to later phases. Without JavaScript the documented rich editor shows
+  a read-only structured page proof, page navigation and export access.
+- **D2 / D13 interaction details:** the layout dialog uses the designed centered frame, existing modal focus
+  behavior and a working tilt-gutters switch. Region editing fits the actual layer's aspect ratio within the
+  desktop proof area; its comparison slider and four-candidate strip stay visible. Feathering keeps an opaque
+  selected core, consistent with the frozen exact-white mask contract. Numeric coordinates remain a keyboard
+  alternative. Automatic object selection and Character Lock/style-preservation options stay visibly Soon.
+- **C4 ready state:** completed reference sheets replace the in-progress job proof in the designed two-by-two
+  candidate grid; they do not retain an extra loading panel above the results. Keeping a look remains an explicit
+  human action.
 

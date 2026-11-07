@@ -1,6 +1,6 @@
 # Phase 1: First playable — premise → exported chapter
 
-- Status: Active — Gate A complete; Gate B is next
+- Status: Complete — Gates A/B/C, desktop alignment and final verification passed (2026-11-07)
 - Gate A: plan 0001 is the mandatory first vertical slice and remains normative for structured text generation,
   project/chapter/script persistence, authorization, provider secrets, spend reservations and atomic job completion.
   Gate A is green as of 2026-11-07; page-pipeline and visual-generation work may now begin under Gate B.
