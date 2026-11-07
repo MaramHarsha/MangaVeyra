@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"mime"
 	"net/http"
 	"net/url"
 	"sort"
@@ -52,7 +51,19 @@ func sessionActor(r *http.Request) (studio.Actor, error) {
 	}
 	return studio.Actor{UserID: id.User.ID}, nil
 }
+
+// load builds the export view with language options gathered from every page
+// of the chapter (the E2 form). loadLite skips that scan for previews,
+// downloads and job polling, which only need the project and chapter.
 func (m *Module) load(r *http.Request) (studio.Actor, exportView, error) {
+	return m.loadView(r, true)
+}
+
+func (m *Module) loadLite(r *http.Request) (studio.Actor, exportView, error) {
+	return m.loadView(r, false)
+}
+
+func (m *Module) loadView(r *http.Request, allPages bool) (studio.Actor, exportView, error) {
 	actor, err := sessionActor(r)
 	if err != nil {
 		return actor, exportView{}, core.ErrNotFound()
@@ -105,35 +116,143 @@ func (m *Module) load(r *http.Request) (studio.Actor, exportView, error) {
 			return actor, v, err
 		}
 	}
+	// Options are the project language plus every language that has bubble
+	// text somewhere in the chapter, in content-language order.
 	languages := map[string]bool{p.Language: true}
-	for _, b := range v.Page.Bubbles {
-		for lang := range b.Texts {
-			languages[lang] = true
+	collect := func(docs []pagedoc.Page) {
+		for _, doc := range docs {
+			for _, b := range doc.Bubbles {
+				for lang, t := range b.Texts {
+					if strings.TrimSpace(t.Text) != "" {
+						languages[lang] = true
+					}
+				}
+			}
 		}
 	}
-	ls := make([]string, 0, len(languages))
-	for lang := range languages {
-		ls = append(ls, lang)
-	}
-	sort.Strings(ls)
-	for _, lang := range ls {
-		label := lang
-		if lang == "en" || lang == "ja" {
-			label = i18n.T(r.Context(), "exportui.language."+lang)
+	collect([]pagedoc.Page{v.Page})
+	wanted := r.URL.Query().Get("lang")
+	// Previews and downloads only scan the rest of the chapter when the
+	// requested language is not on the page they show.
+	if allPages || wanted != "" && !languages[wanted] {
+		docs, err := m.s.pages.ChapterPages(r.Context(), chapter.ID)
+		if err != nil {
+			return actor, v, err
 		}
+		collect(docs)
+	}
+	for _, lang := range languageOrder(languages) {
+		label := languageLabel(r.Context(), lang)
 		if lang == p.Language {
 			label = i18n.T(r.Context(), "exportui.original", "language", label)
 		}
 		v.Languages = append(v.Languages, ui.Option{Value: lang, Label: label})
 	}
-	if lang := r.URL.Query().Get("lang"); lang != "" {
-		if !languages[lang] {
+	if wanted != "" {
+		if !languages[wanted] {
 			return actor, v, core.ErrBadRequest(i18n.T(r.Context(), "exportui.invalid"))
 		}
-		v.Request.Lang = lang
+		v.Request.Lang = wanted
 	}
 	return actor, v, nil
 }
+
+// languageOrder lists content languages in ContentLanguages order, then any
+// other stored tags alphabetically.
+func languageOrder(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for _, lang := range pagedoc.ContentLanguages {
+		if set[lang] {
+			out = append(out, lang)
+		}
+	}
+	var rest []string
+	for lang := range set {
+		if !pagedoc.IsContentLanguage(lang) {
+			rest = append(rest, lang)
+		}
+	}
+	sort.Strings(rest)
+	return append(out, rest...)
+}
+
+// languageLabel names a content language with the exportui catalogue; other
+// tags (and a missing key) show the tag itself.
+func languageLabel(ctx context.Context, lang string) string {
+	if !pagedoc.IsContentLanguage(lang) {
+		return lang
+	}
+	key := "exportui.language." + lang
+	if label := i18n.T(ctx, key); label != key {
+		return label
+	}
+	return lang
+}
+
+// restoreRequest shows a job's settings in the form again, so a finished CBZ
+// export does not reset the form to PDF.
+func restoreRequest(v *exportView, in Request) {
+	v.Request.Format, v.Request.TrimID, v.Request.DPI, v.Request.CreditsPage = in.Format, in.TrimID, in.DPI, in.CreditsPage
+	for _, l := range v.Languages {
+		if l.Value == in.Lang {
+			v.Request.Lang = in.Lang
+		}
+	}
+	v.PageMode, v.Range = "all", ""
+	if len(in.PageIDs) == 0 {
+		return
+	}
+	if len(in.PageIDs) == 1 && in.PageIDs[0] == v.Page.ID {
+		v.PageMode = "current"
+		return
+	}
+	numbers := map[string]int{}
+	for _, p := range v.Pages {
+		numbers[p.ID] = p.Number
+	}
+	var ns []int
+	for _, id := range in.PageIDs {
+		if n, ok := numbers[id]; ok {
+			ns = append(ns, n)
+		}
+	}
+	sort.Ints(ns)
+	var parts []string
+	for i := 0; i < len(ns); {
+		j := i
+		for j+1 < len(ns) && ns[j+1] == ns[j]+1 {
+			j++
+		}
+		if i == j {
+			parts = append(parts, strconv.Itoa(ns[i]))
+		} else {
+			parts = append(parts, strconv.Itoa(ns[i])+"-"+strconv.Itoa(ns[j]))
+		}
+		i = j + 1
+	}
+	v.PageMode, v.Range = "range", strings.Join(parts, ",")
+}
+
+// contentDisposition offers the Unicode filename (RFC 6266 filename*) with an
+// ASCII fallback for older clients.
+func contentDisposition(name, fallback string) string {
+	if fallback == "" {
+		fallback = name
+	}
+	fallback = asciiFilename(fallback)
+	var b strings.Builder
+	b.WriteString(`attachment; filename="` + fallback + `"; filename*=UTF-8''`)
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || strings.IndexByte("!#$&+-.^_`|~", c) >= 0 {
+			b.WriteByte(c)
+		} else {
+			fmt.Fprintf(&b, "%%%02X", c)
+		}
+	}
+	return b.String()
+}
+
 func (m *Module) render(w http.ResponseWriter, r *http.Request, status int, v exportView) error {
 	chrome := m.ui.Chrome(w, r, web.PageOpts{Title: i18n.T(r.Context(), "exportui.title", "number", v.Chapter.Number)})
 	return web.Render(w, r, status, exportScreen(chrome, v), nil)
@@ -147,6 +266,9 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request) error {
 		v.Job, err = m.job(r.Context(), actor, v, id)
 		if err != nil {
 			return core.ErrNotFound()
+		}
+		if in, err := decodeInput(v.Job.Input); err == nil {
+			restoreRequest(&v, in.Request)
 		}
 		m.result(r.Context(), &v)
 	}
@@ -280,7 +402,7 @@ func (m *Module) result(ctx context.Context, v *exportView) {
 	v.Result = &result
 }
 func (m *Module) download(w http.ResponseWriter, r *http.Request) error {
-	actor, v, err := m.load(r)
+	actor, v, err := m.loadLite(r)
 	if err != nil {
 		return err
 	}
@@ -302,14 +424,14 @@ func (m *Module) download(w http.ResponseWriter, r *http.Request) error {
 	}
 	defer object.Close()
 	w.Header().Set("Content-Type", v.Result.ContentType)
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": v.Result.Filename}))
+	w.Header().Set("Content-Disposition", contentDisposition(v.Result.Filename, v.Result.ASCIIFilename))
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, v.Result.Filename, info.ModTime, object)
 	return nil
 }
 func (m *Module) status(w http.ResponseWriter, r *http.Request) error {
-	actor, v, err := m.load(r)
+	actor, v, err := m.loadLite(r)
 	if err != nil {
 		return err
 	}
@@ -328,7 +450,7 @@ func (m *Module) status(w http.ResponseWriter, r *http.Request) error {
 	return web.Fragment(w, r, http.StatusOK, jobStatus(v))
 }
 func (m *Module) cancel(w http.ResponseWriter, r *http.Request) error {
-	actor, v, err := m.load(r)
+	actor, v, err := m.loadLite(r)
 	if err != nil {
 		return err
 	}
@@ -343,7 +465,7 @@ func (m *Module) cancel(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 func (m *Module) preview(w http.ResponseWriter, r *http.Request) error {
-	_, v, err := m.load(r)
+	_, v, err := m.loadLite(r)
 	if err != nil {
 		return err
 	}

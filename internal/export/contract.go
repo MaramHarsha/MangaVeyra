@@ -53,12 +53,14 @@ type Request struct {
 
 // Result is a finished export.
 type Result struct {
-	AssetID     string `json:"asset_id"`
-	URL         string `json:"url"`
-	Filename    string `json:"filename"`
-	ContentType string `json:"content_type"`
-	Pages       int    `json:"pages"`
-	Bytes       int64  `json:"bytes"`
+	AssetID  string `json:"asset_id"`
+	URL      string `json:"url"`
+	Filename string `json:"filename"`
+	// ASCIIFilename is the Content-Disposition fallback for Filename.
+	ASCIIFilename string `json:"ascii_filename,omitempty"`
+	ContentType   string `json:"content_type"`
+	Pages         int    `json:"pages"`
+	Bytes         int64  `json:"bytes"`
 }
 
 // Service builds export files.

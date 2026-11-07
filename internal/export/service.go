@@ -10,10 +10,11 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/compose"
@@ -359,7 +360,106 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 	return b.Buffer.Write(p)
 }
 
-var safeName = regexp.MustCompile(`[^a-zA-Z0-9_-]+`)
+const maxStemRunes = 80
+
+// filenameStem keeps the title readable in any script: letters, marks and
+// digits survive (Devanagari matras included), white space collapses to '-',
+// and only path separators, characters Windows reserves, control and
+// invisible format characters are removed. The result is capped by runes.
+func filenameStem(title string) string {
+	var b strings.Builder
+	dash := false
+	n := 0
+	for _, r := range title {
+		if unicode.IsSpace(r) || r == '-' {
+			dash = b.Len() > 0
+			continue
+		}
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || strings.ContainsRune(`/\:*?"<>|`, r) || r == utf8.RuneError {
+			continue
+		}
+		if dash {
+			if n+2 > maxStemRunes {
+				break
+			}
+			b.WriteByte('-')
+			n++
+			dash = false
+		}
+		if n >= maxStemRunes {
+			break
+		}
+		b.WriteRune(r)
+		n++
+	}
+	stem := strings.Trim(b.String(), ".-_ ")
+	if !strings.ContainsFunc(stem, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) {
+		return "mangaveyra"
+	}
+	return stem
+}
+
+// asciiFilename is the Content-Disposition fallback for clients without RFC
+// 6266 filename* support: ASCII letters, digits, '-', '_' and the extension.
+// A title without ASCII letters becomes "mangaveyra-ch-001".
+func asciiFilename(name string) string {
+	ext := ""
+	if i := strings.LastIndexByte(name, '.'); i > 0 && len(name)-i <= 5 {
+		name, ext = name[:i], name[i:]
+	}
+	var b strings.Builder
+	for _, r := range name {
+		if r < utf8.RuneSelf && (unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_') {
+			b.WriteRune(r)
+		} else if b.Len() > 0 && !strings.HasSuffix(b.String(), "-") {
+			b.WriteByte('-')
+		}
+	}
+	stem := strings.Trim(b.String(), "-")
+	title := name
+	if i := strings.LastIndex(name, "-ch-"); i >= 0 {
+		title = name[:i]
+	}
+	if !strings.ContainsFunc(title, func(r rune) bool { return r < utf8.RuneSelf && (unicode.IsLetter(r) || unicode.IsDigit(r)) }) {
+		stem = strings.Trim("mangaveyra-"+stem, "-")
+	}
+	safeExt := ""
+	for _, r := range ext {
+		if r < utf8.RuneSelf && (unicode.IsLetter(r) || unicode.IsDigit(r) || r == '.') {
+			safeExt += string(r)
+		}
+	}
+	return stem + safeExt
+}
+
+// exportLanguage is the canonical content language of an export, falling back
+// to the project language; unknown stored tags pass through unchanged.
+func exportLanguage(req Request, project studio.Project) string {
+	lang := strings.TrimSpace(req.Lang)
+	if lang == "" {
+		lang = project.Language
+	}
+	if canonical := pagedoc.NormalizeContentLanguage(lang); canonical != "" {
+		return canonical
+	}
+	if lang == "" {
+		return "en"
+	}
+	return lang
+}
+
+// comicInfoManga maps the project format to ComicInfo's Manga field: right to
+// left manga, top-to-bottom webtoon (manga read in page order) and
+// left-to-right comics. It depends on the reading direction, not the language.
+func comicInfoManga(format string) string {
+	switch format {
+	case "manga_rtl":
+		return "YesAndRightToLeft"
+	case "webtoon":
+		return "Yes"
+	}
+	return "No"
+}
 
 func (s *service) build(ctx context.Context, p prepared, progress func(int, int) error) ([]byte, Result, error) {
 	req := p.input.Request
@@ -368,14 +468,7 @@ func (s *service) build(ctx context.Context, p prepared, progress func(int, int)
 		pages = append(pages, s.credits(p))
 	}
 	result := Result{Pages: len(pages)}
-	stem := strings.Trim(safeName.ReplaceAllString(p.project.Title, "-"), "-")
-	if stem == "" {
-		stem = "mangaveyra"
-	}
-	if len(stem) > 80 {
-		stem = stem[:80]
-	}
-	stem += fmt.Sprintf("-ch-%03d", p.chapter.Number)
+	stem := filenameStem(p.project.Title) + fmt.Sprintf("-ch-%03d", p.chapter.Number)
 	var out boundedBuffer
 	if req.Format == FormatPDF {
 		t, _ := findTrim(req.TrimID)
@@ -420,6 +513,7 @@ func (s *service) build(ctx context.Context, p prepared, progress func(int, int)
 		}
 		result.ContentType = "application/pdf"
 		result.Filename = stem + ".pdf"
+		result.ASCIIFilename = asciiFilename(result.Filename)
 		result.Bytes = int64(len(boxed))
 		return boxed, result, nil
 	}
@@ -455,10 +549,6 @@ func (s *service) build(ctx context.Context, p prepared, progress func(int, int)
 		if err != nil {
 			return nil, result, err
 		}
-		manga := "YesAndRightToLeft"
-		if p.project.Format != "manga_rtl" {
-			manga = "No"
-		}
 		info := struct {
 			XMLName     xml.Name `xml:"ComicInfo"`
 			Title       string
@@ -467,10 +557,8 @@ func (s *service) build(ctx context.Context, p prepared, progress func(int, int)
 			PageCount   int
 			LanguageISO string
 			Manga       string
-		}{Title: p.chapter.Title, Series: p.project.Title, Number: p.chapter.Number, PageCount: len(pages), LanguageISO: req.Lang, Manga: manga}
-		if info.LanguageISO == "" {
-			info.LanguageISO = p.project.Language
-		}
+		}{Title: p.chapter.Title, Series: p.project.Title, Number: p.chapter.Number, PageCount: len(pages),
+			LanguageISO: exportLanguage(req, p.project), Manga: comicInfoManga(p.project.Format)}
 		if _, err = w.Write([]byte(xml.Header)); err != nil {
 			return nil, result, err
 		}
@@ -487,47 +575,51 @@ func (s *service) build(ctx context.Context, p prepared, progress func(int, int)
 		result.Filename = stem + ".cbz"
 		result.ContentType = "application/vnd.comicbook+zip"
 	}
+	result.ASCIIFilename = asciiFilename(result.Filename)
 	result.Bytes = int64(out.Len())
 	return out.Bytes(), result, nil
 }
+
+// creditsCopy is the contributions page in each content language. It records
+// who contributed per role; it never names prices.
+type creditsCopy struct {
+	heading, sep           string
+	roles                  [3]string // script, art, lettering
+	human, ai, mixed, none string
+	footer                 string
+}
+
+var creditsCopies = map[string]creditsCopy{
+	"en":      {"CONTRIBUTIONS", " · ", [3]string{"SCRIPT", "ART", "LETTERING"}, "Human", "AI", "Human + AI assistance", "Not recorded", "Created with MangaVeyra.\nHuman and AI contributions are recorded by role."},
+	"ja":      {"制作情報", "・", [3]string{"脚本", "作画", "写植"}, "人間", "AI", "人間とAIの共同制作", "未記録", "MangaVeyraで制作。\n人間とAIの担当を役割ごとに記載しています。"},
+	"ko":      {"제작 정보", " · ", [3]string{"각본", "작화", "식자"}, "사람", "AI", "사람과 AI의 공동 작업", "기록 없음", "MangaVeyra로 제작했습니다.\n사람과 AI의 기여를 역할별로 기록합니다."},
+	"zh-Hans": {"制作信息", "：", [3]string{"脚本", "作画", "嵌字"}, "人工", "AI", "人工与AI协作", "未记录", "使用 MangaVeyra 制作。\n按职能记录人工与AI的贡献。"},
+	"zh-Hant": {"製作資訊", "：", [3]string{"腳本", "作畫", "嵌字"}, "人工", "AI", "人工與AI協作", "未記錄", "使用 MangaVeyra 製作。\n依職能記錄人工與AI的貢獻。"},
+	"es":      {"CONTRIBUCIONES", " · ", [3]string{"GUION", "DIBUJO", "ROTULACIÓN"}, "Humano", "IA", "Humano con ayuda de IA", "Sin registrar", "Creado con MangaVeyra.\nLas contribuciones humanas y de IA se registran por función."},
+	"fr":      {"CONTRIBUTIONS", " · ", [3]string{"SCÉNARIO", "DESSIN", "LETTRAGE"}, "Humain", "IA", "Humain assisté par IA", "Non renseigné", "Créé avec MangaVeyra.\nLes contributions humaines et de l'IA sont indiquées par rôle."},
+	"de":      {"MITWIRKENDE", " · ", [3]string{"SKRIPT", "ZEICHNUNG", "LETTERING"}, "Mensch", "KI", "Mensch mit KI-Unterstützung", "Nicht erfasst", "Erstellt mit MangaVeyra.\nMenschliche und KI-Beiträge werden je Rolle erfasst."},
+	"pt":      {"CONTRIBUIÇÕES", " · ", [3]string{"ROTEIRO", "ARTE", "LETREIRAMENTO"}, "Humano", "IA", "Humano com auxílio de IA", "Não registrado", "Criado com MangaVeyra.\nAs contribuições humanas e de IA são registradas por função."},
+	"hi":      {"योगदान", " · ", [3]string{"पटकथा", "चित्रांकन", "अक्षरांकन"}, "मानव", "एआई", "मानव और एआई सहायता", "दर्ज नहीं", "MangaVeyra से बनाया गया।\nमानव और एआई योगदान भूमिका के अनुसार दर्ज किए गए हैं।"},
+}
+
 func (s *service) credits(p prepared) pagedoc.Page {
 	page := pagedoc.New(db.NewID(), p.project.ID, p.chapter.ID, len(p.pages)+1, p.project.PageWidth, p.project.PageHeight, pagedoc.DirLTR)
-	text := "CONTRIBUTIONS\n\n" + p.project.Title + "\n" + p.chapter.Title + "\n\n"
-	for _, role := range []string{"script", "art", "lettering"} {
-		value := p.chapter.AILabel[role]
-		switch value {
-		case "ai":
-			value = "AI"
-		case "ai_assisted":
-			value = "Human + AI assistance"
-		case "human":
-			value = "Human"
-		default:
-			value = "Not recorded"
+	lang := exportLanguage(p.input.Request, p.project)
+	c, ok := creditsCopies[lang]
+	if !ok {
+		c = creditsCopies["en"]
+	}
+	text := c.heading + "\n\n" + p.project.Title + "\n" + p.chapter.Title + "\n\n"
+	for i, role := range []string{"script", "art", "lettering"} {
+		value := map[string]string{"human": c.human, "ai": c.ai, "ai_assisted": c.mixed}[p.chapter.AILabel[role]]
+		if value == "" {
+			value = c.none
 		}
-		text += strings.ToUpper(role) + " · " + value + "\n\n"
+		text += c.roles[i] + c.sep + value + "\n\n"
 	}
-	text += "Created with MangaVeyra.\nHuman and AI contributions are recorded by role."
-	lang := p.input.Request.Lang
-	if lang == "" {
-		lang = p.project.Language
-	}
-	if strings.HasPrefix(lang, "ja") {
-		text = "制作情報\n\n" + p.project.Title + "\n" + p.chapter.Title + "\n\n"
-		for _, role := range []string{"script", "art", "lettering"} {
-			label := map[string]string{"script": "脚本", "art": "作画", "lettering": "写植"}[role]
-			value := map[string]string{"human": "人間", "ai": "AI", "ai_assisted": "人間とAIの共同制作"}[p.chapter.AILabel[role]]
-			if value == "" {
-				value = "未記録"
-			}
-			text += label + "・" + value + "\n\n"
-		}
-		text += "MangaVeyraで制作。\n人間とAIの担当を役割ごとに記載しています。"
-	}
-	if lang == "" {
-		lang = "en"
-	}
-
+	text += c.footer
+	// The lettering engine picks the language's font and falls back per glyph
+	// run, so a title in another script still renders with real glyphs.
 	page.Bubbles = []pagedoc.Bubble{{ID: db.NewID(), Kind: pagedoc.BubbleCaption, Shape: pagedoc.ShapeNone, Box: pagedoc.Rect{X: float64(page.Width) * .1, Y: float64(page.Height) * .15, W: float64(page.Width) * .8, H: float64(page.Height) * .7}, Style: pagedoc.BubbleStyle{AutoFit: true, Size: 44}, Texts: map[string]pagedoc.BubbleText{lang: {Text: text, Status: "approved", Source: "human"}}}}
 	return page
 }
