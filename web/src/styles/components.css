@@ -239,6 +239,7 @@
   font-size: .6875rem;
   color: var(--mv-text-3);
 }
+.mv-field__count.is-full { color: var(--mv-warning); }
 
 /* Input with prefix/suffix (http://, search icon, "/" key, strength label, Change link). */
 .mv-input-group {
@@ -1527,6 +1528,22 @@
 .is-soon:not(.mv-btn) { color: var(--mv-text-3); }
 a.is-soon:not(.mv-btn):hover { color: var(--mv-text-3); background: transparent; }
 .mv-btn.is-soon { opacity: .6; }
+/* A primary or danger action that is not built yet keeps its designed place,
+   but fading the whole filled button left its label and Soon tag at ~1.1:1.
+   It reads as unavailable through a muted fill instead, so both stay legible
+   (≥ 4.5:1 in both themes). */
+.mv-btn:is(.mv-btn--primary, .mv-btn--danger):is(:disabled, [aria-disabled="true"], .is-disabled, .is-soon):has(> .mv-soon) {
+  opacity: 1;
+  background: color-mix(in srgb, var(--mv-accent) 30%, var(--mv-bg));
+  border-color: color-mix(in srgb, var(--mv-accent) 30%, var(--mv-bg));
+  color: var(--mv-text-2);
+  box-shadow: none;
+}
+.mv-btn--danger:is(:disabled, [aria-disabled="true"], .is-disabled, .is-soon):has(> .mv-soon) {
+  background: color-mix(in srgb, var(--mv-error) 30%, var(--mv-bg));
+  border-color: color-mix(in srgb, var(--mv-error) 30%, var(--mv-bg));
+}
+.mv-btn:is(.mv-btn--primary, .mv-btn--danger) > .mv-soon { border-color: currentColor; color: inherit; }
 .mv-search.is-soon .mv-search__input { cursor: default; }
 @media (max-width: 1024px) {
   .mv-sidebar .mv-soon { display: none; }

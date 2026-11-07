@@ -348,8 +348,6 @@
 .mv-c1__toggle .mv-seg__item { padding: 6px 10px; font-size: var(--mv-fs-meta); }
 .mv-c1__make { display: flex; }
 /* A primary control in the Soon state keeps the primary look (ADR 0004 §7). */
-.mv-c1 .mv-btn--primary.is-soon { color: var(--mv-on-accent); }
-.mv-c1 .mv-btn--primary.is-soon .mv-soon { border-color: currentColor; color: inherit; }
 
 .mv-c1__body {
   position: relative;
