@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/gen"
@@ -123,4 +124,70 @@ func (h *harness) repair() error {
 	}
 	b, _ := json.MarshalIndent(map[string]any{"before": status, "targets": targets}, "", "  ")
 	return os.WriteFile(filepath.Join(h.root, "repair-before.json"), b, 0600)
+}
+
+// Each selected D12 correction is a separate, deliberate operation. Resume
+// reuses its recorded job; a new round must be requested explicitly. The
+// original global spend guard remains active for every reservation.
+func (h *harness) repairDrift(round int) error {
+	status, err := h.control.LockChapterStatus(h.ctx, h.actor, h.s.ProjectID, h.s.CharacterID, h.s.ChapterID)
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(status.Method, "ccip-caformer24-v1:") {
+		return fmt.Errorf("repair-drift requires a completed CCIP assessment")
+	}
+	for _, d := range status.Drift {
+		if d.Locked {
+			continue
+		}
+		key := fmt.Sprintf("ccip-repair-r%d-p%02d", round, d.PageNumber)
+		if h.s.Jobs[key] != "" {
+			continue
+		}
+		before, err := h.pages.ChapterPages(h.ctx, h.s.ChapterID)
+		if err != nil {
+			return err
+		}
+		if _, err = h.step(key, func() (*jobs.Job, error) {
+			return h.control.EnqueueRepair(h.ctx, h.actor, gen.RepairRequest{ProjectID: h.s.ProjectID, ChapterID: h.s.ChapterID, CharacterID: h.s.CharacterID, Targets: []gen.RepairTarget{d.RepairTarget}})
+		}); err != nil {
+			return err
+		}
+		after, err := h.pages.ChapterPages(h.ctx, h.s.ChapterID)
+		if err != nil {
+			return err
+		}
+		unchanged := 0
+		for i, original := range before {
+			if original.ID != d.PageID {
+				if !wireEqual(original, after[i]) {
+					return fmt.Errorf("repair changed unrelated page %d", original.Number)
+				}
+				unchanged++
+				continue
+			}
+			original.Version = after[i].Version
+			for j := range original.Panels {
+				for k := range original.Panels[j].Layers {
+					if original.Panels[j].Layers[k].ID == d.LayerID {
+						original.Panels[j].Layers[k] = after[i].Panels[j].Layers[k]
+					}
+				}
+			}
+			if !wireEqual(original, after[i]) {
+				return fmt.Errorf("repair changed protected page metadata/art/lettering")
+			}
+		}
+		current, err := h.control.LockChapterStatus(h.ctx, h.actor, h.s.ProjectID, h.s.CharacterID, h.s.ChapterID)
+		if err != nil {
+			return err
+		}
+		evidence, _ := json.MarshalIndent(map[string]any{"page": d.PageNumber, "before": d, "after_status": current, "other_pages_unchanged": unchanged}, "", "  ")
+		if err = os.WriteFile(filepath.Join(h.root, key+".json"), evidence, 0600); err != nil {
+			return err
+		}
+		fmt.Printf("Repair round %d, page %d: %d drift remain; %d other pages unchanged\n", round, d.PageNumber, current.DriftTotal, unchanged)
+	}
+	return nil
 }

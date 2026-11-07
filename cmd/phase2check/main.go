@@ -68,17 +68,24 @@ func main() {
 	}
 }
 func run() error {
-	stage := flag.String("stage", "report", "init, references, chapter, assess, region, report, serve")
+	stage := flag.String("stage", "report", "init, references, curate, chapter, plates, benchmark, benchmark-framed, outfit-dataset, outfit-extra, outfit-validation, repair, repair-drift, assess, region, report, serve")
 	root := flag.String("data", "", "new isolated temporary data directory")
 	source := flag.String("source", "", "read-only source data directory (init only)")
 	provider := flag.String("provider", "", "saved OpenAI provider ID (init only)")
 	user := flag.String("user", "", "existing account ID (init only)")
 	python := flag.String("python", "", "isolated scoring Python executable")
 	dino := flag.String("dino", "", "explicit offline DINOv2 Small directory")
+	ccip := flag.String("ccip", "", "explicit offline CCIP ONNX directory (separate model terms)")
+	fashion := flag.String("fashion", "", "explicit offline FashionCLIP directory for the paired scorer")
+	outfit := flag.String("outfit-model", "", "validated frozen outfit-match artifact for the paired scorer")
+	outfitMode := flag.String("outfit-mode", "centroid", "explicit CCIP outfit mode: centroid or multiview")
 	worker := flag.String("worker", "worker", "worker package source directory")
 	upTo := flag.Int("pages", 30, "generate appearances through this page (1–30)")
 	handRect := flag.String("hand-rect", "", "manually inspected page-7 hand rectangle, x,y,width,height")
 	refCrops := flag.String("reference-crops", "", "inspected sheet crops: front:x,y,w,h;side:x,y,w,h;back:x,y,w,h")
+	repairRound := flag.Int("round", 1, "explicit repair-drift round, 1–3; recorded jobs are reused on resume")
+	regionLabel := flag.String("region-label", "", "optional distinct region acceptance label; existing runs are retained")
+	reviewedOutfitViews := flag.Bool("reviewed-outfit-views", false, "acknowledge visual review of the four dedicated canonical outfit views (QA data only)")
 	flag.Parse()
 	if os.Getenv("MV_PHASE2_LIVE_APPROVED") != "1" {
 		return errors.New("explicit owner approval is required (MV_PHASE2_LIVE_APPROVED=1)")
@@ -217,8 +224,8 @@ func run() error {
 	defer server.Close()
 	go server.Serve(ln)
 	a.Start(ctx)
-	if *stage == "references" || *stage == "chapter" || *stage == "assess" || *stage == "region" || *stage == "repair" {
-		if *python == "" || *dino == "" {
+	if *stage == "references" || *stage == "chapter" || *stage == "assess" || *stage == "region" || *stage == "repair" || *stage == "repair-drift" || *stage == "serve" && *python != "" {
+		if *python == "" || *dino == "" && *ccip == "" {
 			return errors.New("an explicitly provisioned scoring environment and model are required")
 		}
 		logfile, e := os.OpenFile(filepath.Join(*root, "worker.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
@@ -226,19 +233,54 @@ func run() error {
 			return e
 		}
 		defer logfile.Close()
+		embedder, scoringModel := "dinov2", "character-lock-dinov2-v1"
+		if *ccip != "" {
+			embedder, scoringModel = "ccip", "character-lock-ccip-v1"
+		}
+		if *fashion != "" || *outfit != "" {
+			if *ccip == "" || *fashion == "" || *outfit == "" {
+				return errors.New("paired scoring requires explicit CCIP, FashionCLIP and a validated outfit artifact")
+			}
+			scoringModel = "character-lock-ccip-outfit-v3"
+		}
+		if *outfitMode == "multiview" {
+			if *ccip == "" || *fashion == "" || *outfit == "" {
+				return errors.New("multiview requires explicit CCIP, FashionCLIP and a validated outfit-view artifact")
+			}
+			scoringModel = "character-lock-ccip-outfit-multiview-v1"
+		} else if *outfitMode != "centroid" {
+			return errors.New("outfit mode must be centroid or multiview")
+		}
+		// Draining is deliberately sticky across worker reconnects. Each QA
+		// process gets a fresh identity; never unpause a prior/human worker.
+		workerName := "phase2-" + embedder + "-assessor-" + db.NewID()
 		cmd := exec.CommandContext(ctx, *python, "-m", "mangaveyra_worker")
-		cmd.Env = append(os.Environ(), "PYTHONPATH="+*worker, "MV_SERVER="+cfg.PublicURL, "MV_WORKER_TOKEN=", "MV_WORKER_TOKEN_FILE="+filepath.Join(*root, "worker-token"), "MV_WORKER_NAME=phase2-dinov2-assessor", "MV_BACKENDS=vision", "MV_MODELS=", "MV_OCR_ENGINE=none", "MV_EMBEDDER=dinov2", "MV_DINO_MODEL_DIR="+*dino, "MV_WORKER_DATA_DIR="+filepath.Join(*root, "worker-scratch"), "MV_LOG_LEVEL=warning", "HF_HUB_OFFLINE=1", "TRANSFORMERS_OFFLINE=1", "OMP_NUM_THREADS=2")
+		cmd.Env = append(os.Environ(), "PYTHONPATH="+*worker, "MV_SERVER="+cfg.PublicURL, "MV_WORKER_TOKEN=", "MV_WORKER_TOKEN_FILE="+filepath.Join(*root, "worker-token"), "MV_WORKER_NAME="+workerName, "MV_BACKENDS=vision", "MV_MODELS=", "MV_OCR_ENGINE=none", "MV_EMBEDDER="+embedder, "MV_DINO_MODEL_DIR="+*dino, "MV_CCIP_MODEL_DIR="+*ccip, "MV_FASHION_MODEL_DIR="+*fashion, "MV_OUTFIT_MODEL="+*outfit, "MV_OUTFIT_MODE="+*outfitMode, "MV_WORKER_DATA_DIR="+filepath.Join(*root, "worker-scratch"), "MV_LOG_LEVEL=warning", "HF_HUB_OFFLINE=1", "HF_HUB_DISABLE_TELEMETRY=1", "TRANSFORMERS_OFFLINE=1", "OMP_NUM_THREADS=2")
 		cmd.Stdout = logfile
 		cmd.Stderr = logfile
 		workerStarted := db.Now()
 		if e = cmd.Start(); e != nil {
 			return e
 		}
-		defer func() { _ = cmd.Process.Signal(os.Interrupt); _ = cmd.Wait() }()
+		defer func() {
+			// Keep registration/history, but stop advertising this temporary
+			// scorer before exit so the next stage cannot queue to its process.
+			bg, done := context.WithTimeout(context.Background(), 5*time.Second)
+			defer done()
+			if workers, err := a.Deps.Jobs.ListWorkers(bg); err == nil {
+				for _, w := range workers {
+					if w.Name == workerName {
+						_ = a.Deps.Jobs.SetWorkerStatus(bg, w.ID, jobs.WorkerDraining)
+					}
+				}
+			}
+			_ = cmd.Process.Signal(os.Interrupt)
+			_ = cmd.Wait()
+		}()
 		ready := false
 		for n := 0; n < 100; n++ {
 			var count int
-			_ = a.Deps.DB.Get(ctx, &count, `SELECT COUNT(*) FROM workers WHERE status='online' AND models LIKE ? AND last_seen_at>=?`, "%character-lock-dinov2-v1%", workerStarted)
+			_ = a.Deps.DB.Get(ctx, &count, `SELECT COUNT(*) FROM workers WHERE name=? AND status='online' AND models LIKE ? AND last_seen_at>=?`, workerName, "%"+scoringModel+"%", workerStarted)
 			if count > 0 {
 				ready = true
 				break
@@ -250,7 +292,7 @@ func run() error {
 			}
 		}
 		if !ready {
-			return errors.New("offline DINOv2 worker did not become ready; see isolated worker.log")
+			return errors.New("offline scoring worker did not become ready; see isolated worker.log")
 		}
 	}
 	switch *stage {
@@ -262,8 +304,35 @@ func run() error {
 		err = h.curate(*refCrops)
 	case "plates":
 		err = h.plates()
+	case "benchmark":
+		err = h.benchmark("")
+	case "benchmark-framed":
+		err = h.benchmark("framed")
+	case "benchmark-identity-v3":
+		err = h.benchmark("identity-v3")
+	case "outfit-views":
+		err = h.benchmark("outfit-views")
+	case "keep-outfit-views":
+		err = h.keepOutfitViews(*reviewedOutfitViews, *outfit)
+	case "benchmark-multiview":
+		err = h.benchmark("multiview-final")
+	case "benchmark-agreement":
+		err = h.benchmark("agreement-final")
+	case "benchmark-outfit-multiview":
+		err = h.benchmark("outfit-multiview")
+	case "outfit-dataset":
+		err = h.outfitDataset(false, false)
+	case "outfit-extra":
+		err = h.outfitDataset(true, false)
+	case "outfit-validation":
+		err = h.outfitDataset(false, true)
 	case "repair":
 		err = h.repair()
+	case "repair-drift":
+		if *repairRound < 1 || *repairRound > 3 {
+			return errors.New("repair round must be 1–3")
+		}
+		err = h.repairDrift(*repairRound)
 	case "chapter":
 		if *upTo < 1 || *upTo > 30 {
 			return errors.New("pages must be 1–30")
@@ -278,7 +347,15 @@ func run() error {
 			})
 		}
 	case "region":
-		err = h.region()
+		if len(*regionLabel) > 32 {
+			return errors.New("region label exceeds 32 characters")
+		}
+		for _, c := range *regionLabel {
+			if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
+				return errors.New("region label must use lowercase letters, digits or hyphens")
+			}
+		}
+		err = h.region(*regionLabel)
 	case "report":
 	case "serve":
 		fmt.Println("Isolated live preview:", cfg.PublicURL)

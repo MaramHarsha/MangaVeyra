@@ -200,7 +200,7 @@ func (h *harness) report() error {
 		Method    string   `db:"method" json:"method"`
 		Reference string   `db:"reference_hash" json:"reference_fingerprint"`
 	}
-	err = h.a.Deps.DB.Select(h.ctx, &scores, `SELECT pg.number,l.asset_id,a.identity_score,a.outfit_score,a.method,a.reference_hash FROM layers l JOIN panels pn ON pn.id=l.panel_id JOIN pages pg ON pg.id=pn.page_id JOIN character_assessments a ON a.asset_id=l.asset_id AND a.character_id=l.character_id WHERE pg.chapter_id=? AND l.character_id=? AND a.reference_hash=? ORDER BY pg.number,a.created_at DESC`, h.s.ChapterID, h.s.CharacterID, status.ReferenceFingerprint)
+	err = h.a.Deps.DB.Select(h.ctx, &scores, `SELECT pg.number,l.asset_id,a.identity_score,a.outfit_score,a.method,a.reference_hash FROM layers l JOIN panels pn ON pn.id=l.panel_id JOIN pages pg ON pg.id=pn.page_id JOIN character_assessments a ON a.asset_id=l.asset_id AND a.character_id=l.character_id WHERE pg.chapter_id=? AND l.character_id=? AND a.reference_hash=? AND a.method=? ORDER BY pg.number,a.created_at DESC`, h.s.ChapterID, h.s.CharacterID, status.ReferenceFingerprint, status.Method)
 	if err != nil {
 		return err
 	}

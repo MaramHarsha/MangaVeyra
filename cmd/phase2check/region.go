@@ -19,7 +19,11 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
 )
 
-func (h *harness) region() error {
+func (h *harness) region(label string) error {
+	prefix := ""
+	if label != "" {
+		prefix = label + "-"
+	}
 	if len(h.s.HandRect) != 4 {
 		return errors.New("inspect the actual page-7 character and provide --hand-rect x,y,width,height")
 	}
@@ -30,8 +34,8 @@ func (h *harness) region() error {
 	if len(before) != 30 {
 		return errors.New("region acceptance needs the complete 30-page chapter")
 	}
-	baseline := filepath.Join(h.root, "before-region.json")
-	if h.s.Jobs["page7-hand"] == "" {
+	baseline := filepath.Join(h.root, prefix+"before-region.json")
+	if h.s.Jobs[prefix+"page7-hand"] == "" {
 		b, _ := json.Marshal(before)
 		if err = os.WriteFile(baseline, b, 0600); err != nil {
 			return err
@@ -79,7 +83,7 @@ func (h *harness) region() error {
 	if err = png.Encode(&data, mask); err != nil {
 		return err
 	}
-	_, err = h.step("page7-hand", func() (*jobs.Job, error) {
+	_, err = h.step(prefix+"page7-hand", func() (*jobs.Job, error) {
 		a, e := as.Save(h.ctx, assets.SaveParams{OwnerID: h.s.UserID, ProjectID: h.s.ProjectID, Kind: "mask", Source: assets.SourceSystem, Data: data.Bytes()})
 		if e != nil {
 			return nil, e
@@ -182,13 +186,13 @@ func (h *harness) region() error {
 	}
 	verdict := map[string]any{"other_pages_unchanged": unchanged, "unrelated_asset_checksums": hashes, "outside_pixels_equal": outside, "inside_pixels_changed": changed, "mask_rect": r, "before_asset": l.Asset.ID, "after_asset": newLayer.Asset.ID, "before_snapshot": hasBefore, "after_snapshot": hasAfter, "lettering_unchanged": wireEqual(p.Bubbles, after[6].Bubbles)}
 	b, _ := json.MarshalIndent(verdict, "", "  ")
-	if err = os.WriteFile(filepath.Join(h.root, "region-result.json"), b, 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(h.root, prefix+"region-result.json"), b, 0600); err != nil {
 		return err
 	}
-	if err = os.WriteFile(filepath.Join(h.root, "page7-before-character.png"), original, 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(h.root, prefix+"page7-before-character.png"), original, 0600); err != nil {
 		return err
 	}
-	if err = os.WriteFile(filepath.Join(h.root, "page7-after-character.png"), pixels, 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(h.root, prefix+"page7-after-character.png"), pixels, 0600); err != nil {
 		return err
 	}
 	fmt.Printf("Hand correction: %d other pages unchanged, %d identical outside pixels, %d changed inside pixels\n", unchanged, outside, changed)
