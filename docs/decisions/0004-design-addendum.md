@@ -115,4 +115,19 @@ nearest designed screen would put it.
   - there is no continuity banner until a checker exists;
   - each scene section has its own "Ch. N · Scene M" header;
   - on narrow screens the assistant pane hides below 1180 px and the tree on phones (responsive layout).
+- **Shared forms:** mutation buttons expose busy state and reject duplicate submission without dropping their form
+  intent. Character/setting forms use the shared modal to protect unsaved edits during in-app navigation and the
+  browser's unload guard when closing a tab. Validation retains safe values; files must be reselected.
+- **B2 / C2–C5:** global Characters and Setting destinations show a project chooser. Empty lists, no filter results,
+  editable profile/reference/outfit/setting forms, upload errors, conflicts, and queued/failed sheet states use the
+  shared cards, fields, notices and variation picker. Reference-only Character Lock shows its actual state rather
+  than an invented trained score. Training, relationships, voice and pack operations remain disabled Soon.
+- **G2 / G11 / G12:** image/local-text catalogue entries and routing become live. Custom local endpoints use the
+  designed four-step wizard; only explicitly registered provider steps are served. Connection testing checks
+  configuration/model availability without generating paid content. Empty pins, offline workers, unavailable routes
+  and validation failures use the existing notices and model table. Google and xAI retain disabled Soon destinations.
+- **E2 Export:** CBZ is an additional format row using the designed format-card component. B5/A5/KDP trim selection,
+  DPI and page/range fields fill the designed print options. Counts and the 64 MiB output limit replace invented
+  sample size/time estimates. Without JavaScript the modal renders as a complete static panel over the same editor
+  shell. EPUB, video and loops retain their designed rows in the disabled Soon state.
 

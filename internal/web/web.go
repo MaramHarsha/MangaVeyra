@@ -27,6 +27,7 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/core/httpx"
+	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/layout"
@@ -183,6 +184,9 @@ func (u *UI) Chrome(w http.ResponseWriter, r *http.Request, o PageOpts) *layout.
 	}
 	if c.Theme == "" {
 		c.Theme = "dark"
+	}
+	if projectID := r.PathValue("project"); db.ValidID(projectID) {
+		c.ProjectID = projectID
 	}
 	if !o.Anonymous {
 		c.User = core.UserFrom(ctx)

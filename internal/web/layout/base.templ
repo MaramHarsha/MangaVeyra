@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
 )
 
 func flashJSON(f Flash) string {
@@ -82,6 +83,19 @@ templ Base(c *Chrome) {
 		>
 			{ children... }
 			<div id="mv-toasts" class="mv-toasts" role="status" aria-live="polite"></div>
+			@ui.Modal(ui.ModalProps{ID: "mv-unsaved", Title: i18n.T(ctx, "ui.unsaved.title")}) {
+				@ui.ModalBody() {
+					<p>{ i18n.T(ctx, "ui.unsaved.body") }</p>
+				}
+				@ui.ModalFoot() {
+					@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Attrs: templ.Attributes{"data-dialog-close": true, "data-keep-editing": true}}) {
+						{ i18n.T(ctx, "ui.unsaved.stay") }
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Danger, Attrs: templ.Attributes{"data-discard-changes": true}}) {
+						{ i18n.T(ctx, "ui.unsaved.discard") }
+					}
+				}
+			}
 			for _, f := range c.Flash {
 				<template data-toast={ flashJSON(f) }></template>
 			}

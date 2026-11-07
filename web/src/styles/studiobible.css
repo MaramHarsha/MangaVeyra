@@ -62,6 +62,9 @@
 .mv-bible__outfit figcaption { position: absolute; inset-inline-start: 8px; inset-block-end: 6px; max-width: calc(100% - 16px); font-family: var(--mv-font-mono); font-size: var(--mv-fs-micro); text-transform: uppercase; padding: 2px 5px; background: var(--mv-surface); overflow-wrap: anywhere; }
 .mv-bible__add-outfit { display: flex; gap: 6px; align-items: center; justify-content: center; min-height: 110px; width: 120px; padding: 10px; border: 1px dashed var(--mv-line); color: var(--mv-text-2); font-size: var(--mv-fs-meta); text-decoration: none; }
 .mv-bible__new-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+.mv-bible--new { min-height: calc(100dvh - var(--mv-topbar-h) - 56px); }
+.mv-main:has(> .mv-bible--new) { padding-block-end: 28px; }
+.mv-bible--new .mv-bible__new-grid { flex: 1; }
 .mv-bible__new-form { display: flex; flex-direction: column; gap: 14px; }
 .mv-bible__new-form .mv-field__count { display: none; }
 .mv-bible__new-form .mv-field:has(#bible-look) .mv-textarea { min-height: 90px; }
@@ -69,6 +72,7 @@
 .mv-bible__textarea { resize: none; }
 .mv-bible__style { margin: 0; padding: 0; border: 0; min-width: 0; }
 .mv-bible__style legend { margin-block-end: 8px; }
+.mv-bible__style .mv-seg { width: 100%; }
 .mv-bible__more { color: var(--mv-text-2); font-size: var(--mv-fs-meta); }
 .mv-bible__generate-actions { display: flex; flex-direction: column; gap: 10px; margin-block-start: auto; }
 .mv-bible__sheets { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
@@ -101,6 +105,7 @@
 @media (max-width: 1000px) {
   .mv-bible__projects, .mv-bible__settings { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mv-bible__character-detail, .mv-bible__new-grid { grid-template-columns: minmax(0, 1fr); }
+  .mv-bible--new { min-height: 0; }
   .mv-bible__references { max-width: 420px; }
   .mv-bible__header { align-items: flex-start; flex-direction: column; }
 }

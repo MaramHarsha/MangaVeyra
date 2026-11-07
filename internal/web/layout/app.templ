@@ -14,12 +14,16 @@ type navLink struct {
 	Label string
 }
 
-func studioNav(ctx context.Context) []navLink {
+func studioNav(ctx context.Context, projectID string) []navLink {
+	characters, setting := "/studio/characters", "/studio/setting"
+	if projectID != "" {
+		characters, setting = "/studio/p/"+projectID+"/characters", "/studio/p/"+projectID+"/setting"
+	}
 	return []navLink{
 		{NavHome, "/studio", "home", i18n.T(ctx, "nav.home")},
 		{NavProjects, "/studio/projects", "books", i18n.T(ctx, "nav.projects")},
-		{NavCharacters, "/studio/characters", "users", i18n.T(ctx, "nav.characters")},
-		{NavSetting, "/studio/setting", "world", i18n.T(ctx, "nav.setting")},
+		{NavCharacters, characters, "users", i18n.T(ctx, "nav.characters")},
+		{NavSetting, setting, "world", i18n.T(ctx, "nav.setting")},
 		{NavTemplates, "/studio/templates", "layout-grid", i18n.T(ctx, "nav.templates")},
 		{NavAnalytics, "/studio/analytics", "chart-bar", i18n.T(ctx, "nav.analytics")},
 	}
@@ -168,7 +172,7 @@ templ Sidebar(c *Chrome) {
 			}
 		}
 		<nav class="mv-stack mv-stack--xs" aria-label={ i18n.T(ctx, "nav.studio") }>
-			for _, n := range studioNav(ctx) {
+			for _, n := range studioNav(ctx, c.ProjectID) {
 				@sideItem(c, n)
 			}
 		</nav>

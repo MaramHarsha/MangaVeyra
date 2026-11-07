@@ -14,6 +14,7 @@ import { shortcutFor } from './lib/keys';
 import { Realtime, wsURL } from './lib/realtime';
 import { passwordStrength } from './lib/password';
 import './lib/studio';
+import { installForms } from './lib/forms';
 import { mountIslands, unmountIslands } from './islands/registry';
 
 declare global {
@@ -30,6 +31,7 @@ declare global {
 
 const root = document.documentElement;
 root.classList.add('js');
+installForms();
 
 // ---- HTMX -------------------------------------------------------------------
 

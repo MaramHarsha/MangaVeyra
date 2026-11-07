@@ -70,6 +70,8 @@ type Chrome struct {
 	MobileTitle string
 	// BackURL shows a back arrow instead of the logo in the mobile header.
 	BackURL string
+	// ProjectID keeps Studio destinations in the current project context.
+	ProjectID string
 
 	User  *httpx.User
 	Prefs settings.UserPrefs

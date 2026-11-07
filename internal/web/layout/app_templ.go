@@ -22,12 +22,16 @@ type navLink struct {
 	Label string
 }
 
-func studioNav(ctx context.Context) []navLink {
+func studioNav(ctx context.Context, projectID string) []navLink {
+	characters, setting := "/studio/characters", "/studio/setting"
+	if projectID != "" {
+		characters, setting = "/studio/p/"+projectID+"/characters", "/studio/p/"+projectID+"/setting"
+	}
 	return []navLink{
 		{NavHome, "/studio", "home", i18n.T(ctx, "nav.home")},
 		{NavProjects, "/studio/projects", "books", i18n.T(ctx, "nav.projects")},
-		{NavCharacters, "/studio/characters", "users", i18n.T(ctx, "nav.characters")},
-		{NavSetting, "/studio/setting", "world", i18n.T(ctx, "nav.setting")},
+		{NavCharacters, characters, "users", i18n.T(ctx, "nav.characters")},
+		{NavSetting, setting, "world", i18n.T(ctx, "nav.setting")},
 		{NavTemplates, "/studio/templates", "layout-grid", i18n.T(ctx, "nav.templates")},
 		{NavAnalytics, "/studio/analytics", "chart-bar", i18n.T(ctx, "nav.analytics")},
 	}
@@ -118,7 +122,7 @@ func AppShell(c *Chrome) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "ui.skip_to_content"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 75, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 79, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -247,7 +251,7 @@ func TopBar(c *Chrome) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(c.InstanceName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 95, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 99, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 		if templ_7745c5c3_Err != nil {
@@ -277,7 +281,7 @@ func TopBar(c *Chrome) templ.Component {
 			var templ_7745c5c3_Var10 templ.SafeURL
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(c.BackURL))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 100, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 104, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {
@@ -290,7 +294,7 @@ func TopBar(c *Chrome) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "ui.back"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 100, Col: 107}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 104, Col: 107}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 			if templ_7745c5c3_Err != nil {
@@ -316,7 +320,7 @@ func TopBar(c *Chrome) templ.Component {
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(c.mobileTitle())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 104, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 108, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -329,7 +333,7 @@ func TopBar(c *Chrome) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "nav.main"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 105, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 109, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 		if templ_7745c5c3_Err != nil {
@@ -348,7 +352,7 @@ func TopBar(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var14 templ.SafeURL
 				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(n.Href))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 110, Col: 30}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 114, Col: 30}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 				if templ_7745c5c3_Err != nil {
@@ -371,7 +375,7 @@ func TopBar(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var15 string
 				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(n.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 114, Col: 15}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 118, Col: 15}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 				if templ_7745c5c3_Err != nil {
@@ -389,7 +393,7 @@ func TopBar(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var16 string
 				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "ui.soon_hint"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 116, Col: 96}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 120, Col: 96}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 				if templ_7745c5c3_Err != nil {
@@ -402,7 +406,7 @@ func TopBar(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var17 string
 				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(n.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 117, Col: 15}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 121, Col: 15}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 				if templ_7745c5c3_Err != nil {
@@ -449,7 +453,7 @@ func TopBar(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var18 string
 				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "nav.notifications"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 130, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 134, Col: 103}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 				if templ_7745c5c3_Err != nil {
@@ -485,7 +489,7 @@ func TopBar(c *Chrome) templ.Component {
 					var templ_7745c5c3_Var19 string
 					templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "nav.unread", "count", c.Unread))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 134, Col: 78}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 138, Col: 78}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 					if templ_7745c5c3_Err != nil {
@@ -508,7 +512,7 @@ func TopBar(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var20 string
 				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "nav.notifications") + " · " + i18n.T(ctx, "ui.soon_hint"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 138, Col: 142}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 142, Col: 142}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 				if templ_7745c5c3_Err != nil {
@@ -521,7 +525,7 @@ func TopBar(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var21 string
 				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "ui.soon_hint"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 138, Col: 180}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 142, Col: 180}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 				if templ_7745c5c3_Err != nil {
@@ -564,7 +568,7 @@ func TopBar(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var23 string
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "auth.login.submit"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 145, Col: 39}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 149, Col: 39}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 				if templ_7745c5c3_Err != nil {
@@ -596,7 +600,7 @@ func TopBar(c *Chrome) templ.Component {
 					var templ_7745c5c3_Var25 string
 					templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "auth.signup.submit"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 149, Col: 41}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 153, Col: 41}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 					if templ_7745c5c3_Err != nil {
@@ -646,7 +650,7 @@ func userTrigger(c *Chrome) templ.Component {
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "nav.account_menu"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 158, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 162, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
@@ -693,7 +697,7 @@ func Sidebar(c *Chrome) templ.Component {
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "nav.studio"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 164, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 168, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 		if templ_7745c5c3_Err != nil {
@@ -723,7 +727,7 @@ func Sidebar(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var31 string
 				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "nav.new_manga"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 167, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 171, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 				if templ_7745c5c3_Err != nil {
@@ -747,7 +751,7 @@ func Sidebar(c *Chrome) templ.Component {
 		var templ_7745c5c3_Var32 string
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "nav.studio"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 170, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 174, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 		if templ_7745c5c3_Err != nil {
@@ -757,7 +761,7 @@ func Sidebar(c *Chrome) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		for _, n := range studioNav(ctx) {
+		for _, n := range studioNav(ctx, c.ProjectID) {
 			templ_7745c5c3_Err = sideItem(c, n).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -770,7 +774,7 @@ func Sidebar(c *Chrome) templ.Component {
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "nav.system"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 176, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 180, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 		if templ_7745c5c3_Err != nil {
@@ -801,7 +805,7 @@ func Sidebar(c *Chrome) templ.Component {
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(c.ServerHost)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 184, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 188, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 		if templ_7745c5c3_Err != nil {
@@ -814,7 +818,7 @@ func Sidebar(c *Chrome) templ.Component {
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(c.Version)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 186, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 190, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 		if templ_7745c5c3_Err != nil {
@@ -857,7 +861,7 @@ func sideItem(c *Chrome, n navLink) templ.Component {
 			var templ_7745c5c3_Var37 string
 			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(n.Label + " · " + i18n.T(ctx, "ui.soon_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 193, Col: 116}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 197, Col: 116}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 			if templ_7745c5c3_Err != nil {
@@ -878,7 +882,7 @@ func sideItem(c *Chrome, n navLink) templ.Component {
 			var templ_7745c5c3_Var38 string
 			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(n.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 195, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 199, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 			if templ_7745c5c3_Err != nil {
@@ -934,7 +938,7 @@ func sideLink(c *Chrome, n navLink) templ.Component {
 		var templ_7745c5c3_Var40 templ.SafeURL
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(n.Href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 206, Col: 26}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 210, Col: 26}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 		if templ_7745c5c3_Err != nil {
@@ -957,7 +961,7 @@ func sideLink(c *Chrome, n navLink) templ.Component {
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(n.Label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 210, Col: 20}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 214, Col: 20}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 		if templ_7745c5c3_Err != nil {
@@ -978,7 +982,7 @@ func sideLink(c *Chrome, n navLink) templ.Component {
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(n.Label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 213, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 217, Col: 43}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
@@ -1021,7 +1025,7 @@ func BottomNav(c *Chrome) templ.Component {
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "nav.main"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 219, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 223, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 		if templ_7745c5c3_Err != nil {
@@ -1040,7 +1044,7 @@ func BottomNav(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var45 templ.SafeURL
 				templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(n.Href))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 223, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 227, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 				if templ_7745c5c3_Err != nil {
@@ -1053,7 +1057,7 @@ func BottomNav(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var46 string
 				templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "nav.new_manga"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 223, Col: 76}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 227, Col: 76}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 				if templ_7745c5c3_Err != nil {
@@ -1079,7 +1083,7 @@ func BottomNav(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var47 string
 				templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "ui.soon_hint"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 228, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 232, Col: 98}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 				if templ_7745c5c3_Err != nil {
@@ -1096,7 +1100,7 @@ func BottomNav(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var48 string
 				templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(n.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 230, Col: 14}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 234, Col: 14}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 				if templ_7745c5c3_Err != nil {
@@ -1114,7 +1118,7 @@ func BottomNav(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var49 templ.SafeURL
 				templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(n.Href))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 235, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 239, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 				if templ_7745c5c3_Err != nil {
@@ -1141,7 +1145,7 @@ func BottomNav(c *Chrome) templ.Component {
 				var templ_7745c5c3_Var50 string
 				templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(n.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 241, Col: 14}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 245, Col: 14}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 				if templ_7745c5c3_Err != nil {
@@ -1222,7 +1226,7 @@ func ShortcutSheet() templ.Component {
 				var templ_7745c5c3_Var54 string
 				templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "shortcuts.search"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 254, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 258, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 				if templ_7745c5c3_Err != nil {
@@ -1243,7 +1247,7 @@ func ShortcutSheet() templ.Component {
 				var templ_7745c5c3_Var55 string
 				templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "shortcuts.help"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 256, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 260, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 				if templ_7745c5c3_Err != nil {
@@ -1264,7 +1268,7 @@ func ShortcutSheet() templ.Component {
 				var templ_7745c5c3_Var56 string
 				templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "shortcuts.close"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 258, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 262, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 				if templ_7745c5c3_Err != nil {
@@ -1285,7 +1289,7 @@ func ShortcutSheet() templ.Component {
 				var templ_7745c5c3_Var57 string
 				templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "shortcuts.variations"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 260, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 264, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 				if templ_7745c5c3_Err != nil {
@@ -1306,7 +1310,7 @@ func ShortcutSheet() templ.Component {
 				var templ_7745c5c3_Var58 string
 				templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "shortcuts.generate"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 262, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/layout/app.templ`, Line: 266, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 				if templ_7745c5c3_Err != nil {

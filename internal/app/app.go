@@ -248,6 +248,9 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (*App, error) {
 		}
 		m.Routes(a.Router)
 	}
+	if manifests, ok := core.Use[jobs.ManifestLookup](d); ok {
+		a.JobAPI.Manifests = manifests
+	}
 	a.Handler = core.Stack(d)(a.Router)
 	return a, nil
 }
