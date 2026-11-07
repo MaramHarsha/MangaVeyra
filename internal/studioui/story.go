@@ -341,6 +341,40 @@ func (m *Module) loadStoryView(ctx context.Context, actor studio.Actor, projectI
 	if err != nil {
 		return storyView{}, err
 	}
+	var job *jobView
+	if len(doc.Scenes) == 0 {
+		found, err := m.d.Jobs.List(ctx, jobs.Filter{UserID: actor.UserID, ProjectID: project.ID,
+			ChapterID: chapter.ID, Types: []string{gen.JobScript}, Limit: 1})
+		if err != nil {
+			return storyView{}, err
+		}
+		if len(found) == 1 && validScriptJob(found[0], actor.UserID, project.ID, chapter.ID) {
+			if found[0].State == jobs.StateDone {
+				// Completion commits the manuscript and chapter revision together,
+				// but it may land after the empty script snapshot above. Recover
+				// both here so the ready job cannot strand C1 on its empty form.
+				// One reload also bounds recovery for empty legacy results.
+				project, chapter, chapters, err = m.loadChapter(ctx, actor, project.ID, chapter.ID)
+				if err != nil {
+					return storyView{}, err
+				}
+				doc, err = m.studio.GetScript(ctx, chapter.ID)
+				if err != nil {
+					return storyView{}, err
+				}
+			}
+			if len(doc.Scenes) == 0 {
+				position := 0
+				if found[0].State == jobs.StateQueued {
+					position, err = m.d.Jobs.Position(ctx, found[0])
+					if err != nil {
+						return storyView{}, err
+					}
+				}
+				job = m.makeJobView(ctx, found[0], position)
+			}
+		}
+	}
 	canEdit, err := m.can(ctx, actor, project.ID, studio.ActEditScript)
 	if err != nil {
 		return storyView{}, err
@@ -357,26 +391,9 @@ func (m *Module) loadStoryView(ctx context.Context, actor studio.Actor, projectI
 	if err != nil {
 		return storyView{}, err
 	}
-	v := storyView{Project: project, Chapter: chapter, Chapters: chapters, Script: doc, CanEdit: canEdit,
-		CanGenerate: canEdit && canGenerate, CanMakePages: canGenerate && canArt && canLetter, ReadOnly: chapter.Locked || !canEdit}
-	if len(doc.Scenes) == 0 {
-		found, err := m.d.Jobs.List(ctx, jobs.Filter{UserID: actor.UserID, ProjectID: project.ID,
-			ChapterID: chapter.ID, Types: []string{gen.JobScript}, Limit: 1})
-		if err != nil {
-			return storyView{}, err
-		}
-		if len(found) == 1 && validScriptJob(found[0], actor.UserID, project.ID, chapter.ID) {
-			position := 0
-			if found[0].State == jobs.StateQueued {
-				position, err = m.d.Jobs.Position(ctx, found[0])
-				if err != nil {
-					return storyView{}, err
-				}
-			}
-			v.Job = m.makeJobView(ctx, found[0], position)
-		}
-	}
-	return v, nil
+	return storyView{Project: project, Chapter: chapter, Chapters: chapters, Script: doc, CanEdit: canEdit,
+		CanGenerate: canEdit && canGenerate, CanMakePages: canGenerate && canArt && canLetter,
+		ReadOnly: chapter.Locked || !canEdit, Job: job}, nil
 }
 
 func (m *Module) can(ctx context.Context, actor studio.Actor, projectID string, action studio.Action) (bool, error) {
