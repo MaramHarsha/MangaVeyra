@@ -45,7 +45,7 @@ func renderArt(spec artSpec) ([]byte, error) {
 		label(im, 28, 230, "THE WAY HOME", 3, ink)
 		label(im, 28, 818, "AN ORIGINAL MANGAVEYRA DEMO", 2, ink)
 	case "quay", "tower":
-		label(im, 28, 35, strings.ToUpper(spec.name), 3, ink)
+		backgroundPlate(im, strings.ToUpper(spec.name))
 	case "fx":
 		for i := 0; i < 30; i++ {
 			x := (i*137 + 53) % 680
@@ -56,17 +56,32 @@ func renderArt(spec artSpec) ([]byte, error) {
 		drawCharacter(im, spec.key)
 		characterPlate(im, strings.ToUpper(spec.name))
 	}
-	if spec.kind != "character_ref" {
-		// A white label plate stays readable even when a transparent FX layer
-		// is moved over a dark background in the editor.
+	if spec.key == "cover" {
+		// The cover is shown whole, so its plate may use the bottom edge.
 		draw.Draw(im, image.Rect(14, 886, 626, 946), image.NewUniform(paper), image.Point{}, draw.Src)
 		line(im, 14, 886, 626, 886, ink, 2)
 		label(im, 28, 900, "DEMO PLACEHOLDER ART", 2, ink)
 		label(im, 28, 925, "ORIGINAL AUTHORED FIXTURE - NO AI GENERATION", 1, ink)
 	}
+	// The FX layer carries no baked text: it sits above the characters in
+	// every panel, and its layer name already marks it as placeholder art.
 	var out bytes.Buffer
 	err := png.Encode(&out, im)
 	return out.Bytes(), err
+}
+
+// backgroundPlate labels a location inside backgroundSafe, the band of the
+// image that stays visible when a panel of any demo aspect crops it (layers
+// cover their panel), so the label is never cut at a panel edge.
+var backgroundSafe = image.Rect(16, 212, 240, 292)
+
+func backgroundPlate(im *image.NRGBA, name string) {
+	r := backgroundSafe
+	draw.Draw(im, r, image.NewUniform(paper), image.Point{}, draw.Src)
+	box(im, r.Min.X, r.Min.Y, r.Max.X-1, r.Max.Y-1, ink, 2)
+	label(im, r.Min.X+12, r.Min.Y+8, name, 2, ink)
+	label(im, r.Min.X+12, r.Min.Y+42, "DEMO PLACEHOLDER ART", 1, ink)
+	label(im, r.Min.X+12, r.Min.Y+60, "NO AI GENERATION", 1, ink)
 }
 
 // characterBox is the part of a character image that holds the figure and its

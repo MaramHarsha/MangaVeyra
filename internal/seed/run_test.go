@@ -367,6 +367,12 @@ func TestPlaceholderDeterministicAndLabelled(t *testing.T) {
 		// and FX carry the full-width plate; a character's plate sits under
 		// the figure inside characterBox, and nothing is drawn outside it.
 		plate, text := image.Pt(18, 910), image.Rect(28, 900, 330, 922)
+		switch spec.key {
+		case "fx":
+			continue
+		case "quay", "tower":
+			plate, text = image.Pt(backgroundSafe.Min.X+4, backgroundSafe.Max.Y-4), backgroundSafe.Inset(4)
+		}
 		if spec.kind == "character_ref" {
 			plate, text = image.Pt(characterBox.Min.X+characterBox.Dx()/2, 890), image.Rect(characterBox.Min.X, 805, characterBox.Max.X, 885)
 			for y := 0; y < im.Bounds().Dy(); y++ {
@@ -392,6 +398,35 @@ func TestPlaceholderDeterministicAndLabelled(t *testing.T) {
 		}
 		if inkPixels < 100 {
 			t.Fatalf("placeholder text was not drawn: %s", spec.key)
+		}
+	}
+}
+
+// Background labels stay inside the band every demo panel shows.
+func TestDemoBackgroundLabelsSurviveEveryPanelCrop(t *testing.T) {
+	f := newFixture(db.NewID())
+	for _, spec := range f.artSpecs() {
+		f.art[spec.key] = db.NewID()
+	}
+	engine, err := lettering.NewEngine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.makePages(engine); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range f.chapters {
+		for _, page := range c.pages {
+			for _, panel := range page.Panels {
+				b := pagedoc.Bounds(panel.Points)
+				s := math.Max(b.W/640, b.H/960)
+				top, bottom := 480-b.H/2/s, 480+b.H/2/s
+				left, right := 320-b.W/2/s, 320+b.W/2/s
+				r := backgroundSafe
+				if float64(r.Min.Y) < top || float64(r.Max.Y) > bottom || float64(r.Min.X) < left || float64(r.Max.X) > right {
+					t.Fatalf("background label %v is cropped by panel %+v (visible %.0f–%.0f × %.0f–%.0f)", r, b, left, right, top, bottom)
+				}
+			}
 		}
 	}
 }
