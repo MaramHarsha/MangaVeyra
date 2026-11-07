@@ -135,6 +135,17 @@ These additions are frozen before parallel implementation; existing Gate A signa
   Request)` queues read-only `ScopeProject` exports so locked chapters remain exportable; persistence reauthorizes
   and verifies the captured page revisions. Selected pages retain chapter order. Page art is aspect-fitted within
   each trim without distortion; archives/output remain bounded by the asset service's 64 MiB limit.
+- Gate C requests gain optional caller fences: `PagesFromScriptRequest.ExpectedUpdatedAt` and
+  `PanelRequest.ExpectedVersion` / `RegionEditRequest.ExpectedVersion`. Enqueue always captures the current
+  authoritative chapter/page revision, and checks a supplied fence before creating the job. Durable image job
+  input uses a versioned wrapper with a nested typed `request`, actor token ID, immutable scope/revision and image
+  plan policy. Candidate sheet previews read `request.character_id`, never infer it from project scope alone.
+- `gen.Candidate.Layers []CandidateLayer` carries each independently generated background/character/FX component
+  of a whole-panel variation. Each `CandidateLayer` contains layer/kind/character/asset IDs, name, seed and prompt.
+  The candidate's main `AssetID` is a composed preview without lettering. Applying a panel variation attaches all
+  its component assets atomically at the captured page revision; a layer/region candidate has one component.
+  Character sheet candidates have no page layers. Candidate reads/applies reauthorize the live actor/project;
+  applying never unlocks, deletes, or alters lettering. Region output restores every pixel outside its mask.
 
 ## Design rule (all gates)
 

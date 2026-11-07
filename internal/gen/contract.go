@@ -63,8 +63,9 @@ type PagesFromScriptRequest struct {
 	// Letter places bubbles from the script dialogue.
 	Letter bool `json:"letter"`
 	// Generate queues panel art for every new panel.
-	Generate    bool   `json:"generate"`
-	RoutingMode string `json:"routing_mode,omitempty"`
+	Generate          bool      `json:"generate"`
+	RoutingMode       string    `json:"routing_mode,omitempty"`
+	ExpectedUpdatedAt time.Time `json:"expected_updated_at,omitempty"`
 }
 
 // PanelRequest generates art for a panel (scope "panel") or one layer (scope "layer").
@@ -76,10 +77,11 @@ type PanelRequest struct {
 	LayerID string `json:"layer_id,omitempty"`
 	// Variations is how many candidates to make (1–4). With more than one the
 	// results are kept as candidates until one is chosen with ApplyVariation.
-	Variations  int    `json:"variations"`
-	Prompt      string `json:"prompt,omitempty"` // overrides the stored panel prompt
-	RoutingMode string `json:"routing_mode,omitempty"`
-	PinModelID  string `json:"pin_model_id,omitempty"`
+	Variations      int    `json:"variations"`
+	Prompt          string `json:"prompt,omitempty"` // overrides the stored panel prompt
+	RoutingMode     string `json:"routing_mode,omitempty"`
+	PinModelID      string `json:"pin_model_id,omitempty"`
+	ExpectedVersion int    `json:"expected_version,omitempty"`
 }
 
 // RegionEditRequest changes only a masked region of a panel image.
@@ -89,19 +91,32 @@ type RegionEditRequest struct {
 	// Page/panel/chapter ancestry is resolved from LayerID server-side so a
 	// client cannot spoof a less-restricted parent scope.
 	// MaskAssetID is a PNG mask (white = change) in the layer image's pixel space.
-	MaskAssetID string `json:"mask_asset_id"`
-	Prompt      string `json:"prompt"`
-	Variations  int    `json:"variations"`
-	RoutingMode string `json:"routing_mode,omitempty"`
+	MaskAssetID     string `json:"mask_asset_id"`
+	Prompt          string `json:"prompt"`
+	Variations      int    `json:"variations"`
+	RoutingMode     string `json:"routing_mode,omitempty"`
+	ExpectedVersion int    `json:"expected_version,omitempty"`
 }
 
 // Candidate is one generated variation waiting to be chosen.
 type Candidate struct {
-	Index     int      `json:"index"`
-	AssetID   string   `json:"asset_id"`
-	URL       string   `json:"url,omitempty"`
-	Seed      int64    `json:"seed"`
-	LockScore *float64 `json:"lock_score,omitempty"`
+	Index     int              `json:"index"`
+	AssetID   string           `json:"asset_id"`
+	URL       string           `json:"url,omitempty"`
+	Seed      int64            `json:"seed"`
+	LockScore *float64         `json:"lock_score,omitempty"`
+	Layers    []CandidateLayer `json:"layers,omitempty"`
+}
+
+// CandidateLayer is one independently editable art component of a variation.
+type CandidateLayer struct {
+	LayerID     string `json:"layer_id"`
+	Kind        string `json:"kind"`
+	CharacterID string `json:"character_id,omitempty"`
+	Name        string `json:"name"`
+	AssetID     string `json:"asset_id"`
+	Seed        int64  `json:"seed"`
+	Prompt      string `json:"prompt"`
 }
 
 // Service enqueues generation jobs. Every method authorizes the actor,
