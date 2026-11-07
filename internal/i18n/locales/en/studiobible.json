@@ -27,6 +27,8 @@
   "bible.view.list": "List",
   "bible.characters.title": "Characters · {project}",
   "bible.characters.count": "{count} characters · {locked} locked · {training} training",
+  "bible.characters.count.one": "{count} character · {locked} locked · {training} training",
+  "bible.characters.count.other": "{count} characters · {locked} locked · {training} training",
   "bible.characters.import": "Import pack",
   "bible.characters.new": "New character",
   "bible.characters.filter": "Character category",

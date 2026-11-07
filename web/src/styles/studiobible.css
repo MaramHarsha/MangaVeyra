@@ -18,6 +18,7 @@
 .mv-bible__projects--list .mv-pcard { display: grid; grid-template-columns: 160px minmax(0, 1fr); }
 .mv-bible__projects--list .mv-pcard__thumb { height: 110px; }
 .mv-bible__characters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.mv-bible__characters .mv-ccard__name a { color: inherit; }
 .mv-bible__add-character { min-height: 210px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px; text-align: center; border: 1px dashed var(--mv-line); color: var(--mv-text-2); text-decoration: none; }
 .mv-bible__add-character strong { font-size: var(--mv-fs-ui); color: var(--mv-text); }
 .mv-bible__add-character span { font-size: var(--mv-fs-meta); }
@@ -111,6 +112,8 @@
 }
 @media (max-width: 768px) {
   .mv-bible { gap: 20px; }
+  .mv-bible summary { min-height: 44px; padding-block: 12px; }
+  .mv-bible__characters .mv-ccard__name a { display: inline-block; min-height: 44px; }
   .mv-bible__projects, .mv-bible__settings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mv-bible__characters, .mv-bible__character-summary { grid-template-columns: minmax(0, 1fr); }
   .mv-bible__actions .mv-btn, .mv-bible__filters .mv-btn { min-height: 44px; }

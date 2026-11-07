@@ -314,9 +314,8 @@ templ BibleCharacter(v biblePage) {
 				<section class={ "mv-bible__lock-card",ui.If(v.Character.LockScore!=nil,"mv-bible__lock-card--ready") }>
 					<div class="mv-bible__lock-heading">
 						<strong>
-							@ui.Icon("lock", 18) {
-								i18n.T(ctx,"bible.lock.title")
-							}
+							@ui.Icon("lock", 18)
+							{ i18n.T(ctx,"bible.lock.title") }
 						</strong>
 						if v.Character.LockScore!=nil {
 							<span class="mv-bible__lock-score">
@@ -391,9 +390,8 @@ templ BibleCharacter(v biblePage) {
 							class="mv-bible__add-outfit"
 							href={ templ.URL(characterPath(v.Project.ID, v.Character.ID) + "?add=outfit#outfit-form") }
 						>
-							@ui.Icon("plus", 18) {
-								i18n.T(ctx,"bible.outfits.add")
-							}
+							@ui.Icon("plus", 18)
+							{ i18n.T(ctx,"bible.outfits.add") }
 						</a>
 					}
 				</div>
@@ -530,7 +528,7 @@ templ BibleNewCharacter(v biblePage) {
 			</div>
 		</form>
 		<section class="mv-bible__sheets">
-			if v.Job!=nil {
+			if v.Job!=nil && len(v.Candidates)==0 {
 				@BibleSheetJob(v)
 			}
 			if len(v.Candidates)>0 {

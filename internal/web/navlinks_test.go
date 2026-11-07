@@ -8,8 +8,12 @@ import (
 	"testing"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
+	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagestore"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
+	"github.com/MaramHarsha/MangaVeyra/internal/testutil/testdb"
 )
 
 var (
@@ -24,7 +28,13 @@ var (
 // item, but no link, HTMX target or form on a built page may lead to a path the
 // server does not serve. Unbuilt destinations must render in the Soon state.
 func TestBuiltPagesHaveNoDeadLinks(t *testing.T) {
-	ta := testutil.NewTestApp(t)
+	for _, dialect := range testdb.Dialects() {
+		t.Run(dialect, func(t *testing.T) { checkBuiltPages(t, dialect) })
+	}
+}
+
+func checkBuiltPages(t *testing.T, dialect string) {
+	ta := testutil.NewTestApp(t, testutil.WithDialect(dialect))
 	ctx := context.Background()
 	svc := core.MustUse[studio.Service](ta.Deps)
 	actor := studio.Actor{UserID: ta.Admin.ID}
@@ -37,27 +47,60 @@ func TestBuiltPagesHaveNoDeadLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	signedIn := map[string]string{
-		"dashboard":     "/studio",
-		"new project":   "/studio/new/premise",
-		"story":         "/studio/p/" + project.ID + "/story/" + chapter.ID,
-		"models":        "/models",
-		"connect OR":    "/models/providers/new?kind=openrouter",
-		"connect OAI":   "/models/providers/new?kind=openai",
-		"onboarding":    "/onboarding/1",
-		"offline":       "/offline",
-		"404":           "/this-page-is-not-built",
-		"settings":      "/settings",
-		"account":       "/settings/account",
-		"appearance":    "/settings/appearance",
-		"language":      "/settings/language",
-		"reading":       "/settings/reading",
-		"notifications": "/settings/notifications",
-		"accessibility": "/settings/accessibility",
-		"world":         "/settings/world",
-		"data":          "/settings/data",
+	character, err := svc.CreateCharacter(ctx, actor, studio.NewCharacter{ProjectID: project.ID, Name: "Rin Asagiri", Category: "main"})
+	if err != nil {
+		t.Fatal(err)
 	}
+	var page pagedoc.Page
+	if err := ta.Deps.DB.WithTx(ctx, func(tx *db.Tx) error {
+		doc := pagedoc.New(db.NewID(), project.ID, chapter.ID, 1, 400, 600, pagedoc.DirRTL)
+		doc.Panels = []pagedoc.Panel{{ID: db.NewID(), Points: pagedoc.RectPoints(pagedoc.Rect{X: 20, Y: 20, W: 360, H: 560}), PromptSource: "user", Layers: []pagedoc.Layer{{ID: db.NewID(), Kind: pagedoc.LayerBackground, Visible: true, Opacity: 1, Provenance: pagedoc.ProvenanceHuman}}}}
+		pages, err := core.MustUse[pagestore.Service](ta.Deps).CreatePagesTx(ctx, tx, chapter.ID, []pagedoc.Page{doc}, pagestore.Change{ActorKind: "user", ActorID: actor.UserID, Action: "save"})
+		if err == nil {
+			page = pages[0]
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	signedIn := map[string]string{
+		"dashboard":         "/studio",
+		"new project":       "/studio/new/premise",
+		"story":             "/studio/p/" + project.ID + "/story/" + chapter.ID,
+		"models":            "/models",
+		"connect OR":        "/models/providers/new?kind=openrouter",
+		"connect OAI":       "/models/providers/new?kind=openai",
+		"connect fal":       "/models/providers/new/fal",
+		"model routing":     "/models/routing",
+		"custom provider":   "/models/providers/new/connect",
+		"project library":   "/studio/projects",
+		"global characters": "/studio/characters",
+		"global setting":    "/studio/setting",
+		"character bible":   "/studio/p/" + project.ID + "/characters",
+		"create character":  "/studio/p/" + project.ID + "/characters/new",
+		"character detail":  "/studio/p/" + project.ID + "/characters/" + character.ID,
+		"character profile": "/studio/p/" + project.ID + "/characters/" + character.ID + "?edit=1",
+		"setting bible":     "/studio/p/" + project.ID + "/setting",
+		"chapter export":    "/studio/p/" + project.ID + "/chapters/" + chapter.ID + "/export",
+		"onboarding":        "/onboarding/1",
+		"offline":           "/offline",
+		"404":               "/this-page-is-not-built",
+		"settings":          "/settings",
+		"account":           "/settings/account",
+		"appearance":        "/settings/appearance",
+		"language":          "/settings/language",
+		"reading":           "/settings/reading",
+		"notifications":     "/settings/notifications",
+		"accessibility":     "/settings/accessibility",
+		"world":             "/settings/world",
+		"data":              "/settings/data",
+	}
+	editorURL := "/studio/p/" + project.ID + "/chapters/" + chapter.ID + "/edit?page=" + page.ID
+	signedIn["page editor"] = editorURL
+	signedIn["layout picker"] = editorURL + "&panel=layouts"
+	signedIn["lettering editor"] = editorURL + "&mode=lettering"
+	signedIn["variations tray"] = editorURL + "&panel=variations"
+	signedIn["region editor"] = editorURL + "&tool=region"
 	signedOut := map[string]string{"login": "/login", "signup": "/signup", "forgot": "/forgot", "404 (signed out)": "/nothing-here"}
 
 	check := func(t *testing.T, client *testutil.Client, name, page string) {
@@ -93,6 +136,12 @@ func TestBuiltPagesHaveNoDeadLinks(t *testing.T) {
 	admin := ta.Login(t, ta.Admin.Username)
 	for name, page := range signedIn {
 		t.Run(name, func(t *testing.T) { check(t, admin, name, page) })
+	}
+	story := admin.Get(signedIn["story"])
+	for _, target := range []string{"/studio/p/" + project.ID + "/characters", "/studio/p/" + project.ID + "/setting"} {
+		if !strings.Contains(string(story.Body), `href="`+target+`"`) {
+			t.Errorf("project context missing from sidebar: %s", target)
+		}
 	}
 	anon := ta.NewClient()
 	for name, page := range signedOut {

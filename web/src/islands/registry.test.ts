@@ -4,6 +4,7 @@ import { islandNames, parseProps } from './registry';
 describe('island registry', () => {
   it('registers the demo island', () => {
     expect(islandNames()).toContain('demo');
+    expect(islandNames()).toContain('editor');
   });
   it('parses props safely', () => {
     const el = document.createElement('div');

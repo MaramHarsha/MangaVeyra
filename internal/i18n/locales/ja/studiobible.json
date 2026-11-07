@@ -27,6 +27,8 @@
   "bible.view.list": "リスト",
   "bible.characters.title": "キャラクター · {project}",
   "bible.characters.count": "{count}人のキャラクター · ロック済み {locked}人 · 学習中 {training}人",
+  "bible.characters.count.one": "{count}人のキャラクター · ロック済み {locked}人 · 学習中 {training}人",
+  "bible.characters.count.other": "{count}人のキャラクター · ロック済み {locked}人 · 学習中 {training}人",
   "bible.characters.import": "パックをインポート",
   "bible.characters.new": "キャラクターを作成",
   "bible.characters.filter": "キャラクターの分類",

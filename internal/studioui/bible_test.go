@@ -105,7 +105,7 @@ func TestBibleCreateUploadProfileOutfitSettingAndRestore(t *testing.T) {
 			t.Fatalf("upload not attached=%#v", character)
 		}
 		page := c.Get(detail)
-		mustContain(t, string(page.Body), "凛 Asagiri", "MAIN REFERENCE", `src="/media/`, "Outfits", "Relationships", `disabled`)
+		mustContain(t, string(page.Body), "凛 Asagiri", "MAIN REFERENCE", `src="/media/`, "Outfits", "Relationships", "Character Lock", `class="mv-bible__add-outfit"`, "Outfit", `disabled`)
 		profile := url.Values{"name": {"凛 朝霧"}, "role": {"Courier"}, "role_line": {"LEAD · COURIER"}, "age": {"19"}, "look": {"Blue coat"}, "personality": {"Loyal"}, "speech_style": {"Short sentences"}, "category": {"main"}, "revision": {character.UpdatedAt.Format(time.RFC3339Nano)}}
 		if resp := postForm(c, detail, profile); resp.StatusCode != 303 {
 			t.Fatalf("profile=%d %.1000s", resp.StatusCode, resp.Body)
