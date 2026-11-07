@@ -1,6 +1,6 @@
 # ADR 0009: OpenAI image route and OpenRouter image fallback
 
-- Status: Accepted for Phase 1 — live verification with the owner's key pending (checklist below)
+- Status: Accepted for Phase 1 — basic direct OpenAI generation verified; remaining live matrix pending (below)
 - Date: 2026-11-07
 - Amends: ADR 0007 (frozen image routes and fallback). Related: ADR 0003, ADR 0006.
 - Boundary: `internal/ai` (`image_routes.go`, `openai_image.go`, `image.go`, `image_remote.go`), prompts in
@@ -93,6 +93,12 @@ bubbles, lettering or panel borders, and nothing explicit. Each layer has its ow
 their character's kept sheets first (up to 4 stored; GPT Image sends 2). Backgrounds and effects carry no references.
 
 ## Live verification checklist (owner's key, USD 10 cap)
+
+Basic direct-route evidence is recorded in [the 2026-11-07 live QA report](../qa/openai-live-2026-11-07.md).
+The owner's saved OpenAI connection produced a background, transparent character and transparent FX through normal
+jobs, all with `gpt-image-2.5-sunburst`. The composed page retains structured lettering. All three first-attempt
+reservations reconciled, totalling USD 0.129615 from reported usage. These were portrait jobs without references;
+they do not satisfy the square-image token assertion or the reference/mask/multi-output/backup checks below.
 
 1. Connection test, then one 1024² background with n = 1: `usage.output_tokens` = 1,756 and actual ≤ USD 0.0834. A 403
    means the OpenAI organisation needs verification for GPT Image.

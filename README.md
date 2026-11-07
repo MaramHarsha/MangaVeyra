@@ -50,7 +50,8 @@
   text, with hard spend reservations, project/token authorization, revision fencing and honest AI provenance.
 - **Visual generation:** deterministic offline images, fixed OpenAI/OpenRouter/fal image adapters, configured worker
   jobs, local OpenAI-compatible text, capability/licence filtering, routing pins and bounded fallback. The direct
-  OpenAI image route has fake-provider coverage; its live verification checklist remains pending in ADR 0009.
+  OpenAI image route has fake-provider coverage and passed a [live three-layer manga check](docs/qa/openai-live-2026-11-07.md);
+  reference/mask/accounting matrix checks remain pending in ADR 0009.
 - **Studio bibles:** project library, character reference sheets/uploads, profile edits, outfits and setting items.
 - **Page production:** polygon panels with independent background/character/FX layers, four variations, exact masked
   region edits, revision-bound saves, locks, history/revert and a lazy Svelte/Pixi editor with undo/redo.

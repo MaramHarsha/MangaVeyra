@@ -74,7 +74,9 @@ Local evidence from this run is under `/private/tmp/mv-claude-resume-evidence/`:
 
 ## Remaining separate work
 
-The direct OpenAI image route remains covered by fake-provider tests. The live key/token/transparency/mask checks
-in [ADR 0009](../decisions/0009-openai-image-route.md) are still pending on the owner's connected instance.
+After this desktop run, the owner separately authorized live OpenAI verification. Three direct OpenAI layer jobs
+passed with the saved key, real manga artwork, character/FX transparency and reconciled spend; see
+[the live QA report](openai-live-2026-11-07.md). The remaining token/reference/mask/multi-output/backup checks in
+[ADR 0009](../decisions/0009-openai-image-route.md) are still pending.
 Mobile optimisation remains deferred, and GitHub Actions remain disabled while the repository is private.
 No push or PR update is part of this continuation.
