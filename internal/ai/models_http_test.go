@@ -473,7 +473,7 @@ func TestModelsPageRowsActionsAndSecrets(t *testing.T) {
 			`<input type="hidden" name="enabled" value="false">`, "<noscript>", ">Save</button>", "</noscript>")
 		// Row actions: test connection (existing POST) and the replace-key dialog (existing POST).
 		mustAppearInOrder(t, body, `<span class="mv-sr-only">Actions for Studio OR</span>`,
-			`<form method="post" action="/models/providers/`+orID+`/test">`,
+			`<form method="post" action="/models/providers/`+orID+`/test" novalidate>`,
 			`hx-post="/models/providers/`+orID+`/test"`, "Test connection",
 			`href="#replace-key-`+orID+`" role="menuitem" data-dialog-open="replace-key-`+orID+`"`, "Replace key",
 			`<dialog class="mv-modal mv-models-keydlg" id="replace-key-`+orID+`"`,

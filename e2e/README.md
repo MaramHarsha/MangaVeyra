@@ -7,6 +7,7 @@ The suite starts its own Go server on port 6199 and a newly allocated temporary 
 configuration path, master key and SMTP host, supplies a test-only worker token, and refuses to reuse a running
 server. It never reads the operator's existing application data or provider keys. The temporary data directory is
 removed after the run. `MV_E2E_BASE_URL` can select another unused loopback port.
+`MV_E2E_BINARY` can select an already-built app executable without replacing another preview's binary.
 
 The flow completes setup without keys, all five wizard steps, a placeholder script, four character sheets and
 selection, pages from the saved manuscript, an independent character layer, four panel variations and selection,
@@ -20,6 +21,10 @@ All four custom-provider steps run against a temporary loopback HTTP fixture tha
 model catalogue. The administrator enables private provider URLs through the designed switch; no real provider is
 contacted and the fixture asserts that the sole call is a non-generation model-list request. A separate browser
 context checks server-rendered screens and the editor's read-only proof with JavaScript disabled.
+
+The Phase 2 activity step inspects real generation/export jobs in G9, the action menu's keyboard recovery, bounded
+job details and events, G4 category/empty states, explicit read actions and the unread counter. It captures both
+screens in English/Japanese and checks basic narrow-width usability. Both routes also join the no-JavaScript pass.
 
 The content-language flow creates a manuscript in each of the ten supported languages in both English and Japanese
 interfaces. It verifies localized dialogue, the shared shaped outlines, automatic vertical lettering, a no-JavaScript

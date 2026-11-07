@@ -6,7 +6,8 @@
 - Primary jobs: connect a provider, create a project/chapter, generate a bounded script job, inspect status, edit the persisted manuscript, and recover without losing work.
 - Target markets: English- and Japanese-language creator workflows documented in `docs/FEATURES.md`, `docs/SCREENS.md`, and ADR 0004.
 - Active locales: `en` fallback and mirrored `ja`; public Japanese copy requires native review.
-- Timezone/calendar policy: store UTC and use the existing user-locale formatter. Gate A collects no dates.
+- Timezone/calendar policy: store UTC. Queue and notification timestamps use their shared locale-aware formatter
+  and explicitly label UTC; the queue's current-week summary starts Monday at 00:00 UTC. No dates are collected.
 - Accessibility target: WCAG 2.2 AA.
 
 ## Business-context sources
@@ -40,6 +41,7 @@
 | Form | `ui.Field`, shared form controls and `installForms` | `internal/web/ui/form.templ`, `components.css`, `web/src/lib/forms.ts` | create / edit / secret; editor Svelte adapters of the same classes | HTTP flow + validation + dirty/duplicate regressions |
 | Toast | shared notice/toast owner | `internal/web/ui/state.templ` | success / warning / info / error | live-region + edition check |
 | CRUD | feature handler plus canonical form | `internal/ai`, `internal/studioui`, service contracts | PRG page / HTMX fragment | full-flow + failure-path tests |
+| Scrollbar | global stylesheet | `web/src/styles/base.css` | geometry exceptions only | browser computed-style check |
 
 ## Component behavior
 
@@ -55,6 +57,22 @@
 
 ## Dataset navigation
 
+- Phase 2 activity: G9 and G4 use cursor pagination with 20 entries per page and Latest/Older links. The cursor and
+  G4 category live in the URL; changing a category resets the cursor. G9 shows the server queue to admins and only
+  the signed-in member's jobs otherwise. Job details and the refresh endpoint repeat authorization on every read.
+- G4 categories: Studio includes generation, comments/mentions/reviews and Lock training; Reading includes chapters
+  and follows; System includes the remaining kinds. The service owns filtering before pagination.
+- G4 GETs never mark anything read. Explicit notification POST marks that owned record read and opens an existing
+  local destination, or returns to its category. Mark all read means all of that member's categories. External,
+  protocol-relative and unbuilt notification destinations never become live links or redirects.
+- G9 only projects safe metadata, localized failure codes and bounded event kinds/timestamps. No input/output,
+  prompt, raw worker/provider message, artifact key or provider secret appears in its markup. Review in Studio
+  returns retry decisions to the original feature's scope/estimate guards; G9 does not replay job payloads.
+- G9 live updates replace the read-only snapshot after re-authorization. They pause for focused controls, open
+  menus/dialogs and pending forms; stale or failed requests retain the previous view and expose a Refresh action.
+  The shared realtime owner supplies job events; admin-wide subscriptions remain admin-only on the server.
+- Worker pause drains new claims without interrupting current work. Only a signed-in admin can pause/resume;
+  multiple workers use the existing dropdown owner with explicit worker names.
 - Admin tables: not in Gate A.
 - Exploratory lists: provider cards and chapter rail are bounded server-rendered lists.
 - URL state: project/chapter identity is in the route; secrets, unsaved state, job errors, and source text never enter the URL.
@@ -79,6 +97,8 @@
 | Make pages | C1 action on saved revision | queued job in editor | chapter editor | structured pages and bubbles | stale revision asks reload; existing pages reopen | editor workbench | plan 0002 |
 | Panel / region variations | explicit editor scope | bounded job and candidate tray | same page | selected candidate applied atomically | scope locks/revision conflict retain draft | selected panel/layer | plan 0002 |
 | Export chapter | E2 format/options | fenced export job | E2 result/download | actual filename/size | error with retry/cancel; manuscript remains editable | result status/action | ADR 0007 and plan 0002 |
+| Inspect/cancel job | G9 job menu or notification | shared busy submit | `/queue?job=...` | sanitized status/detail | completed-job notice; last snapshot retained on refresh failure | normal page heading / preserved menu focus | plan 0006, jobs service |
+| Read notification | G4 row or Mark all read | shared busy submit | existing local destination or selected category | persisted read state and unread count | safe page error; no cross-user mutation | normal destination heading | plan 0006, notify service |
 | Cancel/back | normal link | none | previous canonical GET | none | browser retains GET | destination heading | route map |
 
 ## Navigation and responsive behavior

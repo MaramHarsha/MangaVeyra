@@ -24,7 +24,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: '../bin/mangaveyra serve --dev',
+    command: `${process.env.MV_E2E_BINARY || '../bin/mangaveyra'} serve --dev`,
     url: `${baseURL}/healthz`,
     reuseExistingServer: false,
     timeout: 30_000,
@@ -38,6 +38,7 @@ export default defineConfig({
       MV_STORAGE: 'local',
       MV_WORKER_TOKEN: 'mangaveyra-e2e-worker-only',
       MV_SMTP_HOST: '',
+      MV_LOG_LEVEL: 'error',
     },
   },
 });

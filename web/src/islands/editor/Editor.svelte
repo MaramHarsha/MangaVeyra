@@ -774,7 +774,7 @@
      <p class="mv-ed__help">{drift ? t('variations.drift_hint', {number: candidates.indexOf(drift) + 1, name: driftName || t('layer.character'), score: Math.round((drift.lock_score || 0) * 100)}) : t('variations.layer_hint')}</p>
     </section>
     <section class="mv-ed__property">
-     <div class="mv-ed__property-head"><strong>{t('queue')}</strong><button type="button" class="mv-ed__soon-link" disabled>{t('queue.open')}<span class="mv-soon">{t('soon')}</span></button></div>
+     <div class="mv-ed__property-head"><strong>{t('queue')}</strong><a class="mv-ed__soon-link" href="/queue">{t('queue.open')}</a></div>
      {#if recent.length}
       <ul class="mv-ed__queue">
        {#each recent.slice(0, 5) as j (j.id)}

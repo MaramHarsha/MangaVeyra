@@ -237,7 +237,7 @@ nearest designed screen would put it.
   placement as a new speech bubble. Previously positioned tails remain where the creator put them.
 - **D8 Variations:** the status line reads "{ready} of 4 ready · {seconds} s · {model}" from the job's real timing.
   Lock captions and DRIFT appear only when a job reports lock scores. The queue lists the user's recent panel and
-  region jobs in the chapter; Open queue is Soon. Repeating an identical panel or region request while its job is
+  region jobs in the chapter; Open queue links to G9. Repeating an identical panel or region request while its job is
   queued or running returns that job instead of starting another.
 - **D13 Region edit:** region editing fits the actual layer's aspect ratio within the desktop proof area, and the
   panel's screentone shows through transparent layer areas. The compare handle, comparison area and four-tile strip
@@ -249,3 +249,34 @@ nearest designed screen would put it.
   visibly Soon.
 - **Editor without JavaScript:** the shell shows the page scaled to the canvas with its art, page thumbnails and
   export, and the inspector lists each panel's prompt and layers read-only.
+
+## 9. Phase 2 activity states (G9/G4)
+
+The desktop artboards define these screens' layout, copy, iconography and hierarchy. G9 keeps the full queue table,
+worker action and three summary cards. G4 keeps the full-width shell without the Studio sidebar, the four category
+segments, Mark all read and the compact 760 px notification list. Existing tokens and UI-kit owners are reused.
+
+- **G9 real data:** rows use the actual job type, panel number when available, member, route, state and progress.
+  Admins see server jobs; other members see their own. No GPU means the subtitle identifies server/remote jobs;
+  no hardware name or worker slot count is fabricated. Online worker slots come from registered worker capacity.
+  Per-user limits distinguish configured GPU/server limits. Night mode uses its configured window and server time.
+  This week's summary uses recorded actuals for finished top-level jobs since Monday 00:00 UTC; parent actuals
+  include their child work. These values replace the artboard's sample metrics.
+- **G9 action states not drawn in the handoff:** reuse the shared dropdown for View details, Review in Studio and
+  cancellation. Retry is reviewed in the original Studio flow so scope, revision and spend approval remain there.
+  A selected job expands a shared Box/KV/Notice section below the designed queue and summary, with at most 50
+  sanitized recent event kinds/timestamps. No prompt, payload or raw provider/worker log is shown. A single worker
+  uses the designed Pause/Resume button; multiple workers use the existing dropdown with named actions. No worker
+  or insufficient role disables the action with its reason. Pause drains new claims and preserves running work.
+- **G4 real data:** titles and bodies are persisted notification content; times, controls and read status follow
+  the current interface locale. Notification text retains the language in which it was created. Category filters
+  use the existing segmented-link component; Mark all read covers all categories for the current member.
+  Clicking a row explicitly marks it read and opens an existing local destination. Missing or external destinations
+  return to the notification category instead of offering a dead/external link.
+- **Necessary empty, paging and recovery states:** use the existing State, Notice and button components. Cursor
+  pages use Latest/Older below the list. Empty states explain where future activity appears; they do not fabricate
+  sample jobs or notices. Queue polling retains loaded content on errors and offers Refresh, stops when idle and
+  does not replace an open menu, focused control, dialog or pending form. No-JavaScript views use ordinary complete
+  pages, POST forms and Refresh. Timestamps explicitly label UTC.
+- **Narrow widths:** existing responsive patterns stack queue rows/cards and wrap header actions. The unapproved
+  mobile artboards remain deferred, following the owner's instruction.

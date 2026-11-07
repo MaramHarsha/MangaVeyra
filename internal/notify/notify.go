@@ -289,7 +289,9 @@ func (s *Service) absolute(ctx context.Context, link string) string {
 type ListOptions struct {
 	UnreadOnly bool
 	Kind       string
-	Before     string // id cursor
+	Kinds      []string // include any of these kinds; combined with Kind when set
+	NotKinds   []string // exclude these kinds (for the remaining System category)
+	Before     string   // id cursor
 	Limit      int
 }
 
@@ -302,14 +304,24 @@ func (s *Service) List(ctx context.Context, userID string, o ListOptions) ([]Not
 	if o.Kind != "" {
 		q, args = q+` AND kind = ?`, append(args, o.Kind)
 	}
+	if len(o.Kinds) > 0 {
+		q, args = q+` AND kind IN (?)`, append(args, o.Kinds)
+	}
+	if len(o.NotKinds) > 0 {
+		q, args = q+` AND kind NOT IN (?)`, append(args, o.NotKinds)
+	}
 	if o.Before != "" {
 		q, args = q+` AND id < ?`, append(args, o.Before)
 	}
 	if o.Limit <= 0 || o.Limit > 200 {
 		o.Limit = 50
 	}
+	q, args, err := db.In(q+` ORDER BY id DESC LIMIT ?`, append(args, o.Limit)...)
+	if err != nil {
+		return nil, err
+	}
 	var rows []row
-	if err := s.db.Select(ctx, &rows, q+` ORDER BY id DESC LIMIT ?`, append(args, o.Limit)...); err != nil {
+	if err := s.db.Select(ctx, &rows, q, args...); err != nil {
 		return nil, err
 	}
 	out := make([]Notification, len(rows))
@@ -317,6 +329,15 @@ func (s *Service) List(ctx context.Context, userID string, o ListOptions) ([]Not
 		out[i] = r.notification()
 	}
 	return out, nil
+}
+
+// Get returns one notification only when it belongs to userID.
+func (s *Service) Get(ctx context.Context, userID, id string) (Notification, error) {
+	var r row
+	if err := s.db.Get(ctx, &r, `SELECT `+cols+` FROM notifications WHERE user_id = ? AND id = ?`, userID, id); err != nil {
+		return Notification{}, err
+	}
+	return r.notification(), nil
 }
 
 // UnreadCount returns the number of unread notifications.

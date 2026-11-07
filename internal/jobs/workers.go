@@ -231,17 +231,25 @@ func (q *Queue) ListWorkers(ctx context.Context) ([]Worker, error) {
 	return out, nil
 }
 
-// SetWorkerStatus drains (no new claims) or resumes a worker.
+// SetWorkerStatus drains (no new claims) or resumes an active worker. An
+// offline worker becomes online only by registering or sending a heartbeat;
+// a stale admin action must not fabricate liveness.
 func (q *Queue) SetWorkerStatus(ctx context.Context, id, status string) error {
 	if status != WorkerOnline && status != WorkerDraining {
 		return httpx.ErrBadRequest("status must be online or draining")
 	}
-	res, err := q.db.Exec(ctx, `UPDATE workers SET status = ? WHERE id = ?`, status, id)
+	res, err := q.db.Exec(ctx, `UPDATE workers SET status = ? WHERE id = ? AND status IN ('online', 'draining')`, status, id)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrWorkerNotFound
+		var existing string
+		if err := q.db.Get(ctx, &existing, `SELECT id FROM workers WHERE id = ?`, id); db.IsNotFound(err) {
+			return ErrWorkerNotFound
+		} else if err != nil {
+			return err
+		}
+		return ErrNotActive
 	}
 	return nil
 }

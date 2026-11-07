@@ -19,6 +19,8 @@ import { installForms } from './lib/forms';
 import { installCounters } from './lib/counter';
 import { installAutoSubmit } from './lib/filters';
 import { installPageTurns } from './lib/transitions';
+import { installQueueRefresh } from './lib/queue';
+import { updateUnread } from './lib/unread';
 import './lib/models';
 import { mountIslands, unmountIslands } from './islands/registry';
 
@@ -234,16 +236,10 @@ if (userID && 'WebSocket' in window) {
         action: root.dataset.viewLabel,
       });
     }
-    setUnread(data?.unread ?? 1);
+    updateUnread(data?.unread ?? 1);
   });
-  realtime.on('notification.read', (m) => setUnread((m.data as { unread?: number })?.unread ?? 0));
+  realtime.on('notification.read', (m) => updateUnread((m.data as { unread?: number })?.unread ?? 0));
   realtime.connect();
-}
-
-function setUnread(n: number): void {
-  document.querySelectorAll<HTMLElement>('[data-unread-dot]').forEach((dot) => {
-    dot.hidden = n <= 0;
-  });
 }
 
 // ---- page turns ---------------------------------------------------------------
@@ -253,6 +249,7 @@ installPageTurns(window, root);
 // ---- start -------------------------------------------------------------------
 
 window.mv = { toast: showToast, realtime, applyPrefs, mountIslands };
+installQueueRefresh(document, window, fetch, realtime);
 enhance(document);
 void mountIslands(document);
 

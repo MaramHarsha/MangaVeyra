@@ -190,10 +190,12 @@ func jobNotifier(d *core.Deps) func(context.Context, *jobs.Job) {
 			return
 		}
 		body := j.Type
-		if j.Error != nil {
-			body += ": " + j.Error.Message
-		}
-		if _, err := d.Notify.Notify(ctx, notify.Input{UserID: j.UserID, Kind: kind, Title: i18n.T(ctx, key), Body: body,
+		// Raw worker/provider errors may contain private prompts or credentials.
+		// Notifications carry a stable job link; the queue maps safe error codes.
+		locale := d.Settings.MustInstance(ctx).DefaultLocale
+		_ = d.DB.Get(ctx, &locale, `SELECT locale FROM users WHERE id = ?`, j.UserID)
+		titleCtx := i18n.WithLocale(ctx, locale)
+		if _, err := d.Notify.Notify(ctx, notify.Input{UserID: j.UserID, Kind: kind, Title: i18n.T(titleCtx, key), Body: body,
 			Link: "/queue?job=" + j.ID, Data: map[string]any{"job_id": j.ID}, GroupKey: kind}); err != nil {
 			d.Log.Warn("notify job result", "job", j.ID, "err", err)
 		}

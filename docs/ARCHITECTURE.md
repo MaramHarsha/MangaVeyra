@@ -67,6 +67,7 @@ internal/
   jobs/                  queue (enqueue, claim, progress, cancel, retry, fair share), Go executor pool, handler registry, events
   ws/                    WebSocket hub: topics, presence, Yjs relay + persistence
   notify/                notifications (in-app, email via SMTP, web push), preferences, quiet hours
+  activityui/            session-only G9 queue and G4 notification screens over the jobs/notify foundation services
   web/                   templ UI kit (ui/), layouts (layout/), page helpers, static assets (static/, embedded), Vite manifest
   studio/                projects, members & roles, chapters, arcs/scenes, script panels, pages, panels, layers, bubbles,
                          characters (refs, outfits, relations, voice), setting items, templates, wizard, story editor,

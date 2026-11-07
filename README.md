@@ -46,6 +46,9 @@
   the PWA/static-asset shell.
 - **Working screens:** first-run setup, provider connections, login/signup/onboarding, account/settings, project
   creation/adaptation, the real Studio dashboard, generation state and the editable chapter manuscript.
+- **Phase 2 activity:** the designed G9 job queue and G4 notification center, with scoped job visibility, progress,
+  cancellation, admin worker pause/resume, categorized notifications and explicit read actions. Remaining Phase 2
+  work is tracked in [plan 0006](docs/plans/0006-phase-2-consistency-and-control.md).
 - **Gate A generation:** deterministic offline script generation and fixed-model OpenRouter or OpenAI structured
   text, with hard spend reservations, project/token authorization, revision fencing and honest AI provenance.
 - **Visual generation:** deterministic offline images, fixed OpenAI/OpenRouter/fal image adapters, configured worker
@@ -75,7 +78,8 @@
 Publishing, reader, application MCP server, backup/update flows, admin UI, training/Character Lock repair,
 translation, animation, EPUB/video export and the World link remain incomplete or intentional stubs. Their
 designed controls stay visible as disabled **Soon** actions. GPU/model quality still needs hardware validation;
-remote routes are regression-tested with fake transports, without paid provider calls. See the
+remote routes have fake-transport coverage, and direct OpenAI has a recorded basic live check; its extended
+reference/mask/accounting matrix remains pending in ADR 0009. See the
 [accepted MVP decision](docs/decisions/0001-mvp-scope.md), the
 [hard remote-spend decision](docs/decisions/0003-hard-remote-spend-reservations.md),
 the [completed script plan](docs/plans/0001-script-vertical-slice.md), the

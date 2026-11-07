@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/MaramHarsha/MangaVeyra/internal/account"
+	"github.com/MaramHarsha/MangaVeyra/internal/activityui"
 	"github.com/MaramHarsha/MangaVeyra/internal/admin"
 	"github.com/MaramHarsha/MangaVeyra/internal/ai"
 	"github.com/MaramHarsha/MangaVeyra/internal/analytics"
@@ -75,6 +76,7 @@ func FeatureModules(d *core.Deps) []core.Module {
 		editor.New(d),
 		gen.New(d),
 		studioui.New(d),
+		activityui.New(d),
 		translate.New(d),
 		animate.New(d),
 		// Publishing, reading and community.

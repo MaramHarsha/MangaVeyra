@@ -34,7 +34,7 @@ describe('export proof language', () => {
   });
 });
 
-const exportForm = (checked: string) => `<div class="mv-exportui"><form class="mv-exportui__form">
+const exportForm = (checked: string) => `<div class="mv-exportui"><form class="mv-exportui__form" novalidate>
   ${['png', 'pdf', 'epub', 'video', 'cbz'].map(f => `<label><input type="radio" name="format" value="${f}"${f === checked ? ' checked' : ''}${f === 'epub' || f === 'video' ? ' disabled' : ''}></label>`).join('')}
   <button type="submit" data-export-submit="true"><span class="mv-exportui__go" data-export-label="png">Export PNG</span><span class="mv-exportui__go is-current" data-export-label="pdf">Export PDF</span><span class="mv-exportui__go" data-export-label="cbz">Export CBZ</span><span class="mv-exportui__go" data-export-label="">Export</span></button>
 </form></div>`;

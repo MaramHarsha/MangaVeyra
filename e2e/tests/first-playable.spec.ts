@@ -320,6 +320,81 @@ test('fresh install → script → characters → layered art → lettering → 
     expect(archiveEntries(await readFile(pngPath)).filter(name => name.endsWith('.png'))).toHaveLength(3);
   });
 
+  await test.step('inspect the real queue and explicitly read categorized notifications', async () => {
+    await page.goto('/queue');
+    await expect(page.getByRole('heading', { name: 'Job queue', exact: true })).toBeVisible();
+    expect(await page.locator('[data-job-id]').count()).toBeGreaterThan(0);
+    await expect(page.locator('.mv-queue__summary-card')).toHaveCount(3);
+    await page.screenshot({ animations: 'disabled', path: info.outputPath('G9-desktop.png') });
+    await page.waitForFunction(() => 'mv' in window);
+    const snapshot = await page.locator('#queue-live').innerHTML();
+    await context.route('**/queue/status*', route => route.abort());
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('mv:ws', { detail: { type: 'job.progress' } })));
+    await expect(page.locator('[data-queue-error]')).toBeVisible();
+    expect(await page.locator('#queue-live').innerHTML()).toBe(snapshot);
+    await page.screenshot({ animations: 'disabled', path: info.outputPath('G9-refresh-error-desktop.png') });
+    await context.unroute('**/queue/status*');
+    await page.goto('/queue');
+    await page.locator('.mv-queue__actions summary').first().focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('menuitem', { name: 'View details', exact: true }).first()).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.mv-queue__actions summary').first()).toBeFocused();
+    await page.locator('.mv-queue__job').first().click();
+    await expect(page.locator('.mv-queue__detail')).toBeVisible();
+    await expect(page.locator('.mv-queue__detail')).not.toContainText('An apprentice courier delivers letters');
+    await page.locator('.mv-queue__events summary').click();
+    expect(await page.locator('.mv-queue__events li').count()).toBeGreaterThan(0);
+
+    // Ordinary single jobs stay quiet; the existing notifier sends failures
+    // and completed batch jobs. Exercise G4 with its real in-app test action.
+    for (let i = 0; i < 2; i++) expect((await page.request.post('/api/v1/notifications/test')).status()).toBe(201);
+    const before = (await (await page.request.get('/api/v1/notifications/unread-count')).json()).unread;
+    expect(before).toBeGreaterThan(0);
+    await page.goto('/notifications');
+    await expect(page.getByRole('heading', { name: 'Notifications', exact: true })).toBeVisible();
+    await expect(page.locator('.mv-sidebar')).toHaveCount(0);
+    expect((await (await page.request.get('/api/v1/notifications/unread-count')).json()).unread).toBe(before);
+    await page.screenshot({ animations: 'disabled', path: info.outputPath('G4-desktop.png') });
+    await page.getByRole('link', { name: 'Reading', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'No notifications yet', exact: true })).toBeVisible();
+    await page.getByRole('link', { name: 'System', exact: true }).click();
+    await page.locator('.mv-notifications__item').first().click();
+    await page.waitForURL('**/notifications?category=system');
+    expect((await (await page.request.get('/api/v1/notifications/unread-count')).json()).unread).toBe(before - 1);
+    await page.goto('/notifications');
+    const allRead = page.getByRole('button', { name: 'Mark all read', exact: true });
+    if (await allRead.isEnabled()) await allRead.click();
+    await expect(page.getByRole('button', { name: 'Mark all read', exact: true })).toBeDisabled();
+    await expect(page.locator('.mv-bell')).toHaveAttribute('aria-label', 'Notifications');
+
+    for (const locale of ['ja', 'en']) {
+      expect((await page.request.patch('/api/v1/auth/me', { data: { locale } })).ok()).toBe(true);
+      for (const path of ['/queue', '/notifications']) {
+        await page.goto(path);
+        await expect(page.locator('html')).toHaveAttribute('lang', locale);
+        await page.screenshot({ animations: 'disabled', path: info.outputPath(`${path.slice(1)}-${locale}-desktop.png`) });
+      }
+    }
+    expect((await page.request.post('/settings/theme', { form: { theme: 'light' } })).ok()).toBe(true);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const path of ['/queue', '/notifications']) {
+      await page.goto(path);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
+      await page.screenshot({ animations: 'disabled', path: info.outputPath(`${path.slice(1)}-paper-reduced-motion.png`) });
+    }
+    expect((await page.request.post('/settings/theme', { form: { theme: 'dark' } })).ok()).toBe(true);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    for (const path of ['/queue', '/notifications']) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(path);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ animations: 'disabled', path: info.outputPath(`${path.slice(1)}-responsive.png`) });
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+  });
+
   await test.step('complete all custom-provider steps against a local fake model catalogue', async () => {
     const calls: string[] = [];
     const fake = createServer((req, res) => {
@@ -360,7 +435,7 @@ test('fresh install → script → characters → layered art → lettering → 
     const noJS = await browser.newContext({ baseURL: origin, javaScriptEnabled: false, storageState: await context.storageState(), viewport: { width: 1440, height: 900 } });
     try {
       const proof = await noJS.newPage();
-      for (const path of ['/studio/projects', `/studio/p/${project}/characters`, `/studio/p/${project}/setting`, '/models', '/models/routing']) {
+      for (const path of ['/studio/projects', `/studio/p/${project}/characters`, `/studio/p/${project}/setting`, '/models', '/models/routing', '/queue', '/notifications']) {
         const response = await proof.goto(path);
         expect(response?.status()).toBe(200);
         await expect(proof.locator('h1').first()).toBeVisible();
