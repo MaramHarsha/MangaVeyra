@@ -199,17 +199,32 @@ nearest designed screen would put it.
   the Reload latest notice and the shared unsaved dialog. Confirmations (variation applied, layout applied, version
   restored) use the toast pattern over the canvas.
 - **Editor top bar and footer:** below 1366 px the project name gives way to the chapter title, as in the D2 bar, and
-  the chapter title truncates. The collaborator avatars are one disabled collaboration control in the Soon state until
-  presence exists. Translate, Animate and Publish carry the Soon tag. The footer's right side shows "Self-host ·
-  {host}" (Pages), the worker GPU and VRAM or "No image worker · {host}" (Variations), the lettering note (Lettering)
-  and "Region edit · step N in version history" (Region).
+  the chapter title truncates. On mode tabs, segmented items, icon controls and the Publish button the shared Soon
+  tag sits on the control's top edge, so the designed widths and full names fit at 1440 px. The collaborator avatars
+  are one disabled collaboration control with the Soon tag, in D1 and in the E2 editor shell, until real-time presence
+  exists. Translate, Animate and Publish carry the Soon tag. The footer's right side shows "Self-host · {host}"
+  (Pages; the same value as the app shell: the instance public URL or request host, including the port), the worker
+  GPU and VRAM or "No image worker · {host}" (Variations), the lettering note (Lettering) and "Region edit · step N in
+  version history" (Region).
 - **D1 page and layer actions:** the "…" beside Pages holds Change layout, Move page earlier/later, Version history,
   Lock/Unlock page and Delete page. The layout-grid-add icon adds a page and opens the layout picker. The Layers "+"
   adds a layer for a bible character not yet in the panel, or an FX layer. The dashed "Add" character chip is a native
-  select styled as the chip; chips truncate names to stay on one row.
+  select styled as the chip; chips show the character's name and wrap to a second row rather than truncate. A page
+  without panels shows "No panels yet" and Choose layout in the inspector; otherwise a panel is always selected.
+  Canvas labels read "N.M · BEAT · CAMERA", taken from the first clause of the script action (or of an edited prompt)
+  and a notable camera angle or shot size; they are ellipsized and clipped to the panel, show over art with a light
+  halo, and move to the panel's top when the context toolbar covers its bottom. When a panel's camera or shot is not
+  one of the options, Eye and Medium show as the default selection. Before generating, the routing chip and help line
+  show the router's current choice for the panel ("{model} · {local|built-in|provider} · ~{s} s"; "no cost" or "on
+  your API key"). "Layer properties · {layer}" (opacity, blend, offset, scale, rotation, flip) and D3's "More
+  lettering options" (layer opacity, tail, box geometry, rotation, ruby/furigana, delete bubble) are collapsed sections
+  at the end of the inspector: the design draws no controls for these document properties, and furigana is required
+  by §4. Page thumbnails are renders of the saved page with art and lettering, matching the export shell.
 - **D2 Layout picker:** the custom-grid tile is in the Soon state; the 3 × 3 preset appears under All as "Nine-panel
-  grid". Suggested layouts come from the server. The hint states the script beat for the page when the chapter has a
-  script, otherwise the page's panel count. The dialog body scrolls so its footer stays visible.
+  grid". Suggested layouts are those within two panels of the page's script beat or panel count, best fit first. The
+  hint states the script beat for the page when the chapter has a script, otherwise the page's panel count; a blank
+  page says it has no panels and preselects nothing. Tile captions are the layout names, and each tile's panel count
+  is in its accessible name. The dialog body scrolls so its footer stays visible.
 - **D3 Lettering:** the bubble-type row shows and changes the selected bubble's type. With no bubble selected it adds
   one of that type, and a "+" in the Lettering header (the section-header pattern of Layers) adds another of the
   highlighted type in free space of the selected panel. Size is shown and entered in points, with the automatic size
@@ -217,7 +232,7 @@ nearest designed screen would put it.
   select lists the seven lettering fonts. The speaker field shows the speaker's initials. The "tail follows her" hint
   is not shown because tails do not follow speakers yet (the tail tip is edited under Geometry). "Keep bubbles off
   faces" stays Soon until face detection exists. Reading-order rows reorder by drag or with the arrow keys on the
-  grip.
+  grip, and the order persists. Empty bubbles read "No text yet" (muted) in the reading order.
 - **D8 Variations:** the status line reads "{ready} of 4 ready · {seconds} s · {model}" from the job's real timing.
   Lock captions and DRIFT appear only when a job reports lock scores. The queue lists the user's recent panel and
   region jobs in the chapter; Open queue is Soon. Repeating an identical panel or region request while its job is
@@ -225,8 +240,9 @@ nearest designed screen would put it.
 - **D13 Region edit:** region editing fits the actual layer's aspect ratio within the desktop proof area, and the
   panel's screentone shows through transparent layer areas. The compare handle, comparison area and four-tile strip
   are shown before a result exists; the idle handle lets brush strokes through. Tiles are captioned VAR 1–4 (the
-  design's "HAND n" names come from a prompt subject the app does not infer). Brush size and rectangle coordinates sit
-  in a collapsed "Brush size and coordinates" section. Feathering keeps an opaque selected core, consistent with the
+  design's "HAND n" names come from a prompt subject the app does not infer). "Clear" in the Select heading empties
+  the selection. Brush size, rectangle coordinates and the keyboard note sit in the collapsed "Brush size and
+  coordinates" section. Feathering keeps an opaque selected core, consistent with the
   frozen exact-white mask contract. Automatic object selection and Character Lock/style-preservation options stay
   visibly Soon.
 - **Editor without JavaScript:** the shell shows the page scaled to the canvas with its art, page thumbnails and
