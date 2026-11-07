@@ -9,6 +9,7 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/ai"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
 )
@@ -152,8 +153,8 @@ func defaultNewProjectValues(ctxLocale string) newProjectValues {
 		chapter = "第1話"
 	}
 	language := "en"
-	if contains(languageValues, ctxLocale) {
-		language = ctxLocale
+	if tag := pagedoc.NormalizeContentLanguage(ctxLocale); tag != "" {
+		language = tag
 	}
 	return newProjectValues{
 		ChapterTitle: chapter,

@@ -87,14 +87,17 @@
 .mv-wizard__fieldset { display: flex; flex-direction: column; gap: var(--mv-space-2); min-width: 0; margin: 0; padding: 0; border: 0; }
 
 .mv-wizard__mode { display: flex; flex-direction: column; gap: var(--mv-space-3); }
-.mv-wizard__premise .mv-textarea { min-height: 150px; font-size: .9375rem; }
+.mv-wizard__premise .mv-textarea { min-height: 112px; font-size: .9375rem; }
 .mv-wizard__hint { margin: 0; font-size: var(--mv-fs-small); color: var(--mv-text-2); }
-.mv-wizard__tries { display: flex; flex-direction: column; gap: var(--mv-space-2); }
+/* The premise suggestions have no artboard (ADR 0004 section 8); they sit on one
+   compact row of dashed chips so step 1 keeps Next in view at 1440 x 900. */
+.mv-wizard__tries { display: flex; flex-wrap: wrap; align-items: center; gap: var(--mv-space-2); }
+.mv-wizard__trylabel { margin-inline-end: var(--mv-space-1); }
 .mv-wizard__try {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  min-height: 44px;
-  padding: 0 14px;
+  min-height: 32px;
+  padding: 0 12px;
   border: 1px dashed var(--mv-line);
   background: transparent;
   color: var(--mv-text-2);
@@ -155,23 +158,13 @@
   background: var(--mv-accent);
 }
 
-/* A paper page of screentone panels (the wrapper switches to Paper tokens). */
-.mv-fmt__page {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-template-rows: 36fr 29fr 38fr;
-  gap: 3px;
-  width: 84px;
-  height: 119px;
-  padding: 5px;
-  background: var(--mv-bg);
-}
-.mv-fmt__panel { min-height: 0; border: 1.5px solid var(--mv-text); }
-.mv-fmt__panel--1 { grid-column: 1 / -1; }
-.mv-fmt__panel--2 { grid-column: 1 / 7; }
-.mv-fmt__panel--3 { grid-column: 7 / -1; }
-.mv-fmt__panel--4 { grid-column: 1 / 8; }
-.mv-fmt__panel--5 { grid-column: 8 / -1; }
+/* A paper page of screentone panels with tilted gutters, drawn with the Paper
+   colours as in the design (paper, panel tone, ink frames). */
+.mv-fmt__page { display: block; flex: none; }
+.mv-fmt__paper { fill: var(--mv-bg); }
+.mv-fmt__panel { fill: var(--mv-surface-2); }
+.mv-fmt__dot { fill: var(--mv-text); fill-opacity: .45; }
+.mv-fmt__frame { fill: none; stroke: var(--mv-text); stroke-width: 1.5; }
 
 .mv-fmt__strip { display: flex; flex-direction: column; gap: var(--mv-space-1); width: 62px; }
 .mv-fmt__cell { min-height: 0; }

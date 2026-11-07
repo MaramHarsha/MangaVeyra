@@ -198,6 +198,58 @@ func TestWizardMapsPageSizeAndOnboardingStyle(t *testing.T) {
 	mustContain(t, body, `name="style" value="chibi" checked`, `data-summary="style">Chibi · 4-koma<`)
 }
 
+// B3 offers every manga content language with a localized name, defaults to
+// the interface language and stores the chosen tag; anything else is refused.
+func TestWizardOffersEveryContentLanguage(t *testing.T) {
+	ta := testutil.NewTestApp(t)
+	ctx := context.Background()
+	_, client := ta.UserClient(t, auth.RoleCreator)
+	names := map[string][2]string{
+		"en": {"English", "英語"}, "ja": {"Japanese", "日本語"}, "ko": {"Korean", "韓国語"},
+		"zh-Hans": {"Chinese (Simplified)", "中国語（簡体字）"}, "zh-Hant": {"Chinese (Traditional)", "中国語（繁体字）"},
+		"es": {"Spanish", "スペイン語"}, "fr": {"French", "フランス語"}, "de": {"German", "ドイツ語"},
+		"pt": {"Portuguese", "ポルトガル語"}, "hi": {"Hindi", "ヒンディー語"},
+	}
+	selectRe := regexp.MustCompile(`(?s)<select[^>]*name="language"[^>]*>(.*?)</select>`)
+	optionRe := regexp.MustCompile(`<option value="([^"]+)"( selected)?>([^<]+)</option>`)
+	for i, locale := range []string{"en", "ja"} {
+		client.Header.Set("Accept-Language", locale)
+		page := client.Get("/studio/new/generate")
+		m := selectRe.FindStringSubmatch(string(page.Body))
+		if page.StatusCode != http.StatusOK || m == nil {
+			t.Fatalf("%s wizard = %d, language select found %v", locale, page.StatusCode, m != nil)
+		}
+		var order []string
+		for _, o := range optionRe.FindAllStringSubmatch(m[1], -1) {
+			order = append(order, o[1])
+			if want := names[o[1]][i]; html.UnescapeString(o[3]) != want {
+				t.Errorf("%s label for %s = %q, want %q", locale, o[1], o[3], want)
+			}
+			if (o[2] != "") != (o[1] == locale) {
+				t.Errorf("%s: option %s selected=%v", locale, o[1], o[2] != "")
+			}
+		}
+		if got := strings.Join(order, ","); got != "en,ja,ko,zh-Hans,zh-Hant,es,fr,de,pt,hi" {
+			t.Errorf("%s options = %s", locale, got)
+		}
+	}
+	client.Header.Del("Accept-Language")
+	for _, lang := range []string{"ko", "zh-Hant", "hi"} {
+		title := "Salt Road " + lang
+		if r := postWizardFields(t, client, map[string]string{"title": title, "language": lang}); r.StatusCode != http.StatusSeeOther {
+			t.Fatalf("%s create = %d %.400s", lang, r.StatusCode, r.Body)
+		}
+		var stored string
+		if err := ta.Deps.DB.Get(ctx, &stored, `SELECT language FROM projects WHERE title = ?`, title); err != nil || stored != lang {
+			t.Fatalf("%s stored %q %v", lang, stored, err)
+		}
+	}
+	r := postWizardFields(t, client, map[string]string{"title": "Unknown Tongue", "language": "xx"})
+	if r.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(string(r.Body), `data-current="generate"`) {
+		t.Fatalf("unknown language = %d", r.StatusCode)
+	}
+}
+
 // htmlForm collects what a browser would submit from the first form whose
 // opening tag contains marker: enabled inputs, textareas and selected options.
 func htmlForm(t *testing.T, page, marker string) url.Values {

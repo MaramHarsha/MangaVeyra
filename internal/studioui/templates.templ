@@ -127,14 +127,6 @@ func sceneHref(v storyView, sceneID string) string {
 	return "#scene-" + sceneID
 }
 
-// hintAttrs points a control without its own Described prop at its hint.
-func hintAttrs(id string, ok bool) templ.Attributes {
-	if !ok {
-		return nil
-	}
-	return templ.Attributes{"aria-describedby": id + "-hint"}
-}
-
 func cellLabel(parts ...string) string { return strings.Join(parts, " · ") }
 
 // cellRows sizes a compact textarea to its text where field-sizing is not
@@ -333,11 +325,11 @@ templ wizardPremise(v newProjectView) {
 	</div>
 	<div class="mv-wizard__mode" data-mode-panel="premise">
 		@ui.Field(ui.FieldProps{ID: "premise", Label: i18n.T(ctx, "studioui.new.premise_label"), Error: v.Errors["premise"], Class: "mv-wizard__premise"}) {
-			@ui.Textarea(ui.TextareaProps{ID: "premise", Name: "premise", Value: v.Values.Premise, Placeholder: i18n.T(ctx, "studioui.new.premise_placeholder"), Rows: 6, MaxLength: 4000, Invalid: v.Errors["premise"] != "", Attrs: templ.Attributes{"data-summary-source": "premise"}})
+			@ui.Textarea(ui.TextareaProps{ID: "premise", Name: "premise", Value: v.Values.Premise, Placeholder: i18n.T(ctx, "studioui.new.premise_placeholder"), Rows: 4, MaxLength: 4000, Invalid: v.Errors["premise"] != "", Attrs: templ.Attributes{"data-summary-source": "premise"}})
 		}
 		<p class="mv-wizard__hint">{ i18n.T(ctx, "studioui.new.premise_hint") }</p>
 		<div class="mv-wizard__tries" data-premise-tries hidden>
-			<span class="mv-wizard__hint">{ i18n.T(ctx, "studioui.new.premise_try") }</span>
+			<span class="mv-wizard__hint mv-wizard__trylabel">{ i18n.T(ctx, "studioui.new.premise_try") }</span>
 			for _, key := range premiseSuggestions {
 				<button type="button" class="mv-wizard__try" data-premise-suggestion={ i18n.T(ctx, "studioui.new.try."+key) }>{ i18n.T(ctx, "studioui.new.try." + key) }</button>
 			}
@@ -426,25 +418,25 @@ templ wizardFormat(v newProjectView) {
 		}
 	</fieldset>
 	<div class="mv-wizard__triple">
-		@ui.Field(ui.FieldProps{ID: "page_size", Label: i18n.T(ctx, "studioui.new.page_size"), Hint: i18n.T(ctx, "studioui.new.page_size_hint"), Error: v.Errors["page_size"]}) {
-			@ui.Select(ui.SelectProps{ID: "page_size", Name: "page_size", Value: v.Values.PageSize, Options: pageSizeOptions(ctx), Invalid: v.Errors["page_size"] != "", Attrs: hintAttrs("page_size", v.Errors["page_size"] == "")})
+		@ui.Field(ui.FieldProps{ID: "page_size", Label: i18n.T(ctx, "studioui.new.page_size"), Error: v.Errors["page_size"]}) {
+			@ui.Select(ui.SelectProps{ID: "page_size", Name: "page_size", Value: v.Values.PageSize, Options: pageSizeOptions(ctx), Invalid: v.Errors["page_size"] != ""})
 		}
 		<div class="mv-field is-soon">
 			<label class="mv-field__label" for="chapters_plan">
 				<span>{ i18n.T(ctx, "studioui.new.chapters_plan") }</span>
 				@ui.SoonTag()
 			</label>
-			@ui.Input(ui.InputProps{ID: "chapters_plan", Type: "number", Value: "1", Disabled: true, Described: true})
-			<span class="mv-field__hint" id="chapters_plan-hint">{ i18n.T(ctx, "studioui.new.chapters_plan_hint") }</span>
+			@ui.Input(ui.InputProps{ID: "chapters_plan", Type: "number", Value: "1", Disabled: true})
 		</div>
-		@ui.Field(ui.FieldProps{ID: "pages_target", Label: i18n.T(ctx, "studioui.new.pages_per_chapter"), Hint: i18n.T(ctx, "studioui.new.pages_hint"), Error: v.Errors["pages_target"]}) {
-			@ui.Input(ui.InputProps{ID: "pages_target", Name: "pages_target", Type: "number", Value: strconv.Itoa(v.Values.PagesTarget), Inputmode: "numeric", Invalid: v.Errors["pages_target"] != "", Described: true, Attrs: templ.Attributes{"min": "1", "max": "256"}})
+		@ui.Field(ui.FieldProps{ID: "pages_target", Label: i18n.T(ctx, "studioui.new.pages_per_chapter"), Error: v.Errors["pages_target"]}) {
+			@ui.Input(ui.InputProps{ID: "pages_target", Name: "pages_target", Type: "number", Value: strconv.Itoa(v.Values.PagesTarget), Inputmode: "numeric", Invalid: v.Errors["pages_target"] != "", Attrs: templ.Attributes{"min": "1", "max": "256"}})
 		}
 	</div>
 }
 
-// formatThumb draws the format card's thumbnail from the screentone
-// placeholder: a paper page (or a spread) of toned panels, or a webtoon strip.
+// formatThumb draws the format card's thumbnail as the design does: a paper
+// page (or a spread) of screentone panels with tilted gutters, or a webtoon
+// strip of toned cells.
 templ formatThumb(format string) {
 	<span class="mv-fmt__thumb" aria-hidden="true">
 		switch format {
@@ -455,22 +447,38 @@ templ formatThumb(format string) {
 					<span class="mv-tone mv-fmt__cell mv-fmt__cell--3"></span>
 				</span>
 			case "manga_rtl":
-				@pageThumb()
-				@pageThumb()
+				@pageThumb(format + "-1")
+				@pageThumb(format + "-2")
 			default:
-				@pageThumb()
+				@pageThumb(format + "-1")
 		}
 	</span>
 }
 
-templ pageThumb() {
-	<span class="mv-fmt__page" data-theme="light">
-		<span class="mv-tone mv-fmt__panel mv-fmt__panel--1"></span>
-		<span class="mv-tone mv-fmt__panel mv-fmt__panel--2"></span>
-		<span class="mv-tone mv-fmt__panel mv-fmt__panel--3"></span>
-		<span class="mv-tone mv-fmt__panel mv-fmt__panel--4"></span>
-		<span class="mv-tone mv-fmt__panel mv-fmt__panel--5"></span>
-	</span>
+// thumbPanels are the design's five-panel page with tilted gutters, in the
+// 84 x 119 page box.
+var thumbPanels = []string{
+	"5,5 79,5 79,36.6 5,41",
+	"43.5,43.7 79,39.3 79,72.6 43.5,72.6",
+	"5,44.2 41.3,43.8 41.3,72.6 5,72.6",
+	"5,75.9 49.4,75.9 43.5,114 5,114",
+	"51.6,75.9 79,75.9 79,114 45.7,114",
+}
+
+templ pageThumb(id string) {
+	<svg class="mv-fmt__page" data-theme="light" width="84" height="119" viewBox="0 0 84 119" focusable="false">
+		<defs>
+			<pattern id={ "mv-fmt-dots-" + id } width="6" height="6" patternUnits="userSpaceOnUse">
+				<circle class="mv-fmt__dot" cx="3" cy="3" r="1.05"></circle>
+			</pattern>
+		</defs>
+		<rect class="mv-fmt__paper" width="84" height="119"></rect>
+		for _, points := range thumbPanels {
+			<polygon class="mv-fmt__panel" points={ points }></polygon>
+			<polygon points={ points } fill={ "url(#mv-fmt-dots-" + id + ")" }></polygon>
+			<polygon class="mv-fmt__frame" points={ points }></polygon>
+		}
+	</svg>
 }
 
 templ wizardGenerate(v newProjectView) {
