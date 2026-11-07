@@ -1,0 +1,736 @@
+package studioui
+
+import (
+	"context"
+	"strconv"
+	"strings"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+func bibleCategoryLinks(ctx context.Context, v biblePage) []ui.SegLink {
+
+	links := []ui.SegLink{{Href: characterPath(v.Project.ID, ""), Label: i18n.T(ctx, "bible.category.all", "count", len(v.Characters)), Current: v.Filter == ""}}
+	for _, kind := range []string{"main", "supporting", "extra"} {
+		links = append(links, ui.SegLink{Href: characterPath(v.Project.ID, "") + "?category=" + kind, Label: i18n.T(ctx, "bible.category."+kind), Current: v.Filter == kind})
+	}
+	return links
+}
+func bibleSettingLinks(ctx context.Context, v biblePage) []ui.SegLink {
+
+	links := []ui.SegLink{}
+	for _, kind := range []string{"location", "prop", "style"} {
+		links = append(links, ui.SegLink{Href: settingPath(v.Project.ID) + "?kind=" + kind, Label: i18n.T(ctx, "bible.setting.tab."+kind, "count", v.Counts[kind]), Current: v.Filter == kind})
+	}
+	return links
+}
+func bibleModeLinks(ctx context.Context, v biblePage) []ui.SegLink {
+
+	path := characterPath(v.Project.ID, "") + "/new"
+	if v.Character.ID != "" {
+		path += "?character=" + v.Character.ID + "&"
+	} else {
+		path += "?"
+	}
+	return []ui.SegLink{{Href: path + "mode=describe", Label: i18n.T(ctx, "bible.new.describe"), Current: v.Form.Mode != "upload"}, {Href: path + "mode=upload", Label: i18n.T(ctx, "bible.new.upload"), Current: v.Form.Mode == "upload"}}
+}
+func bibleReference(v biblePage, kind, label string) bibleMedia {
+
+	for _, ref := range v.Media {
+		if ref.Description == kind && (kind != "expression" || strings.EqualFold(ref.Label, label)) {
+			return ref
+		}
+	}
+	return bibleMedia{Label: label}
+}
+func bibleJobAttrs(v biblePage) templ.Attributes {
+
+	if v.Job == nil || (v.Job.State != jobs.StateQueued && v.Job.State != jobs.StateRunning) {
+		return nil
+	}
+	return templ.Attributes{"hx-get": sheetPath(v.Project.ID, v.Character.ID, v.Job.ID), "hx-trigger": "load delay:2s", "hx-swap": "outerHTML"}
+}
+
+templ BiblePage(v biblePage) {
+	<div class={ "mv-bible", "mv-bible--"+v.Kind }>
+		if v.Errors.Has() {
+			@ui.Notice(ui.ToneError, "alert-triangle") {
+				{ i18n.T(ctx,"bible.error.invalid") }
+			}
+		}
+		if v.Notice != "" {
+			@ui.Notice(ui.ToneSuccess, "check") {
+				{ v.Notice }
+			}
+		}
+		if v.Error != "" {
+			@ui.Notice(ui.ToneError, "alert-triangle") {
+				{ v.Error }
+			}
+			if v.Character.ID != "" {
+				@ui.LinkButton(characterPath(v.Project.ID, v.Character.ID), ui.ButtonProps{Variant: ui.Secondary, Icon: "refresh"}) {
+					{ i18n.T(ctx,"bible.reload") }
+				}
+			}
+		}
+		switch v.Kind {
+			case "projects":
+				@BibleProjects(v)
+			case "characters":
+				@BibleCharacters(v)
+			case "detail":
+				@BibleCharacter(v)
+			case "new":
+				@BibleNewCharacter(v)
+			case "setting":
+				@BibleSetting(v)
+		}
+	</div>
+}
+
+templ bibleSoon(label, icon string) {
+	@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Icon: icon, Disabled: true, Tip: i18n.T(ctx, "ui.soon_hint")}) {
+		{ label }
+		@ui.SoonTag()
+	}
+}
+
+templ BibleProjects(v biblePage) {
+	<header class="mv-bible__header">
+		<div>
+			<h1>
+				{ v.Title }
+			</h1>
+			<p>
+				{ i18n.T(ctx,"bible.projects.count","count",len(v.Projects),"shared",v.Counts["shared"]) }
+			</p>
+		</div>
+		<div class="mv-bible__actions">
+			@bibleSoon(i18n.T(ctx, "bible.projects.import"), "upload")
+			@ui.LinkButton("/studio/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				{ i18n.T(ctx,"nav.new_manga") }
+			}
+		</div>
+	</header>
+	if v.Target!="" {
+		<p class="mv-bible__hint">
+			{ i18n.T(ctx,"bible.choose.hint") }
+		</p>
+	}
+	<form
+		class="mv-bible__filters"
+		method="get"
+		action={ templ.URL(bibleListURL(biblePage{Target: v.Target}, nil)) }
+		novalidate
+	>
+		<div class="mv-bible__search">
+			@ui.Field(ui.FieldProps{ID: "project-search", Label: i18n.T(ctx, "bible.projects.search"), Class: "mv-bible__filter-field"}) {
+				@ui.InputGroup("", false) {
+					@ui.Icon("search", 16)
+					@ui.Input(ui.InputProps{ID: "project-search", Name: "q", Type: "search", Value: v.Query, Placeholder: i18n.T(ctx, "bible.projects.search"), MaxLength: 160})
+					if v.Query!="" {
+						<a
+							class="mv-iconlink"
+							href={ templ.URL(bibleListURL(v, map[string]string{"q": ""}) + "#project-search") }
+							aria-label={ i18n.T(ctx, "bible.search.clear") }
+						>
+							@ui.Icon("x", 16)
+						</a>
+					}
+				}
+			}
+		</div>
+		@ui.Field(ui.FieldProps{ID: "project-status", Label: i18n.T(ctx, "bible.projects.status"), Class: "mv-bible__filter-field"}) {
+			@ui.Select(ui.SelectProps{ID: "project-status", Name: "status", Value: v.Status, Options: projectStatusOptions(ctx)})
+		}
+		@ui.Field(ui.FieldProps{ID: "project-format", Label: i18n.T(ctx, "bible.projects.format"), Class: "mv-bible__filter-field"}) {
+			@ui.Select(ui.SelectProps{ID: "project-format", Name: "format", Value: v.Format, Options: projectFormatOptions(ctx)})
+		}
+		@ui.Field(ui.FieldProps{ID: "project-sort", Label: i18n.T(ctx, "bible.projects.sort"), Class: "mv-bible__filter-field"}) {
+			@ui.Select(ui.SelectProps{ID: "project-sort", Name: "sort", Value: v.Sort, Options: bibleOptions(ctx, "sort", "edited", "title", "oldest")})
+		}
+		<input type="hidden" name="view" value={ v.View }/>
+		@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Ghost, Icon: "filter"}) {
+			{ i18n.T(ctx,"bible.filters.apply") }
+		}
+		<div class="mv-bible__view">
+			@ui.SegmentedLinks(i18n.T(ctx, "bible.view.label"), bibleViewLinks(ctx, v))
+		</div>
+	</form>
+	if len(v.ProjectCards)==0 {
+		@ui.State(ui.StateProps{Title: i18n.T(ctx, "bible.projects.empty"), Body: i18n.T(ctx, "bible.projects.empty_hint"), SFX: "SHIIN", Boxed: true}) {
+			@ui.LinkButton("/studio/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				{ i18n.T(ctx,"nav.new_manga") }
+			}
+		}
+	} else {
+		<div class={ "mv-bible__projects",ui.If(v.View=="list","mv-bible__projects--list") }>
+			for _,card:=range v.ProjectCards {
+				@ui.ProjectCard(card)
+			}
+		</div>
+	}
+	if len(v.Projects)==200 {
+		<p class="mv-bible__hint">
+			{ i18n.T(ctx,"bible.projects.limit") }
+		</p>
+	}
+}
+
+func projectStatusOptions(ctx context.Context) []ui.Option {
+
+	out := []ui.Option{{Value: "", Label: i18n.T(ctx, "bible.projects.any_status")}}
+	for _, status := range projectStatuses {
+		out = append(out, ui.Option{Value: status, Label: i18n.T(ctx, "studioui.status."+status)})
+	}
+	return out
+}
+func projectFormatOptions(ctx context.Context) []ui.Option {
+
+	out := []ui.Option{{Value: "", Label: i18n.T(ctx, "bible.projects.any_format")}}
+	for _, format := range formatValues {
+		out = append(out, ui.Option{Value: format, Label: formatLabel(ctx, format)})
+	}
+	return out
+}
+func bibleViewLinks(ctx context.Context, v biblePage) []ui.SegLink {
+	return []ui.SegLink{{Href: bibleListURL(v, map[string]string{"view": "grid"}), Label: i18n.T(ctx, "bible.view.grid"), Icon: "layout-grid", Current: v.View == "grid"}, {Href: bibleListURL(v, map[string]string{"view": "list"}), Label: i18n.T(ctx, "bible.view.list"), Icon: "list", Current: v.View == "list"}}
+}
+
+templ BibleCharacters(v biblePage) {
+	<header class="mv-bible__header">
+		<div>
+			<h1>
+				{ v.Title }
+			</h1>
+			<p>
+				{ i18n.T(ctx,"bible.characters.count","count",len(v.Characters),"locked",v.Counts["locked"],"training",v.Counts["training"]) }
+			</p>
+		</div>
+		<div class="mv-bible__actions">
+			@bibleSoon(i18n.T(ctx, "bible.characters.import"), "package-import")
+			if v.CanEdit {
+				@ui.LinkButton(characterPath(v.Project.ID, "")+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					{ i18n.T(ctx,"bible.characters.new") }
+				}
+			}
+		</div>
+	</header>
+	<div>
+		@ui.SegmentedLinks(i18n.T(ctx, "bible.characters.filter"), bibleCategoryLinks(ctx, v))
+	</div>
+	<div class="mv-bible__characters">
+		for _,card:=range v.CharacterCards {
+			@ui.CharacterCard(card)
+		}
+		if v.CanEdit {
+			<a
+				class="mv-bible__add-character"
+				href={ templ.URL(characterPath(v.Project.ID, "") + "/new") }
+			>
+				@ui.Icon("user-plus", 28)
+				<strong>
+					{ i18n.T(ctx,"bible.characters.add") }
+				</strong>
+				<span>
+					{ i18n.T(ctx,"bible.characters.add_hint") }
+				</span>
+			</a>
+		}
+	</div>
+	if len(v.CharacterCards)==0&&!v.CanEdit {
+		@ui.State(ui.StateProps{Title: i18n.T(ctx, "bible.characters.empty"), Body: i18n.T(ctx, "bible.characters.empty_hint"), Boxed: true})
+	}
+}
+
+templ bibleImage(url, label, class string) {
+	if url!="" {
+		<div class={ "mv-bible__image",class }><img src={ url } alt={ label } loading="lazy"/></div>
+	} else {
+		@ui.ToneBox(label, "", class)
+	}
+}
+
+templ BibleCharacter(v biblePage) {
+	<div class="mv-bible__character-detail">
+		<aside class="mv-bible__references">
+			<div class="mv-bible__portrait-wrap">
+				@bibleImage(v.Images[v.Character.PortraitAssetID], i18n.T(ctx, "bible.refs.main"), "mv-bible__portrait")
+				if v.Character.Kanji!="" {
+					<span class="mv-bible__kanji" aria-hidden="true">
+						{ v.Character.Kanji }
+					</span>
+				}
+			</div>
+			<div class="mv-bible__ref-strip">
+				for _,kind:=range []string{"front","side","back","other"} {
+					@bibleImage(bibleReference(v, kind, "").URL, i18n.T(ctx, "bible.refs."+kind), "mv-bible__ref")
+				}
+			</div>
+			<div class="mv-bible__ref-strip">
+				for _,label:=range []string{"joy","anger","fear","smug"} {
+					@bibleImage(bibleReference(v, "expression", label).URL, i18n.T(ctx, "bible.expression."+label), "mv-bible__expression")
+				}
+			</div>
+			if v.CanArt {
+				@ui.LinkButton(characterPath(v.Project.ID, v.Character.ID)+"?add=reference#reference-form", ui.ButtonProps{Variant: ui.Ghost, Icon: "upload", Full: true}) {
+					{ i18n.T(ctx,"bible.refs.add") }
+				}
+			}
+			if len(v.Media)>0 {
+				<details class="mv-bible__all-refs">
+					<summary>
+						{ i18n.T(ctx,"bible.refs.all","count",len(v.Media)) }
+					</summary>
+					<div class="mv-bible__ref-strip">
+						for _,ref:=range v.Media {
+							@bibleImage(ref.URL, ref.Label, "mv-bible__ref")
+						}
+					</div>
+				</details>
+			}
+		</aside>
+		<section class="mv-bible__character-body">
+			<header class="mv-bible__detail-header">
+				<div>
+					<p class="mv-bible__eyebrow">
+						{ v.Character.RoleLine } · { v.Project.Title }
+					</p>
+					<h1>
+						{ v.Character.Name }
+					</h1>
+				</div>
+				<div class="mv-bible__actions">
+					@bibleSoon(i18n.T(ctx, "bible.character.export"), "package-export")
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Disabled: true, Tip: i18n.T(ctx, "ui.soon_hint")}) {
+						{ i18n.T(ctx,"bible.character.use") }
+						@ui.SoonTag()
+					}
+				</div>
+			</header>
+			<div class="mv-bible__character-summary">
+				<section class={ "mv-bible__lock-card",ui.If(v.Character.LockScore!=nil,"mv-bible__lock-card--ready") }>
+					<div class="mv-bible__lock-heading">
+						<strong>
+							@ui.Icon("lock", 18) {
+								i18n.T(ctx,"bible.lock.title")
+							}
+						</strong>
+						if v.Character.LockScore!=nil {
+							<span class="mv-bible__lock-score">
+								{ strconv.Itoa(int(*v.Character.LockScore*100+.5)) }%
+							</span>
+						} else {
+							@ui.SoonTag()
+						}
+					</div>
+					<p>
+						{ i18n.T(ctx,"bible.lock.references","count",len(v.Character.Refs)) }
+					</p>
+					<p>
+						{ i18n.T(ctx,"bible.lock.hint") }
+					</p>
+				</section>
+				<dl class="mv-bible__facts">
+					<div>
+						<dt>
+							{ i18n.T(ctx,"bible.field.age") }
+						</dt>
+						<dd>
+							{ displayBibleValue(ctx,v.Character.Age) }
+						</dd>
+					</div>
+					<div>
+						<dt>
+							{ i18n.T(ctx,"bible.character.voice") }
+						</dt>
+						<dd>
+							@ui.SoonTag()
+						</dd>
+					</div>
+					<div>
+						<dt>
+							{ i18n.T(ctx,"bible.field.speech_style") }
+						</dt>
+						<dd>
+							{ displayBibleValue(ctx,v.Character.SpeechStyle) }
+						</dd>
+					</div>
+					<div>
+						<dt>
+							{ i18n.T(ctx,"bible.character.appears") }
+						</dt>
+						<dd>
+							@ui.SoonTag()
+						</dd>
+					</div>
+				</dl>
+			</div>
+			<section class="mv-bible__outfits">
+				<h2>
+					{ i18n.T(ctx,"bible.outfits.title") }
+				</h2>
+				<div class="mv-bible__outfit-strip">
+					for _,outfit:=range v.Outfits {
+						<figure class={ "mv-bible__outfit",ui.If(outfit.Default,"mv-bible__outfit--default") }>
+							@bibleImage(outfit.URL, outfit.Label, "mv-bible__outfit-image")
+							<figcaption>
+								{ outfit.Label }
+								if outfit.Default {
+									<span>
+										· { i18n.T(ctx,"bible.outfits.default") }
+									</span>
+								}
+							</figcaption>
+						</figure>
+					}
+					if v.CanEdit {
+						<a
+							class="mv-bible__add-outfit"
+							href={ templ.URL(characterPath(v.Project.ID, v.Character.ID) + "?add=outfit#outfit-form") }
+						>
+							@ui.Icon("plus", 18) {
+								i18n.T(ctx,"bible.outfits.add")
+							}
+						</a>
+					}
+				</div>
+			</section>
+			<section class="mv-bible__relationships">
+				<h2>
+					{ i18n.T(ctx,"bible.relationships.title") }
+				</h2>@ui.Notice(ui.ToneInfo, "users") {
+	{ i18n.T(ctx,"bible.relationships.hint") } @ui.SoonTag()
+}
+			</section>
+			if v.CanEdit {
+				<div>
+					@ui.LinkButton(characterPath(v.Project.ID, v.Character.ID)+"?edit=profile#profile-form", ui.ButtonProps{Variant: ui.Ghost, Icon: "edit"}) {
+						{ i18n.T(ctx,"bible.character.edit") }
+					}
+					@ui.LinkButton(characterPath(v.Project.ID, "")+"/new?character="+v.Character.ID, ui.ButtonProps{Variant: ui.Secondary, Icon: "sparkles"}) {
+						{ i18n.T(ctx,"bible.new.generate") }
+					}
+				</div>
+			}
+			if v.Editing&&v.CanEdit {
+				@BibleProfileForm(v)
+			}
+			if v.AddingRef&&v.CanArt {
+				@BibleReferenceForm(v)
+			}
+			if v.AddingOutfit&&v.CanEdit {
+				@BibleOutfitForm(v)
+			}
+		</section>
+	</div>
+}
+
+func displayBibleValue(ctx context.Context, value string) string {
+	if value != "" {
+		return value
+	}
+	return i18n.T(ctx, "bible.empty_value")
+}
+
+templ bibleTextField(v biblePage, name, value string, max int) {
+	@ui.Field(ui.FieldProps{ID: "bible-" + name, Label: bibleFieldLabel(ctx, name), Error: v.Errors[name]}) {
+		@ui.Input(ui.InputProps{ID: "bible-" + name, Name: name, Value: value, MaxLength: max, Invalid: v.Errors[name] != "", Required: name == "name", Autofocus: v.Errors[name] != "" && bibleFirstError(v) == name})
+	}
+}
+
+templ bibleTextArea(v biblePage, name, value string, max, rows int) {
+	@ui.Field(ui.FieldProps{ID: "bible-" + name, Label: bibleFieldLabel(ctx, name), Error: v.Errors[name]}) {
+		@ui.Textarea(ui.TextareaProps{ID: "bible-" + name, Name: name, Value: value, MaxLength: max, Rows: rows, Invalid: v.Errors[name] != "", Class: "mv-bible__textarea", Attrs: bibleControlAttrs(v, name)})
+	}
+}
+
+templ bibleCategory(v biblePage) {
+	@ui.Field(ui.FieldProps{ID: "bible-category", Label: bibleFieldLabel(ctx, "category"), Error: v.Errors["category"]}) {
+		@ui.Select(ui.SelectProps{ID: "bible-category", Name: "category", Value: v.Form.Category, Invalid: v.Errors["category"] != "", Options: bibleOptions(ctx, "category", "main", "supporting", "extra"), Attrs: bibleControlAttrs(v, "category")})
+	}
+}
+
+templ bibleUpload(v biblePage) {
+	@ui.Field(ui.FieldProps{ID: "bible-file", Label: i18n.T(ctx, "bible.field.file"), Hint: i18n.T(ctx, "bible.upload.hint"), Error: v.Errors["file"], Class: "mv-bible__upload"}) {
+		<input
+			class="mv-input"
+			id="bible-file"
+			type="file"
+			name="file"
+			accept="image/png,image/jpeg,image/webp,image/gif"
+			aria-describedby={ uploadDescribed(v) }
+			aria-invalid={ strconv.FormatBool(v.Errors["file"] != "") }
+		/>
+	}
+}
+
+func uploadDescribed(v biblePage) string {
+	if v.Errors["file"] != "" {
+		return "bible-file-error"
+	}
+	return "bible-file-hint"
+}
+
+templ BibleNewCharacter(v biblePage) {
+	<header class="mv-bible__header">
+		<div>
+			<h1>
+				{ i18n.T(ctx,"bible.new.title") }
+			</h1>
+			<p>
+				{ v.Project.Title }
+			</p>
+		</div>@ui.SegmentedLinks(i18n.T(ctx, "bible.new.mode"), bibleModeLinks(ctx, v))
+	</header>
+	<div class="mv-bible__new-grid">
+		<form action={ templ.URL(characterPath(v.Project.ID, "") + "/new") } method="post" enctype="multipart/form-data" class="mv-bible__new-form" novalidate data-guard-unsaved>
+			<input type="hidden" name="mode" value={ v.Form.Mode }/><input type="hidden" name="revision" value={ v.Form.Revision }/><input type="hidden" name="character_id" value={ v.Form.CharacterID }/>
+			@bibleTextField(v, "name", v.Form.Name, 160)
+			@ui.Field(ui.FieldProps{ID: "bible-role", Label: bibleFieldLabel(ctx, "role"), Error: v.Errors["role"]}) {
+				@ui.Select(ui.SelectProps{ID: "bible-role", Name: "role", Value: v.Form.Role, Options: bibleRoleOptions(ctx, v.Form.Role), Invalid: v.Errors["role"] != "", Attrs: bibleControlAttrs(v, "role")})
+			}
+			@bibleTextArea(v, "look", v.Form.Look, 4000, 3)
+			@bibleTextArea(v, "personality", v.Form.Personality, 4000, 2)
+			<fieldset class="mv-bible__style">
+				<legend class="mv-field__label">{ i18n.T(ctx,"bible.field.style") }</legend>
+				@ui.Segmented(ui.SegmentedProps{Name: "style", Value: v.Form.Style, Label: i18n.T(ctx, "bible.field.style"), Options: bibleStyleOptions(ctx, v), InputAttrs: bibleControlAttrs(v, "style")})
+				if v.Errors["style"]!="" {
+					<span id="bible-style-error" class="mv-field__error" role="alert">{ v.Errors["style"] }</span>
+				}
+			</fieldset>
+			if v.Form.Mode=="upload" {
+				@bibleUpload(v)
+			}
+			<details class="mv-bible__more" open?={ bibleAdvancedError(v) }>
+				<summary>
+					{ i18n.T(ctx,"bible.new.profile_details") }
+				</summary>
+				<div class="mv-stack mv-stack--sm">
+					@bibleTextField(v, "kanji", v.Form.Kanji, 160)
+					@bibleTextField(v, "role_line", v.Form.RoleLine, 1000)
+					@bibleTextField(v, "age", v.Form.Age, 80)
+					@bibleTextField(v, "speech_style", v.Form.SpeechStyle, 2000)
+					@bibleCategory(v)
+				</div>
+			</details>
+			<div class="mv-bible__generate-actions">
+				if v.Form.Mode=="upload" {
+					@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Primary, Size: ui.LG, Full: true, Icon: "upload", Disabled: !v.CanArt}) {
+						{ i18n.T(ctx,"bible.new.save_upload") }
+					}
+				} else {
+					@ui.RouteChip(i18n.T(ctx, "bible.route.auto"), i18n.T(ctx, "bible.route.pending"), "", "")
+					@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Primary, Size: ui.LG, Full: true, Icon: "sparkles", Disabled: !v.CanGenerate || (v.Job != nil && (v.Job.State == jobs.StateQueued || v.Job.State == jobs.StateRunning))}) {
+						{ i18n.T(ctx,"bible.new.generate") }
+					}
+				}
+				@ui.LinkButton(characterPath(v.Project.ID, ""), ui.ButtonProps{Variant: ui.Ghost}) {
+					{ i18n.T(ctx,"ui.cancel") }
+				}
+			</div>
+		</form>
+		<section class="mv-bible__sheets">
+			if v.Job!=nil {
+				@BibleSheetJob(v)
+			}
+			if len(v.Candidates)>0 {
+				<form action={ templ.URL(sheetPath(v.Project.ID, v.Character.ID, v.Job.ID) + "/apply") } method="post" novalidate>
+					@ui.VariationPicker(bibleCandidateTitle(ctx, len(v.Candidates)), i18n.T(ctx, "bible.new.refine"), "index", strconv.Itoa(v.Candidates[0].Index), bibleCandidateVars(ctx, v.Candidates))
+					@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Primary, Full: true}) {
+						{ i18n.T(ctx,"bible.new.keep") }
+					}
+				</form>
+			} else {
+				<div class="mv-bible__sheet-heading">
+					<h2>
+						{ i18n.T(ctx,"bible.new.pick","count",0) }
+					</h2>
+					<span>
+						{ i18n.T(ctx,"bible.new.refine") }
+					</span>
+				</div>
+				<div class="mv-bible__empty-sheets">
+					for i:=range 4 {
+						@ui.ToneBox(i18n.T(ctx, "bible.new.sheet", "number", i+1), "", "mv-bible__sheet")
+					}
+				</div>
+			}
+			@ui.Notice(ui.ToneInfo, "info-circle") {
+				{ i18n.T(ctx,"bible.new.training_hint") } @ui.SoonTag()
+			}
+		</section>
+	</div>
+}
+
+func bibleStyleOptions(ctx context.Context, v biblePage) []ui.Option {
+	style := styleLabel(ctx, v.Project.Style)
+	if style == "style."+v.Project.Style {
+		style = i18n.T(ctx, "bible.style.series_default")
+	}
+	return []ui.Option{{Value: "series", Label: i18n.T(ctx, "bible.style.series", "style", style)}, {Value: "colour", Label: i18n.T(ctx, "bible.style.colour")}, {Value: "chibi", Label: i18n.T(ctx, "bible.style.chibi")}}
+}
+
+func bibleRoleOptions(ctx context.Context, value string) []ui.Option {
+	values := []string{"", "lead", "rival", "mentor", "antagonist", "sidekick", "supporting"}
+	out := bibleOptions(ctx, "role", values...)
+	if !contains(values, value) {
+		out = append(out, ui.Option{Value: value, Label: value})
+	}
+	return out
+}
+
+func bibleControlAttrs(v biblePage, name string) templ.Attributes {
+	if v.Errors[name] == "" {
+		return nil
+	}
+	return templ.Attributes{"aria-invalid": "true", "aria-describedby": "bible-" + name + "-error", "autofocus": bibleFirstError(v) == name}
+}
+
+func bibleAdvancedError(v biblePage) bool {
+	for _, name := range []string{"kanji", "role_line", "age", "speech_style", "category"} {
+		if v.Errors[name] != "" {
+			return true
+		}
+	}
+	return false
+}
+
+templ BibleSheetJob(v biblePage) {
+	<div
+		id="bible-sheet-job"
+		{ bibleJobAttrs(v)... }
+	>
+		@ui.GenState(bibleSheetGen(v, ctx))
+		@ui.LinkButton(sheetPagePath(v.Project.ID, v.Character.ID, v.Job.ID), ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Icon: "refresh"}) {
+			{ i18n.T(ctx,"bible.refresh") }
+		}
+	</div>
+}
+
+templ BibleProfileForm(v biblePage) {
+	<form id="profile-form" class="mv-bible__inline-form" action={ templ.URL(characterPath(v.Project.ID, v.Character.ID)) } method="post" novalidate data-guard-unsaved>
+		<h2>
+			{ i18n.T(ctx,"bible.character.edit") }
+		</h2><input type="hidden" name="revision" value={ v.Form.Revision }/>
+		@bibleTextField(v, "name", v.Form.Name, 160)
+		@bibleTextField(v, "kanji", v.Form.Kanji, 160)
+		@bibleTextField(v, "role", v.Form.Role, 160)
+		@bibleTextField(v, "role_line", v.Form.RoleLine, 1000)
+		@bibleTextField(v, "age", v.Form.Age, 80)
+		@bibleTextArea(v, "look", v.Form.Look, 4000, 3)
+		@bibleTextArea(v, "personality", v.Form.Personality, 4000, 3)
+		@bibleTextField(v, "speech_style", v.Form.SpeechStyle, 2000)
+		@bibleCategory(v)
+		@bibleFormActions(characterPath(v.Project.ID, v.Character.ID))
+	</form>
+}
+
+templ BibleReferenceForm(v biblePage) {
+	<form id="reference-form" class="mv-bible__inline-form" action={ templ.URL(characterPath(v.Project.ID, v.Character.ID) + "/references") } method="post" enctype="multipart/form-data" novalidate data-guard-unsaved>
+		<h2>
+			{ i18n.T(ctx,"bible.refs.add") }
+		</h2><input type="hidden" name="revision" value={ v.Form.Revision }/>
+		@bibleUpload(v)
+		@bibleTextField(v, "label", v.Form.Label, 160)
+		@ui.Field(ui.FieldProps{ID: "bible-kind", Label: i18n.T(ctx, "bible.field.kind"), Error: v.Errors["kind"]}) {
+			@ui.Select(ui.SelectProps{ID: "bible-kind", Name: "kind", Value: v.Form.Kind, Invalid: v.Errors["kind"] != "", Options: bibleOptions(ctx, "refs", "front", "side", "back", "face", "expression", "outfit", "sheet", "other"), Attrs: bibleControlAttrs(v, "kind")})
+		}
+		@ui.Checkbox(ui.CheckProps{Name: "portrait", Label: i18n.T(ctx, "bible.refs.portrait"), Checked: v.Form.Portrait})
+		@bibleFormActions(characterPath(v.Project.ID, v.Character.ID))
+	</form>
+}
+
+templ BibleOutfitForm(v biblePage) {
+	<form id="outfit-form" class="mv-bible__inline-form" action={ templ.URL(characterPath(v.Project.ID, v.Character.ID) + "/outfits") } method="post" enctype="multipart/form-data" novalidate data-guard-unsaved>
+		<h2>
+			{ i18n.T(ctx,"bible.outfits.add") }
+		</h2><input type="hidden" name="revision" value={ v.Form.Revision }/>
+		@bibleTextField(v, "name", v.Form.Name, 160)
+		@bibleTextArea(v, "description", v.Form.Description, 4000, 3)
+		@bibleUpload(v)
+		@ui.Checkbox(ui.CheckProps{Name: "default", Label: i18n.T(ctx, "bible.outfits.make_default"), Checked: v.Form.Default})
+		@bibleFormActions(characterPath(v.Project.ID, v.Character.ID))
+	</form>
+}
+
+templ bibleFormActions(back string) {
+	<div class="mv-bible__actions">
+		@ui.LinkButton(back, ui.ButtonProps{Variant: ui.Ghost}) {
+			{ i18n.T(ctx,"ui.cancel") }
+		}
+		@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Primary, Icon: "check"}) {
+			{ i18n.T(ctx,"bible.save") }
+		}
+	</div>
+}
+
+templ BibleSetting(v biblePage) {
+	<header class="mv-bible__header">
+		<div>
+			<h1>
+				{ v.Title }
+			</h1>
+			<p>
+				{ i18n.T(ctx,"bible.setting.subtitle") }
+			</p>
+		</div>
+		<div class="mv-bible__actions">
+			if v.CanEdit {
+				@ui.LinkButton(settingPath(v.Project.ID)+"?kind="+v.Filter+"&add=1#setting-form", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					{ i18n.T(ctx,"bible.setting.add") }
+				}
+			}
+		</div>
+	</header>
+	<div>
+		@ui.SegmentedLinks(i18n.T(ctx, "bible.setting.filter"), bibleSettingLinks(ctx, v))
+	</div>
+	if v.AddingSetting&&v.CanEdit {
+		@BibleSettingForm(v)
+	}
+	if len(v.Settings)==0 {
+		@ui.State(ui.StateProps{Title: i18n.T(ctx, "bible.setting.empty"), Body: i18n.T(ctx, "bible.setting.empty_hint"), Boxed: true})
+	} else {
+		<div class="mv-bible__settings">
+			for _,item:=range v.Settings {
+				<article class="mv-bible__setting-card">
+					@bibleImage(v.Images[item.AssetID], i18n.T(ctx, "bible.setting.reference."+item.Kind), "mv-bible__setting-image")
+					<div>
+						<h2>
+							{ item.Name }
+						</h2>
+						<p>
+							{ item.Description }
+						</p>
+						if len(item.Tags)>0 {
+							<div class="mv-bible__tags">
+								for _,tag:=range item.Tags {
+									@ui.Badge(ui.ToneInfo, "", tag)
+								}
+							</div>
+						}
+					</div>
+				</article>
+			}
+		</div>
+	}
+}
+
+templ BibleSettingForm(v biblePage) {
+	<form id="setting-form" class="mv-bible__inline-form mv-bible__setting-form" action={ templ.URL(settingPath(v.Project.ID)) } method="post" enctype="multipart/form-data" novalidate data-guard-unsaved>
+		<h2>
+			{ i18n.T(ctx,"bible.setting.add") }
+		</h2>
+		@ui.Field(ui.FieldProps{ID: "bible-kind", Label: i18n.T(ctx, "bible.field.kind"), Error: v.Errors["kind"]}) {
+			@ui.Select(ui.SelectProps{ID: "bible-kind", Name: "kind", Value: v.Form.Kind, Invalid: v.Errors["kind"] != "", Options: bibleOptions(ctx, "setting.kind", "location", "prop", "style"), Attrs: bibleControlAttrs(v, "kind")})
+		}
+		@bibleTextField(v, "name", v.Form.Name, 160)
+		@bibleTextArea(v, "description", v.Form.Description, 8000, 3)
+		@bibleTextField(v, "tags", v.Form.Tags, 2592)
+		@bibleUpload(v)
+		@bibleFormActions(settingPath(v.Project.ID) + "?kind=" + v.Filter)
+	</form>
+}

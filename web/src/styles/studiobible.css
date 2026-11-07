@@ -1,0 +1,123 @@
+/* B2 and C2–C5: approved desktop Studio library geometry (design file 07).
+ * Runtime tokens and internal/web/ui own every control and semantic state. */
+.mv-bible { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.mv-bible h1, .mv-bible h2, .mv-bible p, .mv-bible figure, .mv-bible dl { margin: 0; }
+.mv-bible__header { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+.mv-bible__header > div:first-child { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mv-bible__header h1 { font-size: var(--mv-fs-h1); font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.mv-bible__header p, .mv-bible__hint { font-size: var(--mv-fs-ui); color: var(--mv-text-2); }
+.mv-bible__actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.mv-bible__filters { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.mv-bible__filter-field > .mv-field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.mv-bible__search { flex: 1 1 220px; max-width: 360px; }
+.mv-bible__search .mv-input-group { padding-inline: 10px; }
+.mv-bible__search .mv-input { border: 0; min-width: 0; }
+.mv-bible__view { margin-inline-start: auto; }
+.mv-bible__projects { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+.mv-bible__projects--list { grid-template-columns: 1fr; }
+.mv-bible__projects--list .mv-pcard { display: grid; grid-template-columns: 160px minmax(0, 1fr); }
+.mv-bible__projects--list .mv-pcard__thumb { height: 110px; }
+.mv-bible__characters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.mv-bible__add-character { min-height: 210px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px; text-align: center; border: 1px dashed var(--mv-line); color: var(--mv-text-2); text-decoration: none; }
+.mv-bible__add-character strong { font-size: var(--mv-fs-ui); color: var(--mv-text); }
+.mv-bible__add-character span { font-size: var(--mv-fs-meta); }
+.mv-bible__add-character:hover, .mv-bible__add-outfit:hover { border-color: var(--mv-text-3); color: var(--mv-text); }
+.mv-bible__character-detail { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 28px; }
+.mv-bible__references { position: relative; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.mv-bible__portrait-wrap { position: relative; }
+.mv-bible__image { overflow: hidden; background: var(--mv-surface-2); }
+.mv-bible__image img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.mv-bible__portrait { height: 420px; }
+.mv-bible__kanji { position: absolute; inset-block-start: 10px; inset-inline-end: 10px; font-family: var(--mv-font-jp); font-size: 90px; line-height: 1; opacity: .18; pointer-events: none; }
+.mv-bible__ref-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.mv-bible__ref { height: 80px; }
+.mv-bible__expression { height: 70px; }
+.mv-bible__all-refs { font-size: var(--mv-fs-meta); color: var(--mv-text-2); }
+.mv-bible__all-refs > div { margin-block-start: 12px; }
+.mv-bible summary { cursor: pointer; padding-block: 8px; }
+.mv-bible__character-body { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.mv-bible__detail-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.mv-bible__detail-header > div:first-child { min-width: 0; }
+.mv-bible__detail-header h1 { font-family: var(--mv-font-display); font-size: 72px; font-weight: 400; line-height: .9; text-transform: uppercase; overflow-wrap: anywhere; margin-block-start: 6px; }
+.mv-bible__eyebrow { font-family: var(--mv-font-mono); font-size: var(--mv-fs-mono); color: var(--mv-acc-text); text-transform: uppercase; }
+.mv-bible__character-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.mv-bible__lock-card, .mv-bible__facts { border: 1px solid var(--mv-line); background: var(--mv-surface); padding: 16px; }
+.mv-bible__lock-card { display: flex; flex-direction: column; gap: 8px; }
+.mv-bible__lock-card--ready { border-color: var(--mv-success); }
+.mv-bible__lock-heading, .mv-bible__lock-heading strong { display: flex; align-items: center; gap: 8px; }
+.mv-bible__lock-heading { justify-content: space-between; }
+.mv-bible__lock-heading strong { font-size: var(--mv-fs-ui); }
+.mv-bible__lock-score { font-family: var(--mv-font-display); font-size: 32px; color: var(--mv-success); }
+.mv-bible__lock-card p { font-size: var(--mv-fs-meta); line-height: 1.45; color: var(--mv-text-2); }
+.mv-bible__facts > div { display: flex; justify-content: space-between; gap: 12px; padding-block: 9px; border-bottom: 1px solid var(--mv-line); font-size: var(--mv-fs-small); }
+.mv-bible__facts dt { color: var(--mv-text-2); flex: none; }
+.mv-bible__facts dd { margin: 0; text-align: end; overflow-wrap: anywhere; }
+.mv-bible__outfits, .mv-bible__relationships { display: flex; flex-direction: column; gap: 10px; }
+.mv-bible__character-body h2, .mv-bible__sheets h2 { font-size: var(--mv-fs-ui); font-weight: 700; }
+.mv-bible__outfit-strip { display: flex; gap: 10px; flex-wrap: wrap; }
+.mv-bible__outfit { position: relative; width: 170px; min-width: 0; }
+.mv-bible__outfit--default { outline: 2px solid var(--mv-accent); outline-offset: 2px; }
+.mv-bible__outfit-image { height: 110px; }
+.mv-bible__outfit .mv-tone__label { display: none; }
+.mv-bible__outfit figcaption { position: absolute; inset-inline-start: 8px; inset-block-end: 6px; max-width: calc(100% - 16px); font-family: var(--mv-font-mono); font-size: var(--mv-fs-micro); text-transform: uppercase; padding: 2px 5px; background: var(--mv-surface); overflow-wrap: anywhere; }
+.mv-bible__add-outfit { display: flex; gap: 6px; align-items: center; justify-content: center; min-height: 110px; width: 120px; padding: 10px; border: 1px dashed var(--mv-line); color: var(--mv-text-2); font-size: var(--mv-fs-meta); text-decoration: none; }
+.mv-bible__new-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+.mv-bible__new-form { display: flex; flex-direction: column; gap: 14px; }
+.mv-bible__new-form .mv-field__count { display: none; }
+.mv-bible__new-form .mv-field:has(#bible-look) .mv-textarea { min-height: 90px; }
+.mv-bible__new-form .mv-field:has(#bible-personality) .mv-textarea { min-height: 60px; }
+.mv-bible__textarea { resize: none; }
+.mv-bible__style { margin: 0; padding: 0; border: 0; min-width: 0; }
+.mv-bible__style legend { margin-block-end: 8px; }
+.mv-bible__more { color: var(--mv-text-2); font-size: var(--mv-fs-meta); }
+.mv-bible__generate-actions { display: flex; flex-direction: column; gap: 10px; margin-block-start: auto; }
+.mv-bible__sheets { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.mv-bible__sheet-heading { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.mv-bible__sheet-heading span { font-size: var(--mv-fs-meta); color: var(--mv-text-2); }
+.mv-bible__empty-sheets, .mv-bible__sheets .mv-vars__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.mv-bible__sheet, .mv-bible__sheets .mv-var .mv-tone, .mv-bible__sheets .mv-var__image { height: 230px; }
+.mv-bible__sheets .mv-var__image { width: 100%; display: block; object-fit: contain; background: var(--mv-surface-2); }
+.mv-bible__sheets .mv-vars__head { display: flex; gap: 12px; flex-wrap: wrap; }
+.mv-bible__sheets .mv-var { aspect-ratio: auto; }
+.mv-bible__inline-form { display: flex; flex-direction: column; gap: 14px; border: 1px solid var(--mv-line); background: var(--mv-surface); padding: 20px; scroll-margin-block-start: 80px; }
+.mv-bible__inline-form h2 { font-size: var(--mv-fs-h2); }
+.mv-bible__upload { padding: 14px; border: 1px dashed var(--mv-line); }
+.mv-bible__upload .mv-input { height: auto; min-height: 44px; padding: 8px; cursor: pointer; }
+.mv-bible__settings { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.mv-bible__setting-card { display: flex; flex-direction: column; border: 1px solid var(--mv-line); background: var(--mv-surface); min-width: 0; }
+.mv-bible__setting-image { height: 150px; }
+.mv-bible__setting-card > div:last-child { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.mv-bible__setting-card h2 { font-size: var(--mv-fs-ui); overflow-wrap: anywhere; }
+.mv-bible__setting-card p { font-size: var(--mv-fs-meta); color: var(--mv-text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.mv-bible__tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.mv-bible__setting-form { max-width: 760px; }
+
+@media (max-width: 1280px) {
+  .mv-bible__projects { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .mv-bible__characters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mv-bible__character-detail { grid-template-columns: 300px minmax(0, 1fr); gap: 20px; }
+  .mv-bible__detail-header { flex-direction: column; }
+}
+@media (max-width: 1000px) {
+  .mv-bible__projects, .mv-bible__settings { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mv-bible__character-detail, .mv-bible__new-grid { grid-template-columns: minmax(0, 1fr); }
+  .mv-bible__references { max-width: 420px; }
+  .mv-bible__header { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 768px) {
+  .mv-bible { gap: 20px; }
+  .mv-bible__projects, .mv-bible__settings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mv-bible__characters, .mv-bible__character-summary { grid-template-columns: minmax(0, 1fr); }
+  .mv-bible__actions .mv-btn, .mv-bible__filters .mv-btn { min-height: 44px; }
+  .mv-bible__filters { align-items: stretch; }
+  .mv-bible__filter-field { flex: 1 1 130px; }
+  .mv-bible__search { flex-basis: 100%; max-width: none; }
+  .mv-bible__view { margin-inline-start: 0; }
+  .mv-bible__detail-header h1 { font-size: 48px; }
+  .mv-bible__new-form .mv-seg { display: flex; flex-wrap: wrap; }
+  .mv-bible__sheet-heading { flex-direction: column; align-items: flex-start; }
+  .mv-bible__sheet, .mv-bible__sheets .mv-var .mv-tone, .mv-bible__sheets .mv-var__image { height: 180px; }
+  .mv-bible__projects--list { grid-template-columns: 1fr; }
+  .mv-bible__projects--list .mv-pcard { grid-template-columns: 100px minmax(0, 1fr); }
+  .mv-bible__inline-form { padding: 16px; }
+}
