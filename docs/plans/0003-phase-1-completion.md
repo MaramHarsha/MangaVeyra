@@ -26,7 +26,7 @@ the deprecated OpenRouter text model. No live paid-provider calls are authorized
 Agents use separate temporary git worktrees and branches, with non-overlapping ownership. Each returns logical
 commits, exact tests, and remaining risks; root reviews and cherry-picks into the existing Phase 1 branch.
 
-1. [ ] Root readiness: transactional Studio helpers, staged assets, additive frozen interfaces, validation tests.
+1. [x] Root readiness: transactional Studio helpers, staged assets, additive frozen interfaces, validation tests.
 2. [ ] Gate B AI agent: `internal/ai/**` except shared contracts, module-local locales/styles; catalogue, image
    adapters, local text/worker jobs, modes/licence/fallback, G11/G12 and faithful G2 updates. Root imports styles,
    merges locale entry points and owns provider ADRs/dependencies.
@@ -34,8 +34,13 @@ commits, exact tests, and remaining risks; root reviews and cherry-picks into th
    except root integration to C1; new `studiobible` locale/styles. B2/C2/C3/C4/C5 and refs/outfits/uploads/setting.
 4. [ ] Gate B rendering agent: `internal/lettering/**`, `internal/compose/**`, `internal/export/**` except contracts;
    new module-local locale/styles. Shared glyph geometry, polygon compositing, exports/job and E2 design.
-5. [ ] Root Gate B page store: `internal/pagestore/**`, all shared contracts, assets, pagedoc, migrations, app/core,
+5. [x] Root Gate B page store: `internal/pagestore/**`, all shared contracts, assets, pagedoc, migrations, app/core,
    generated integration, dependency manifests and shared locale entry points. Versions/revert/locks and parity tests.
+
+Root prerequisite/page-store evidence: full Go suite passed on SQLite and PostgreSQL18 after integration. The
+store's regression cases exercise normalized pixel geometry/ruby, URL-free snapshots, stale/concurrent saves,
+foreign assets and membership, locked descendants, atomic replacement rollback, versions/revert, reorder/delete,
+and human-only destructive/unlock actions. Rendering, generation and final browser evidence remain pending.
 6. [ ] Gate C generation: assign `internal/gen/**` except contracts after Gate B interfaces pass. Implement
    character.sheet/pages.from_script/panel.generate/region.edit/candidates/apply with lease/revision/lock fencing.
 7. [ ] Gate C editor: assign `internal/editor/**`, `web/src/islands/editor/**` and editor-local locale/styles after

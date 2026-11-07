@@ -2,6 +2,7 @@ package pagedoc
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 )
 
@@ -43,8 +44,25 @@ func TestValidateRejects(t *testing.T) {
 		"bad ruby": func(p *Page) {
 			p.Bubbles[0].Texts["en"] = BubbleText{Text: "ab", Ruby: []Ruby{{Start: 1, End: 5, Text: "x"}}}
 		},
-		"prompt source": func(p *Page) { p.Panels[0].PromptSource = "robot" },
-		"provenance":    func(p *Page) { p.Panels[0].Layers[0].Provenance = "" },
+		"prompt source":   func(p *Page) { p.Panels[0].PromptSource = "robot" },
+		"provenance":      func(p *Page) { p.Panels[0].Layers[0].Provenance = "" },
+		"nan box":         func(p *Page) { p.Bubbles[0].Box.W = math.NaN() },
+		"infinite box":    func(p *Page) { p.Bubbles[0].Box.H = math.Inf(1) },
+		"outside bubble":  func(p *Page) { p.Bubbles[0].Box.X = 1700 },
+		"nan font":        func(p *Page) { p.Bubbles[0].Style.Size = math.NaN() },
+		"nan transform":   func(p *Page) { p.Panels[0].Layers[0].Transform.Rotate = math.NaN() },
+		"negative scale":  func(p *Page) { p.Panels[0].Layers[0].Transform.Scale = -1 },
+		"bad blend":       func(p *Page) { p.Panels[0].Layers[0].Blend = "arbitrary-css" },
+		"flat polygon":    func(p *Page) { p.Panels[0].Points = []Point{{1, 1}, {2, 2}, {3, 3}} },
+		"crossed polygon": func(p *Page) { p.Panels[0].Points = []Point{{10, 10}, {100, 100}, {10, 100}, {100, 10}} },
+		"raster lettering": func(p *Page) {
+			p.Panels[0].Layers[0].Kind = LayerLettering
+			p.Panels[0].Layers[0].Asset = &AssetRef{ID: "art"}
+		},
+		"bad text source": func(p *Page) { t := p.Bubbles[0].Texts["en"]; t.Source = "model-html"; p.Bubbles[0].Texts["en"] = t },
+		"overlapping ruby": func(p *Page) {
+			p.Bubbles[0].Texts["en"] = BubbleText{Text: "abcd", Ruby: []Ruby{{Start: 0, End: 3, Text: "a"}, {Start: 2, End: 4, Text: "b"}}}
+		},
 	}
 	for name, mutate := range cases {
 		p := validPage()
