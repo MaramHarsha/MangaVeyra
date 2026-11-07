@@ -24,15 +24,25 @@ import (
 // test hooks are needed to reproduce the mixed pre/post-completion reads.
 type completingStoryService struct {
 	studio.Service
-	firstRead func() error
-	reads     int
+	beforeRead func() error
+	firstRead  func() error
+	afterRead  func() error
+	reads      int
 }
 
 func (s *completingStoryService) GetScript(ctx context.Context, chapterID string) (studio.ScriptDoc, error) {
+	if s.reads == 0 && s.beforeRead != nil {
+		if err := s.beforeRead(); err != nil {
+			return studio.ScriptDoc{}, err
+		}
+	}
 	doc, err := s.Service.GetScript(ctx, chapterID)
 	s.reads++
 	if err == nil && s.reads == 1 && s.firstRead != nil {
 		err = s.firstRead()
+	}
+	if err == nil && s.afterRead != nil {
+		err = s.afterRead()
 	}
 	return doc, err
 }
@@ -139,6 +149,51 @@ func TestStoryReloadsManuscriptAndRevisionWhenGenerationCompletesBetweenReads(t 
 					t.Fatal("completed manuscript still shows its ready/empty-generation state")
 				}
 			})
+		}
+	})
+}
+
+func TestStoryUsesTheNewRevisionWhenGenerationCompletesBeforeReadingTheManuscript(t *testing.T) {
+	testdb.ForEach(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		f := newStorySnapshotFixture(t, d)
+		// The chapter has already been read, but GetScript sees the completed
+		// manuscript. This used to render a ready form with a stale revision.
+		f.service.beforeRead = func() error { return f.complete(ctx, true, false, false) }
+		v, err := f.module.loadStoryView(ctx, f.actor, f.project.ID, f.chapter.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stored, err := f.service.Service.GetChapter(ctx, f.chapter.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(v.Script.Scenes) != 1 || v.Job != nil || !v.Chapter.UpdatedAt.Equal(stored.UpdatedAt) {
+			t.Fatalf("ready manuscript has a stale revision: scenes=%d, job=%+v, view=%v, stored=%v", len(v.Script.Scenes), v.Job, v.Chapter.UpdatedAt, stored.UpdatedAt)
+		}
+		if len(v.Chapters) != 1 || !v.Chapters[0].UpdatedAt.Equal(stored.UpdatedAt) {
+			t.Fatal("chapter tree kept the pre-generation revision")
+		}
+	})
+}
+
+func TestStoryContinuouslyChangingSnapshotReturnsABoundedConflict(t *testing.T) {
+	testdb.ForEach(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		f := newStorySnapshotFixture(t, d)
+		revision := f.chapter.UpdatedAt
+		f.service.afterRead = func() error {
+			revision = revision.Add(time.Millisecond)
+			_, err := d.Exec(ctx, `UPDATE chapters SET updated_at = ? WHERE id = ?`, revision, f.chapter.ID)
+			return err
+		}
+		_, err := f.module.loadStoryView(ctx, f.actor, f.project.ID, f.chapter.ID)
+		var apiError *core.APIError
+		if !errors.As(err, &apiError) || apiError.Status != 409 {
+			t.Fatalf("concurrent writes must return a usable conflict response: %v", err)
+		}
+		if f.service.reads == 0 || f.service.reads > 5 {
+			t.Fatalf("snapshot recovery was not bounded: %d reads", f.service.reads)
 		}
 	})
 }

@@ -347,12 +347,39 @@ func (m *Module) loadChapter(ctx context.Context, actor studio.Actor, projectID,
 	return project, chapter, chapters, nil
 }
 
-func (m *Module) loadStoryView(ctx context.Context, actor studio.Actor, projectID, chapterID string) (storyView, error) {
-	project, chapter, chapters, err := m.loadChapter(ctx, actor, projectID, chapterID)
-	if err != nil {
-		return storyView{}, err
+// loadStorySnapshot fences the manuscript read with the chapter revision.
+// A generation commit can otherwise land after loadChapter but before
+// GetScript, pairing a ready manuscript with the old form revision. Retrying
+// also rechecks membership; continually changing chapters fail with a conflict.
+func (m *Module) loadStorySnapshot(ctx context.Context, actor studio.Actor, projectID, chapterID string) (studio.Project, studio.Chapter, []studio.Chapter, studio.ScriptDoc, error) {
+	for range 3 {
+		project, chapter, chapters, err := m.loadChapter(ctx, actor, projectID, chapterID)
+		if err != nil {
+			return studio.Project{}, studio.Chapter{}, nil, studio.ScriptDoc{}, err
+		}
+		doc, err := m.studio.GetScript(ctx, chapter.ID)
+		if err != nil {
+			return studio.Project{}, studio.Chapter{}, nil, studio.ScriptDoc{}, err
+		}
+		latest, err := m.studio.GetChapter(ctx, chapter.ID)
+		if err != nil {
+			return studio.Project{}, studio.Chapter{}, nil, studio.ScriptDoc{}, err
+		}
+		if !chapter.UpdatedAt.Equal(latest.UpdatedAt) {
+			continue
+		}
+		for i := range chapters {
+			if chapters[i].ID == latest.ID {
+				chapters[i] = latest
+			}
+		}
+		return project, latest, chapters, doc, nil
 	}
-	doc, err := m.studio.GetScript(ctx, chapter.ID)
+	return studio.Project{}, studio.Chapter{}, nil, studio.ScriptDoc{}, core.ErrConflict(i18n.T(ctx, "studioui.generate.changed"))
+}
+
+func (m *Module) loadStoryView(ctx context.Context, actor studio.Actor, projectID, chapterID string) (storyView, error) {
+	project, chapter, chapters, doc, err := m.loadStorySnapshot(ctx, actor, projectID, chapterID)
 	if err != nil {
 		return storyView{}, err
 	}
@@ -369,11 +396,7 @@ func (m *Module) loadStoryView(ctx context.Context, actor studio.Actor, projectI
 				// but it may land after the empty script snapshot above. Recover
 				// both here so the ready job cannot strand C1 on its empty form.
 				// One reload also bounds recovery for empty legacy results.
-				project, chapter, chapters, err = m.loadChapter(ctx, actor, project.ID, chapter.ID)
-				if err != nil {
-					return storyView{}, err
-				}
-				doc, err = m.studio.GetScript(ctx, chapter.ID)
+				project, chapter, chapters, doc, err = m.loadStorySnapshot(ctx, actor, project.ID, chapter.ID)
 				if err != nil {
 					return storyView{}, err
 				}
