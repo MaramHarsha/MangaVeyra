@@ -90,8 +90,8 @@
 .mv-exportui__actions{display:flex;gap:10px;margin-left:auto}
 
 /* The Export button names the chosen format. The server marks the current
-   label and :has() keeps it right when another format is chosen, without
-   JavaScript. */
+   label; :has() keeps it right without JavaScript and export.ts mirrors it
+   for browsers without :has(). */
 .mv-exportui__go{display:none}
 .mv-exportui__go.is-current{display:inline}
 .mv-exportui__form:has([name=format][value=png]:checked) .mv-exportui__go:not([data-export-label=png]),
