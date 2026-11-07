@@ -370,7 +370,7 @@ func EditorDocument(c *layout.Chrome, data bootstrapData, props string) templ.Co
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" class=\"mv-ed__thumb-panel\"></polygon>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" class=\"mv-ed__thumb-panel\" fill=\"#dce3f3\"></polygon>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
