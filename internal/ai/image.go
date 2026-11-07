@@ -480,12 +480,25 @@ func (s *imageService) GenerateImage(ctx context.Context, req ImageGenerateReque
 
 // ImageFallback is opt-in integration for NEW typed image jobs. Gen must pass
 // its durable plan, reconstructing the current route from the job. It never
-// touches old text jobs, child jobs, pins, or unapproved remote spending.
+// touches old text jobs, worker children, pins, or unapproved remote spending.
 type ImageFallback func(context.Context, *jobs.Job, ImagePlan, jobs.JobError) (*jobs.Reroute, error)
 
 func (s *imageService) fallback(ctx context.Context, j *jobs.Job, p ImagePlan, failure jobs.JobError) (*jobs.Reroute, error) {
-	if j == nil || j.ParentID != "" || !imageTask(j.Type) || !imageTask(p.Task) || j.RoundAttempt() >= j.MaxAttempts || j.MaxAttempts > 3 || p.PinProviderID != "" || p.PinModelID != "" {
+	if j == nil || j.Executor != jobs.ExecutorGo || !imageTask(j.Type) || j.Type != p.Task || j.RoundAttempt() >= j.MaxAttempts || j.MaxAttempts > 3 || p.PinProviderID != "" || p.PinModelID != "" {
 		return nil, nil
+	}
+	if j.ParentID != "" {
+		// A page batch's panel jobs are Go orchestration parents in their own
+		// right. Worker image children are never eligible for router fallback.
+		parent, err := s.d.Jobs.Get(ctx, j.ParentID)
+		if err != nil || j.Type != TaskPanel || parent.Type != "pages.from_script" || parent.State != jobs.StateDone ||
+			parent.UserID != j.UserID || parent.Scope.ProjectID != j.Scope.ProjectID || parent.Scope.Kind != jobs.ScopeChapter {
+			return nil, nil
+		}
+		var chapterID string
+		if err := s.d.DB.Get(ctx, &chapterID, `SELECT chapter_id FROM pages WHERE id = ? AND project_id = ?`, j.Scope.PageID, j.Scope.ProjectID); err != nil || chapterID != parent.Scope.ChapterID {
+			return nil, nil
+		}
 	}
 	switch failure.Code {
 	case CodeTimeout, CodeRateLimited, CodeUpstream, jobs.ErrCodeOOM, jobs.ErrCodeInternal:
