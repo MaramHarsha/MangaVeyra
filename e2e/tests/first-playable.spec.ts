@@ -197,6 +197,7 @@ test('fresh install → script → characters → layered art → lettering → 
     await page.reload();
     await expect(page.locator('[data-island=editor]')).toHaveAttribute('data-island-mounted', 'true');
     await page.getByRole('button', { name: 'Lettering', exact: true }).click();
+    await page.locator('.mv-ed__reading-select', { hasText: 'The harbour remembers every footstep.' }).first().click();
     await expect(page.getByLabel('Text', { exact: true })).toHaveValue('The harbour remembers every footstep.');
   });
 
@@ -218,6 +219,7 @@ test('fresh install → script → characters → layered art → lettering → 
     await expect(text).toHaveValue('Keep this unsaved conflict draft.');
     await page.getByRole('button', { name: 'Reload latest', exact: true }).click();
     await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+    await page.locator('.mv-ed__reading-select', { hasText: 'The harbour remembers every footstep.' }).first().click();
     await expect(text).toHaveValue('The harbour remembers every footstep.');
     await page.getByRole('button', { name: 'Page actions', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Lock page', exact: true }).click();
