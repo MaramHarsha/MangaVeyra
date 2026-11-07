@@ -532,7 +532,7 @@ func (m *Module) layoutLettering(w http.ResponseWriter, r *http.Request) error {
 			if len(lines) == 0 {
 				continue
 			}
-			bubbles, err := m.letter.AutoPlace(in.Page, pn.ID, lines, res.Project.Language, res.Project.Language == "ja")
+			bubbles, err := m.letter.AutoPlace(in.Page, pn.ID, lines, res.Project.Language, pagedoc.VerticalByDefault(res.Project.Language))
 			if err != nil {
 				return mapped(r, studio.ErrInvalid)
 			}
