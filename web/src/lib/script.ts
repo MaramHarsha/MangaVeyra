@@ -69,7 +69,7 @@ export class ScriptEditor {
     form.addEventListener('submit', (e) => {
       const submitter = (e as SubmitEvent).submitter as HTMLButtonElement | null;
       if (submitter?.dataset.addLine || submitter?.dataset.removeLine) return;
-      if (!form.hasAttribute('data-autosave')) return;
+      if (!form.hasAttribute('data-script-autosave')) return;
       e.preventDefault();
       this.saveNow();
     });
@@ -156,7 +156,7 @@ export class ScriptEditor {
 
   /** changed records an edit and schedules a save. */
   changed(): void {
-    if (this.stopped || !this.form.hasAttribute('data-autosave')) return;
+    if (this.stopped || !this.form.hasAttribute('data-script-autosave')) return;
     this.edits++;
     this.setState('dirty');
     this.schedule(this.delay);
@@ -238,7 +238,7 @@ export class ScriptEditor {
 
   private stop(state: SaveState): void {
     this.stopped = true;
-    this.form.removeAttribute('data-autosave');
+    this.form.removeAttribute('data-script-autosave');
     this.setState(state);
   }
 }

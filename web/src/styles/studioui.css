@@ -339,12 +339,16 @@
   border-bottom: 1px solid var(--mv-line);
 }
 .mv-c1__heading { display: flex; flex-direction: column; gap: var(--mv-space-1); flex: 1 1 220px; min-width: 0; }
-.mv-c1__crumbline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--mv-space-2); }
+.mv-c1__crumbline { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--mv-space-2); min-width: 0; white-space: nowrap; }
+.mv-c1__crumbline > * { flex: none; }
 .mv-c1__title { margin: 0; font-size: 1.375rem; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
 .mv-c1__tools { display: flex; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px; }
 .mv-c1__toggle .mv-seg__item { padding: 6px 10px; font-size: var(--mv-fs-meta); }
 .mv-c1__make { display: flex; }
+/* The save state never wraps the crumb line: it shrinks and truncates. */
+.mv-c1__crumbline > .mv-c1__savestate { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mv-c1__savestate { font-size: var(--mv-fs-meta); color: var(--mv-text-3); white-space: nowrap; }
+.mv-c1__savestate a { color: inherit; }
 .mv-c1__savestate::before { content: "· "; }
 .mv-c1__savestate[data-state="failed"], .mv-c1__savestate[data-state="conflict"], .mv-c1__savestate[data-state="locked"] { color: var(--mv-warning); }
 .mv-c1__readonly { font-size: var(--mv-fs-meta); color: var(--mv-text-3); }

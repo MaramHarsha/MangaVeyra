@@ -393,7 +393,7 @@ templ ScriptEditor(v storyView) {
 		novalidate
 		data-guard-unsaved
 		if !v.ReadOnly {
-			data-autosave
+			data-script-autosave
 		}
 	>
 		<h2 class="mv-sr-only">{ i18n.T(ctx, "studioui.script.title") }</h2>

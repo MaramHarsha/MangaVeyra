@@ -162,7 +162,13 @@ func TestStoryAutosaveRevisionsAndConflicts(t *testing.T) {
 		ctx := context.Background()
 		doc := seedLines(t, f)
 		panel := doc.Scenes[0].Panels[0]
-		form := htmlForm(t, string(f.client.Get(f.storyURL).Body), `data-view-panel="panels"`)
+		page := string(f.client.Get(f.storyURL).Body)
+		// The C1 form autosaves through its own JSON request; it must not also
+		// match the G11 change-save contract (form[data-autosave]), whose plain
+		// POST moved the revision under the editor and caused false conflicts.
+		mustContain(t, page, "data-script-autosave")
+		mustNotContain(t, page, "data-autosave")
+		form := htmlForm(t, page, `data-view-panel="panels"`)
 		stale := form.Get("revision")
 
 		// Lines posted with gaps (added and removed in the browser) keep order.

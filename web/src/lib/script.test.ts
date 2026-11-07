@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScriptEditor } from './script';
+import { installAutosave } from './models';
 
 const html = `
 <div data-story-views>
@@ -10,7 +11,7 @@ const html = `
       data-invalid="Not saved · a field is not valid">All changes saved</span>
     <form data-make-pages><input type="hidden" name="revision" value="r1" data-revision></form>
   </header>
-  <form class="mv-c1__script" id="mv-c1-script" action="/studio/p/p1/story/c1/script" method="post" data-autosave>
+  <form class="mv-c1__script" id="mv-c1-script" action="/studio/p/p1/story/c1/script" method="post" data-script-autosave>
     <input type="hidden" name="revision" value="r1" data-revision>
     <input type="hidden" name="scene" value="s1">
     <div data-panel="p1" data-panel-label="7.1">
@@ -66,6 +67,29 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('C1 script editor', () => {
+  it('saves a speaker change only through the JSON autosave, never the G11 change-save', async () => {
+    const routing = vi.fn(async () => ({ ok: true }));
+    const off = installAutosave(document, routing);
+    const fetch = fakeFetch([
+      { status: 200, body: { state: 'saved', revision: 'r2' } },
+      { status: 200, body: { state: 'saved', revision: 'r3' } },
+    ]);
+    new ScriptEditor(form, { delay: 10, fetch });
+    const speaker = field('panel.p1.dialogue.0.speaker');
+    speaker.value = 'KaitoMio';
+    speaker.dispatchEvent(new Event('input', { bubbles: true }));
+    speaker.dispatchEvent(new Event('change', { bubbles: true })); // blur
+    await vi.runAllTimersAsync();
+    type('panel.p1.dialogue.0.text', 'You are late.');
+    await vi.runAllTimersAsync();
+    off();
+    expect(routing).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const revisions = fetch.mock.calls.map((call) => ((call as unknown as [string, RequestInit])[1].body as URLSearchParams).get('revision'));
+    expect(revisions).toEqual(['r1', 'r2']);
+    expect(state().textContent).toBe('All changes saved');
+  });
+
   it('autosaves after a pause with the held revision and takes the new one back', async () => {
     const fetch = fakeFetch([{ status: 200, body: { state: 'saved', revision: 'r2' } }]);
     const saved = vi.fn();
@@ -101,7 +125,7 @@ describe('C1 script editor', () => {
     type('panel.p1.dialogue.0.text', 'Mine again');
     await vi.runAllTimersAsync();
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(form.hasAttribute('data-autosave')).toBe(false);
+    expect(form.hasAttribute('data-script-autosave')).toBe(false);
   });
 
   it('retries after a network failure and reports an invalid field without retrying', async () => {

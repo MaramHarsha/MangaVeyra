@@ -1858,7 +1858,7 @@ func ScriptEditor(v storyView) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if !v.ReadOnly {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, " data-autosave")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, " data-script-autosave")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
