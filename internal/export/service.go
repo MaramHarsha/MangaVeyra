@@ -381,6 +381,7 @@ func (s *service) build(ctx context.Context, p prepared, progress func(int, int)
 		t, _ := findTrim(req.TrimID)
 		mw, mh := t.WidthMM+2*t.BleedMM, t.HeightMM+2*t.BleedMM
 		pdf := canvaspdf.New(&out, mw, mh, nil)
+		stream := streamingPDFRenderer{Renderer: pdf}
 		pdf.SetInfo(p.project.Title, p.chapter.Title, "", "", "MangaVeyra")
 		for i, page := range pages {
 			if err := ctx.Err(); err != nil {
@@ -405,7 +406,7 @@ func (s *service) build(ctx context.Context, p prepared, progress func(int, int)
 				return nil, result, err
 			}
 			c.Transform(canvas.Identity.Translate(t.BleedMM+(t.WidthMM-float64(page.Width)*fit)/2, t.BleedMM+(t.HeightMM-float64(page.Height)*fit)/2).Scale(fit, fit))
-			c.RenderTo(pdf)
+			c.RenderTo(stream)
 		}
 		if err := pdf.Close(); err != nil {
 			return nil, result, err
