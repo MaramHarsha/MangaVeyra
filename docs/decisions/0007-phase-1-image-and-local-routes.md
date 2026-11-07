@@ -3,6 +3,8 @@
 - Status: Accepted for Phase 1
 - Date: 2026-11-07
 - Boundary: `internal/ai`, consumed by lease-fenced `internal/gen` jobs
+- Amended by: ADR 0009 (direct OpenAI GPT Image route preferred by Auto, pin-only OpenRouter image backups and the
+  automatic image fallback chain)
 
 ## Fixed remote routes
 
