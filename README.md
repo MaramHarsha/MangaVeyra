@@ -48,8 +48,9 @@
   creation/adaptation, the real Studio dashboard, generation state and the editable chapter manuscript.
 - **Gate A generation:** deterministic offline script generation and fixed-model OpenRouter or OpenAI structured
   text, with hard spend reservations, project/token authorization, revision fencing and honest AI provenance.
-- **Visual generation:** deterministic offline images, fixed OpenRouter/fal image adapters, configured worker jobs,
-  local OpenAI-compatible text, capability/licence filtering, routing pins and bounded fallback.
+- **Visual generation:** deterministic offline images, fixed OpenAI/OpenRouter/fal image adapters, configured worker
+  jobs, local OpenAI-compatible text, capability/licence filtering, routing pins and bounded fallback. The direct
+  OpenAI image route has fake-provider coverage; its live verification checklist remains pending in ADR 0009.
 - **Studio bibles:** project library, character reference sheets/uploads, profile edits, outfits and setting items.
 - **Page production:** polygon panels with independent background/character/FX layers, four variations, exact masked
   region edits, revision-bound saves, locks, history/revert and a lazy Svelte/Pixi editor with undo/redo.
@@ -76,8 +77,9 @@ designed controls stay visible as disabled **Soon** actions. GPU/model quality s
 remote routes are regression-tested with fake transports, without paid provider calls. See the
 [accepted MVP decision](docs/decisions/0001-mvp-scope.md), the
 [hard remote-spend decision](docs/decisions/0003-hard-remote-spend-reservations.md),
-the [completed script plan](docs/plans/0001-script-vertical-slice.md), and the
-[active Phase 1 plan](docs/plans/0002-phase-1-first-playable.md).
+the [completed script plan](docs/plans/0001-script-vertical-slice.md), the
+[Phase 1 plan](docs/plans/0002-phase-1-first-playable.md), and the
+[desktop QA and content-language follow-up](docs/plans/0004-phase-1-qa-fixes-and-content-languages.md).
 
 ## Why MangaVeyra
 

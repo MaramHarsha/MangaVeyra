@@ -193,6 +193,12 @@ test('fresh install → script → characters → layered art → lettering → 
     await page.getByRole('button', { name: 'Redo', exact: true }).click();
     await expect(text).toHaveValue('The harbour remembers every footstep.');
     await savePage(page);
+    const saved = await (await page.request.get(`/api/v1/editor/p/${project}/chapters/${chapter}`)).json();
+    const speech = saved.current.page.bubbles.find((b: { texts: Record<string, { text: string }> }) => b.texts.en?.text === 'The harbour remembers every footstep.');
+    expect(speech.tail.enabled).toBe(true);
+    expect(speech.tail.tip.x).toBeGreaterThanOrEqual(speech.box.x);
+    expect(speech.tail.tip.x).toBeLessThanOrEqual(speech.box.x + speech.box.w);
+    expect(Math.abs(speech.tail.tip.y - (speech.box.y + speech.box.h))).toBeLessThanOrEqual(48);
     await page.screenshot({ animations: 'disabled', path: info.outputPath('D3-desktop.png') });
     await page.reload();
     await expect(page.locator('[data-island=editor]')).toHaveAttribute('data-island-mounted', 'true');
@@ -386,4 +392,126 @@ test('fresh install → script → characters → layered art → lettering → 
   });
   expect(unexpectedRequests).toEqual([]);
   expect(appErrors).toEqual([]);
+});
+
+test('all ten content languages render and export in English and Japanese desktop interfaces', async ({ page, context, browser }, info) => {
+  test.setTimeout(360_000);
+  const origin = new URL(info.project.use.baseURL as string).origin;
+  const external: string[] = [], errors: string[] = [];
+  await context.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if ((url.protocol === 'http:' || url.protocol === 'https:') && url.origin !== origin) {
+      external.push(url.origin);
+      return route.abort();
+    }
+    return route.continue();
+  });
+  const recordError = (e: Error) => {
+    if (e.message !== 'Transition was aborted because of invalid state. ViewTransition opt-in disabled') errors.push(e.message);
+  };
+  context.on('page', p => p.on('pageerror', recordError));
+  page.on('pageerror', recordError);
+  await page.goto('/setup/admin');
+  if (new URL(page.url()).pathname === '/setup/admin') {
+    await setup(page);
+  } else {
+    await page.goto('/login');
+    await page.locator('[name=identifier]').fill('studio-tester');
+    await page.locator('[name=password]').fill('MangaVeyra_Test_Only_2026!');
+    await page.locator('form[action="/login"] button[type=submit]').click();
+    await page.waitForURL('**/studio');
+  }
+  // Keep the language matrix offline even if another flow installed a fake provider.
+  const route = await page.request.post('/models/routing', { form: { mode: 'local_only', licence_guard: 'true' } });
+  expect(route.ok()).toBe(true);
+  const languages = [
+    ['en', 'Lighthouse Letters', 'The Last Ferry'], ['ja', '灯台の手紙', '最後の渡し'],
+    ['ko', '등대의 편지', '마지막 배'], ['zh-Hans', '灯塔来信', '最后一班船'],
+    ['zh-Hant', '燈塔來信', '最後一班船'], ['es', 'Cartas del faro', 'El último ferri'],
+    ['fr', 'Lettres du phare', 'Le dernier bac'], ['de', 'Briefe vom Leuchtturm', 'Die letzte Fähre'],
+    ['pt', 'Cartas do farol', 'O último barco'], ['hi', 'प्रकाशस्तंभ के पत्र', 'आख़िरी नाव'],
+  ];
+  for (const ui of ['en', 'ja']) {
+    expect((await page.request.patch('/api/v1/auth/me', { data: { locale: ui } })).ok()).toBe(true);
+    for (const [lang, title, chapterTitle] of languages) {
+      await test.step(`${ui} interface / ${lang} manuscript`, async () => {
+        const prefix = `${ui}-${lang}`;
+        const response = await page.goto('/studio/new/premise');
+        expect(response?.headers()['content-language']).toBe(ui);
+        await page.locator('[name=title]').fill(title);
+        await page.locator('[name=premise]').fill('A courier carries letters to a lighthouse that only appears at low tide.');
+        await page.locator('[data-wizard-next]').click();
+        await page.locator('label').filter({ has: page.locator('[name=genres][value=mystery]') }).click();
+        await page.locator('[data-wizard-next]').click();
+        await page.locator('[data-wizard-next]').click();
+        await page.locator('[name=pages_target]').fill('1');
+        await page.locator('[data-wizard-next]').click();
+        await expect(page.locator('[name=language] option')).toHaveCount(10);
+        await page.locator('[name=language]').selectOption(lang);
+        await page.locator('[name=chapter_title]').fill(chapterTitle);
+        await page.locator('[data-wizard-submit]').click();
+        await page.waitForURL(/\/studio\/p\/[^/]+\/story\/[^/]+/);
+        await expect(page.locator('form[data-view-panel=panels]')).toBeVisible();
+        const [, , , project, , chapter] = new URL(page.url()).pathname.split('/');
+        await page.screenshot({ animations: 'disabled', path: info.outputPath(`${prefix}-C1.png`) });
+        await page.locator('form[action$="/pages"] button[type=submit]').first().click();
+        await page.waitForURL(/\/chapters\/[^/]+\/edit/);
+        await expect(page.locator('[data-island=editor]')).toHaveAttribute('data-island-mounted', 'true');
+        const editor = new URL(page.url()).pathname;
+        const api = `/api/v1/editor/p/${project}/chapters/${chapter}`;
+        const boot = await (await page.request.get(api)).json();
+        expect(boot.lang).toBe(ui);
+        expect(boot.project.language).toBe(lang);
+        expect(boot.current.page.bubbles.length).toBeGreaterThan(0);
+        for (const bubble of boot.current.page.bubbles) {
+          expect(bubble.texts[lang].text.length).toBeGreaterThan(0);
+          expect(!!bubble.vertical).toBe(['ja', 'zh-Hant'].includes(lang));
+        }
+        for (const layout of boot.current.lettering) {
+          expect(layout.lang).toBe(lang);
+          expect(layout.text_path.length).toBeGreaterThan(0);
+          expect(layout.overflow).toBe(false);
+        }
+        await page.screenshot({ animations: 'disabled', path: info.outputPath(`${prefix}-D1.png`) });
+        await page.goto(editor + '?mode=lettering');
+        await expect(page.locator('[data-island=editor]')).toHaveAttribute('data-island-mounted', 'true');
+        await page.screenshot({ animations: 'disabled', path: info.outputPath(`${prefix}-D3.png`) });
+        const noJS = await browser.newContext({ baseURL: origin, javaScriptEnabled: false, storageState: await context.storageState(), viewport: { width: 1440, height: 900 } });
+        try {
+          const proof = await noJS.newPage();
+          await proof.goto(editor);
+          await expect(proof.locator('svg.mv-ed__proof')).toBeVisible();
+          expect(await proof.locator('svg.mv-ed__proof path').count()).toBeGreaterThan(0);
+          await proof.screenshot({ animations: 'disabled', path: info.outputPath(`${prefix}-nojs.png`) });
+        } finally { await noJS.close(); }
+        // Every format in every content language; repeat PDF in the Japanese UI.
+        for (const format of ui === 'en' ? ['pdf', 'cbz', 'png'] : ['pdf']) {
+          await page.goto(`/studio/p/${project}/chapters/${chapter}/export`);
+          await page.locator('.mv-exportui__canvas img').evaluate((image: HTMLImageElement) => image.decode());
+          await page.locator('[name=dpi]').selectOption('150');
+          if (format !== 'pdf') await page.locator('label').filter({ has: page.locator(`[name=format][value=${format}]`) }).click();
+          await page.screenshot({ animations: 'disabled', path: info.outputPath(`${prefix}-E2-${format}.png`) });
+          await page.locator('[data-export-submit]').click();
+          const link = page.locator('a[href$="/download"]').last();
+          await expect(link).toBeVisible();
+          const downloading = page.waitForEvent('download');
+          await link.click();
+          const download = await downloading;
+          const extension = format === 'png' ? 'zip' : format;
+          expect(download.suggestedFilename()).toBe(`${title.replaceAll(' ', '-')}-ch-001.${extension}`);
+          const file = info.outputPath(`${prefix}-${format}.${extension}`);
+          await download.saveAs(file);
+          const bytes = await readFile(file);
+          if (format === 'pdf') expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+          else {
+            const entries = archiveEntries(bytes);
+            expect(entries.filter(name => name.endsWith('.png'))).toHaveLength(2);
+            if (format === 'cbz') expect(entries).toContain('ComicInfo.xml');
+          }
+        }
+      });
+    }
+  }
+  expect(external).toEqual([]);
+  expect(errors).toEqual([]);
 });

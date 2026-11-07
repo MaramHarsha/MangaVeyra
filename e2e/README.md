@@ -17,13 +17,19 @@ and captures runtime errors. The native Chromium
 optional-view-transition abort is excluded by its exact browser error message.
 
 All four custom-provider steps run against a temporary loopback HTTP fixture that only returns an original test
-model catalogue. The isolated server permits private provider URLs for this fixture; no real provider is contacted
-and the fixture asserts that the sole call is a non-generation model-list request. A separate browser context checks
-server-rendered screens and the editor's read-only proof with JavaScript disabled. All new desktop routes are also
-checked for document overflow and 44px enabled-control touch targets at 390×844.
+model catalogue. The administrator enables private provider URLs through the designed switch; no real provider is
+contacted and the fixture asserts that the sole call is a non-generation model-list request. A separate browser
+context checks server-rendered screens and the editor's read-only proof with JavaScript disabled.
 
-Artifacts and traces live in ignored `test-results/` and `playwright-report/`. Screenshots use 1440×900 desktop and
-390×844 responsive viewports; the unfinished mobile artboards are not a target.
+The content-language flow creates a manuscript in each of the ten supported languages in both English and Japanese
+interfaces. It verifies localized dialogue, the shared shaped outlines, automatic vertical lettering, a no-JavaScript
+page proof and Unicode download names. Every language exports PDF, CBZ and PNG ZIP; PDF is repeated in the Japanese
+interface. The matrix uses Local only mode and the built-in placeholder, including when the preceding flow has
+connected its fake provider.
+
+Artifacts and traces live in ignored `test-results/` and `playwright-report/`. Screenshots use 1440×900 desktop.
+Phone layouts and touch-target testing are deferred to the final optimisation pass, following the owner's
+2026-11-07 instruction and plan 0004; the existing phone step stays skipped.
 
 ## Desktop reference evidence
 
@@ -39,4 +45,4 @@ MV_BROWSER_CHANNEL=chrome MV_E2E_BASE_URL=http://127.0.0.1:6199 \
 Only the reference-rendering context bypasses CSP, because the handoff is authored with inline styles. Application
 screenshots and the test flow retain production CSP. External requests are blocked in the reference renderer too.
 Compare the resulting desktop references alongside the matching app captures. Design notes are maintained in
-`docs/plans/0003-phase-1-completion.md` and ADR 0004 §8.
+`docs/plans/0004-phase-1-qa-fixes-and-content-languages.md` and ADR 0004 §8.

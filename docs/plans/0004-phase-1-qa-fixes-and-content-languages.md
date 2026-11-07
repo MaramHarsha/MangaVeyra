@@ -1,7 +1,8 @@
 # Phase 1 QA fixes and manga content languages
 
-- Status: Active — milestones L, E, S and X integrated; final desktop QA pass
+- Status: Complete — milestones L, E, S and X integrated; desktop QA and local gates passed (2026-11-07)
 - Branch: `phase-1/first-playable` (PR #7); starting commit `addcd9e`.
+- Verification: [desktop QA and language results](../qa/phase-1-desktop-2026-11-07.md).
 - Normative inputs: AGENTS.md, plan 0002/0003, ADRs 0001–0007, the approved desktop handoff in
   `../MangaVeyra_All_Pages/`.
 
@@ -56,7 +57,7 @@ edits `docs/**`, `README.md`, `go.mod`/`go.sum`, `web/package*.json`, `internal/
 4. [x] **X — Export screen (E2).** `internal/export/templates.templ` (+ generated), `web/src/styles/exportui.css`,
    `web/src/lib/export.ts`, exportui locales. The editor shell behind the modal matches D1; modal gaps; language
    labels for all ten languages.
-5. [ ] **Root integration.** Cherry-pick, resolve, ADR 0004 §8 and ADR 0008 (content languages and fonts), README,
+5. [x] **Root integration.** Cherry-pick, resolve, ADR 0004 §8 and ADR 0008 (content languages and fonts), README,
    full gates and a fresh browser QA pass at 1440×900 in English and Japanese UI with a project in every language.
 
 ## Acceptance and verification
