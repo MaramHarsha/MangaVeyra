@@ -196,7 +196,7 @@ templ sideItem(c *Chrome, n navLink) {
 	if !ui.Ready(ctx, n.Href) {
 		<a class="mv-sidenav__item is-soon" aria-disabled="true" data-tip={ n.Label + " · " + i18n.T(ctx, "ui.soon_hint") }>
 			@ui.Icon(n.Icon, 18)
-			<span class="mv-sidebar__label">{ n.Label }</span>
+			<span class="mv-sidebar__label mv-truncate">{ n.Label }</span>
 			@ui.SoonTag()
 		</a>
 	} else {

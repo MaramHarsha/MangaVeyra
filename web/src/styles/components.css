@@ -1583,6 +1583,11 @@
 a.is-soon:not(.mv-btn):hover { color: var(--mv-text-3); background: transparent; }
 .mv-btn.is-soon { opacity: .6; }
 /* A primary or danger action that is not built yet keeps its designed place,
+/* A sidebar item keeps its Soon tag inside the sidebar: a long label (the
+   Japanese "エージェントとプラグイン") truncates instead, and the label may use
+   the last few pixels of the gap before the tag. */
+.mv-sidenav__item.is-soon > .mv-sidebar__label { margin-inline-end: -4px; }
+.mv-sidenav__item.is-soon > .mv-soon { flex: none; }
    but fading the whole filled button left its label and Soon tag at ~1.1:1.
    It reads as unavailable through a muted fill instead, so both stay legible
    (≥ 4.5:1 in both themes). */
