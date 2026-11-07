@@ -17,7 +17,10 @@ func TestImageCatalogueShowsPublishedEstimates(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := map[string]string{seedreamModel: "~$0.04 / img", falSchnellModel: "~$0.006 / img", falInpaintModel: "~$0.07 / img", "sdxl-base": "GPU time"}
+		want := map[string]string{seedreamModel: "~$0.04 / img", falSchnellModel: "~$0.006 / img", falInpaintModel: "~$0.07 / img", "sdxl-base": "GPU time",
+			// ADR 0009: a new 1024² image at each route's frozen bound.
+			gptImageSunburst: "~$0.083 / img", gptImageFlare: "~$0.083 / img", openRouterGPTImageSunburst: "~$0.209 / img",
+			openRouterNanoBanana21: "~$0.074 / img", openRouterNanoBananaPro: "~$0.196 / img"}
 		seen := 0
 		for _, model := range models {
 			if label, ok := want[model.ID]; ok {

@@ -55,7 +55,7 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 			if inst.LocalOnly {
 				row.Status = i18n.T(ctx, "models.tile.blocked")
 			}
-			if quote, ok := quoteImage(p.Kind, model.ID, estimateNeeds(model)); ok {
+			if quote, ok := estimateQuote(p.Kind, model); ok {
 				row.Cost = imageCostLabel(ctx, quote.USD)
 			}
 			if !used[p.ID] {
@@ -85,7 +85,7 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 					row.Connection = &copy
 					used[v.ID] = true
 				}
-				if quote, ok := quoteImage(v.Kind, model.ID, estimateNeeds(model)); ok {
+				if quote, ok := estimateQuote(v.Kind, model); ok {
 					row.Cost = imageCostLabel(ctx, quote.USD)
 				}
 				break
@@ -121,9 +121,17 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 	return out, nil
 }
 
-// estimateNeeds is the one 1024 × 1024 image a COST cell estimates.
-func estimateNeeds(model ModelManifest) ImageNeeds {
-	return ImageNeeds{Width: 1024, Height: 1024, Count: 1, Edit: model.Edit, Mask: model.Mask}
+// estimateQuote is the one 1024 × 1024 image a COST cell estimates: a new
+// image when the route can make one, otherwise a masked edit (fal
+// inpainting). Token-priced routes would otherwise show the init and mask
+// uploads of an edit as the price of every panel (ADR 0009).
+func estimateQuote(kind string, model ModelManifest) (jobs.Cost, bool) {
+	n := ImageNeeds{Width: 1024, Height: 1024, Count: 1}
+	if quote, ok := quoteImage(kind, model.ID, n); ok {
+		return quote, true
+	}
+	n.Edit, n.Mask = model.Edit, model.Mask
+	return quoteImage(kind, model.ID, n)
 }
 
 // imageEstimate is the COST cell of a model before it is connected: the
@@ -133,7 +141,7 @@ func estimateNeeds(model ModelManifest) ImageNeeds {
 // shows none.
 func imageEstimate(ctx context.Context, model ModelManifest) string {
 	for _, kind := range model.Providers {
-		if quote, ok := quoteImage(kind, model.ID, estimateNeeds(model)); ok && quote.USD > 0 {
+		if quote, ok := estimateQuote(kind, model); ok && quote.USD > 0 {
 			return imageCostLabel(ctx, quote.USD)
 		}
 	}
