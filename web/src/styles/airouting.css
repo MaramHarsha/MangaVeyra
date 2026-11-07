@@ -47,5 +47,8 @@
 @media(max-width:760px){.mv-airouting__columns,.mv-aicustom__columns{grid-template-columns:minmax(0,1fr)}.mv-airouting__decisions{min-height:240px}.mv-airouting__decision{grid-template-columns:minmax(0,1fr)}.mv-aicustom__preview{height:240px}.mv-aicustom__actions{flex-wrap:wrap}.mv-airouting .mv-seg__item{min-height:44px}}
 
 @media(min-width:1001px){.mv-airouting__decisions{min-height:calc(100dvh - 199px)}}
+.mv-airouting__limit{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}
+.mv-airouting__amount.mv-input{width:76px;min-height:26px;height:26px;padding:0 6px;font-size:var(--mv-fs-small)}
 .mv-aicustom__modes .mv-chip{height:36px;padding:0 12px;font-size:var(--mv-fs-small)}
 .mv-aicustom__modes .mv-chips{gap:8px}
+.mv-airouting__guard .mv-toggle{flex:none}

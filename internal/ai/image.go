@@ -429,6 +429,12 @@ func (s *imageService) GenerateImage(ctx context.Context, req ImageGenerateReque
 		if err != nil {
 			return zero, err
 		}
+		// The router chose the placeholder, so G11 explains it like any other
+		// route. Placeholder art is local and free: a failed record is logged
+		// and never fails the job.
+		if err := s.recordDecision(ctx, req); err != nil && s.d.Log != nil {
+			s.d.Log.WarnContext(ctx, "record placeholder routing decision", "err", err)
+		}
 		return ImageResult{Images: images, ProviderID: PlaceholderID, ModelID: PlaceholderArt}, nil
 	}
 	if _, err := s.dispatchGuard(ctx, req); err != nil {
