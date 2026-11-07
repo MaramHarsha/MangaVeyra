@@ -98,7 +98,7 @@ func TestSetupModelStepFallsBackSafelyAndRecommendsWithoutNetwork(t *testing.T) 
 		// Without a browser session only the built connection kinds report an
 		// error; designed-but-unbuilt rows stay "not connected" so they show Soon.
 		assertSetupProviderCards(t, cards, map[string]string{
-			providerKindOpenRouter: setup.ProviderError, "vendor": setup.ProviderError,
+			providerKindOpenRouter: setup.ProviderError, "vendor": setup.ProviderError, "fal": setup.ProviderError, "ollama": setup.ProviderError, "custom": setup.ProviderError,
 		})
 		if doer.count() != 0 {
 			t.Fatal("setup provider status made a network request")

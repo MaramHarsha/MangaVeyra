@@ -1,0 +1,60 @@
+package ai
+
+import (
+	"context"
+	"fmt"
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+templ imageModelsTable(rows []imageModelView) {
+	<table class="mv-table mv-models-table">
+		<caption class="mv-sr-only">{ i18n.T(ctx,"models.table.caption") }</caption>
+		<colgroup><col class="mv-models-table__col-model"/><col class="mv-models-table__col-provider"/><col class="mv-models-table__col-use"/><col class="mv-models-table__col-status"/><col class="mv-models-table__col-cost"/><col class="mv-models-table__col-on"/></colgroup>
+		<thead><tr><th scope="col">{ i18n.T(ctx,"models.col.model") }</th><th scope="col">{ i18n.T(ctx,"models.col.provider") }</th><th scope="col">{ i18n.T(ctx,"models.col.use") }</th><th scope="col">{ i18n.T(ctx,"models.col.status") }</th><th scope="col">{ i18n.T(ctx,"models.col.cost") }</th><th scope="col">{ i18n.T(ctx,"models.col.on") }</th></tr></thead>
+		<tbody>
+			for index,row:=range rows {
+				<tr class="mv-models-table__row">
+					<td class="mv-models-table__model" data-label={ i18n.T(ctx, "models.col.model") }><strong>{ row.Name }</strong><span class="mv-models-table__meta">{ row.ID }</span></td>
+					<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.provider") }>{ row.Provider }</td>
+					<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.use") }>{ row.Use }</td>
+					<td data-label={ i18n.T(ctx, "models.col.status") }>@ui.Badge(imageStatusTone(row.Ready), "", row.Status)
+</td>
+					<td class="mv-models-table__cost" data-label={ i18n.T(ctx, "models.col.cost") }>{ row.Cost }</td>
+					<td data-label={ i18n.T(ctx, "models.col.on") }>
+						if row.Connection!=nil {
+							<div class="mv-models-table__controls">
+								<form method="post" action={ templ.URL(providerPath(row.Connection.ID, "enabled") + "?cap=image") } novalidate>
+									<input type="hidden" name="enabled" value={ fmt.Sprint(!row.Connection.Enabled) }/>
+									@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Ghost, Size: ui.SM, Label: i18n.T(ctx, "models.toggle.label", "name", row.Connection.Name), Icon: imageToggleIcon(row.Connection.Enabled)}) {
+										<span class="mv-sr-only">{ i18n.T(ctx,"models.toggle.label","name",row.Connection.Name) }</span>
+									}
+								</form>
+								@ui.Dropdown("mv-models-table__menu", "end", false, providerMenuTrigger(row.Connection.Name), imageProviderMenu(ctx, row.Connection))
+								@providerKeyDialog(providerRowView{Provider: *row.Connection})
+							</div>
+						} else {
+							@ui.Toggle(ui.ToggleProps{ID: fmt.Sprintf("image-model-%d", index), Checked: row.Ready, Disabled: true, AriaLabel: row.Name})
+						}
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+func imageStatusTone(ready bool) ui.Tone {
+	if ready {
+		return ui.ToneSuccess
+	}
+	return ui.ToneMuted
+}
+func imageToggleIcon(enabled bool) string {
+	if enabled {
+		return "toggle-right"
+	}
+	return "toggle-left"
+}
+func imageProviderMenu(ctx context.Context, p *providerView) []ui.MenuItem {
+	return []ui.MenuItem{{Post: true, Href: providerPath(p.ID, "test") + "?cap=image", Label: i18n.T(ctx, "models.test.action"), Icon: "plug-connected"}, {Href: "#" + providerKeyDialogID(p.ID), Label: i18n.T(ctx, "models.key.replace"), Icon: "key", Attrs: templ.Attributes{"data-dialog-open": providerKeyDialogID(p.ID)}}}
+}

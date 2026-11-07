@@ -1,0 +1,19 @@
+id: bytedance-seed/seedream-4.5
+name: Seedream 4.5
+maker: ByteDance Seed
+kind: image
+licence: provider-commercial
+commercial: true
+providers: [openrouter]
+references: 14
+text_in_art: true
+bw: true
+edit: true
+# Masked editing is enforced by the server compositor; provider receives the mask as a reference.
+mask: true
+max_width: 4096
+max_height: 4096
+max_count: 4
+quality: 90
+speed: 65
+gpu_seconds: 0

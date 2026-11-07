@@ -384,7 +384,8 @@ type providerService struct {
 	settings instanceReader
 	client   *openRouterClient
 	// testers covers the other remote kinds (OpenRouter uses client).
-	testers map[string]remoteKeyTester
+	testers   map[string]remoteKeyTester
+	localDoer httpDoer
 }
 
 func (s *providerService) tester(kind string) remoteKeyTester {
@@ -412,6 +413,21 @@ func (s *providerService) TestConnection(ctx context.Context, actor providerActo
 	provider, err := s.store.ResolveDispatch(ctx, actor.UserID, id)
 	if err != nil {
 		return zero, errProviderUnavailable
+	}
+	if provider.Kind == providerKindLocalText {
+		err := testLocalText(ctx, provider, s.localDoer)
+		state := "ok"
+		if err != nil {
+			state = "error"
+		}
+		if saveErr := s.store.recordTest(context.WithoutCancel(ctx), provider.ID, provider.KeyEnc, state, ""); saveErr != nil {
+			return zero, saveErr
+		}
+		view, getErr := s.store.GetManageable(ctx, actor, id)
+		if getErr != nil {
+			return zero, getErr
+		}
+		return view, err
 	}
 	tester := s.tester(provider.Kind)
 	if tester == nil {

@@ -85,5 +85,7 @@
   "models.toggle.placeholder": "内蔵プレースホルダーは常にオンです",
   "models.toggle.save": "保存",
   "models.use.scripts": "脚本",
-  "models.use.scripts_fallback": "脚本・フォールバック"
+  "models.use.scripts_fallback": "脚本・フォールバック",
+  "models.fal.connect": "falを接続",
+  "models.fal.form_subtitle": "ご自身のfalキーを接続して画像を生成します。"
 }

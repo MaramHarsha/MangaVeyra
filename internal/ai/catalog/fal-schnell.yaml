@@ -1,0 +1,18 @@
+id: fal-ai/flux/schnell
+name: FLUX.1 schnell
+maker: Black Forest Labs
+kind: image
+licence: Apache-2.0
+commercial: true
+providers: [fal]
+references: 0
+text_in_art: false
+bw: true
+edit: false
+mask: false
+max_width: 1024
+max_height: 1024
+max_count: 4
+quality: 65
+speed: 95
+gpu_seconds: 0

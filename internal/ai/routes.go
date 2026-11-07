@@ -42,7 +42,7 @@ func routeForModel(model string) (remoteRoute, bool) {
 
 func validProviderKind(kind string) bool {
 	_, ok := routeForKind(kind)
-	return ok
+	return ok || kind == providerKindFal || kind == providerKindLocalText
 }
 
 // remoteTextClient sends one structured script request with a decrypted key.

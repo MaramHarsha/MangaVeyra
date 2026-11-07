@@ -1,0 +1,30 @@
+# FLUX.2 [klein] 4B — low-latency drafts and thumbnails (Apache-2.0).
+id: flux2-klein
+name: FLUX.2 [klein] 4B
+maker: Black Forest Labs
+kind: image
+vram_mb: 14000
+min_vram_mb: 8000
+worker:
+  diffusers:
+    repo: black-forest-labs/FLUX.2-klein-4B
+    family: auto
+    dtype: bfloat16
+    default_steps: 4
+    default_guidance: 1.0
+    job_types: [image.generate, character.sheet]
+
+licence: Apache-2.0
+commercial: true
+providers: [local-worker]
+references: 0
+text_in_art: false
+bw: true
+edit: false
+mask: false
+max_width: 2048
+max_height: 2048
+max_count: 4
+quality: 70
+speed: 85
+gpu_seconds: 20

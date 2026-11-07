@@ -27,7 +27,9 @@ templ ModelsPage(v modelsPageView) {
 		</ul>
 		@ui.SegmentedLinks(i18n.T(ctx, "models.caps.label"), modelsCapLinks(ctx, v))
 		<section class="mv-models__box" aria-label={ capLabel(ctx, v.Cap) }>
-			if v.Cap == capText {
+			if v.Cap == capImage {
+				@imageModelsTable(v.Images)
+			} else if v.Cap == capText {
 				@modelsTable(v)
 			} else {
 				@ui.State(ui.StateProps{SFX: "シーン…", JP: true, Title: capEmptyTitle(ctx, v.Cap),
@@ -40,6 +42,9 @@ templ ModelsPage(v modelsPageView) {
 }
 
 templ modelsHeadActions(v modelsPageView) {
+	@ui.LinkButton("/models/routing", ui.ButtonProps{Variant: ui.Ghost, Icon: "route"}) {
+		{ i18n.T(ctx,"aiimage.routing.title") }
+	}
 	@ui.LinkButton(modelsCustomHref, ui.ButtonProps{Variant: ui.Quiet, Icon: "plus"}) {
 		{ i18n.T(ctx, "models.add.custom") }
 	}
@@ -173,7 +178,9 @@ templ modelsTable(v modelsPageView) {
 		</thead>
 		@placeholderRows()
 		for _, provider := range v.Providers {
-			@ProviderRows(providerRowView{Provider: provider, LocalOnly: v.LocalOnly})
+			if provider.Kind != providerKindFal {
+				@ProviderRows(providerRowView{Provider: provider, LocalOnly: v.LocalOnly})
+			}
 		}
 	</table>
 }
@@ -294,7 +301,7 @@ templ ProviderRows(v providerRowView) {
 	<tbody class="mv-models-table__group" id={ providerRowsID(v.Provider.ID) }>
 		<tr class="mv-models-table__row">
 			<td class="mv-models-table__model" data-label={ i18n.T(ctx, "models.col.model") }>
-				<strong>{ providerKindModel(v.Provider.Kind) }</strong>
+				<strong>{ providerRowModel(v.Provider) }</strong>
 			</td>
 			<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.provider") }>
 				<span class="mv-models-table__provider">{ providerKindName(v.Provider.Kind) } · { v.Provider.Name }</span>
@@ -303,7 +310,8 @@ templ ProviderRows(v providerRowView) {
 			<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.use") }>
 				{ i18n.T(ctx, "models.use.scripts") }
 			</td>
-			<td data-label={ i18n.T(ctx, "models.col.status") }
+			<td
+				data-label={ i18n.T(ctx, "models.col.status") }
 				if v.Provider.LastTest.RequestID != "" {
 					title={ i18n.T(ctx, "models.status.request", "id", v.Provider.LastTest.RequestID) }
 				}
@@ -337,9 +345,16 @@ templ ProviderRows(v providerRowView) {
 // "false" so the first submitted value is the switch state. HTMX posts on
 // change; without JavaScript a Save button submits the same form.
 templ providerEnabledForm(v providerRowView) {
-	<form class="mv-models-table__toggle" method="post" action={ templ.URL(providerPath(v.Provider.ID, "enabled")) } novalidate
-		hx-post={ providerPath(v.Provider.ID, "enabled") } hx-trigger="change"
-		hx-target={ "#" + providerRowsID(v.Provider.ID) } hx-swap="outerHTML">
+	<form
+		class="mv-models-table__toggle"
+		method="post"
+		action={ templ.URL(providerPath(v.Provider.ID, "enabled")) }
+		novalidate
+		hx-post={ providerPath(v.Provider.ID, "enabled") }
+		hx-trigger="change"
+		hx-target={ "#" + providerRowsID(v.Provider.ID) }
+		hx-swap="outerHTML"
+	>
 		@ui.Toggle(ui.ToggleProps{ID: "enabled-" + v.Provider.ID, Name: "enabled", Value: "true", Checked: v.Provider.Enabled,
 			AriaLabel: i18n.T(ctx, "models.toggle.label", "name", v.Provider.Name)})
 		<input type="hidden" name="enabled" value="false"/>
@@ -356,9 +371,14 @@ templ providerEnabledForm(v providerRowView) {
 templ providerKeyDialog(v providerRowView) {
 	@ui.Modal(ui.ModalProps{ID: providerKeyDialogID(v.Provider.ID), Class: "mv-models-keydlg",
 		Title: i18n.T(ctx, "models.key.title", "name", v.Provider.Name)}) {
-		<form method="post" action={ templ.URL(providerPath(v.Provider.ID, "key")) }
-			hx-post={ providerPath(v.Provider.ID, "key") } hx-target={ "#" + providerRowsID(v.Provider.ID) }
-			hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+		<form
+			method="post"
+			action={ templ.URL(providerPath(v.Provider.ID, "key")) }
+			hx-post={ providerPath(v.Provider.ID, "key") }
+			hx-target={ "#" + providerRowsID(v.Provider.ID) }
+			hx-swap="outerHTML"
+			hx-disabled-elt="find button[type=submit]"
+		>
 			@ui.ModalBody() {
 				<p>{ i18n.T(ctx, "models.key.current", "hint", v.Provider.KeyHint) }</p>
 				@ui.Field(ui.FieldProps{ID: "key-" + v.Provider.ID, Label: i18n.T(ctx, "models.form.key"),
@@ -402,7 +422,9 @@ templ ProviderFormPage(v providerFormView) {
 			<input type="hidden" name="next" value={ v.Next }/>
 			<input type="hidden" name="kind" value={ v.Kind }/>
 			if v.Errors.Form() != "" {
-				@ui.Notice(ui.ToneError, "alert-triangle") { { v.Errors.Form() } }
+				@ui.Notice(ui.ToneError, "alert-triangle") {
+					{ v.Errors.Form() }
+				}
 			}
 			@ui.Field(ui.FieldProps{ID: "provider-name", Label: i18n.T(ctx, "models.form.name"),
 				Hint: i18n.T(ctx, "models.form.name_hint"), Error: v.Errors["name"]}) {
@@ -428,10 +450,14 @@ templ ProviderFormPage(v providerFormView) {
 				</fieldset>
 			} else {
 				<input type="hidden" name="scope" value={ providerScopeUser }/>
-				@ui.Notice(ui.ToneInfo, "user") { { i18n.T(ctx, "models.form.personal_only") } }
+				@ui.Notice(ui.ToneInfo, "user") {
+					{ i18n.T(ctx, "models.form.personal_only") }
+				}
 			}
 			<div class="mv-provider-form__actions">
-				@ui.LinkButton("/models", ui.ButtonProps{Variant: ui.Ghost}) { { i18n.T(ctx, "ui.cancel") } }
+				@ui.LinkButton("/models", ui.ButtonProps{Variant: ui.Ghost}) {
+					{ i18n.T(ctx, "ui.cancel") }
+				}
 				@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Primary, Icon: "plug-connected"}) {
 					{ i18n.T(ctx, "models."+v.Kind+".connect") }
 				}
