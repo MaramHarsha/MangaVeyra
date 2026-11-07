@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/compose"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
@@ -88,8 +90,12 @@ func (m *Module) load(r *http.Request) (studio.Actor, exportView, error) {
 	v.Back = strings.TrimSuffix(v.Base, "/export") + "/edit"
 	if len(pages) > 0 {
 		pageID := pages[0].ID
+		wanted := r.PathValue("page")
+		if wanted == "" {
+			wanted = r.URL.Query().Get("page")
+		}
 		for _, pg := range pages {
-			if r.URL.Query().Get("page") == pg.ID || r.URL.Query().Get("page") == strconv.Itoa(pg.Number) {
+			if wanted == pg.ID || wanted == strconv.Itoa(pg.Number) {
 				pageID = pg.ID
 			}
 		}
@@ -118,6 +124,12 @@ func (m *Module) load(r *http.Request) (studio.Actor, exportView, error) {
 			label = i18n.T(r.Context(), "exportui.original", "language", label)
 		}
 		v.Languages = append(v.Languages, ui.Option{Value: lang, Label: label})
+	}
+	if lang := r.URL.Query().Get("lang"); lang != "" {
+		if !languages[lang] {
+			return actor, v, core.ErrBadRequest(i18n.T(r.Context(), "exportui.invalid"))
+		}
+		v.Request.Lang = lang
 	}
 	return actor, v, nil
 }
@@ -237,7 +249,7 @@ func (m *Module) enqueue(w http.ResponseWriter, r *http.Request) error {
 		v.Error = i18n.T(r.Context(), key)
 		return m.render(w, r, status, v)
 	}
-	core.Redirect(w, r, v.Base+"?job="+url.QueryEscape(j.ID))
+	core.Redirect(w, r, v.Base+"?job="+url.QueryEscape(j.ID)+"&lang="+url.QueryEscape(v.Request.Lang))
 	return nil
 }
 func (m *Module) job(ctx context.Context, actor studio.Actor, v exportView, id string) (*jobs.Job, error) {
@@ -309,7 +321,8 @@ func (m *Module) preview(w http.ResponseWriter, r *http.Request) error {
 	if err != nil || page.ProjectID != v.Project.ID || page.ChapterID != v.Chapter.ID {
 		return core.ErrNotFound()
 	}
-	png, err := m.s.renderer.Thumbnail(r.Context(), page, 520)
+	png, err := m.s.renderer.PNG(r.Context(), page, compose.Options{Lang: v.Request.Lang,
+		Scale: math.Min(1, 520/float64(page.Width)), Placeholder: true})
 	if err != nil {
 		return core.ErrBadRequest(i18n.T(r.Context(), "exportui.preview_error"))
 	}
@@ -324,8 +337,11 @@ func (v exportView) action() string {
 	}
 	return v.Base
 }
-func (v exportView) previewURL(id string) string { return v.Base + "/preview/" + url.PathEscape(id) }
-func (v exportView) active() bool                { return v.Job != nil && !v.Job.Finished() }
+func (v exportView) previewURL(id string) string {
+	query := url.Values{"lang": {v.Request.Lang}}
+	return v.Base + "/preview/" + url.PathEscape(id) + "?" + query.Encode()
+}
+func (v exportView) active() bool { return v.Job != nil && !v.Job.Finished() }
 func poll(v exportView) templ.Attributes {
 	if !v.active() {
 		return nil
