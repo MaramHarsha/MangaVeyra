@@ -41,6 +41,13 @@ templ CustomProviderPage(v customProviderView) {
 				{ v.Errors.Form() }
 			}
 		}
+		if v.Blocked {
+			@ui.State(ui.StateProps{Title: i18n.T(ctx, "aiimage.custom.blocked_title"), Body: i18n.T(ctx, "aiimage.custom.blocked_body"), Boxed: true}) {
+				@ui.LinkButton("/models", ui.ButtonProps{Variant: ui.Secondary, Icon: "arrow-left"}) {
+					{ i18n.T(ctx, "aiimage.custom.blocked_back") }
+				}
+			}
+		} else {
 		<form method="post" action={ templ.URL(customURL(v.Step, "")) } novalidate class="mv-aicustom__columns" hx-disabled-elt="find button[type=submit]">
 			<input type="hidden" name="id" value={ v.ID }/>
 			<div class="mv-aicustom__fields">
@@ -64,6 +71,7 @@ templ CustomProviderPage(v customProviderView) {
 			</div>
 			@customResult(v)
 		</form>
+		}
 	</div>
 }
 
@@ -168,14 +176,17 @@ templ customRouteFields(v customProviderView) {
 	<fieldset class="mv-field mv-aicustom__modes" aria-describedby="custom-modes-hint">
 		<legend class="mv-field__label">{ i18n.T(ctx,"aiimage.custom.modes") }</legend>
 		<div class="mv-chips">
-			for _, mode := range localRouteModes {
-				<label class="mv-chip">
-					<input type="checkbox" name="modes" value={ mode } checked?={ customModeChecked(v, mode) }/>
-					@ui.Icon("check", 16)
-					<span>{ i18n.T(ctx, "aiimage.mode." + mode) }</span>
-				</label>
+			for _, mode := range []string{ModeBalanced, ModeBest, ModeFastest, ModeLocalOnly, ModeFreeOnly} {
+				if mode == ModeLocalOnly {
+					<span class="mv-chip mv-aicustom__chip-off" aria-disabled="true">{ i18n.T(ctx,"aiimage.mode.local_only") }</span>
+				} else {
+					<label class="mv-chip">
+						<input type="checkbox" name="modes" value={ mode } checked?={ customModeChecked(v, mode) }/>
+						@ui.Icon("check", 16)
+						<span>{ i18n.T(ctx, "aiimage.mode." + mode) }</span>
+					</label>
+				}
 			}
-			<span class="mv-chip mv-aicustom__chip-off" aria-disabled="true">{ i18n.T(ctx,"aiimage.mode.local_only") }</span>
 		</div>
 		if v.Errors["modes"] != "" {
 			<span class="mv-field__error" role="alert">

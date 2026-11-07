@@ -23,7 +23,7 @@ templ imageModelsTable(rows []imageModelView) {
 						}
 					</td>
 					<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.use") }>{ row.Use }</td>
-					<td data-label={ i18n.T(ctx, "models.col.status") }>
+					<td class="mv-models-table__status" data-label={ i18n.T(ctx, "models.col.status") }>
 						@ui.Badge(imageStatusTone(row.Ready), "", row.Status)
 					</td>
 					<td class="mv-models-table__cost" data-label={ i18n.T(ctx, "models.col.cost") }>{ row.Cost }</td>

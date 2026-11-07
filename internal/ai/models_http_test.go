@@ -69,7 +69,7 @@ func TestModelsCreateAuthorizationAndSecretRecovery(t *testing.T) {
 	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
 		admin := ta.Login(t, ta.Admin.Username)
 		page := admin.Get("/models?cap=text")
-		if page.StatusCode != http.StatusOK || !strings.Contains(string(page.Body), "placeholder-text") ||
+		if page.StatusCode != http.StatusOK || !strings.Contains(string(page.Body), "<strong>Placeholder text</strong>") ||
 			!strings.Contains(string(page.Body), `href="/models/providers/new?kind=openrouter"`) {
 			t.Fatalf("models page = %d: %.2500s", page.StatusCode, page.Body)
 		}
@@ -388,7 +388,7 @@ func TestModelsPageMatchesDesignedLayout(t *testing.T) {
 		// The designed table with the built-in placeholder row.
 		mustAppearInOrder(t, body, `<table class="mv-table mv-models-table">`,
 			">Model</th>", ">Provider</th>", ">Router uses it for</th>", ">Status</th>", ">Cost</th>", ">On</th>",
-			`id="provider-placeholder"`, "<strong>placeholder-text</strong>", "Built-in", "Scripts · fallback",
+			`id="provider-placeholder"`, "<strong>Placeholder text</strong>", "Built-in", "Scripts · fallback",
 			`<span class="mv-badge mv-badge--success">Ready</span>`, "None",
 			`id="enabled-placeholder" name="" value="on" checked disabled`)
 		mustNotContain(t, body, "Local only is enabled")
@@ -427,7 +427,7 @@ func TestModelsPageSoonItemsNeverLink(t *testing.T) {
 			tab := mainOf(t, ta.Login(t, ta.Admin.Username).Get("/models?cap="+capability))
 			mustContain(t, tab, `href="/models?cap=`+capability+`" aria-current="true"`, "シーン…", title,
 				"This version routes text only.", `<span class="mv-soon">Soon</span>`)
-			mustNotContain(t, tab, "<table", "placeholder-text")
+			mustNotContain(t, tab, "<table", "Placeholder text")
 		}
 		// Unknown tabs fall back to the designed default, Image.
 		mustContain(t, mainOf(t, ta.Login(t, ta.Admin.Username).Get("/models?cap=bogus")),

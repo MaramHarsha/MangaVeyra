@@ -99,6 +99,29 @@ func TestCustomProviderPrivateEndpointsAreAnAdminSettingByDefaultOff(t *testing.
 }
 
 // An empty Model ID is reported on the Model ID field, not on the endpoint.
+// While members may not add their own providers, a creator sees both G2 add
+// actions disabled with the same reason, and reaching G12 directly shows the
+// designed "ask an admin" state instead of a bare 403 page.
+func TestCustomProviderCreatorWithoutPersonalProvidersIsAskedToAskAnAdmin(t *testing.T) {
+	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
+		updateModelsInstance(t, ta, func(inst *settings.Instance) { inst.UsersMayAddProviders = false })
+		_, creator := ta.UserClient(t, auth.RoleCreator)
+		models := mainOf(t, creator.Get("/models"))
+		mustNotContain(t, models, `href="/models/providers/custom"`)
+		if strings.Count(models, `data-tip="Only an admin can add providers on this server."`) != 2 {
+			t.Fatalf("G2 add actions are not both disabled with the reason: %.1200s", models)
+		}
+		r := creator.Get("/models/providers/new/connect")
+		if r.StatusCode != http.StatusForbidden {
+			t.Fatalf("G12 for a creator = %d", r.StatusCode)
+		}
+		r.StatusCode = http.StatusOK // the designed page, served with 403
+		page := mainOf(t, r)
+		mustContain(t, page, "Ask an admin to add this provider", "Add a custom provider", `href="/models"`)
+		mustNotContain(t, page, `name="endpoint"`, "<form")
+	})
+}
+
 func TestCustomProviderEmptyModelErrorIsOnModelField(t *testing.T) {
 	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
 		admin := ta.Login(t, ta.Admin.Username)

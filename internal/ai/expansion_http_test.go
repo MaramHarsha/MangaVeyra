@@ -88,6 +88,10 @@ func TestCustomProviderFourStepsAndRoutingPermissions(t *testing.T) {
 			mustContain(t, route, "Step 4 of 4", "Auto-routing may use it in", `name="modes" value="balanced" checked`,
 				`name="modes" value="fastest" checked`, `name="modes" value="free_only" checked`, "Everyone on this server", "Connect provider")
 			mustNotContain(t, route, `name="modes" value="best" checked`, `name="modes" value="local_only"`)
+			// The chips follow the G11 order: Local only (disabled) before Free only.
+			if local, free := strings.Index(route, ">Local only<"), strings.Index(route, `value="free_only"`); local < 0 || free < 0 || local > free {
+				t.Fatalf("step 4 chip order: local=%d free=%d", local, free)
+			}
 			none := postModelsForm(admin, "/models/providers/new/route", url.Values{"id": {id}})
 			if none.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(string(none.Body), "Choose at least one routing mode.") {
 				t.Fatalf("route without modes=%d", none.StatusCode)

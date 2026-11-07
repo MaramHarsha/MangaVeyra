@@ -35,6 +35,9 @@ type customProviderView struct {
 	Modes      []string
 	// ServerMode is this server's default routing mode, shown on step 4.
 	ServerMode string
+	// Blocked is a member reaching the wizard while personal providers are
+	// off: the page explains who can connect one instead of the form.
+	Blocked bool
 	Errors     web.FormErrors
 }
 
@@ -86,10 +89,11 @@ func (m *Module) customPage(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if !actor.Admin && !inst.UsersMayAddProviders {
-		return core.ErrForbidden(i18n.T(r.Context(), "models.error.personal_disabled"))
-	}
 	v := m.customBase(r, actor, step, inst)
+	if !actor.Admin && !inst.UsersMayAddProviders {
+		v.Blocked = true
+		return m.renderCustom(w, r, http.StatusForbidden, v)
+	}
 	if step != "connect" || r.URL.Query().Get("id") != "" {
 		record, err := m.customRecord(r.Context(), actor, r.URL.Query().Get("id"))
 		if err != nil {

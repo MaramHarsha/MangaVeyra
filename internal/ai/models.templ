@@ -67,8 +67,14 @@ templ modelsHead(v modelsPageView) {
 }
 
 templ modelsHeadActions(v modelsPageView) {
-	@ui.LinkButton(modelsCustomHref, ui.ButtonProps{Variant: ui.Quiet, Icon: "plus"}) {
-		{ i18n.T(ctx, "models.add.custom") }
+	if v.CanAdd {
+		@ui.LinkButton(modelsCustomHref, ui.ButtonProps{Variant: ui.Quiet, Icon: "plus"}) {
+			{ i18n.T(ctx, "models.add.custom") }
+		}
+	} else {
+		@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Icon: "plus", Disabled: true, Tip: i18n.T(ctx, "models.add.admin_only")}) {
+			{ i18n.T(ctx, "models.add.custom") }
+		}
 	}
 	if v.CanAdd {
 		@ui.Dropdown("mv-models__add", "end", false, addProviderTrigger(), addProviderItems())
@@ -213,7 +219,7 @@ templ placeholderRows() {
 	<tbody class="mv-models-table__group" id="provider-placeholder">
 		<tr class="mv-models-table__row">
 			<td class="mv-models-table__model" data-label={ i18n.T(ctx, "models.col.model") }>
-				<strong>{ PlaceholderText }</strong>
+				<strong>{ i18n.T(ctx, "aiimage.placeholder.text") }</strong>
 			</td>
 			<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.provider") }>
 				{ i18n.T(ctx, "models.provider.builtin") }
@@ -221,7 +227,7 @@ templ placeholderRows() {
 			<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.use") }>
 				{ i18n.T(ctx, "models.use.scripts_fallback") }
 			</td>
-			<td data-label={ i18n.T(ctx, "models.col.status") }>
+			<td class="mv-models-table__status" data-label={ i18n.T(ctx, "models.col.status") }>
 				@ui.Badge(ui.ToneSuccess, "", i18n.T(ctx, "models.status.ready"))
 			</td>
 			<td class="mv-models-table__cost" data-label={ i18n.T(ctx, "models.col.cost") }>
@@ -333,6 +339,7 @@ templ ProviderRows(v providerRowView) {
 				{ i18n.T(ctx, "models.use.scripts") }
 			</td>
 			<td
+				class="mv-models-table__status"
 				data-label={ i18n.T(ctx, "models.col.status") }
 				if v.Provider.LastTest.RequestID != "" {
 					title={ i18n.T(ctx, "models.status.request", "id", v.Provider.LastTest.RequestID) }

@@ -45,9 +45,6 @@ func decisionReason(ctx context.Context, d routingDecisionView) string {
 	case d.Provider == PlaceholderID:
 		reason = i18n.T(ctx, "aiimage.decision.placeholder")
 	}
-	if d.Explanation != "" {
-		reason += " · " + d.Explanation
-	}
 	return reason
 }
 

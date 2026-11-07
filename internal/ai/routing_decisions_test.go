@@ -49,13 +49,35 @@ func TestPlaceholderImageJobsRecordRoutingDecisions(t *testing.T) {
 		if err := RoutingPage(v).Render(ctx, &page); err != nil {
 			t.Fatal(err)
 		}
-		for _, want := range []string{"Panel art", "Placeholder art · built-in", "No connected model fits; placeholder art keeps the flow working · 64 × 64"} {
+		for _, want := range []string{"Panel art", "Placeholder art · built-in", "No connected model fits; placeholder art keeps the flow working"} {
 			if !strings.Contains(page.String(), want) {
 				t.Fatalf("G11 lacks %q", want)
 			}
 		}
 		if strings.Contains(page.String(), "Image jobs will show their model choices here.") {
 			t.Fatal("G11 still shows the empty state")
+		}
+		// The reason is given in words, as designed, without the image size.
+		if strings.Contains(page.String(), "64 × 64") {
+			t.Fatal("G11 decision reason still carries the image size")
+		}
+	})
+}
+
+// Other modules' route chips name the routed model and provider in words.
+func TestRouteNamesForChips(t *testing.T) {
+	forEachAIDialect(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		m, _ := imageTestModule(t, d, &queuedDoer{})
+		for _, tc := range []struct{ model, provider, wantModel, wantProvider string }{
+			{PlaceholderArt, PlaceholderID, "Placeholder art", "built-in"},
+			{PlaceholderText, PlaceholderID, "Placeholder text", "built-in"},
+			{"unknown-model", "01m6v0ahn00zr9aetqbppvtgnn", "unknown-model", "removed connection"},
+		} {
+			model, provider := m.RouteNames(ctx, tc.model, tc.provider)
+			if model != tc.wantModel || provider != tc.wantProvider {
+				t.Errorf("RouteNames(%q, %q) = %q, %q", tc.model, tc.provider, model, provider)
+			}
 		}
 	})
 }

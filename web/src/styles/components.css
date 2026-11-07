@@ -218,7 +218,9 @@
 .mv-input:disabled, .mv-textarea:disabled, .mv-select:disabled, .mv-input[readonly] {
   opacity: .45;
 }
-.mv-input[readonly] { opacity: 1; color: var(--mv-text-2); }
+/* Read-only values (a summary of what the user entered) read as values, not as
+   fields waiting for input. */
+.mv-input[readonly] { opacity: 1; border-color: transparent; background: var(--mv-surface-2); color: var(--mv-text-2); cursor: default; }
 
 .mv-input--lg { font-size: .9375rem; }
 .mv-stack > .mv-btn:not(.mv-btn--full),
@@ -477,6 +479,9 @@
   color: var(--mv-bg);
 }
 .mv-seg input:focus-visible + .mv-seg__item { outline: var(--mv-focus-width) solid var(--mv-focus); outline-offset: 2px; }
+/* A segmented control the viewer cannot change reads as disabled. */
+.mv-seg input:disabled + .mv-seg__item { cursor: not-allowed; color: var(--mv-text-3); }
+.mv-seg input:disabled:checked + .mv-seg__item { background: var(--mv-surface-2); color: var(--mv-text-2); }
 .mv-seg--lg .mv-seg__item { padding: 8px 12px; min-height: 36px; }
 
 /* Genre chips (A5) and choice cards (A5, G8). */
@@ -1578,16 +1583,16 @@
   white-space: nowrap;
 }
 .mv-btn .mv-soon { margin-inline-start: var(--mv-space-2); }
-.is-soon { cursor: default; }
-.is-soon:not(.mv-btn) { color: var(--mv-text-3); }
-a.is-soon:not(.mv-btn):hover { color: var(--mv-text-3); background: transparent; }
-.mv-btn.is-soon { opacity: .6; }
-/* A primary or danger action that is not built yet keeps its designed place,
 /* A sidebar item keeps its Soon tag inside the sidebar: a long label (the
    Japanese "エージェントとプラグイン") truncates instead, and the label may use
    the last few pixels of the gap before the tag. */
 .mv-sidenav__item.is-soon > .mv-sidebar__label { margin-inline-end: -4px; }
 .mv-sidenav__item.is-soon > .mv-soon { flex: none; }
+.is-soon { cursor: default; }
+.is-soon:not(.mv-btn) { color: var(--mv-text-3); }
+a.is-soon:not(.mv-btn):hover { color: var(--mv-text-3); background: transparent; }
+.mv-btn.is-soon { opacity: .6; }
+/* A primary or danger action that is not built yet keeps its designed place,
    but fading the whole filled button left its label and Soon tag at ~1.1:1.
    It reads as unavailable through a muted fill instead, so both stay legible
    (≥ 4.5:1 in both themes). */
