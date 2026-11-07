@@ -401,7 +401,7 @@ func (s *service) build(ctx context.Context, p prepared, progress func(int, int)
 			}
 			fit := math.Min(t.WidthMM/float64(page.Width), t.HeightMM/float64(page.Height))
 			scale := fit * float64(dpi) / 25.4
-			c, err := s.renderer.Canvas(ctx, page, compose.Options{Lang: req.Lang, Scale: scale, Placeholder: true})
+			c, err := s.renderer.Canvas(ctx, page, compose.Options{Lang: req.Lang, Scale: scale})
 			if err != nil {
 				return nil, result, err
 			}
@@ -438,7 +438,7 @@ func (s *service) build(ctx context.Context, p prepared, progress func(int, int)
 			t, _ := findTrim(req.TrimID)
 			scale = math.Min(t.WidthMM/float64(page.Width), t.HeightMM/float64(page.Height)) * float64(req.DPI) / 25.4
 		}
-		png, err := s.renderer.PNG(ctx, page, compose.Options{Lang: req.Lang, Scale: scale, Placeholder: true})
+		png, err := s.renderer.PNG(ctx, page, compose.Options{Lang: req.Lang, Scale: scale})
 		if err != nil {
 			return nil, result, err
 		}

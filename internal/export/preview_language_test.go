@@ -57,7 +57,7 @@ func TestExportPreviewUsesProjectAndRequestedLanguages(t *testing.T) {
 					want = "ja"
 				}
 				response := client.Get(base + "/preview/" + p.ID + "?lang=" + lang)
-				expected, err := renderer.PNG(ctx, p, compose.Options{Lang: want, Scale: 1, Placeholder: true})
+				expected, err := renderer.PNG(ctx, p, compose.Options{Lang: want, Scale: 1})
 				if err != nil || response.StatusCode != http.StatusOK || !bytes.Equal(response.Body, expected) {
 					t.Fatalf("preview lang=%q: %d %v", lang, response.StatusCode, err)
 				}

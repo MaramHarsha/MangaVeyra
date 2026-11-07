@@ -95,20 +95,10 @@ func (r *renderer) Canvas(ctx context.Context, p pagedoc.Page, o Options) (*canv
 		mask := polygonMask(pn.Points, b, o.Scale, w, h)
 		layers := append([]pagedoc.Layer(nil), pn.Layers...)
 		sort.SliceStable(layers, func(i, j int) bool { return layers[i].Order < layers[j].Order })
-		missing := false
 		for _, l := range layers {
-			if !l.Visible || l.Kind == pagedoc.LayerLettering || l.Opacity == 0 {
-				continue
-			}
-			if l.Asset == nil {
-				if o.Placeholder {
-					missing = true
-					tmp := image.NewNRGBA(dst.Bounds())
-					placeholder(tmp, l.Kind)
-					if err := blend(ctx, dst, tmp, l.Opacity, l.Blend); err != nil {
-						return nil, err
-					}
-				}
+			// A layer without art contributes nothing: an empty panel is a clean
+			// white storyboard area with its border, exactly as in the editor.
+			if !l.Visible || l.Kind == pagedoc.LayerLettering || l.Opacity == 0 || l.Asset == nil {
 				continue
 			}
 			if r.assets == nil {
@@ -157,16 +147,6 @@ func (r *renderer) Canvas(ctx context.Context, p pagedoc.Page, o Options) (*canv
 		cc.SetStrokeColor(canvas.Black)
 		cc.SetStrokeWidth(o.BorderWidth)
 		cc.DrawPath(0, 0, path)
-		if missing && r.lettering != nil {
-			label := pagedoc.Bubble{ID: pn.ID + "-label", Kind: pagedoc.BubbleSFX, Shape: pagedoc.ShapeNone, Box: pagedoc.Rect{X: b.X + b.W*.15, Y: b.Y + b.H*.4, W: b.W * .7, H: b.H * .2}, Style: pagedoc.BubbleStyle{Size: math.Min(36, b.W*.08), AutoFit: true}, Texts: map[string]pagedoc.BubbleText{"en": {Text: fmt.Sprintf("PANEL %d · PLACEHOLDER", pn.Order+1)}}}
-			l, err := r.lettering.Layout(label, "en")
-			if err != nil {
-				return nil, err
-			}
-			if err = r.lettering.Draw(cc, l); err != nil {
-				return nil, err
-			}
-		}
 	}
 	if !o.NoLettering && len(p.Bubbles) > 0 {
 		if r.lettering == nil {
@@ -333,26 +313,6 @@ func blend(ctx context.Context, dst, src *image.NRGBA, opacity float64, mode str
 	}
 	return nil
 }
-func placeholder(dst *image.NRGBA, kind string) {
-	for y := 0; y < dst.Bounds().Dy(); y++ {
-		for x := 0; x < dst.Bounds().Dx(); x++ {
-			v := uint8(232)
-			if (x/3+y/3)%8 == 0 {
-				v = 150
-			}
-			if kind == pagedoc.LayerCharacter && ((float64(x)/float64(dst.Bounds().Dx())-.5)*(float64(x)/float64(dst.Bounds().Dx())-.5)*4+math.Pow(float64(y)/float64(dst.Bounds().Dy())-.55, 2)*2) > .5 {
-				continue
-			}
-			if kind == pagedoc.LayerFX {
-				if (x+y)%32 > 3 {
-					continue
-				}
-				v = 100
-			}
-			dst.SetNRGBA(x, y, color.NRGBA{v, v, v, 255})
-		}
-	}
-}
 func (r *renderer) Image(ctx context.Context, p pagedoc.Page, o Options) (image.Image, error) {
 	c, err := r.Canvas(ctx, p, o)
 	if err != nil {
@@ -380,5 +340,5 @@ func (r *renderer) Thumbnail(ctx context.Context, p pagedoc.Page, maxWidth int) 
 	if maxWidth <= 0 || maxWidth > 2048 {
 		return nil, errors.New("compose: invalid thumbnail width")
 	}
-	return r.PNG(ctx, p, Options{Scale: math.Min(1, float64(maxWidth)/float64(p.Width)), Placeholder: true})
+	return r.PNG(ctx, p, Options{Scale: math.Min(1, float64(maxWidth)/float64(p.Width))})
 }

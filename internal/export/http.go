@@ -352,7 +352,7 @@ func (m *Module) preview(w http.ResponseWriter, r *http.Request) error {
 		return core.ErrNotFound()
 	}
 	png, err := m.s.renderer.PNG(r.Context(), page, compose.Options{Lang: v.Request.Lang,
-		Scale: math.Min(1, 520/float64(page.Width)), Placeholder: true})
+		Scale: math.Min(1, 520/float64(page.Width))})
 	if err != nil {
 		return core.ErrBadRequest(i18n.T(r.Context(), "exportui.preview_error"))
 	}

@@ -141,7 +141,7 @@ func TestLetteringScaleThumbnailPlaceholderAndBounds(t *testing.T) {
 	_ = a
 	p := pageFixture()
 	p.Bubbles = []pagedoc.Bubble{{ID: "bubble", PanelID: "pn", Kind: "speech", Shape: "ellipse", Box: pagedoc.Rect{X: 50, Y: 50, W: 110, H: 90}, Style: pagedoc.BubbleStyle{AutoFit: true, Size: 24}, Texts: map[string]pagedoc.BubbleText{"en": {Text: "Run!"}}}}
-	im, err := r.Image(context.Background(), p, Options{Scale: 2, BleedPx: 4, Placeholder: true})
+	im, err := r.Image(context.Background(), p, Options{Scale: 2, BleedPx: 4})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,6 +168,63 @@ func TestLetteringScaleThumbnailPlaceholderAndBounds(t *testing.T) {
 	cancel()
 	if _, err = r.PNG(ctx, pageFixture(), Options{}); err == nil {
 		t.Fatal("cancellation ignored")
+	}
+}
+
+// QA #11: a panel without art is a clean white storyboard area with its
+// border, as in the editor; no hatch and no "PANEL n · PLACEHOLDER" label.
+func TestEmptyPanelsRenderCleanWhiteWithBorder(t *testing.T) {
+	e, err := lettering.NewEngine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewRenderer(nil, e)
+	p := pagedoc.New("page", "project", "chapter", 1, 400, 600, "rtl")
+	layer := func(id, kind string) pagedoc.Layer {
+		l := pagedoc.Layer{ID: id, Kind: kind, Visible: true, Opacity: 1, Provenance: "human"}
+		if kind == pagedoc.LayerCharacter {
+			l.CharacterID = "rin"
+		}
+		return l
+	}
+	p.Panels = []pagedoc.Panel{
+		{ID: "a", Order: 0, Points: pagedoc.RectPoints(pagedoc.Rect{X: 20, Y: 20, W: 360, H: 260}),
+			Layers: []pagedoc.Layer{layer("bg", "background"), layer("ch", "character"), layer("fx", "fx"), layer("lt", "lettering")}},
+		{ID: "b", Order: 1, Points: pagedoc.RectPoints(pagedoc.Rect{X: 20, Y: 300, W: 360, H: 280}), Layers: []pagedoc.Layer{}},
+	}
+	for _, o := range []Options{{}, {Placeholder: true, Scale: 2, BleedPx: 6}} {
+		im, err := r.Image(context.Background(), p, o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := o.Scale
+		if s == 0 {
+			s = 1
+		}
+		at := func(x, y float64) color.Gray {
+			return color.GrayModel.Convert(im.At(int((x+o.BleedPx)*s), int((y+o.BleedPx)*s))).(color.Gray)
+		}
+		for _, pn := range p.Panels {
+			b := pagedoc.Bounds(pn.Points)
+			for y := b.Y + 8; y < b.Y+b.H-8; y += 2 {
+				for x := b.X + 8; x < b.X+b.W-8; x += 2 {
+					if g := at(x, y); g.Y < 250 {
+						t.Fatalf("panel %s interior is not white at %.0f,%.0f: %d", pn.ID, x, y, g.Y)
+					}
+				}
+			}
+			if g := at(b.X, b.Y+b.H/2); g.Y > 40 {
+				t.Fatalf("panel %s border missing: %d", pn.ID, g.Y)
+			}
+		}
+	}
+	plain, err := r.PNG(context.Background(), p, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := r.PNG(context.Background(), p, Options{Placeholder: true})
+	if err != nil || !bytes.Equal(plain, legacy) {
+		t.Fatal("the deprecated Placeholder option must not change output", err)
 	}
 }
 
