@@ -262,6 +262,8 @@
 .mv-ed__compare { position: absolute; inset: 0; pointer-events: none; }
 .mv-ed__compare-line { position: absolute; top: 0; bottom: 0; left: var(--split); width: 3px; transform: translateX(-50%); background: var(--mv-accent); }
 .mv-ed__compare-handle { position: absolute; left: var(--split); top: 50%; width: 36px; height: 36px; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--mv-accent); color: var(--mv-on-accent); font-size: 20px; pointer-events: auto; cursor: ew-resize; touch-action: none; }
+/* Before a result exists the handle is shown but lets painting through. */
+.mv-ed__compare-handle.idle { pointer-events: none; }
 .mv-ed__compare-input { position: absolute; left: var(--split); top: 50%; width: 1px; height: 1px; opacity: 0; margin: 0; pointer-events: none; }
 .mv-ed__compare:has(.mv-ed__compare-input:focus-visible) .mv-ed__compare-handle { outline: var(--mv-focus-width, 2px) solid var(--mv-focus); outline-offset: 3px; }
 .mv-ed__region-actions { display: flex; gap: 10px; align-items: center; padding-block: 10px; }
@@ -387,4 +389,10 @@ body:has(.mv-ed) .mv-toasts { right: 340px; bottom: 44px; }
  .mv-ed__layout-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
  .mv-ed--layouts .mv-ed__left { display: flex; }
  body:has(.mv-ed) .mv-toasts { right: 16px; bottom: 16px; }
+ /* Touch targets keep the 44 px minimum on phones. */
+ .mv-ed .mv-btn, .mv-ed .mv-iconlink, .mv-ed .mv-ed__back, .mv-ed .mv-select, .mv-ed summary, .mv-ed .mv-seg__item, .mv-ed__grip, .mv-ed__bubble-type, .mv-ed__chip, .mv-ed__layer-select, .mv-ed__reading-select { min-width: 44px; min-height: 44px; }
+ .mv-ed__chip--add select { min-width: 44px; min-height: 44px; }
+ .mv-ed__panel-tools .mv-btn { min-height: 44px; }
+ .mv-ed__layer-row > .mv-iconlink { width: 44px; height: 44px; }
+ .mv-ed__chips { flex-wrap: wrap; }
 }

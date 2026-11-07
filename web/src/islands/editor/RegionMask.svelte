@@ -39,7 +39,7 @@
  {#if coverage}<span class="mv-ed__region-coverage" style:left={`${coverage.x}%`} style:top={`${coverage.y}%`}>{t('region.coverage',{tool:t(`region.${tool}`).toUpperCase(),percent:coverage.percent})}</span>{/if}
  <div class="mv-ed__compare">
   <span class="mv-ed__compare-line" aria-hidden="true"></span>
-  <span class="mv-ed__compare-handle" aria-hidden="true" onpointerdown={handleDown} onpointermove={handleMove} onpointerup={handleUp} onpointercancel={handleUp}><i class="ti ti-arrows-horizontal"></i></span>
+  <span class="mv-ed__compare-handle" class:idle={!candidateURL} aria-hidden="true" onpointerdown={handleDown} onpointermove={handleMove} onpointerup={handleUp} onpointercancel={handleUp}><i class="ti ti-arrows-horizontal"></i></span>
   <input class="mv-ed__compare-input" type="range" min="0" max="100" bind:value={split} aria-label={t('region.compare')} aria-valuetext={`${split}%`}/>
  </div>
 </div>
