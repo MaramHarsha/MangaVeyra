@@ -123,3 +123,44 @@ func TestSuggest(t *testing.T) {
 		t.Fatalf("vertical should prefer webtoon, got %s", s[0].ID)
 	}
 }
+
+func TestTextLanguageFallsBackThroughContentLanguages(t *testing.T) {
+	texts := map[string]BubbleText{"zh-Hant": {Text: "港"}, "ko": {Text: "항"}, "pt": {Text: "porto"}}
+	for lang, want := range map[string]string{
+		"zh-Hant": "zh-Hant", "zh-TW": "zh-Hant", "zh-hk": "zh-Hant", "ko-KR": "ko", "pt-BR": "pt",
+		"en": "ko", "": "ko", "ja": "ko",
+	} {
+		if got := TextLanguage(texts, lang); got != want {
+			t.Fatalf("TextLanguage(%q) = %q, want %q", lang, got, want)
+		}
+	}
+	legacy := map[string]BubbleText{"en-GB": {Text: "harbour"}, "x-custom": {Text: "?"}}
+	if got := TextLanguage(legacy, "en"); got != "en-GB" {
+		t.Fatalf("stored regional tag: %q", got)
+	}
+	if got := TextLanguage(map[string]BubbleText{"x-a": {}, "x-b": {}}, "fr"); got != "x-a" {
+		t.Fatalf("unknown tags fall back to the smallest key: %q", got)
+	}
+	if TextLanguage(nil, "en") != "" {
+		t.Fatal("empty texts")
+	}
+	b := Bubble{Texts: texts}
+	if b.Text("zh-TW").Text != "港" || b.Text("de").Text != "항" {
+		t.Fatal("Bubble.Text fallback")
+	}
+}
+
+func TestValidateAcceptsEveryLetteringFont(t *testing.T) {
+	for _, key := range append([]string{""}, LetteringFonts...) {
+		p := validPage()
+		p.Bubbles[0].Style.Font = key
+		if err := p.Validate(); err != nil {
+			t.Fatalf("font %q rejected: %v", key, err)
+		}
+	}
+	p := validPage()
+	p.Bubbles[0].Style.Font = "papyrus"
+	if p.Validate() == nil {
+		t.Fatal("unknown font accepted")
+	}
+}

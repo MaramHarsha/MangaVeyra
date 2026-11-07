@@ -183,7 +183,8 @@ type Tail struct {
 
 // BubbleStyle controls lettering.
 type BubbleStyle struct {
-	// Font is a lettering font key ("comic", "sfx", "jp"); empty picks by kind and language.
+	// Font is a lettering font key (one of LetteringFonts); empty picks by kind
+	// and language.
 	Font string `json:"font,omitempty"`
 	// Size is the font size in page pixels; 0 means auto.
 	Size float64 `json:"size,omitempty"`
@@ -229,7 +230,8 @@ type Bubble struct {
 	Tail     Tail        `json:"tail"`
 	Style    BubbleStyle `json:"style"`
 	Vertical bool        `json:"vertical"`
-	// Texts maps a BCP-47 language tag ("en", "ja") to the text in that language.
+	// Texts maps a BCP-47 language tag (normally one of ContentLanguages) to the
+	// text in that language.
 	Texts map[string]BubbleText `json:"texts"`
 }
 
@@ -331,25 +333,69 @@ func (p *Panel) LayerOfKind(kind, characterID string) *Layer {
 	return nil
 }
 
-// Text returns the bubble text for lang, falling back to any language when missing.
-func (b *Bubble) Text(lang string) BubbleText {
-	if t, ok := b.Texts[lang]; ok {
-		return t
-	}
-	for _, k := range []string{"en", "ja"} {
-		if t, ok := b.Texts[k]; ok {
-			return t
+// LetteringFonts lists the lettering font keys a bubble style may name. The
+// lettering package bundles one font per key and falls back across all of
+// them per glyph run, so any key renders every content language.
+var LetteringFonts = []string{"comic", "sfx", "jp", "ko", "sc", "tc", "deva"}
+
+// IsLetteringFont reports whether key is one of LetteringFonts.
+func IsLetteringFont(key string) bool {
+	for _, k := range LetteringFonts {
+		if k == key {
+			return true
 		}
 	}
-	keys := make([]string, 0, len(b.Texts))
-	for k := range b.Texts {
+	return false
+}
+
+// TextLanguage returns the key of texts that best serves lang: the exact tag,
+// then the same content language under another spelling ("ja-JP" → "ja",
+// "zh-TW" → "zh-Hant"), then the first content language present in
+// ContentLanguages order, then the smallest remaining key. It returns "" when
+// texts is empty.
+func TextLanguage(texts map[string]BubbleText, lang string) string {
+	if len(texts) == 0 {
+		return ""
+	}
+	if _, ok := texts[lang]; ok && lang != "" {
+		return lang
+	}
+	if canonical := NormalizeContentLanguage(lang); canonical != "" {
+		if _, ok := texts[canonical]; ok {
+			return canonical
+		}
+		keys := sortedKeys(texts)
+		for _, k := range keys {
+			if NormalizeContentLanguage(k) == canonical {
+				return k
+			}
+		}
+	}
+	if base := strings.SplitN(lang, "-", 2)[0]; base != "" && base != lang {
+		if _, ok := texts[base]; ok {
+			return base
+		}
+	}
+	for _, k := range ContentLanguages {
+		if _, ok := texts[k]; ok {
+			return k
+		}
+	}
+	return sortedKeys(texts)[0]
+}
+
+func sortedKeys(texts map[string]BubbleText) []string {
+	keys := make([]string, 0, len(texts))
+	for k := range texts {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	if len(keys) > 0 {
-		return b.Texts[keys[0]]
-	}
-	return BubbleText{}
+	return keys
+}
+
+// Text returns the bubble text for lang, falling back as TextLanguage does.
+func (b *Bubble) Text(lang string) BubbleText {
+	return b.Texts[TextLanguage(b.Texts, lang)]
 }
 
 // Validate checks structural invariants. It does not check IDs against the
@@ -475,9 +521,7 @@ func (p *Page) Validate() error {
 		if !finite(b.Tail.Tip.X) || !finite(b.Tail.Tip.Y) {
 			add("bubble %d tail is invalid", i)
 		}
-		switch b.Style.Font {
-		case "", "comic", "sfx", "jp":
-		default:
+		if b.Style.Font != "" && !IsLetteringFont(b.Style.Font) {
 			add("bubble %d font is unsupported", i)
 		}
 		switch b.Style.Align {
