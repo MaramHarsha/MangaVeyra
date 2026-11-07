@@ -107,6 +107,8 @@ These additions are frozen before parallel implementation; existing Gate A signa
   revision; `CreateOutfit` has the same authorization/revision boundary. `NewSettingItem` carries project/kind/name/
   description/asset/tags; `CreateSettingItem` authorizes and validates the same-project asset.
   Profile/outfit/setting text follows `ActEditScript`; image reference mutations follow `ActEditArt`.
+  `BibleService.CreateOutfitTx` and `CreateSettingItemTx` accept the same inputs in a caller transaction, allowing
+  staged upload-row insertion and its attachment to commit atomically.
 - `ai.ImagePlan.RoutingMode` preserves the effective request policy independently of explanatory JSON, like text.
   It also carries `Needs`, `PublicSeries`, `PinProviderID`, and `PinModelID`; `ImagePlanRequest` accepts optional
   `CharacterIDs` and `PanelType` for scoped routing pins. Durable generation payloads preserve these typed fields

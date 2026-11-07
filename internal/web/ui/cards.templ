@@ -15,6 +15,10 @@ type ProjectCardProps struct {
 	Title      string
 	Meta       string
 	ThumbLabel string
+	ThumbURL   string
+	// Variant "studio" matches the B2 project-library card artboard.
+	Variant string
+	Class string
 	Badges     []BadgeSpec
 	// MenuLabel is the accessible name of the "…" menu button; empty hides it.
 	MenuLabel string
@@ -22,8 +26,14 @@ type ProjectCardProps struct {
 
 // ProjectCard renders a project with the angled bottom edge on its thumbnail.
 templ ProjectCard(p ProjectCardProps) {
-	<article class="mv-pcard">
-		@ToneBox(p.ThumbLabel, "", "mv-pcard__thumb")
+	<article class={ Cls("mv-pcard", If(p.Variant == "studio", "mv-pcard--studio"), p.Class) }>
+		if p.ThumbURL != "" {
+			<div class="mv-pcard__thumb mv-card-image">
+				<img src={ templ.URL(p.ThumbURL) } alt={ p.ThumbLabel } loading="lazy"/>
+			</div>
+		} else {
+			@ToneBox(p.ThumbLabel, "", "mv-pcard__thumb")
+		}
 		<div class="mv-pcard__body">
 			<div class="mv-pcard__head">
 				<a class="mv-pcard__title" href={ templ.URL(p.Href) }>{ p.Title }</a>
@@ -107,12 +117,24 @@ type CharacterCardProps struct {
 	Lock      float64
 	LockLabel string
 	ArtLabel  string
+	ArtURL string
+	// Variant "bible" matches the C2 character-library card artboard.
+	Variant string
+	Class string
+	StatusLabel string
+	StatusTone Tone
 }
 
 // CharacterCard renders an anime profile sheet: art, kanji watermark, big name, role and Character Lock score.
 templ CharacterCard(p CharacterCardProps) {
-	<article class="mv-ccard">
-		@ToneBox(p.ArtLabel, "", "mv-ccard__art")
+	<article class={ Cls("mv-ccard", If(p.Variant == "bible", "mv-ccard--bible"), p.Class) }>
+		if p.ArtURL != "" {
+			<div class="mv-ccard__art mv-card-image">
+				<img src={ templ.URL(p.ArtURL) } alt={ p.ArtLabel } loading="lazy"/>
+			</div>
+		} else {
+			@ToneBox(p.ArtLabel, "", "mv-ccard__art")
+		}
 		<div class="mv-ccard__body">
 			if p.Kanji != "" {
 				<span class="mv-ccard__kanji" aria-hidden="true">{ p.Kanji }</span>
@@ -144,6 +166,10 @@ templ CharacterCard(p CharacterCardProps) {
 						<span class="mv-lock__score">{ strconv.Itoa(int(p.Lock*100 + .5)) }%</span>
 					</div>
 					@Bar(p.Lock, lockTone(p.Lock), false, p.LockLabel)
+				</div>
+			} else if p.StatusLabel != "" {
+				<div class="mv-ccard__lock">
+					@Badge(p.StatusTone, "photo", p.StatusLabel)
 				</div>
 			}
 		</div>

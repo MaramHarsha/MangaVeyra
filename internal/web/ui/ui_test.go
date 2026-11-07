@@ -94,6 +94,18 @@ func TestAIAndGateComponents(t *testing.T) {
 	has(t, render(t, withText(StatusWindow("Status · Creator", ""), "<b>x</b>")), "mv-status__title")
 }
 
+func TestStudioCardsRenderStoredArtAndHonestReferenceStatus(t *testing.T) {
+	has(t, render(t, ProjectCard(ProjectCardProps{Href: "/studio/projects", Title: "Tidebreak Courier", Variant: "studio",
+		ThumbURL: "/media/page.png", ThumbLabel: "Page thumbnail", Class: "project-library-item"})),
+		"mv-pcard--studio", "project-library-item", `src="/media/page.png"`, `alt="Page thumbnail"`)
+	card := render(t, CharacterCard(CharacterCardProps{FirstName: "Rin", Variant: "bible", ArtURL: "/media/ref.png",
+		ArtLabel: "Rin's reference", Lock: -1, StatusLabel: "Reference images", StatusTone: ToneInfo}))
+	has(t, card, "mv-ccard--bible", `src="/media/ref.png"`, "Reference images")
+	if strings.Contains(card, "mv-lock__score") {
+		t.Fatal("reference-only character claimed a trained score")
+	}
+}
+
 func TestOverlaysAndStates(t *testing.T) {
 	has(t, render(t, withText(Modal(ModalProps{ID: "m", Title: "Regenerate page 7?"}), "body")), `<dialog`, `aria-labelledby="m-title"`, `method="dialog"`, `aria-label="Close"`)
 	has(t, render(t, Toast(ToastProps{Tone: ToneSuccess, Title: "Chapter 8 published", Href: "/s/x", Action: "View"})), "mv-toast--success", "ti-circle-check")

@@ -682,6 +682,11 @@
 .mv-pcard__menu { position: relative; z-index: 1; color: var(--mv-text-2); }
 .mv-pcard__meta { font-size: .75rem; color: var(--mv-text-2); }
 .mv-pcard__badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.mv-card-image { position: relative; overflow: hidden; }
+.mv-card-image > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.mv-pcard--studio .mv-pcard__thumb { height: 140px; }
+.mv-pcard--studio .mv-pcard__body { gap: 6px; padding: 10px 12px 12px; }
+.mv-pcard--studio .mv-pcard__title { font-size: .875rem; }
 .mv-pcard:hover { border-color: var(--mv-text-3); }
 
 .mv-scard {
@@ -743,6 +748,13 @@
 .mv-ccard__name span { display: block; }
 .mv-ccard__desc { font-size: .8125rem; line-height: 1.45; color: var(--mv-text-2); }
 .mv-ccard__lock { margin-top: auto; display: flex; flex-direction: column; gap: 5px; }
+.mv-ccard--bible { grid-template-columns: 130px 1fr; min-height: 210px; }
+.mv-ccard--bible .mv-ccard__art { min-height: 210px; }
+.mv-ccard--bible .mv-ccard__body { gap: 7px; }
+.mv-ccard--bible .mv-ccard__kanji { font-size: 70px; }
+.mv-ccard--bible .mv-ccard__name { font-size: 1.875rem; }
+.mv-ccard--bible .mv-ccard__desc { font-size: .75rem; }
+.mv-ccard--bible .mv-ccard__role { font-size: .625rem; }
 
 .mv-lock {
   --mv-lock: var(--mv-success);

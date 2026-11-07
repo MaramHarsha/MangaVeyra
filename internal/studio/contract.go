@@ -199,7 +199,9 @@ type BibleService interface {
 	UpdateCharacter(context.Context, Actor, UpdateCharacterInput) (Character, error)
 	AddCharacterRef(context.Context, Actor, NewCharacterRef) (CharacterRef, error)
 	CreateOutfit(context.Context, Actor, NewOutfit) (Outfit, error)
+	CreateOutfitTx(context.Context, *db.Tx, Actor, NewOutfit) (Outfit, error)
 	CreateSettingItem(context.Context, Actor, NewSettingItem) (SettingItem, error)
+	CreateSettingItemTx(context.Context, *db.Tx, Actor, NewSettingItem) (SettingItem, error)
 }
 
 // CharacterRef is one reference image.
