@@ -131,6 +131,7 @@
 }
 .mv-link:hover { color: var(--mv-text); }
 .mv-link--plain { text-decoration: none; }
+
 .mv-link--danger { color: var(--mv-error); }
 
 /* ---- inputs (07) --------------------------------------------------------- */
@@ -1529,4 +1530,11 @@ a.is-soon:not(.mv-btn):hover { color: var(--mv-text-3); background: transparent;
 .mv-search.is-soon .mv-search__input { cursor: default; }
 @media (max-width: 1024px) {
   .mv-sidebar .mv-soon { display: none; }
+}
+
+@media (max-width: 768px) {
+  .mv-btn, .mv-iconlink, .mv-select, .mv-seg .mv-seg__item, .mv-toggle, .mv-check, summary {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
