@@ -20,6 +20,9 @@ type Module struct {
 	gen    gen.Service
 	assets *assets.Service
 	ui     *web.UI
+	// generating serialises one user's generation requests per page so a
+	// repeated submission reuses the active job (see activeGeneration).
+	generating keyedMutex
 }
 
 // New creates the module.
@@ -53,6 +56,7 @@ func (m *Module) Routes(r *core.Router) {
 	r.API("POST "+base+"/pages/{page}/revert", m.revert, core.RequireSession)
 	r.API("POST "+base+"/pages/{page}/generate", m.generate, core.RequireSession)
 	r.API("POST "+base+"/pages/{page}/masks", m.uploadMask, core.RequireSession)
+	r.API("GET "+base+"/queue", m.queue, core.RequireSession)
 	r.API("GET "+base+"/pages/{page}/jobs/{job}", m.job, core.RequireSession)
 	r.API("POST "+base+"/pages/{page}/jobs/{job}/apply", m.apply, core.RequireSession)
 }

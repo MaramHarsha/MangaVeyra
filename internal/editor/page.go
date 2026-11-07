@@ -10,7 +10,6 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
-	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/layout"
@@ -60,12 +59,5 @@ func exportHref(data bootstrapData) string {
 	return fmt.Sprintf("/studio/p/%s/chapters/%s/export", data.Project.ID, data.Chapter.ID)
 }
 func label(ctx context.Context, key string) string { return i18n.T(ctx, "editor."+key) }
-func jobSummary(j *jobs.Job) map[string]any {
-	out := map[string]any{"id": j.ID, "type": j.Type, "state": j.State, "progress": j.Progress, "step": j.Step, "steps": j.Steps, "model_id": j.ModelID, "provider_id": j.ProviderID}
-	if j.Error != nil {
-		out["error_code"] = j.Error.Code
-	}
-	return out
-}
 
 var _ core.Initer = (*Module)(nil)

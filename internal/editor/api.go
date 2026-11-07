@@ -585,21 +585,48 @@ func (m *Module) generate(w http.ResponseWriter, r *http.Request) error {
 			return mapped(r, studio.ErrInvalid)
 		}
 	}
+	switch in.Kind {
+	case "panel":
+		in.LayerID = ""
+	case "layer":
+		if in.LayerID == "" {
+			return mapped(r, studio.ErrInvalid)
+		}
+	case "region":
+		if in.LayerID == "" || !db.ValidID(in.MaskID) {
+			return mapped(r, studio.ErrInvalid)
+		}
+	default:
+		return mapped(r, studio.ErrInvalid)
+	}
+	want := generation{Kind: in.Kind, UserID: res.Actor.UserID, PageID: res.Page.ID, PanelID: in.PanelID, LayerID: in.LayerID, Prompt: in.Prompt, Routing: in.RoutingMode}
+	if in.Kind == "region" {
+		if mask, err := m.assets.Get(r.Context(), in.MaskID); err == nil && mask.ProjectID != nil && *mask.ProjectID == res.Project.ID {
+			want.MaskSHA = mask.SHA256
+		}
+	}
+	// One user's generation requests for a page run one at a time, so a
+	// double click or a retried request finds the job the first one queued.
+	release := m.generating.lock(res.Actor.UserID + "/" + res.Page.ID)
+	defer release()
+	existing, err := m.activeGeneration(r.Context(), res.Project.ID, want)
+	if err != nil {
+		return mapped(r, err)
+	}
+	if existing != nil {
+		core.JSON(w, 200, map[string]any{"job": m.jobSummary(r.Context(), existing), "existing": true})
+		return nil
+	}
 	var j *jobs.Job
 	if in.Kind == "region" {
 		j, err = m.gen.EnqueueRegionEdit(r.Context(), res.Actor, gen.RegionEditRequest{ProjectID: res.Project.ID, LayerID: in.LayerID, MaskAssetID: in.MaskID, Prompt: in.Prompt, Variations: 4, RoutingMode: in.RoutingMode, ExpectedVersion: in.BaseVersion})
-	} else if in.Kind == "panel" || in.Kind == "layer" {
-		if in.Kind == "layer" && in.LayerID == "" {
-			return mapped(r, studio.ErrInvalid)
-		}
-		j, err = m.gen.EnqueuePanel(r.Context(), res.Actor, gen.PanelRequest{ProjectID: res.Project.ID, PageID: res.Page.ID, PanelID: in.PanelID, LayerID: in.LayerID, Variations: 4, Prompt: in.Prompt, RoutingMode: in.RoutingMode, ExpectedVersion: in.BaseVersion})
 	} else {
-		return mapped(r, studio.ErrInvalid)
+		j, err = m.gen.EnqueuePanel(r.Context(), res.Actor, gen.PanelRequest{ProjectID: res.Project.ID, PageID: res.Page.ID, PanelID: in.PanelID, LayerID: in.LayerID, Variations: 4, Prompt: in.Prompt, RoutingMode: in.RoutingMode, ExpectedVersion: in.BaseVersion})
 	}
 	if err != nil {
 		return mapped(r, err)
 	}
-	core.JSON(w, 202, map[string]any{"job": jobSummary(j)})
+	core.JSON(w, 202, map[string]any{"job": m.jobSummary(r.Context(), j)})
 	return nil
 }
 
@@ -736,7 +763,7 @@ func (m *Module) job(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	core.JSON(w, 200, map[string]any{"job": jobSummary(j), "candidates": candidates})
+	core.JSON(w, 200, map[string]any{"job": m.jobSummary(r.Context(), j), "candidates": candidates})
 	return nil
 }
 func (m *Module) apply(w http.ResponseWriter, r *http.Request) error {
