@@ -1,61 +1,32 @@
 package export
 
 import (
+	"context"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/layout"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
 	"strconv"
+	"strings"
 )
+
+// exportFormats is the E2 format grid in designed order; CBZ is the documented
+// extra row (ADR 0004 §8).
+var exportFormats = []string{"png", "pdf", "epub", "video", "cbz"}
+
+// exportableFormats are the formats the Export button can name.
+var exportableFormats = []string{FormatPNG, FormatPDF, FormatCBZ}
 
 templ exportScreen(c *layout.Chrome, v exportView) {
 	@layout.EditorShell(c) {
 		<div class="mv-exportui">
-			<div class="mv-exportui__editor" aria-hidden="true" inert>
-				<header class="mv-exportui__bar">
-					@ui.Icon("arrow-left", 20)
-					<strong>{ v.Project.Title }</strong><span>· { i18n.T(ctx,"exportui.chapter","number",v.Chapter.Number) } · { v.Chapter.Title }</span>
-					<div class="mv-exportui__tools">
-						@ui.Icon("arrow-back-up", 18)
-						@ui.Icon("arrow-forward-up", 18)
-					</div>
-					<div class="mv-exportui__tabs"><span>{ i18n.T(ctx,"exportui.pages") }</span><span>{ i18n.T(ctx,"exportui.lettering") }</span><span>{ i18n.T(ctx,"exportui.translate") }</span><span>{ i18n.T(ctx,"exportui.animate") }</span></div>
-					<div class="mv-exportui__bar-actions"><span>100%</span><span>{ i18n.T(ctx,"exportui.preview") }</span><strong>{ i18n.T(ctx,"exportui.export") }</strong><span>{ i18n.T(ctx,"exportui.publish") }</span></div>
-				</header>
-				<aside class="mv-exportui__rail">
-					<h2>{ i18n.T(ctx,"exportui.pages") }</h2>
-					<div class="mv-exportui__filmstrip">
-						for _,p:=range v.Pages {
-							<figure><img src={ v.previewURL(p.ID) } data-export-preview alt="" width="104" height="147" loading="lazy"/><figcaption>{ strconv.Itoa(p.Number) }</figcaption></figure>
-						}
-					</div>
-					<h2>{ i18n.T(ctx,"exportui.layers") }</h2>
-					if len(v.Page.Panels)>0 {
-						for _,l:=range v.Page.Panels[0].Layers {
-							<div class="mv-exportui__layer">
-								@ui.Icon("stack-2", 16)
-								<span>{ l.Name }</span>@ui.Icon("eye", 16)
-							</div>
-						}
-					}
-				</aside>
-				<div class="mv-exportui__canvas">
-					if v.Page.ID!="" {
-						<img src={ v.previewURL(v.Page.ID) } data-export-preview width="520" height="735" alt=""/>
-					}
-				</div>
-				<aside class="mv-exportui__properties"><h2>{ i18n.T(ctx,"exportui.properties") }</h2><span>{ v.Project.PageSize }</span><span>{ strconv.Itoa(v.Page.Width) } × { strconv.Itoa(v.Page.Height) }</span></aside>
-				<footer class="mv-exportui__status"><span>{ i18n.T(ctx,"exportui.page_count","count",len(v.Pages)) }</span>
-					if v.Page.Direction!="" {
-						<span>{ i18n.T(ctx,"exportui.direction."+v.Page.Direction) }</span>
-					}
-					<span>{ v.Project.PageSize }</span><span>{ i18n.T(ctx,"exportui.self_host") }</span></footer>
-			</div>
+			@editorBackdrop(c, v)
 			<div class="mv-exportui__scrim"></div>
 			@ui.Modal(ui.ModalProps{ID: "chapter-export", Title: i18n.T(ctx, "exportui.title", "number", v.Chapter.Number), Static: true, Class: "mv-exportui__panel"}) {
 				<a class="mv-exportui__close mv-close" href={ templ.URL(v.Back) } aria-label={ i18n.T(ctx, "ui.close") }>
 					@ui.Icon("x", 20)
 				</a>
-				<form method="post" action={ templ.URL(v.action()) } novalidate hx-disabled-elt="find button[type='submit']">
+				<form class="mv-exportui__form" method="post" action={ templ.URL(v.action()) } novalidate hx-disabled-elt="find button[type='submit']">
 					if v.Error!="" {
 						<div class="mv-exportui__notice" role="alert">
 							@ui.Icon("alert-triangle", 18)
@@ -67,8 +38,8 @@ templ exportScreen(c *layout.Chrome, v exportView) {
 					}
 					<fieldset class="mv-exportui__formats">
 						<legend class="mv-sr-only">{ i18n.T(ctx,"exportui.format") }</legend>
-						for _,format:=range []string{"png","pdf","epub","video","cbz"} {
-							<label class={ ui.Cls("mv-exportui__format", ui.If(format == "cbz", "mv-exportui__format--wide")) }>
+						for _,format:=range exportFormats {
+							<label class={ ui.Cls("mv-radio mv-exportui__format", ui.If(format == FormatCBZ, "mv-exportui__format--wide"), ui.If(formatSoon(format), "is-soon")) }>
 								<input
 									type="radio"
 									name="format"
@@ -76,44 +47,36 @@ templ exportScreen(c *layout.Chrome, v exportView) {
 									if v.Request.Format == format {
 										checked
 									}
-									if format == "epub" || format == "video" || v.active() {
+									if formatSoon(format) || v.active() {
 										disabled
 									}
 								/>
-								@ui.Icon(formatIcon(format), 22)
-								<span><strong>{ i18n.T(ctx,"exportui.format."+format) }</strong><span>{ i18n.T(ctx,"exportui.format_desc."+format) }</span></span>
-								if format=="epub"||format=="video" {
-									<span class="mv-exportui__soon">{ i18n.T(ctx,"exportui.soon") }</span>
-								}
+								<span class="mv-radio__box" aria-hidden="true"></span>
+								@ui.Icon(formatIcon(format), 20)
+								<span class="mv-exportui__format-text">
+									<span class="mv-exportui__format-title">
+										<strong>{ i18n.T(ctx,"exportui.format."+format) }</strong>
+										if formatSoon(format) {
+											@ui.SoonTag()
+										}
+									</span>
+									<span>{ i18n.T(ctx,"exportui.format_desc."+format) }</span>
+								</span>
 							</label>
 						}
 					</fieldset>
 					<div class="mv-exportui__fields">
-						<fieldset class="mv-exportui__pages">
-							<legend>{ i18n.T(ctx,"exportui.pages") }</legend>
-							<div class="mv-exportui__segments">
-								for _,mode:=range []string{"all","range","current"} {
-									<label>
-										<input
-											type="radio"
-											name="pages"
-											value={ mode }
-											if v.PageMode == mode {
-												checked
-											}
-											if v.active() {
-												disabled
-											}
-										/><span>{ i18n.T(ctx,"exportui.pages."+mode) }</span>
-									</label>
-								}
+						<div class="mv-exportui__pages">
+							<div class="mv-field">
+								<span class="mv-field__label" aria-hidden="true"><span>{ i18n.T(ctx,"exportui.pages") }</span></span>
+								@ui.Segmented(ui.SegmentedProps{Name: "pages", Value: v.PageMode, Options: pageModeOptions(ctx, v.active()), Label: i18n.T(ctx, "exportui.pages"), Full: true, Class: "mv-exportui__segments"})
 							</div>
-						</fieldset>
-						@ui.Field(ui.FieldProps{ID: "export-language", Label: i18n.T(ctx, "exportui.language")}) {
+							@ui.Field(ui.FieldProps{ID: "export-range", Label: i18n.T(ctx, "exportui.range"), Hint: i18n.T(ctx, "exportui.range_hint"), Class: "mv-exportui__range"}) {
+								@ui.Input(ui.InputProps{ID: "export-range", Name: "range", Value: v.Range, Placeholder: "1-3, 5", Disabled: v.active(), MaxLength: 2048, Described: true})
+							}
+						</div>
+						@ui.Field(ui.FieldProps{ID: "export-language", Label: i18n.T(ctx, "exportui.language"), Aside: translationsAside(ctx, v)}) {
 							@ui.Select(ui.SelectProps{ID: "export-language", Name: "lang", Value: v.Request.Lang, Options: v.Languages, Disabled: v.active(), Attrs: templ.Attributes{"data-export-language": "true"}})
-						}
-						@ui.Field(ui.FieldProps{ID: "export-range", Label: i18n.T(ctx, "exportui.range"), Hint: i18n.T(ctx, "exportui.range_hint")}) {
-							@ui.Input(ui.InputProps{ID: "export-range", Name: "range", Value: v.Range, Placeholder: "1-3, 5", Disabled: v.active(), MaxLength: 2048, Described: true})
 						}
 						@ui.Field(ui.FieldProps{ID: "export-trim", Label: i18n.T(ctx, "exportui.trim")}) {
 							@ui.Select(ui.SelectProps{ID: "export-trim", Name: "trim_id", Value: v.Request.TrimID, Options: trimOptions(ctx), Disabled: v.active()})
@@ -125,12 +88,21 @@ templ exportScreen(c *layout.Chrome, v exportView) {
 					</div>
 					<div class="mv-exportui__checks">
 						@ui.Checkbox(ui.CheckProps{Name: "credits_page", Checked: v.Request.CreditsPage, Label: i18n.T(ctx, "exportui.credits"), Disabled: v.active()})
-						@ui.Checkbox(ui.CheckProps{Name: "living_loops", Label: i18n.T(ctx, "exportui.loops"), Disabled: true})
+						@ui.Checkbox(ui.CheckProps{Name: "living_loops", Label: i18n.T(ctx, "exportui.loops"), Disabled: true}) {
+							@ui.SoonTag()
+						}
 					</div>
 					@ui.ModalFoot() {
-						<span class="mv-exportui__limit">{ i18n.T(ctx,"exportui.output_limit","count",len(v.Pages)) }</span><a href={ templ.URL(v.Back) } class="mv-btn mv-btn--secondary">{ i18n.T(ctx,"ui.cancel") }</a>@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Primary, Icon: "download", Disabled: len(v.Pages) == 0 || v.active(), Busy: v.active()}) {
-	{ i18n.T(ctx,"exportui.export") }
-}
+						<span class="mv-exportui__limit">{ i18n.T(ctx,"exportui.output_limit","count",len(v.Pages)) }</span>
+						<div class="mv-exportui__actions">
+							<a href={ templ.URL(v.Back) } class="mv-btn mv-btn--ghost">{ i18n.T(ctx,"ui.cancel") }</a>
+							@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Primary, Icon: "download", Disabled: len(v.Pages) == 0 || v.active(), Busy: v.active(), Attrs: templ.Attributes{"data-export-submit": "true"}}) {
+								for _,format:=range exportableFormats {
+									<span class={ ui.Cls("mv-exportui__go", ui.If(v.Request.Format == format, "is-current")) } data-export-label={ format }>{ i18n.T(ctx,"exportui.export_as."+format) }</span>
+								}
+								<span class={ ui.Cls("mv-exportui__go", ui.If(!exportable(v.Request.Format), "is-current")) } data-export-label="">{ i18n.T(ctx,"exportui.export") }</span>
+							}
+						</div>
 					}
 				</form>
 				@jobStatus(v)
@@ -139,10 +111,137 @@ templ exportScreen(c *layout.Chrome, v exportView) {
 	}
 }
 
+// editorBackdrop draws the D1 editor the export modal sits on. It is a
+// read-only picture of the current page (inert and hidden from assistive
+// technology); the real editor is the island at /edit.
+templ editorBackdrop(c *layout.Chrome, v exportView) {
+	<div class="mv-exportui__editor" aria-hidden="true" inert>
+		<header class="mv-exportui__bar">
+			@layout.ThemedImg("mv-exportui__logo", layout.BrandMarkDark, layout.BrandMarkLight, "", 26, 26)
+			<div class="mv-exportui__crumb">
+				<span>{ v.Project.Title }</span>
+				@ui.Icon("chevron-right", 0)
+				<strong>{ i18n.T(ctx,"exportui.chapter_title","number",v.Chapter.Number,"title",v.Chapter.Title) }</strong>
+				@ui.Icon("chevron-down", 0)
+			</div>
+			<div class="mv-exportui__history">
+				<span class="mv-btn mv-btn--bare mv-btn--sm">
+					@ui.Icon("arrow-back-up", 16)
+				</span>
+				<span class="mv-btn mv-btn--bare mv-btn--sm">
+					@ui.Icon("arrow-forward-up", 16)
+				</span>
+			</div>
+			<div class="mv-seg mv-exportui__modes">
+				<span class="mv-seg__item" aria-current="true">{ i18n.T(ctx,"exportui.pages") }</span>
+				<span class="mv-seg__item">{ i18n.T(ctx,"exportui.lettering") }</span>
+				<span class="mv-seg__item">{ i18n.T(ctx,"exportui.translate") }</span>
+				<span class="mv-seg__item">{ i18n.T(ctx,"exportui.animate") }</span>
+			</div>
+			<div class="mv-exportui__bar-end">
+				if c != nil && c.User != nil {
+					@ui.Avatar(ui.AvatarProps{Name: userName(c), Key: c.User.ID, Size: "sm", Online: true})
+				}
+				if c != nil && c.Meter != nil {
+					@ui.ComputeMeter(*c.Meter)
+				}
+				<span class="mv-btn mv-btn--bare mv-btn--sm">
+					@ui.Icon("history", 16)
+				</span>
+				<span class="mv-btn mv-btn--bare mv-btn--sm">
+					@ui.Icon("zoom-in", 16)
+				</span>
+				<span class="mv-exportui__zoom">100%</span>
+				<span class="mv-btn mv-btn--quiet mv-btn--sm">
+					@ui.Icon("eye", 16)
+					{ i18n.T(ctx,"exportui.preview") }
+				</span>
+				<span class="mv-btn mv-btn--quiet mv-btn--sm">
+					@ui.Icon("download", 16)
+					{ i18n.T(ctx,"exportui.export") }
+				</span>
+				<span class="mv-btn mv-btn--primary mv-btn--sm is-soon">
+					{ i18n.T(ctx,"exportui.publish") }
+					@ui.SoonTag()
+				</span>
+			</div>
+		</header>
+		<aside class="mv-exportui__rail">
+			<div class="mv-exportui__rail-head">
+				<strong>{ i18n.T(ctx,"exportui.pages") }</strong>
+				<span>
+					@ui.Icon("layout-grid-add", 16)
+					@ui.Icon("dots", 16)
+				</span>
+			</div>
+			<div class="mv-exportui__filmstrip">
+				for _,p:=range v.Pages {
+					<figure class={ ui.Cls("mv-exportui__thumb", ui.If(p.ID == v.Page.ID, "is-current")) }>
+						<span class="mv-exportui__thumb-art">
+							<img src={ v.previewURL(p.ID) } data-export-preview alt="" width="88" height={ strconv.Itoa(scaledHeight(v.Page, 88)) } loading="lazy"/>
+							if p.Locked {
+								<span class="mv-exportui__thumb-lock">
+									@ui.Icon("lock", 0)
+								</span>
+							}
+						</span>
+						<figcaption>{ strconv.Itoa(p.Number) }</figcaption>
+					</figure>
+				}
+			</div>
+			<section class="mv-exportui__layers">
+				<div class="mv-exportui__rail-head">
+					<strong>{ layersTitle(ctx, v.Page) }</strong>
+					@ui.Icon("plus", 16)
+				</div>
+				if len(v.Page.Panels)>0 {
+					for _,l:=range layerRows(v.Page.Panels[0]) {
+						<div class={ ui.Cls("mv-exportui__layer", ui.If(l.ID == selectedLayer(v.Page.Panels[0]), "is-selected")) }>
+							@ui.Icon(layerIcon(l.Kind), 16)
+							<span class="mv-exportui__layer-name">{ layerName(ctx, l) }</span>
+							<small>{ layerMeta(ctx, v.Page, v.Page.Panels[0], l) }</small>
+							@ui.Icon(visibilityIcon(l), 0)
+							if l.Locked {
+								<span class="mv-exportui__layer-lock is-locked">
+									@ui.Icon("lock", 0)
+								</span>
+							} else {
+								<span class="mv-exportui__layer-lock">
+									@ui.Icon("lock-open", 0)
+								</span>
+							}
+						</div>
+					}
+				}
+			</section>
+		</aside>
+		<div class="mv-exportui__canvas">
+			if v.Page.ID!="" {
+				<img src={ v.previewURL(v.Page.ID) } data-export-preview width="520" height={ strconv.Itoa(scaledHeight(v.Page, 520)) } alt=""/>
+			}
+		</div>
+		<aside class="mv-exportui__inspector"></aside>
+		<footer class="mv-exportui__status">
+			if v.Page.ID!="" {
+				<span>{ i18n.T(ctx,"exportui.page_of","number",v.Page.Number,"count",len(v.Pages)) }</span>
+			} else {
+				<span>{ i18n.T(ctx,"exportui.page_count","count",len(v.Pages)) }</span>
+			}
+			<span>{ i18n.T(ctx,"exportui.direction."+direction(v)) }</span>
+			<span>{ pageSizeLabel(ctx, v) }</span>
+			<span class="mv-exportui__saved">
+				@ui.Icon("circle-check", 0)
+				{ i18n.T(ctx,"exportui.saved") }
+			</span>
+			<span class="mv-exportui__host">{ i18n.T(ctx,"exportui.self_host","host",serverHost(c)) }</span>
+		</footer>
+	</div>
+}
+
 func formatIcon(f string) string {
 	switch f {
 	case "png":
-		return "photo"
+		return "file-type-png"
 	case "pdf":
 		return "file-type-pdf"
 	case "epub":
@@ -152,6 +251,188 @@ func formatIcon(f string) string {
 	default:
 		return "archive"
 	}
+}
+
+// formatSoon reports the designed formats that are not built yet (ADR 0004 §7).
+func formatSoon(f string) bool { return f == "epub" || f == "video" }
+
+func exportable(f string) bool {
+	for _, e := range exportableFormats {
+		if e == f {
+			return true
+		}
+	}
+	return false
+}
+
+func pageModeOptions(ctx context.Context, disabled bool) []ui.Option {
+	modes := []string{"all", "range", "current"}
+	out := make([]ui.Option, len(modes))
+	for i, mode := range modes {
+		out[i] = ui.Option{Value: mode, Label: i18n.T(ctx, "exportui.pages."+mode), Disabled: disabled}
+	}
+	return out
+}
+
+// translationsAside is the "+1 translation" note beside Language: the chapter
+// languages other than the project's original. It is empty when the original
+// is the only language.
+func translationsAside(ctx context.Context, v exportView) string {
+	n := 0
+	for _, o := range v.Languages {
+		if o.Value != v.Project.Language {
+			n++
+		}
+	}
+	if n == 0 {
+		return ""
+	}
+	return i18n.T(ctx, "exportui.translations", "count", n)
+}
+
+func userName(c *layout.Chrome) string {
+	if c.User.DisplayName != "" {
+		return c.User.DisplayName
+	}
+	return c.User.Username
+}
+
+func serverHost(c *layout.Chrome) string {
+	if c == nil || c.ServerHost == "" {
+		return "localhost"
+	}
+	return c.ServerHost
+}
+
+// scaledHeight keeps a proof image at the page's aspect ratio.
+func scaledHeight(p pagedoc.Page, width int) int {
+	if p.Width <= 0 || p.Height <= 0 {
+		return width * 3 / 2
+	}
+	return width * p.Height / p.Width
+}
+
+// direction is the reading direction shown in the status bar.
+func direction(v exportView) string {
+	if v.Page.Direction != "" {
+		return v.Page.Direction
+	}
+	switch v.Project.Format {
+	case "comic_ltr":
+		return pagedoc.DirLTR
+	case "webtoon":
+		return pagedoc.DirVertical
+	}
+	return pagedoc.DirRTL
+}
+
+// pageSizeLabel names the trim in the status bar ("B5 · 182 × 257 mm").
+func pageSizeLabel(ctx context.Context, v exportView) string {
+	size := strings.ToLower(strings.TrimSpace(v.Project.PageSize))
+	switch size {
+	case "b5", "a5", "a4":
+		return i18n.T(ctx, "exportui.page_size."+size)
+	}
+	w, h := v.Project.PageWidth, v.Project.PageHeight
+	if v.Page.Width > 0 && v.Page.Height > 0 {
+		w, h = v.Page.Width, v.Page.Height
+	}
+	if size == "webtoon" {
+		return i18n.T(ctx, "exportui.page_size.webtoon", "width", w, "height", h)
+	}
+	return i18n.T(ctx, "exportui.page_size.custom", "width", w, "height", h)
+}
+
+func layersTitle(ctx context.Context, p pagedoc.Page) string {
+	if len(p.Panels) == 0 {
+		return i18n.T(ctx, "exportui.layers")
+	}
+	return i18n.T(ctx, "exportui.layers_panel", "page", p.Number, "panel", 1)
+}
+
+// layerRows lists a panel's layers top first, as the editor does.
+func layerRows(p pagedoc.Panel) []pagedoc.Layer {
+	out := make([]pagedoc.Layer, 0, len(p.Layers))
+	for i := len(p.Layers) - 1; i >= 0; i-- {
+		out = append(out, p.Layers[i])
+	}
+	return out
+}
+
+// selectedLayer is the layer the editor selects when it opens a panel.
+func selectedLayer(p pagedoc.Panel) string {
+	for _, l := range p.Layers {
+		if l.Kind != pagedoc.LayerLettering {
+			return l.ID
+		}
+	}
+	return ""
+}
+
+func layerIcon(kind string) string {
+	switch kind {
+	case pagedoc.LayerLettering:
+		return "message-circle"
+	case pagedoc.LayerCharacter:
+		return "user"
+	case pagedoc.LayerFX:
+		return "bolt"
+	}
+	return "photo"
+}
+
+// defaultLayerNames are the names page creation stores for new layers. They
+// are shown in the interface language; names a creator gave are shown as is.
+var defaultLayerNames = map[string][]string{
+	pagedoc.LayerBackground: {"Background"},
+	pagedoc.LayerCharacter:  {"Character"},
+	pagedoc.LayerFX:         {"Effects", "FX"},
+	pagedoc.LayerLettering:  {"Lettering"},
+}
+
+func layerName(ctx context.Context, l pagedoc.Layer) string {
+	kind := l.Kind
+	if _, ok := defaultLayerNames[kind]; !ok {
+		kind = pagedoc.LayerBackground
+	}
+	if l.Name != "" {
+		for _, name := range defaultLayerNames[kind] {
+			if l.Name == name {
+				return i18n.T(ctx, "exportui.layer."+kind)
+			}
+		}
+		return l.Name
+	}
+	return i18n.T(ctx, "exportui.layer."+kind)
+}
+
+// layerMeta is the mono note on a layer row: bubble count, Character Lock
+// score, or human/AI provenance.
+func layerMeta(ctx context.Context, page pagedoc.Page, panel pagedoc.Panel, l pagedoc.Layer) string {
+	if l.Kind == pagedoc.LayerLettering {
+		n := 0
+		for _, b := range page.Bubbles {
+			if b.PanelID == panel.ID {
+				n++
+			}
+		}
+		return i18n.T(ctx, "exportui.bubble_count", "count", n)
+	}
+	if l.Kind == pagedoc.LayerCharacter && l.LockScore != nil {
+		return i18n.T(ctx, "exportui.lock_score", "score", int(*l.LockScore*100+.5))
+	}
+	switch l.Provenance {
+	case pagedoc.ProvenanceAI, pagedoc.ProvenanceMixed:
+		return i18n.T(ctx, "exportui.provenance."+l.Provenance)
+	}
+	return i18n.T(ctx, "exportui.provenance.human")
+}
+
+func visibilityIcon(l pagedoc.Layer) string {
+	if l.Visible {
+		return "eye"
+	}
+	return "eye-off"
 }
 
 templ jobStatus(v exportView) {
