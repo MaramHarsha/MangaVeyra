@@ -121,7 +121,7 @@ func TestCharacterReferencesPortraitSettingsAndAILabel(t *testing.T) {
 			t.Fatal(err)
 		}
 		asset, err := assets.From(ta.Deps).Save(ctx, assets.SaveParams{OwnerID: owner.ID, ProjectID: project.ID,
-			Kind: "character_ref", Source: assets.SourceUpload, Data: []byte("original-reference")})
+			Kind: "character_ref", Source: assets.SourceUpload, Data: biblePNG(t)})
 		if err != nil {
 			t.Fatal(err)
 		}

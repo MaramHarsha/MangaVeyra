@@ -171,6 +171,9 @@ func (s *service) AddCharacterRefTx(ctx context.Context, tx *db.Tx, characterID,
 	if asset.ProjectID == nil || *asset.ProjectID != projectID {
 		return CharacterRef{}, ErrForbidden
 	}
+	if err := imageAssetMetadata(asset); err != nil {
+		return CharacterRef{}, err
+	}
 	var order int
 	if err := tx.Get(ctx, &order, `SELECT COALESCE(MAX(order_idx) + 1, 0) FROM character_refs WHERE character_id = ?`, characterID); err != nil {
 		return CharacterRef{}, fmt.Errorf("studio: allocate reference order: %w", err)
@@ -179,6 +182,9 @@ func (s *service) AddCharacterRefTx(ctx context.Context, tx *db.Tx, characterID,
 	if _, err := tx.Exec(ctx, `INSERT INTO character_refs (id, character_id, asset_id, kind, label, order_idx, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, ref.ID, characterID, ref.AssetID, ref.Kind, ref.Label, ref.Order, db.Now()); err != nil {
 		return CharacterRef{}, fmt.Errorf("studio: insert character reference: %w", err)
+	}
+	if err := touchCharacter(ctx, tx, characterID); err != nil {
+		return CharacterRef{}, err
 	}
 	return ref, nil
 }
@@ -207,6 +213,9 @@ func (s *service) SetCharacterPortraitTx(ctx context.Context, tx *db.Tx, charact
 	}
 	if asset.ProjectID == nil || *asset.ProjectID != projectID {
 		return ErrForbidden
+	}
+	if err := imageAssetMetadata(asset); err != nil {
+		return err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE characters SET portrait_asset_id = ?, updated_at = ? WHERE id = ?`, assetID, db.Now(), characterID); err != nil {
 		return fmt.Errorf("studio: update character portrait: %w", err)

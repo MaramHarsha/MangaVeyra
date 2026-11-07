@@ -18,6 +18,7 @@ type Module struct {
 func New(d *core.Deps) *Module {
 	svc := &service{db: d.DB, auth: d.Auth}
 	core.Provide[Service](d, svc)
+	core.Provide[BibleService](d, svc)
 	return &Module{d: d, svc: svc}
 }
 
