@@ -72,7 +72,7 @@ templ Base(c *Chrome) {
 				<link rel="modulepreload" href={ p }/>
 			}
 			if c.Assets.Script != "" {
-				<script type="module" src={ c.Assets.Script }></script>
+				<script type="module" src={ c.Assets.Script } blocking="render"></script>
 			}
 		</head>
 		<body

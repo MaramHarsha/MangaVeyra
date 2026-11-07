@@ -18,6 +18,7 @@ import './lib/export';
 import { installForms } from './lib/forms';
 import { installCounters } from './lib/counter';
 import { installAutoSubmit } from './lib/filters';
+import { installPageTurns } from './lib/transitions';
 import './lib/models';
 import { mountIslands, unmountIslands } from './islands/registry';
 
@@ -244,6 +245,10 @@ function setUnread(n: number): void {
     dot.hidden = n <= 0;
   });
 }
+
+// ---- page turns ---------------------------------------------------------------
+
+installPageTurns(window, root);
 
 // ---- start -------------------------------------------------------------------
 
