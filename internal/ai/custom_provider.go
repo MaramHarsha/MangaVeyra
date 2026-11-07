@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
-	"github.com/MaramHarsha/MangaVeyra/internal/core/netguard"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
@@ -120,8 +119,7 @@ func (m *Module) customPost(w http.ResponseWriter, r *http.Request) error {
 		}
 		// Check saving policy without dispatching to the endpoint. DNS/IP policy is
 		// rechecked by the guarded transport when the human presses Test.
-		allowPrivate := m.d.Cfg != nil && m.d.Cfg.AllowPrivateProviderURLs
-		if strings.Contains(v.Endpoint, "localhost") && !allowPrivate {
+		if strings.Contains(v.Endpoint, "localhost") && !m.private.Allowed(r.Context()) {
 			v.Errors.Add("endpoint", i18n.T(r.Context(), "aiimage.custom.private_disabled"))
 		}
 		if v.Errors.Has() {
@@ -154,8 +152,7 @@ func (m *Module) customPost(w http.ResponseWriter, r *http.Request) error {
 			v.Notice = i18n.T(r.Context(), "models.local_only.body")
 			return m.renderCustom(w, r, http.StatusUnprocessableEntity, v)
 		}
-		allowPrivate := m.d.Cfg != nil && m.d.Cfg.AllowPrivateProviderURLs
-		if _, err := (netguard.Policy{AllowPrivate: allowPrivate, AllowHTTP: true}).CheckURL(r.Context(), record.BaseURL, nil); err != nil {
+		if _, err := m.private.netPolicy(r.Context()).CheckURL(r.Context(), record.BaseURL, nil); err != nil {
 			v.Notice = i18n.T(r.Context(), "aiimage.custom.endpoint_invalid")
 			return m.renderCustom(w, r, http.StatusUnprocessableEntity, v)
 		}

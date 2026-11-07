@@ -182,8 +182,12 @@ func (s *textService) generateLocalText(ctx context.Context, req TextGenerateReq
 	return zero, &GenerateError{Code: CodeBadOutput, SafeMessage: invalidScriptMessage(reason), Err: errInvalidScriptOutput}
 }
 
-func newLocalTextHTTPClient(allowPrivate bool) *http.Client {
-	policy := netguard.Policy{AllowPrivate: allowPrivate, AllowHTTP: true}
+// newLocalTextHTTPClient dials only loopback and private-network addresses
+// (custom connections are local servers) and refuses every request while the
+// live private-endpoint setting is off. Link-local and metadata addresses stay
+// blocked by netguard in every case.
+func newLocalTextHTTPClient(private *privateEndpointPolicy) *http.Client {
+	policy := netguard.Policy{AllowPrivate: true, AllowHTTP: true}
 	transport := policy.Transport()
 	dialer := policy.Dialer()
 	dialer.Control = func(network, address string, conn syscall.RawConn) error {
@@ -201,7 +205,7 @@ func newLocalTextHTTPClient(allowPrivate bool) *http.Client {
 		return nil
 	}
 	transport.DialContext = dialer.DialContext
-	return &http.Client{Timeout: 2 * time.Minute, Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("ai: provider redirects are disabled") }}
+	return &http.Client{Timeout: 2 * time.Minute, Transport: privateGate{policy: private, next: transport}, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("ai: provider redirects are disabled") }}
 }
 
 func testLocalText(ctx context.Context, p dispatchProvider, doer httpDoer) error {
