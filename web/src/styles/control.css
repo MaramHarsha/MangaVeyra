@@ -27,7 +27,7 @@
 .mv-control__actions p { font-size: var(--mv-fs-meta); }
 .mv-control__refs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
 .mv-control__refs figure { position: relative; margin: 0; min-width: 0; }
-.mv-control__refs img { display: block; width: 100%; aspect-ratio: 1.4; object-fit: cover; border: 1px solid var(--mv-line); background: var(--mv-surface); }
+.mv-control__refs img { display: block; width: 100%; aspect-ratio: 1.4; object-fit: contain; border: 1px solid var(--mv-line); background: var(--mv-surface); }
 .mv-control__refs figcaption { font-size: var(--mv-fs-micro); color: var(--mv-text-2); overflow-wrap: anywhere; }
 .mv-control__drift { display: flex; gap: 8px; padding: 8px 6px; align-items: center; }
 .mv-control__drift.selected, .mv-ed__version.selected { background: var(--mv-surface-2); }

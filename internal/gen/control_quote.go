@@ -51,7 +51,7 @@ func (s *service) QuotePage(ctx context.Context, actor studio.Actor, req PageReq
 		}
 	}
 	for _, pn := range page.Panels {
-		p, err := s.preparePanel(ctx, actor, PanelRequest{ProjectID: req.ProjectID, PageID: req.PageID, PanelID: pn.ID, ExpectedVersion: page.Version, Variations: 1, RoutingMode: req.RoutingMode}, page, "")
+		p, err := s.preparePanelControls(ctx, actor, PanelRequest{ProjectID: req.ProjectID, PageID: req.PageID, PanelID: pn.ID, ExpectedVersion: page.Version, Variations: 1, RoutingMode: req.RoutingMode}, page, "", sketch)
 		if err != nil {
 			return out, err
 		}

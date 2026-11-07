@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
@@ -19,13 +20,38 @@ type lockAssessment struct {
 	Outfit                                                        *float64
 }
 
+type lockWorkerOutput struct {
+	Scores                     []float64         `json:"scores"`
+	Outfits                    []*float64        `json:"outfit_scores"`
+	Method                     string            `json:"method"`
+	IdentityMethod             string            `json:"identity_method"`
+	OutfitFeatures             [][]float64       `json:"outfit_features"`
+	FeatureMethods             map[string]string `json:"feature_methods"`
+	OutfitCosines              [][]float64       `json:"outfit_cosines"`
+	OutfitReferenceIndices     []*int            `json:"outfit_reference_indices"`
+	OutfitReferenceCount       int               `json:"outfit_reference_count"`
+	OutfitPairFeatures         [][][]float64     `json:"outfit_pair_features"`
+	OutfitPairScores           [][]float64       `json:"outfit_pair_scores"`
+	OutfitPairReferenceIndices []*int            `json:"outfit_pair_reference_indices"`
+	OutfitFit                  *outfitFit        `json:"outfit_fit"`
+}
+
 func fmtIndex(prefix string, n int) string { return prefix + strconv.Itoa(n) }
-func (s *service) assessPixels(ctx context.Context, run *jobs.Run, c studio.Character, hash string, ids []string, pixels [][]byte, scope jobs.Scope, slot string) ([]lockAssessment, error) {
+func (s *service) assessPixels(ctx context.Context, run *jobs.Run, c studio.Character, hash string, ids []string, pixels [][]byte, scope jobs.Scope, slot, selectedModel string) ([]lockAssessment, error) {
 	if len(ids) == 0 || len(ids) != len(pixels) || len(ids) > 8 || len(c.Refs) == 0 {
 		return nil, studio.ErrInvalid
 	}
-	if _, ok := s.workerFor(ctx, "character.score"); !ok {
+	model, ok := s.workerFor(ctx, "character.score")
+	if !ok {
 		return nil, ErrDeferredFeature
+	}
+	if selectedModel != "" {
+		// A chapter assessment freezes the model at enqueue. A worker change
+		// cannot silently mix different metrics partway through its batches.
+		if model != selectedModel {
+			return nil, ErrDeferredFeature
+		}
+		model = selectedModel
 	}
 	files := map[string][]byte{}
 	for i, r := range scoringRefs(c.Refs) {
@@ -38,48 +64,63 @@ func (s *service) assessPixels(ctx context.Context, run *jobs.Run, c studio.Char
 		}
 		files[fmtIndex("reference_", i)] = data
 	}
-	for _, outfit := range c.Outfits {
-		if outfit.IsDefault && outfit.AssetID != "" {
-			data, _, err := s.readOwned(ctx, c.ProjectID, outfit.AssetID)
-			if err != nil {
-				return nil, err
-			}
-			files["outfit_0"] = data
-			break
-		}
+	viewLimit := 1
+	if model == lockMultiviewModel {
+		viewLimit = 5
 	}
-	for _, r := range c.Refs {
-		if r.Kind == "outfit" && files["outfit_0"] == nil {
-			data, _, err := s.readOwned(ctx, c.ProjectID, r.AssetID)
-			if err != nil {
-				return nil, err
-			}
-			files["outfit_0"] = data
-			break
+	outfitIDs := outfitReferenceIDs(c, viewLimit)
+	for i, id := range outfitIDs {
+		data, _, err := s.readOwned(ctx, c.ProjectID, id)
+		if err != nil {
+			return nil, err
 		}
+		files[fmtIndex("outfit_", i)] = data
 	}
 	for i, data := range pixels {
 		files[fmtIndex("candidate_", i)] = data
 	}
-	child, err := s.runLockWorker(ctx, run, "character.score", lockModel, slot, scope, map[string]any{"threshold": LockThreshold}, files)
+	child, err := s.runLockWorker(ctx, run, "character.score", model, slot, scope, map[string]any{"threshold": LockThreshold}, files)
 	if child != nil {
 		run.AddActual(child.Actual)
 	}
 	if err != nil {
 		return nil, err
 	}
-	var out struct {
-		Scores  []float64  `json:"scores"`
-		Outfits []*float64 `json:"outfit_scores"`
-		Method  string     `json:"method"`
-	}
-	if json.Unmarshal(child.Output, &out) != nil || !validLockMethod(out.Method) || len(out.Scores) != len(ids) || len(out.Outfits) != len(ids) {
+	var out lockWorkerOutput
+	if json.Unmarshal(child.Output, &out) != nil || !validLockMethod(out.Method) || !strings.HasPrefix(out.Method, lockMethodForModel(model)+":") || len(out.Scores) != len(ids) || len(out.Outfits) != len(ids) {
 		return nil, studio.ErrInvalid
+	}
+	if model == lockOutfitModel {
+		if !validLockMethod(out.IdentityMethod) || !strings.HasPrefix(out.IdentityMethod, lockCCIPMethod+":") || out.FeatureMethods["ccip"] != out.IdentityMethod || !validFeatureMethod(out.FeatureMethods["fashion"], "fashion-clip-v1") || len(out.OutfitFeatures) != len(ids) {
+			return nil, studio.ErrInvalid
+		}
+		for i, features := range out.OutfitFeatures {
+			if out.Outfits[i] == nil {
+				if len(features) != 0 {
+					return nil, studio.ErrInvalid
+				}
+				continue
+			}
+			if len(features) != 2 {
+				return nil, studio.ErrInvalid
+			}
+			for _, value := range features {
+				if math.IsNaN(value) || math.IsInf(value, 0) || value < -1.00001 || value > 1.00001 {
+					return nil, studio.ErrInvalid
+				}
+			}
+		}
+	}
+	if model == lockMultiviewModel {
+		if !validMultiviewOutput(out, len(outfitIDs)) {
+			return nil, studio.ErrInvalid
+		}
 	}
 	found := make([]lockAssessment, 0, len(ids))
 	for i, identity := range out.Scores {
 		outfit := out.Outfits[i]
-		if !finiteScore(identity) || outfit != nil && !finiteScore(*outfit) || files["outfit_0"] != nil && outfit == nil || files["outfit_0"] == nil && outfit != nil {
+		identityMismatch := (model == lockOutfitModel || model == lockMultiviewModel) && identity < LockThreshold
+		if !finiteScore(identity) || outfit != nil && !finiteScore(*outfit) || files["outfit_0"] != nil && outfit == nil && !identityMismatch || files["outfit_0"] == nil && outfit != nil || identityMismatch && outfit != nil {
 			return nil, studio.ErrInvalid
 		}
 		found = append(found, lockAssessment{ProjectID: c.ProjectID, CharacterID: c.ID, AssetID: ids[i], ReferenceHash: hash, Method: out.Method, JobID: run.Job.ID, Identity: identity, Outfit: outfit})
@@ -153,6 +194,7 @@ func (s *service) WithLockScores(ctx context.Context, actor studio.Actor, p *pag
 		return err
 	}
 	hashes := map[string]string{}
+	methods := map[string]string{}
 	for i := range p.Panels {
 		for j := range p.Panels[i].Layers {
 			l := &p.Panels[i].Layers[j]
@@ -174,13 +216,18 @@ func (s *service) WithLockScores(ctx context.Context, actor studio.Actor, p *pag
 					return err
 				}
 				hashes[c.ID] = hash
+				method, err := s.currentAssessmentMethod(ctx, p.ProjectID, c.ID, hash)
+				if err != nil {
+					return err
+				}
+				methods[c.ID] = method
 			}
 			var row struct {
 				Identity float64         `db:"identity_score"`
 				Outfit   sql.NullFloat64 `db:"outfit_score"`
 				Method   string          `db:"method"`
 			}
-			err := s.db.Get(ctx, &row, `SELECT identity_score,outfit_score,method FROM character_assessments WHERE project_id=? AND character_id=? AND asset_id=? AND reference_hash=?`, p.ProjectID, l.CharacterID, l.Asset.ID, hash)
+			err := s.db.Get(ctx, &row, `SELECT identity_score,outfit_score,method FROM character_assessments WHERE project_id=? AND character_id=? AND asset_id=? AND reference_hash=? AND method=?`, p.ProjectID, l.CharacterID, l.Asset.ID, hash, methods[l.CharacterID])
 			if db.IsNotFound(err) {
 				continue
 			}
@@ -201,4 +248,23 @@ func (s *service) WithLockScores(ctx context.Context, actor studio.Actor, p *pag
 		}
 	}
 	return nil
+}
+
+// A score from a different model/weight revision cannot be averaged with the
+// current measurement. If a new explicitly configured model has no evidence,
+// report unassessed until it completes; offline views retain the latest method.
+func (s *service) currentAssessmentMethod(ctx context.Context, projectID, characterID, hash string) (string, error) {
+	var rows []struct {
+		Method string `db:"method"`
+	}
+	if err := s.db.Select(ctx, &rows, `SELECT method FROM character_assessments WHERE project_id=? AND character_id=? AND reference_hash=? ORDER BY created_at DESC,id DESC LIMIT 1025`, projectID, characterID, hash); err != nil {
+		return "", err
+	}
+	model, available := s.workerFor(ctx, "character.score")
+	for _, r := range rows {
+		if validLockMethod(r.Method) && (!available || strings.HasPrefix(r.Method, lockMethodForModel(model)+":")) {
+			return r.Method, nil
+		}
+	}
+	return "", nil
 }

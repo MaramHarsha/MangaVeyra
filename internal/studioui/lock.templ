@@ -22,7 +22,16 @@ templ BibleLockCard(v biblePage) {
 		</div>
 		<p>{ i18n.T(ctx,"bible.lock.references","count",v.Lock.References) }</p>
 		if v.Lock.Score!=nil {
-			<p>{ i18n.T(ctx,"bible.lock.measured","count",v.Lock.Panels) }</p>
+			<p>{ i18n.T(ctx,lockMeasurementKey(v.Lock.Method),"count",v.Lock.Panels,"method",lockMethodLabel(v.Lock.Method)) }</p>
+		}
+		if len(v.Lock.RecentScores)>0 {
+			<svg class="mv-bible__lock-chart" viewBox="0 0 119 36" preserveAspectRatio="none" role="img">
+				<title>{ i18n.T(ctx,"bible.lock.recent","count",len(v.Lock.RecentScores)) }</title>
+				<desc>{ lockChartSummary(v.Lock.RecentScores) }</desc>
+				for i, score := range v.Lock.RecentScores {
+					<rect x={ strconv.Itoa(i*10) } y={ strconv.FormatFloat((1-score)*36,'f',3,64) } width="9" height={ strconv.FormatFloat(score*36,'f',3,64) } class={ ui.If(score<.9,"mv-bible__lock-chart-drift") }></rect>
+				}
+			</svg>
 		}
 		if v.Lock.Unscored>0 {
 			<p>{ i18n.T(ctx,"bible.lock.unscored_panels","count",v.Lock.Unscored) }</p>
@@ -54,7 +63,7 @@ templ BibleLockCard(v biblePage) {
 				</form>
 				<form action={ templ.URL(characterPath(v.Project.ID, v.Character.ID) + "/lock/train") } method="post" novalidate>
 					<input type="hidden" name="revision" value={ bibleRevision(v.Character.UpdatedAt) }/>
-					@ui.Button(ui.ButtonProps{Type: "submit", Size: ui.SM, Disabled: !v.Lock.CanTrain || v.Lock.JobID != "", Tip: ui.If(!v.Lock.CanTrain, i18n.T(ctx, "bible.lock.training_needed"))}) {
+					@ui.Button(ui.ButtonProps{Type: "submit", Size: ui.SM, Disabled: !v.Lock.CanTrain || v.Lock.JobID != "", Tip: ui.If(!v.Lock.CanTrain, i18n.T(ctx, "bible.lock.training_needed")), Attrs: templ.Attributes{"data-tip-pos":"end"}}) {
 						{ i18n.T(ctx,"bible.lock.train") }
 					}
 				</form>

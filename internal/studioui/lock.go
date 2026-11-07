@@ -3,9 +3,11 @@ package studioui
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
@@ -88,5 +90,34 @@ func lockPercent(n *float64) string {
 	if n == nil {
 		return ""
 	}
-	return strconv.Itoa(int(*n*100+.5)) + "%"
+	percent := int(math.Floor(*n*100 + 1e-9))
+	if *n < gen.LockThreshold && percent >= int(gen.LockThreshold*100) {
+		percent = int(gen.LockThreshold*100) - 1
+	}
+	return strconv.Itoa(percent) + "%"
+}
+
+func lockMethodLabel(method string) string {
+	if strings.HasPrefix(method, "ccip-caformer24-v1:") || strings.HasPrefix(method, "ccip-outfit-pair-v3:") || strings.HasPrefix(method, "ccip-outfit-multiview-v1:") {
+		return "CCIP"
+	}
+	return "DINOv2"
+}
+
+func lockMeasurementKey(method string) string {
+	if strings.HasPrefix(method, "ccip-outfit-multiview-v1:") {
+		return "bible.lock.measured_outfit_views"
+	}
+	if strings.HasPrefix(method, "ccip-outfit-pair-v3:") {
+		return "bible.lock.measured_outfit"
+	}
+	return "bible.lock.measured"
+}
+
+func lockChartSummary(scores []float64) string {
+	values := make([]string, len(scores))
+	for i, score := range scores {
+		values[i] = strconv.Itoa(i+1) + ": " + lockPercent(&score)
+	}
+	return strings.Join(values, " · ")
 }

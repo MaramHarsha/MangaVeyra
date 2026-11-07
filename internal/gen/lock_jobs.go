@@ -206,9 +206,12 @@ func (s *service) handleLock(ctx context.Context, run *jobs.Run) error {
 			pixels = append(pixels, data)
 			ids = append(ids, target.AssetID)
 		}
-		found, err := s.assessPixels(ctx, run, c, p.ReferenceHash, ids, pixels, j.Scope, "score-"+p.Targets[i].LayerID)
+		found, err := s.assessPixels(ctx, run, c, p.ReferenceHash, ids, pixels, j.Scope, "score-"+p.Targets[i].LayerID, p.Model)
 		if err != nil {
 			return mapImageJobError(ctx, err)
+		}
+		if len(assessments) > 0 && found[0].Method != assessments[0].Method {
+			return mapImageJobError(ctx, studio.ErrConflict)
 		}
 		assessments = append(assessments, found...)
 		if err := run.Progress(ctx, float64(end)/float64(len(p.Targets)), end, len(p.Targets), "Assessing Character Lock"); err != nil {
@@ -222,7 +225,7 @@ func (s *service) handleLock(ctx context.Context, run *jobs.Run) error {
 		if err := s.saveAssessmentsTx(ctx, tx, assessments); err != nil {
 			return nil, err
 		}
-		return map[string]any{"character_id": c.ID, "assessed": len(assessments), "method": lockMethod}, nil
+		return map[string]any{"character_id": c.ID, "assessed": len(assessments), "method": assessments[0].Method}, nil
 	})
 	if err != nil {
 		return mapImageJobError(ctx, err)

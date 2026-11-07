@@ -75,7 +75,7 @@ func (s *service) EnqueuePage(ctx context.Context, actor studio.Actor, req PageR
 	}
 	payload := controlArtPayload{Request: &req, Version: 1, Actor: storedActor{actor.UserID, actor.TokenID}, Scope: jobs.Scope{Kind: jobs.ScopePage, ProjectID: req.ProjectID, PageID: page.ID}}
 	for _, pn := range page.Panels {
-		p, err := s.preparePanel(ctx, actor, PanelRequest{ProjectID: req.ProjectID, PageID: page.ID, PanelID: pn.ID, ExpectedVersion: page.Version, Variations: 1, RoutingMode: req.RoutingMode}, page, "")
+		p, err := s.preparePanelControls(ctx, actor, PanelRequest{ProjectID: req.ProjectID, PageID: page.ID, PanelID: pn.ID, ExpectedVersion: page.Version, Variations: 1, RoutingMode: req.RoutingMode}, page, "", req.SketchAssetID != "")
 		if err != nil {
 			return nil, err
 		}

@@ -1,4 +1,5 @@
 <script lang="ts">
+ import {scorePercent} from './score';
  import {onMount, onDestroy, tick, untrack} from 'svelte';
  import Button from './Button.svelte';
  import CanvasStage from './CanvasStage.svelte';
@@ -604,7 +605,7 @@
  <button type="button" class="mv-ed__chip" class:selected={l.id === layerID} aria-pressed={l.id === layerID} title={name} onclick={() => layerID = l.id}>
   <span class={`mv-avatar mv-avatar--xs mv-avatar--c${avatarTone(l.character_id || l.id)}`} aria-hidden="true">{initials(name)}</span>
   <span class="mv-ed__chip-name">{name}</span>
-  {#if score !== undefined}<span class="mv-ed__chip-lock" class:drift={score < .9}><i class="ti ti-lock" aria-hidden="true"></i>{Math.round(score * 100)}%</span>{/if}
+  {#if score !== undefined}<span class="mv-ed__chip-lock" class:drift={score < .9}><i class="ti ti-lock" aria-hidden="true"></i>{scorePercent(score)}%</span>{/if}
  </button>
 {/snippet}
 
@@ -713,7 +714,7 @@
       <button type="button" class="mv-ed__layer-select" onclick={() => { if (l.kind === 'lettering') switchMode('lettering'); else { layerID = l.id; if (mode === 'lettering') switchMode('pages'); } }}>
        <i class={`ti ti-${l.kind === 'lettering' ? 'message-circle' : l.kind === 'character' ? 'user' : l.kind === 'fx' ? 'bolt' : 'photo'}`} aria-hidden="true"></i>
        <span>{name}</span>
-       <small>{l.kind === 'lettering' ? t('bubble.count', {count: page?.bubbles.filter(b => b.panel_id === panel!.id).length || 0}) : l.kind === 'character' && l.lock_score !== undefined ? t('lock_score', {score: Math.round((l.lock_score ?? 0) * 100)}) : l.provenance === 'ai' ? t('ai') : l.provenance === 'mixed' ? t('mixed') : t('human')}</small>
+       <small>{l.kind === 'lettering' ? t('bubble.count', {count: page?.bubbles.filter(b => b.panel_id === panel!.id).length || 0}) : l.kind === 'character' && l.lock_score !== undefined ? t('lock_score', {score: scorePercent(l.lock_score ?? 0)}) : l.provenance === 'ai' ? t('ai') : l.provenance === 'mixed' ? t('mixed') : t('human')}</small>
       </button>
       <button type="button" class="mv-iconlink" aria-label={l.visible ? t('layer.hide_named', {name}) : t('layer.show_named', {name})} disabled={!writableArt || l.locked} onclick={() => toggleVisible(l)}><i class={`ti ti-${l.visible ? 'eye' : 'eye-off'}`} aria-hidden="true"></i></button>
       <button type="button" class="mv-iconlink mv-ed__layer-lock" class:locked={l.locked} aria-label={l.locked ? t('layer.unlock_named', {name}) : t('layer.lock_named', {name})} disabled={!initial.permissions.lock || busy} onclick={() => { layerID = l.kind === 'lettering' ? layerID : l.id; void lockTarget('layer', l.id); }}><i class={`ti ti-${l.locked ? 'lock' : 'lock-open'}`} aria-hidden="true"></i></button>
@@ -782,7 +783,7 @@
        {#if c}
         <label class="mv-ed__var" class:selected={candidateIndex === c.index}>
          <span class="mv-ed__var-frame"><input type="radio" name="variation" value={c.index} bind:group={candidateIndex} aria-keyshortcuts={String(i + 1)} aria-label={t('variations.candidate', {number: i + 1})}/>{#if c.url}<img class="mv-ed__var-image" src={c.url} alt=""/>{/if}<span class="mv-ed__var-caption" aria-hidden="true">{t('variations.var', {number: i + 1})}</span><span class="mv-ed__var-key" aria-hidden="true">{i + 1}</span></span>
-         {#if c.lock_score !== undefined}<span class="mv-ed__var-lock" class:drift={c.lock_score < .9}>{t('lock_score', {score: Math.round(c.lock_score * 100)})}{#if c.lock_score < .9} · {t('variations.drift')}{/if}</span>{/if}
+         {#if c.lock_score !== undefined}<span class="mv-ed__var-lock" class:drift={c.lock_score < .9}>{t('lock_score', {score: scorePercent(c.lock_score)})}{#if c.lock_score < .9} · {t('variations.drift')}{/if}</span>{/if}
         </label>
        {:else}
         <span class="mv-ed__var mv-ed__var--empty" aria-hidden="true"><span class="mv-ed__var-frame" class:busy={jobRunning}><span class="mv-ed__var-caption">{t('variations.var', {number: i + 1})}</span><span class="mv-ed__var-key">{i + 1}</span></span></span>
@@ -793,7 +794,7 @@
     <section class="mv-ed__property">
      <div class="mv-ed__property-head"><strong>{t('variations.layer')}</strong></div>
      <div class="mv-ed__reroll">{#each rerollLayers as l (l.id)}<button type="button" class="mv-ed__reroll-button" title={label(l)} disabled={busy || !initial.permissions.generate || l.locked} onclick={() => void generate('layer', l.id)}><i class="ti ti-refresh" aria-hidden="true"></i><span>{rerollName(l)}</span></button>{/each}</div>
-     <p class="mv-ed__help">{drift ? t('variations.drift_hint', {number: candidates.indexOf(drift) + 1, name: driftName || t('layer.character'), score: Math.round((drift.lock_score || 0) * 100)}) : t('variations.layer_hint')}</p>
+     <p class="mv-ed__help">{drift ? t('variations.drift_hint', {number: candidates.indexOf(drift) + 1, name: driftName || t('layer.character'), score: scorePercent(drift.lock_score || 0)}) : t('variations.layer_hint')}</p>
      {#if drift}<Button small icon="wand" disabled={!initial.permissions.generate||busy} onclick={()=>void openControl('lockfix')}>{t('control.fix_character')}</Button>{/if}
     </section>
     <section class="mv-ed__property">

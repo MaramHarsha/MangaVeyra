@@ -367,7 +367,7 @@ func (s *service) renderImage(ctx context.Context, run *jobs.Run, p imagePayload
 		if c.Kind == pagedoc.LayerCharacter && plan.ProviderID != ai.PlaceholderID {
 			if character, err := s.studio.GetCharacter(ctx, c.CharacterID); err == nil {
 				if hash, err := referenceStamp(ctx, s.db, character); err == nil {
-					if assessed, err := s.assessPixels(ctx, run, character, hash, candidateIDs, candidateData, p.Scope, "auto-"+strconv.Itoa(callOffset+i)); err == nil {
+					if assessed, err := s.assessPixels(ctx, run, character, hash, candidateIDs, candidateData, p.Scope, "auto-"+strconv.Itoa(callOffset+i), ""); err == nil {
 						rendered.Assessments = append(rendered.Assessments, assessed...)
 						for k, a := range assessed {
 							score := assessmentScore(a)

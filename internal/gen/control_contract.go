@@ -53,6 +53,7 @@ type LockStatus struct {
 	Status               string       `json:"status"`
 	Method               string       `json:"method,omitempty"`
 	Score                *float64     `json:"score,omitempty"`
+	RecentScores         []float64    `json:"recent_scores,omitempty"`
 	DriftTotal           int          `json:"drift_total"`
 	Panels               int          `json:"panels"`
 	References           int          `json:"references"`

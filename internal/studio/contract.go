@@ -206,11 +206,12 @@ type BibleService interface {
 
 // CharacterRef is one reference image.
 type CharacterRef struct {
-	ID      string `json:"id"`
-	AssetID string `json:"asset_id"`
-	Kind    string `json:"kind"` // front | side | back | face | expression | outfit | sheet | other
-	Label   string `json:"label"`
-	Order   int    `json:"order"`
+	ID       string `json:"id"`
+	AssetID  string `json:"asset_id"`
+	Kind     string `json:"kind"` // front | side | back | face | expression | outfit | sheet | other
+	Label    string `json:"label"`
+	Order    int    `json:"order"`
+	OutfitID string `json:"outfit_id,omitempty"` // captured default variant for kind=outfit; legacy refs may be unassigned
 }
 
 // Outfit is a named outfit variant.

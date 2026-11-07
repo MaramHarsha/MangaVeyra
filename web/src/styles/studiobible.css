@@ -54,6 +54,9 @@
 .mv-bible__lock-heading strong { font-size: var(--mv-fs-ui); }
 .mv-bible__lock-score { font-family: var(--mv-font-display); font-size: 32px; color: var(--mv-success); }
 .mv-bible__lock-card p { font-size: var(--mv-fs-meta); line-height: 1.45; color: var(--mv-text-2); }
+.mv-bible__lock-chart { display: block; width: 100%; height: calc(var(--mv-space-6) + var(--mv-space-1)); }
+.mv-bible__lock-chart rect { fill: var(--mv-success); }
+.mv-bible__lock-chart rect.mv-bible__lock-chart-drift { fill: var(--mv-warning); }
 .mv-bible__facts > div { display: flex; justify-content: space-between; gap: 12px; padding-block: 9px; border-bottom: 1px solid var(--mv-line); font-size: var(--mv-fs-small); }
 .mv-bible__facts dt { color: var(--mv-text-2); flex: none; }
 .mv-bible__facts dd { margin: 0; text-align: end; overflow-wrap: anywhere; }
@@ -156,6 +159,7 @@
   .mv-bible__search { flex-basis: 100%; max-width: none; }
   .mv-bible__view { margin-inline-start: 0; }
   .mv-bible__detail-header h1 { font-size: 48px; }
+  .mv-bible__detail-header > .mv-bible__actions { max-width: 100%; flex-wrap: wrap; }
   .mv-bible__new-form .mv-seg { display: flex; flex-wrap: wrap; }
   .mv-bible__sheet-heading { flex-direction: column; align-items: flex-start; }
   .mv-bible__sheet, .mv-bible__sheets .mv-var .mv-tone, .mv-bible__sheets .mv-var__image { height: 180px; }

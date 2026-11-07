@@ -121,7 +121,7 @@ func (s *service) ListCharacters(ctx context.Context, projectID string) ([]Chara
 }
 
 func loadCharacterChildren(ctx context.Context, q db.Querier, c *Character) error {
-	if err := q.Select(ctx, &c.Refs, `SELECT id, asset_id AS "assetid", kind, label, order_idx AS "order" FROM character_refs
+	if err := q.Select(ctx, &c.Refs, `SELECT id, asset_id AS "assetid", kind, label, order_idx AS "order", COALESCE(outfit_id,'') AS "outfitid" FROM character_refs
 		WHERE character_id = ? ORDER BY order_idx, id`, c.ID); err != nil {
 		return fmt.Errorf("studio: list character references: %w", err)
 	}
@@ -179,8 +179,19 @@ func (s *service) AddCharacterRefTx(ctx context.Context, tx *db.Tx, characterID,
 		return CharacterRef{}, fmt.Errorf("studio: allocate reference order: %w", err)
 	}
 	ref := CharacterRef{ID: db.NewID(), AssetID: assetID, Kind: kind, Label: label, Order: order}
-	if _, err := tx.Exec(ctx, `INSERT INTO character_refs (id, character_id, asset_id, kind, label, order_idx, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, ref.ID, characterID, ref.AssetID, ref.Kind, ref.Label, ref.Order, db.Now()); err != nil {
+	var outfitID any
+	if kind == "outfit" {
+		var found string
+		err := tx.Get(ctx, &found, `SELECT id FROM character_outfits WHERE character_id=? AND is_default=TRUE ORDER BY order_idx,id LIMIT 1`, characterID)
+		if err != nil && !db.IsNotFound(err) {
+			return CharacterRef{}, fmt.Errorf("studio: bind outfit reference: %w", err)
+		}
+		if err == nil {
+			ref.OutfitID, outfitID = found, found
+		}
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO character_refs (id, character_id, asset_id, kind, label, order_idx, created_at,outfit_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?,?)`, ref.ID, characterID, ref.AssetID, ref.Kind, ref.Label, ref.Order, db.Now(), outfitID); err != nil {
 		return CharacterRef{}, fmt.Errorf("studio: insert character reference: %w", err)
 	}
 	if err := touchCharacter(ctx, tx, characterID); err != nil {

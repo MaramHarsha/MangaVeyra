@@ -17,6 +17,12 @@ import (
 
 const lockModel = "character-lock-dinov2-v1"
 const lockMethod = "dinov2-small-v1"
+const lockCCIPModel = "character-lock-ccip-v1"
+const lockCCIPMethod = "ccip-caformer24-v1"
+const lockOutfitModel = "character-lock-ccip-outfit-v3"
+const lockOutfitMethod = "ccip-outfit-pair-v3"
+const lockMultiviewModel = "character-lock-ccip-outfit-multiview-v1"
+const lockMultiviewMethod = "ccip-outfit-multiview-v1"
 
 // The fingerprint includes immutable image checksums and authored identity /
 // outfit descriptions. Changing the bible invalidates old evidence and LoRAs.
@@ -27,7 +33,11 @@ func referenceStamp(ctx context.Context, q db.Querier, c studio.Character) (stri
 		if err := q.Get(ctx, &sha, `SELECT sha256 FROM assets WHERE id=? AND project_id=?`, r.AssetID, c.ProjectID); err != nil {
 			return "", err
 		}
-		hashes = append(hashes, r.Kind+":"+r.AssetID+":"+sha)
+		entry := r.Kind + ":" + r.AssetID + ":" + sha
+		if r.OutfitID != "" {
+			entry += ":outfit=" + r.OutfitID
+		}
+		hashes = append(hashes, entry)
 	}
 	for _, o := range c.Outfits {
 		if o.IsDefault {
@@ -54,12 +64,21 @@ func (s *service) workerFor(ctx context.Context, kind string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
+	if kind == "character.score" {
+		// CCIP is advertised only by an explicitly configured CCIP worker.
+		// Auto/DINO-only installations keep their existing model selection.
+		for _, model := range []string{lockMultiviewModel, lockOutfitModel, lockCCIPModel, lockModel} {
+			for _, w := range workers {
+				if w.Status == jobs.WorkerOnline && time.Since(w.LastSeenAt) <= jobs.HeartbeatInterval*jobs.MissedHeartbeats && slices.Contains(w.JobTypes.V, kind) && slices.Contains(w.Backends.V, "vision") && slices.Contains(w.Models.V, model) {
+					return model, true
+				}
+			}
+		}
+		return "", false
+	}
 	for _, w := range workers {
 		if w.Status != jobs.WorkerOnline || time.Since(w.LastSeenAt) > jobs.HeartbeatInterval*jobs.MissedHeartbeats || !slices.Contains(w.JobTypes.V, kind) {
 			continue
-		}
-		if kind == "character.score" && slices.Contains(w.Backends.V, "vision") && slices.Contains(w.Models.V, lockModel) {
-			return lockModel, true
 		}
 		if kind == "character.train" && slices.Contains(w.Backends.V, "diffusers") {
 			for _, id := range []string{"illustrious-xl", "sdxl-base"} {
@@ -104,8 +123,12 @@ func (s *service) lockStatus(ctx context.Context, actor studio.Actor, projectID,
 	out.CanTrain = out.CanTrain && unique >= 3
 	out.CanScore = out.CanScore && len(c.Refs) > 0
 	// Only evidence for current raster assets and this current bible participates.
-	query := ` FROM layers l JOIN panels pn ON pn.id=l.panel_id JOIN pages pg ON pg.id=pn.page_id LEFT JOIN character_assessments a ON a.asset_id=l.asset_id AND a.character_id=l.character_id AND a.reference_hash=? WHERE pg.project_id=? AND l.character_id=? AND l.kind='character' AND l.asset_id IS NOT NULL`
-	args := []any{hash, projectID, characterID}
+	method, err := s.currentAssessmentMethod(ctx, projectID, characterID, hash)
+	if err != nil {
+		return out, err
+	}
+	query := ` FROM layers l JOIN panels pn ON pn.id=l.panel_id JOIN pages pg ON pg.id=pn.page_id LEFT JOIN character_assessments a ON a.asset_id=l.asset_id AND a.character_id=l.character_id AND a.reference_hash=? AND a.method=? WHERE pg.project_id=? AND l.character_id=? AND l.kind='character' AND l.asset_id IS NOT NULL`
+	args := []any{hash, method, projectID, characterID}
 	if chapterID != "" {
 		chapter, err := s.studio.GetChapter(ctx, chapterID)
 		if err != nil || chapter.ProjectID != projectID {
@@ -131,8 +154,14 @@ func (s *service) lockStatus(ctx context.Context, actor studio.Actor, projectID,
 		v := totals.Score.Float64
 		out.Score = &v
 		out.Status = "assessed"
-		out.Method = lockMethod
+		out.Method = method
 	}
+	// C3's designed bars show up to twelve actual current measurements,
+	// oldest to newest. Never synthesize or pad missing measurements.
+	if err := s.db.Select(ctx, &out.RecentScores, `SELECT CASE WHEN a.outfit_score IS NOT NULL AND a.outfit_score<a.identity_score THEN a.outfit_score ELSE a.identity_score END`+query+` AND a.id IS NOT NULL ORDER BY a.created_at DESC,a.id DESC LIMIT 12`, args...); err != nil {
+		return out, err
+	}
+	slices.Reverse(out.RecentScores)
 	var drift []struct {
 		PageID      string          `db:"page_id"`
 		PanelID     string          `db:"panel_id"`
@@ -206,12 +235,33 @@ func (s *service) lockStatus(ctx context.Context, actor studio.Actor, projectID,
 }
 
 func validLockMethod(method string) bool {
-	if !strings.HasPrefix(method, lockMethod+":") {
+	for _, prefix := range []string{lockMethod, lockCCIPMethod, lockOutfitMethod, lockMultiviewMethod} {
+		if validFeatureMethod(method, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func validFeatureMethod(method, prefix string) bool {
+	if !strings.HasPrefix(method, prefix+":") {
 		return false
 	}
-	hash := strings.TrimPrefix(method, lockMethod+":")
-	b, err := hex.DecodeString(hash)
+	b, err := hex.DecodeString(strings.TrimPrefix(method, prefix+":"))
 	return err == nil && len(b) == 32
+}
+
+func lockMethodForModel(model string) string {
+	if model == lockMultiviewModel {
+		return lockMultiviewMethod
+	}
+	if model == lockOutfitModel {
+		return lockOutfitMethod
+	}
+	if model == lockCCIPModel {
+		return lockCCIPMethod
+	}
+	return lockMethod
 }
 
 func distinctReferences(ctx context.Context, q db.Querier, c studio.Character) (int, error) {

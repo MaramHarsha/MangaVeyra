@@ -87,7 +87,7 @@ func (s *service) EnqueueCharacterSheet(ctx context.Context, actor studio.Actor,
 	req.ExpectedUpdatedAt = c.UpdatedAt
 	sheet := component{Name: c.Name + " · sheet", Prompt: sheetPrompt(req.Style, c), OwnRefs: true, Background: "opaque", Negative: sheetNegative(req.Style)}
 	p := imagePayload{Version: imagePayloadVersion, Request: requestJSON(req), Actor: storedActor{actor.UserID, actor.TokenID}, Scope: jobs.Scope{Kind: jobs.ScopeProject, ProjectID: req.ProjectID}, CharacterID: c.ID, ExpectedUpdatedAt: c.UpdatedAt, Style: req.Style, Plan: ai.ImagePlan{Task: ai.TaskCharacterSheet}}
-	for _, ref := range orderedRefs(c.Refs) {
+	for _, ref := range generationRefs(c) {
 		if len(p.References) == 4 {
 			break
 		}
@@ -115,6 +115,13 @@ func (s *service) EnqueuePanel(ctx context.Context, actor studio.Actor, req Pane
 	return s.enqueueImage(ctx, p)
 }
 func (s *service) preparePanel(ctx context.Context, actor studio.Actor, req PanelRequest, page pagedoc.Page, batchID string) (imagePayload, error) {
+	return s.preparePanelControls(ctx, actor, req, page, batchID, false)
+}
+
+// A sketch supplies the complete composition. Suppress a saved pose before the
+// first planning call, rather than requiring pose support and discarding the
+// pose afterwards. The original document still owns the version/target fence.
+func (s *service) preparePanelControls(ctx context.Context, actor studio.Actor, req PanelRequest, page pagedoc.Page, batchID string, sketch bool) (imagePayload, error) {
 	if !db.ValidID(req.ProjectID) || !db.ValidID(req.PageID) || !db.ValidID(req.PanelID) || !utf8.ValidString(req.Prompt) || len([]rune(req.Prompt)) > pagedoc.MaxPromptRunes {
 		return imagePayload{}, studio.ErrInvalid
 	}
@@ -143,7 +150,7 @@ func (s *service) preparePanel(ctx context.Context, actor studio.Actor, req Pane
 		pose = nil
 	}
 	// Composition-preserving repair uses the existing art as its pose source.
-	if req.PreserveComposition {
+	if req.PreserveComposition || sketch {
 		pose = nil
 	}
 	p := imagePayload{PanelType: pn.Shot, Pose: pose, Version: imagePayloadVersion, Request: requestJSON(req), Actor: storedActor{actor.UserID, actor.TokenID}, Scope: jobs.Scope{Kind: jobs.ScopePanel, ProjectID: req.ProjectID, PageID: page.ID, PanelID: pn.ID}, PageID: page.ID, PanelID: pn.ID, ExpectedVersion: page.Version, TargetHash: hashPanel(*pn), Style: project.Style, BatchID: batchID, Plan: ai.ImagePlan{Task: ai.TaskPanel}}
@@ -217,7 +224,7 @@ func (s *service) preparePanel(ctx context.Context, actor studio.Actor, req Pane
 				return p, err
 			}
 			p.Components[idx].ReferenceHash = hash
-			for _, r := range orderedRefs(character.Refs) {
+			for _, r := range generationRefs(character) {
 				if !seen[r.AssetID] {
 					if len(p.References) >= 32 {
 						continue
@@ -245,7 +252,7 @@ func (s *service) preparePanel(ctx context.Context, actor studio.Actor, req Pane
 		}
 		p.InitAssetID = l.Asset.ID
 		p.Strength = .9
-		p.Components[0].Prompt = clip(p.Components[0].Prompt, 2800) + " Preserve the source character's pose, silhouette, scale and position. Correct only the identity, face, hair and expected outfit using the kept references. " + promptRules
+		p.Components[0].Prompt = clip(p.Components[0].Prompt, 2800) + " Preserve the source character's pose, silhouette, scale and position. Correct only the identity, face, hair and expected outfit using the kept references. Reconstruct visible clothing and accessories from the approved references, rather than retaining incorrect source clothing. Keep the hands' pose while restoring reference gloves when present. Match the reference garment lengths, lapels, scarf, fasteners and bag details. " + promptRules
 	}
 	bounds := pagedoc.Bounds(pn.Points)
 	scale := math.Min(1, 1024/math.Max(bounds.W, bounds.H))
@@ -325,7 +332,7 @@ func (s *service) EnqueueRegionEdit(ctx context.Context, actor studio.Actor, req
 			return nil, err
 		}
 		p.Components[0].ReferenceHash = hash
-		for i, ref := range orderedRefs(character.Refs) {
+		for i, ref := range generationRefs(character) {
 			if i >= 4 {
 				break
 			}

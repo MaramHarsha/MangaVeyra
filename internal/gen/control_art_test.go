@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/ai"
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
@@ -21,6 +22,71 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 )
+
+type sketchWithoutPoseImages struct{ fakeImages }
+
+func (f *sketchWithoutPoseImages) PlanImage(ctx context.Context, req ai.ImagePlanRequest) (ai.ImagePlan, error) {
+	if req.Needs.Pose {
+		return ai.ImagePlan{}, errors.New("this configured sketch route has no pose control")
+	}
+	return f.fakeImages.PlanImage(ctx, req)
+}
+
+func TestSketchCompositionDoesNotRequireThePreviousPoseCapability(t *testing.T) {
+	forEachGenDialect(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		f, ps, pages := controlPages(t, ta, 2)
+		target := pages[0]
+		poseBytes, _ := json.Marshal(pagedoc.PosePresets()["crouch"])
+		if err := json.Unmarshal(poseBytes, &target.Panels[0].Pose); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ps.SavePage(ctx, target, target.Version, pagestore.Change{ActorKind: "user", ActorID: f.actor.UserID, Action: "save"}); err != nil {
+			t.Fatal(err)
+		}
+		target, err := ps.GetPage(ctx, target.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fake := &sketchWithoutPoseImages{}
+		gen.SetImageServiceForTest(f.gen, fake)
+		controls := core.MustUse[gen.ControlService](ta.Deps)
+		req := gen.PageRequest{ProjectID: f.project.ID, PageID: target.ID, ExpectedVersion: target.Version}
+		if _, err := controls.QuotePage(ctx, f.actor, req, false); err == nil {
+			t.Fatal("ordinary generation silently ignored the saved pose")
+		}
+		if _, err := controls.QuotePage(ctx, f.actor, req, true); err != nil {
+			t.Fatalf("sketch quote unnecessarily required the old pose: %v", err)
+		}
+		req.SketchAssetID = target.Panels[0].Layers[0].Asset.ID
+		req.Strength, req.Finish = .62, "screentone"
+		job, err := controls.EnqueuePage(ctx, f.actor, req)
+		if err != nil {
+			t.Fatalf("sketch dispatch unnecessarily required the old pose: %v", err)
+		}
+		if done := runArtJob(t, ta, job.ID); done.State != jobs.StateDone {
+			t.Fatalf("sketch conversion failed: %+v", done.Error)
+		}
+		for _, call := range fake.requests {
+			if call.Plan.Needs.Pose || call.Init == nil {
+				t.Fatal("sketch was not used as the composition source")
+			}
+			for _, ref := range call.References {
+				if ref.Role == "pose" {
+					t.Fatal("old pose leaked into sketch conversion")
+				}
+			}
+		}
+		after, err := ps.GetPage(ctx, target.ID)
+		if err != nil || !reflect.DeepEqual(after.Panels[0].Pose, target.Panels[0].Pose) || !reflect.DeepEqual(after.Bubbles, target.Bubbles) {
+			t.Fatal("sketch conversion changed saved metadata or lettering")
+		}
+		other, err := ps.GetPage(ctx, pages[1].ID)
+		if err != nil || pageBytes(t, other) != pageBytes(t, pages[1]) {
+			t.Fatal("sketch conversion changed a neighbouring page")
+		}
+	})
+}
 
 func controlPages(t *testing.T, ta *testutil.TestApp, count int) (*genFixture, pagestore.Service, []pagedoc.Page) {
 	t.Helper()

@@ -663,6 +663,11 @@ templ BibleReferenceForm(v biblePage) {
 		@ui.Field(ui.FieldProps{ID: "bible-kind", Label: i18n.T(ctx, "bible.field.kind"), Error: v.Errors["kind"]}) {
 			@ui.Select(ui.SelectProps{ID: "bible-kind", Name: "kind", Value: v.Form.Kind, Invalid: v.Errors["kind"] != "", Options: bibleOptions(ctx, "refs", "front", "side", "back", "face", "expression", "outfit", "sheet", "other"), Attrs: bibleControlAttrs(v, "kind")})
 		}
+		for _, outfit := range v.Character.Outfits {
+			if outfit.IsDefault {
+				<p class="mv-bible__hint">{ i18n.T(ctx,"bible.refs.outfit_binding","outfit",outfit.Name) }</p>
+			}
+		}
 		@ui.Checkbox(ui.CheckProps{Name: "portrait", Label: i18n.T(ctx, "bible.refs.portrait"), Checked: v.Form.Portrait})
 		@bibleFormActions(characterPath(v.Project.ID, v.Character.ID))
 	</form>
