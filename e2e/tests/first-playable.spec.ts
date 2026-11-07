@@ -259,7 +259,7 @@ test('fresh install → script → characters → layered art → lettering → 
     await page.screenshot({ animations: 'disabled', path: info.outputPath('E2-form-desktop.png') });
     await page.locator('[name=trim_id]').selectOption('kdp-5x7.5');
     await page.locator('[name=dpi]').selectOption('150');
-    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('button', { name: 'Export PDF', exact: true }).click();
     const pdfLink = page.getByRole('link', { name: /Download/ }).last();
     await expect(pdfLink).toBeVisible();
     const pdfDownload = page.waitForEvent('download');
@@ -275,7 +275,7 @@ test('fresh install → script → characters → layered art → lettering → 
     await page.goto(`/studio/p/${project}/chapters/${chapter}/export`);
     await page.locator('label').filter({ has: page.locator('[name=format][value=cbz]') }).click();
     await page.locator('[name=dpi]').selectOption('150');
-    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('button', { name: 'Export CBZ', exact: true }).click();
     const cbzLink = page.getByRole('link', { name: /Download/ }).last();
     await expect(cbzLink).toBeVisible();
     const cbzDownload = page.waitForEvent('download');
@@ -291,7 +291,7 @@ test('fresh install → script → characters → layered art → lettering → 
     await page.goto(`/studio/p/${project}/chapters/${chapter}/export`);
     await page.locator('label').filter({ has: page.locator('[name=format][value=png]') }).click();
     await page.locator('[name=dpi]').selectOption('150');
-    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('button', { name: 'Export PNG', exact: true }).click();
     const pngLink = page.getByRole('link', { name: /Download/ }).last();
     await expect(pngLink).toBeVisible();
     const pngDownload = page.waitForEvent('download');
