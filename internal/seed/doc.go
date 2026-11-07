@@ -4,6 +4,8 @@
 //
 // CLI: mangaveyra seed.
 //
-// This package is a stub created with the foundation; its owner fills it in
-// without touching app wiring (it is already listed in internal/app/modules.go).
+// The demo is unpublished and owned by an existing active admin/creator. A
+// versioned owner-scoped marker makes repeated runs preserve user edits. Files
+// are staged before the single database transaction; rows, attachments, page
+// documents and version history commit together. No AI provider is required.
 package seed

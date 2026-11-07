@@ -37,7 +37,7 @@
 | Capability | Canonical owner | Source of truth | Allowed variants | Verification |
 |---|---|---|---|---|
 | Select/Listbox | `ui.Select` over native `select` | `internal/web/ui/form.templ` | native single-select | keyboard/browser + handler tests |
-| Form | `ui.Field` and shared form controls | `internal/web/ui/form.templ`, `components.css` | create / edit / secret | HTTP flow + validation tests |
+| Form | `ui.Field`, shared form controls and `installForms` | `internal/web/ui/form.templ`, `components.css`, `web/src/lib/forms.ts` | create / edit / secret; editor Svelte adapters of the same classes | HTTP flow + validation + dirty/duplicate regressions |
 | Toast | shared notice/toast owner | `internal/web/ui/state.templ` | success / warning / info / error | live-region + edition check |
 | CRUD | feature handler plus canonical form | `internal/ai`, `internal/studioui`, service contracts | PRG page / HTMX fragment | full-flow + failure-path tests |
 
@@ -75,6 +75,10 @@
 | Generate script | story action | queued `ui.GenState` | same story route | terminal reloads manuscript | translated error + retry | state heading/action | plan 0001 |
 | Edit script | Save changes | pessimistic busy submit | same story route | saved notice/new revision | unsaved values retained; Reload on conflict | notice then editor | `studio.EditScript` |
 | Upload source | file + create submit | submit owns pending | project/story route | adaptation summary | type/size/UTF-8 error | upload field | plan 0001 |
+| Character / outfit / reference / setting | designed form or upload | shared busy submit | current project bible | saved resource or sheet status | safe values retained; reselect files | field error or resource heading | plan 0002 |
+| Make pages | C1 action on saved revision | queued job in editor | chapter editor | structured pages and bubbles | stale revision asks reload; existing pages reopen | editor workbench | plan 0002 |
+| Panel / region variations | explicit editor scope | bounded job and candidate tray | same page | selected candidate applied atomically | scope locks/revision conflict retain draft | selected panel/layer | plan 0002 |
+| Export chapter | E2 format/options | fenced export job | E2 result/download | actual filename/size | error with retry/cancel; manuscript remains editable | result status/action | ADR 0007 and plan 0002 |
 | Cancel/back | normal link | none | previous canonical GET | none | browser retains GET | destination heading | route map |
 
 ## Navigation and responsive behavior
@@ -94,13 +98,21 @@
 - Toast placement/duration/deduplication: shared live region; durable errors remain inline.
 - Alert/banner scope and persistence: provider-card notice for local issues, page notice for create/save/job issues.
 - Tooltip delay/dismissal: shared owner; never the sole carrier of instructions.
-- Unsaved-changes behavior: server errors/conflicts retain submitted non-secret values. No false draft/autosave claim.
+- Unsaved-changes behavior: server errors/conflicts retain submitted non-secret values. `form[data-guard-unsaved]`
+  compares current controls to their loaded values in memory. The Base frame owns `#mv-unsaved`; Keep editing
+  receives focus and cancellation restores the trigger. `beforeunload` protects actual tab close. Rich islands send
+  `mv:unsaved` with `{owner: HTMLElement, dirty: boolean}` and may request an internal transition through
+  `mv:guard-navigation` with `{proceed: () => void, trigger?: HTMLElement}`. No draft text enters events, storage or
+  URLs. Successful save clears dirty state; validation/error does not. No false draft/autosave claim.
 - Layer/z-index contract: dialog > drawer > popover > toast; existing CSS is canonical.
 
 ## Async and resilience
 
 - Mutation default: pessimistic server commit with PRG; generation is an explicit queued job.
-- Idempotency and duplicate-submit policy: disable active submit; queue/spend layers fence side effects; retry is explicit.
+- Idempotency and duplicate-submit policy: the shared form owner guards immediately and disables submitters after
+  serialization, preserving their name/value and geometry. HTMX completion and bfcache restore busy buttons;
+  queue/spend layers fence side effects independently. Rich islands own their pending request and use the same
+  classes/ARIA states. Retry is explicit.
 - Auto-save/draft recovery: none in Gate A. Never display “Draft saved.”
 - Offline/read-stale/write behavior: keep GET visible; writes fail clearly and retain safe values. No offline queue.
 - Retry/backoff/timeout behavior: poll jobs every two seconds; terminal retry only when allowed; provider testing is bounded.

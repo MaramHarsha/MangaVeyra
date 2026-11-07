@@ -6,6 +6,8 @@
  * summary) and the story toggle switches views without losing unsaved edits.
  */
 
+import { enhanceScriptEditors, rebuildProseLines } from './script';
+
 export const WIZARD_STEPS = ['premise', 'genre', 'style', 'format', 'generate'] as const;
 export type WizardStep = (typeof WIZARD_STEPS)[number];
 
@@ -222,11 +224,6 @@ export class StoryViews {
         this.show(viewOf(toggle));
         return;
       }
-      const scene = t.closest<HTMLAnchorElement>('a[data-scene-link]');
-      if (scene) {
-        root.querySelectorAll('a[data-scene-link][aria-current]').forEach((a) => a.removeAttribute('aria-current'));
-        scene.setAttribute('aria-current', 'location');
-      }
     });
   }
 
@@ -234,7 +231,10 @@ export class StoryViews {
   show(view: 'prose' | 'panels'): void {
     const { root } = this;
     const form = root.querySelector<HTMLFormElement>('form[data-view-panel="panels"]');
-    if (view === 'prose' && form) mirror(root, form);
+    if (view === 'prose' && form) {
+      mirror(root, form);
+      rebuildProseLines(root, form);
+    }
     root.querySelectorAll<HTMLElement>('[data-view-panel]').forEach((panel) => {
       panel.hidden = panel.dataset.viewPanel !== view;
     });
@@ -242,9 +242,12 @@ export class StoryViews {
       if (viewOf(a) === view) a.setAttribute('aria-current', 'true');
       else a.removeAttribute('aria-current');
     });
+    // Scene links open the other scenes in the same view.
     root.querySelectorAll<HTMLAnchorElement>('a[data-scene-link]').forEach((a) => {
-      const href = view === 'prose' ? a.dataset.proseHref : a.dataset.panelsHref;
-      if (href) a.setAttribute('href', href);
+      const href = new URL(a.href, window.location.href);
+      if (view === 'prose') href.searchParams.set('view', 'prose');
+      else href.searchParams.delete('view');
+      a.setAttribute('href', href.pathname + href.search);
     });
     const url = new URL(window.location.href);
     if (view === 'prose') url.searchParams.set('view', 'prose');
@@ -260,6 +263,7 @@ function viewOf(a: HTMLAnchorElement): 'prose' | 'panels' {
 /** mirror copies each form field into the prose node that names it (data-mirror). */
 export function mirror(root: ParentNode, form: HTMLFormElement): void {
   root.querySelectorAll<HTMLElement>('[data-mirror]').forEach((node) => {
+    if (node.closest('[data-prose-line]')) return; // rebuilt from the form's lines
     const name = node.dataset.mirror ?? '';
     const el = form.elements.namedItem(name);
     if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
@@ -279,6 +283,7 @@ export function enhanceStudio(root: ParentNode = document): void {
   root.querySelectorAll<HTMLElement>('[data-story-views]').forEach((el) => {
     if (!stories.has(el)) stories.set(el, new StoryViews(el));
   });
+  enhanceScriptEditors(root);
 }
 
 if (typeof document !== 'undefined') {

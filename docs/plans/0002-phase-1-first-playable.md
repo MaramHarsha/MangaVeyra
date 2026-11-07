@@ -1,11 +1,13 @@
 # Phase 1: First playable — premise → exported chapter
 
-- Status: Active — Gate A complete; Gate B is next
+- Status: Complete — Gates A/B/C, desktop alignment and final verification passed (2026-11-07)
 - Gate A: plan 0001 is the mandatory first vertical slice and remains normative for structured text generation,
   project/chapter/script persistence, authorization, provider secrets, spend reservations and atomic job completion.
   Gate A is green as of 2026-11-07; page-pipeline and visual-generation work may now begin under Gate B.
 - Decisions: ADR 0001 (scope), 0002 (embedder), 0003 (spend reservations), 0004 (design addendum),
   0005 (Gate A OpenRouter text boundary), 0006 (OpenAI direct text route; strict-schema fix for both routes).
+- Remaining execution: `docs/plans/0003-phase-1-completion.md` tracks Gates B/C, desktop design evidence,
+  final verification and the authorized commits/push/pull request.
 
 ## Handoff status (2026-11-07)
 
@@ -87,6 +89,79 @@ contains `ProjectID`, `LayerID`, mask, prompt and generation options. Its `jobs.
 `LayerID` and a non-null region object, while forbidding chapter/page/panel IDs. At enqueue and persistence, Studio
 resolves `layer → panel → page → chapter → project`, verifies the resolved project, checks every lock and rejects
 lettering layers. Server-derived ancestry may be indexed internally; it is never trusted from the request.
+
+### Additive Gate B/C contract clarifications (2026-11-07)
+
+- `ai.ImageGenerateRequest.CallSlot` is a stable zero-based component index (default 0, bounded to 0–15).
+  Worker child idempotency is `(parent job, claimed attempt, call slot)`, with an immutable request digest within
+  each slot. Gen passes its durable component index; slots above zero must correspond to a stored component.
+  Every child still has one attempt, shares the parent's explicit scope, and stays within the aggregate approved
+  layer/attempt estimate. Different layer calls must not collide or permit a changed request to reuse a slot.
+
+- `pagestore.Change.ExpectedVersion` optionally fences browser lock, delete and revert actions against the loaded
+  page revision under the page row lock; zero retains the trusted internal caller behavior.
+- `jobs.Queue.EnqueueTx` stores a fully validated job and its created event in the caller's transaction. Studio scope
+  validation uses `AddTxValidator` so newly created pages are visible. Guards run in the same transaction; no network
+  call, publication or wake-up occurs before commit. The durable executor poll discovers committed children after a
+  crash. `pages.from_script` atomically stores pages and its optional per-panel children through this API.
+- Art children of the same `pages.from_script` batch may cross sibling page revisions only when every intervening
+  snapshot belongs to a successful panel job in that batch and the target panel fingerprint is unchanged. Any human,
+  lettering, lock, or unrelated generation change invalidates the original revision.
+
+These additions are frozen before parallel implementation; existing Gate A signatures remain compatible.
+
+- `studio.AuthorizeTx(ctx, tx, actor, projectID, action)` and `CheckScopeWritableTx(ctx, tx, scope)` expose the
+  existing single authorization/lock boundary inside enqueue and lease-fenced persistence transactions. The latter
+  locks the resolved ancestor rows on PostgreSQL. Neither method opens an independent transaction.
+- `studio.Character.UpdatedAt` and `gen.CharacterSheetRequest.ExpectedUpdatedAt` bind character work to a revision.
+  `studio.UpdateCharacterInput` carries project/character IDs, `Character NewCharacter`, and `ExpectedUpdatedAt`;
+  `BibleService.UpdateCharacter(ctx, actor, input)` returns the stored character. `GetCharacterTx(ctx, tx, id)`
+  locks/loads it. `BibleService` is an additive registry interface for reference/profile/outfit/setting mutations.
+- `studio.NewCharacterRef` carries project/character/asset IDs, kind, label, portrait selection and expected character
+  revision. `AddCharacterRef(ctx, actor, input)` authorizes and validates an image from the same project, then bumps
+  the character revision. `NewOutfit` carries project/character/name/description/asset, default selection and expected
+  revision; `CreateOutfit` has the same authorization/revision boundary. `NewSettingItem` carries project/kind/name/
+  description/asset/tags; `CreateSettingItem` authorizes and validates the same-project asset.
+  Profile/outfit/setting text follows `ActEditScript`; image reference mutations follow `ActEditArt`.
+  `BibleService.CreateOutfitTx` and `CreateSettingItemTx` accept the same inputs in a caller transaction, allowing
+  staged upload-row insertion and its attachment to commit atomically.
+- `ai.ImagePlan.RoutingMode` preserves the effective request policy independently of explanatory JSON, like text.
+  It also carries `Needs`, `PublicSeries`, `PinProviderID`, and `PinModelID`; `ImagePlanRequest` accepts optional
+  `CharacterIDs` and `PanelType` for scoped routing pins. Durable generation payloads preserve these typed fields
+  and every retry/fallback revalidates them. The explanatory `Decision` never authorizes a route.
+  Local only rejects remote HTTP/custom text calls and worker dispatch/claims; until same-host worker locality can
+  be proven, the deterministic in-process placeholder is its safe image route. Balanced/best/fastest/free-only may
+  use an explicitly connected worker, with no paid remote fallback from a zero-spend action.
+  New image jobs have a bounded retry/fallback envelope included in their aggregate estimate/approval; old text
+  jobs retain their original three-attempt envelope. AI provides `jobs.ManifestLookup` for app worker-claim wiring.
+- Assets gain `Stage(ctx, SaveParams) (*StagedAsset, error)`, `StagedAsset.Asset() Asset`,
+  `CommitStagedTx(ctx, tx, staged) (Asset, error)` and `DiscardStaged(ctx, staged) error`. Storage I/O happens before
+  the job's commit fence; only the asset-row INSERT occurs inside it. Failed fenced writes discard staged objects.
+- `lettering.BubbleLayout.TextPath` is the authoritative outline of shaped base/ruby glyphs in page pixels, shared
+  by editor SVG and export. Layout also carries rotation/center and text stroke/width; `TextLine.FontSize` records
+  ruby size for accessible text. Browser font metrics never independently reflow an exported bubble.
+- Page document coordinates remain pixels. The existing DB percentage geometry columns are encoded/decoded at
+  the store boundary; `panels.border`/`bubbles.style` retain their document metadata, bubble `style.shape` retains
+  shape, and `bubble_texts.fit.ruby` retains ruby. Direction is derived from the project format. Snapshots contain
+  the full URL-free `pagedoc.Page`. No migration is needed for these existing JSON extension points.
+- KDP trims use exactly 0.125 in = **3.175 mm** bleed. PDF output includes actual trim/bleed boxes, with MediaBox
+  enclosing the bleed. A maintained PDF boxing dependency may be added by root if the canvas writer lacks this API.
+- `pagestore.ReplaceChapterPagesTx` atomically checks all affected locks and replaces one chapter's pages, avoiding
+  nested transactions when pages.from_script runs under the job fence. `export.QueueService.Enqueue(ctx, actor,
+  Request)` queues read-only `ScopeProject` exports so locked chapters remain exportable; persistence reauthorizes
+  and verifies the captured page revisions. Selected pages retain chapter order. Page art is aspect-fitted within
+  each trim without distortion; archives/output remain bounded by the asset service's 64 MiB limit.
+- Gate C requests gain optional caller fences: `PagesFromScriptRequest.ExpectedUpdatedAt` and
+  `PanelRequest.ExpectedVersion` / `RegionEditRequest.ExpectedVersion`. Enqueue always captures the current
+  authoritative chapter/page revision, and checks a supplied fence before creating the job. Durable image job
+  input uses a versioned wrapper with a nested typed `request`, actor token ID, immutable scope/revision and image
+  plan policy. Candidate sheet previews read `request.character_id`, never infer it from project scope alone.
+- `gen.Candidate.Layers []CandidateLayer` carries each independently generated background/character/FX component
+  of a whole-panel variation. Each `CandidateLayer` contains layer/kind/character/asset IDs, name, seed and prompt.
+  The candidate's main `AssetID` is a composed preview without lettering. Applying a panel variation attaches all
+  its component assets atomically at the captured page revision; a layer/region candidate has one component.
+  Character sheet candidates have no page layers. Candidate reads/applies reauthorize the live actor/project;
+  applying never unlocks, deletes, or alters lettering. Region output restores every pixel outside its mask.
 
 ## Design rule (all gates)
 

@@ -42,10 +42,14 @@ type providerActor struct {
 
 type providerCreate struct {
 	// Kind is a remote route kind (remoteRoutes); empty means OpenRouter.
-	Kind  string
-	Name  string
-	Key   string
-	Scope string
+	Kind    string
+	BaseURL string
+	Local   localTextConfig
+	Draft   bool
+	Name    string
+	Key     string
+	Scope   string
+	Model   string
 }
 
 // providerUpdate is an ordinary metadata update. Key is accepted only so form
@@ -58,24 +62,29 @@ type providerUpdate struct {
 
 type providerTestState struct {
 	State     string    `json:"state,omitempty"`
+	Step      string    `json:"step,omitempty"`
 	Time      time.Time `json:"time,omitempty"`
 	RequestID string    `json:"request_id,omitempty"`
+	// DurationMS is how long the last custom connection test took (G12).
+	DurationMS int64 `json:"duration_ms,omitempty"`
 }
 
 // providerView is the only representation suitable for a response or page.
 // It intentionally has no ciphertext, plaintext key, base URL, or raw test
 // response.
 type providerView struct {
-	ID        string            `json:"id"`
-	Kind      string            `json:"kind"`
-	Name      string            `json:"name"`
-	KeyHint   string            `json:"key_hint"`
-	Enabled   bool              `json:"enabled"`
-	Scope     string            `json:"scope"`
-	OwnerID   string            `json:"owner_id,omitempty"`
-	LastTest  providerTestState `json:"last_test"`
-	CreatedAt time.Time         `json:"created_at"`
-	UpdatedAt time.Time         `json:"updated_at"`
+	ID         string            `json:"id"`
+	Kind       string            `json:"kind"`
+	Name       string            `json:"name"`
+	KeyHint    string            `json:"key_hint"`
+	Enabled    bool              `json:"enabled"`
+	Scope      string            `json:"scope"`
+	OwnerID    string            `json:"owner_id,omitempty"`
+	LastTest   providerTestState `json:"last_test"`
+	LocalModel string            `json:"local_model,omitempty"`
+	Endpoint   string            `json:"endpoint,omitempty"`
+	CreatedAt  time.Time         `json:"created_at"`
+	UpdatedAt  time.Time         `json:"updated_at"`
 }
 
 type providerRecord struct {
@@ -98,6 +107,7 @@ type providerCandidate struct {
 	ID    string
 	Kind  string
 	Scope string
+	Model string
 }
 
 type dispatchProvider struct {
@@ -109,6 +119,8 @@ type dispatchProvider struct {
 	KeyEnc  string
 	KeyHint string
 	Enabled bool
+	BaseURL string
+	Local   localTextConfig
 }
 
 type providerStore struct {
@@ -138,7 +150,17 @@ func (s *providerStore) Create(ctx context.Context, actor providerActor, in prov
 	if in.Kind == "" {
 		in.Kind = providerKindOpenRouter
 	}
-	if !validProviderKind(in.Kind) || !validProviderName(in.Name) || !validProviderKey(in.Key) {
+	if !validProviderKind(in.Kind) || !validProviderName(in.Name) || (in.Kind != providerKindLocalText && !validProviderKey(in.Key)) || (in.Key != "" && !validProviderKey(in.Key)) {
+		return zero, errProviderInvalid
+	}
+	config := "{}"
+	if in.Kind == providerKindLocalText {
+		if validateLocalTextConfig(in.BaseURL, in.Local) != nil {
+			return zero, errProviderInvalid
+		}
+		raw, _ := json.Marshal(in.Local)
+		config = string(raw)
+	} else if in.BaseURL != "" {
 		return zero, errProviderInvalid
 	}
 	owner, err := s.ownerForCreate(ctx, actor, in.Scope)
@@ -147,11 +169,15 @@ func (s *providerStore) Create(ctx context.Context, actor providerActor, in prov
 	}
 	id := db.NewID() // allocate before sealing: the row id is authenticated data
 	now := s.timeNow()
-	keyEnc := s.box.SealString(in.Key, providerKeyAAD(id))
+	keyEnc, hint := "", ""
+	if in.Key != "" {
+		keyEnc = s.box.SealString(in.Key, providerKeyAAD(id))
+		hint = secrets.Hint(in.Key)
+	}
 	_, err = s.db.Exec(ctx, `INSERT INTO providers (
 		id, kind, name, base_url, key_enc, key_hint, config, enabled, scope, owner_id, last_test, created_at, updated_at
-	) VALUES (?, ?, ?, '', ?, ?, '{}', TRUE, ?, ?, '{}', ?, ?)`,
-		id, in.Kind, in.Name, keyEnc, secrets.Hint(in.Key), in.Scope, db.NullString(owner), now, now)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?)`,
+		id, in.Kind, in.Name, in.BaseURL, keyEnc, hint, config, !in.Draft, in.Scope, db.NullString(owner), now, now)
 	if err != nil {
 		return zero, fmt.Errorf("ai: create provider: %w", err)
 	}
@@ -281,8 +307,8 @@ func (s *providerStore) ListManageable(ctx context.Context, actor providerActor)
 	if s == nil || s.db == nil || strings.TrimSpace(actor.UserID) == "" {
 		return nil, errProviderUnavailable
 	}
-	query := `SELECT ` + providerColumns + ` FROM providers WHERE kind IN (?, ?) AND `
-	args := []any{providerKindOpenRouter, providerKindOpenAI}
+	query := `SELECT ` + providerColumns + ` FROM providers WHERE kind IN (?, ?, ?, ?) AND `
+	args := []any{providerKindOpenRouter, providerKindOpenAI, providerKindFal, providerKindLocalText}
 	if actor.Admin {
 		query += `((scope = 'server' AND owner_id IS NULL) OR (scope = 'user' AND owner_id = ?))`
 		args = append(args, actor.UserID)
@@ -314,16 +340,16 @@ func (s *providerStore) Candidates(ctx context.Context, actorID string) ([]provi
 	}
 	var rows []providerRecord
 	err := s.db.Select(ctx, &rows, `SELECT `+providerColumns+` FROM providers
-		WHERE kind IN (?, ?) AND enabled = TRUE AND key_enc <> '' AND base_url = ''
+		WHERE kind IN (?, ?, ?, ?) AND enabled = TRUE AND (key_enc <> '' OR kind = 'openai-compatible-local')
 			AND ((scope = 'user' AND owner_id = ?) OR (scope = 'server' AND owner_id IS NULL))
-		ORDER BY CASE WHEN scope = 'user' THEN 0 ELSE 1 END, id`, providerKindOpenRouter, providerKindOpenAI, actorID)
+		ORDER BY CASE WHEN scope = 'user' THEN 0 ELSE 1 END, id`, providerKindOpenRouter, providerKindOpenAI, providerKindFal, providerKindLocalText, actorID)
 	if err != nil {
 		return nil, fmt.Errorf("ai: list providers: %w", err)
 	}
 	out := make([]providerCandidate, 0, len(rows))
 	for _, r := range rows {
 		if validateProviderRecord(r) == nil {
-			out = append(out, providerCandidate{ID: r.ID, Kind: r.Kind, Scope: r.Scope})
+			out = append(out, providerCandidate{ID: r.ID, Kind: r.Kind, Scope: r.Scope, Model: r.localConfig().Model})
 		}
 	}
 	return out, nil
@@ -338,13 +364,13 @@ func (s *providerStore) Candidate(ctx context.Context, actorID, id string) (prov
 	if err != nil {
 		return zero, errProviderUnavailable
 	}
-	if err := validateProviderRecord(r); err != nil || !r.Enabled || strings.TrimSpace(r.KeyEnc) == "" {
+	if err := validateProviderRecord(r); err != nil || !r.Enabled || (r.Kind != providerKindLocalText && strings.TrimSpace(r.KeyEnc) == "") {
 		return zero, errProviderUnavailable
 	}
 	if r.Scope == providerScopeUser && (!r.OwnerID.Valid || r.OwnerID.String != actorID) {
 		return zero, errProviderUnavailable
 	}
-	return providerCandidate{ID: r.ID, Kind: r.Kind, Scope: r.Scope}, nil
+	return providerCandidate{ID: r.ID, Kind: r.Kind, Scope: r.Scope, Model: r.localConfig().Model}, nil
 }
 
 func (s *providerStore) ResolveDispatch(ctx context.Context, actorID, id string) (dispatchProvider, error) {
@@ -353,14 +379,17 @@ func (s *providerStore) ResolveDispatch(ctx context.Context, actorID, id string)
 		return zero, errProviderUnavailable
 	}
 	r, err := providerByID(ctx, s.db, id, false)
-	if err != nil || validateProviderRecord(r) != nil || !r.Enabled || strings.TrimSpace(r.KeyEnc) == "" {
+	if err != nil || validateProviderRecord(r) != nil || !r.Enabled || (r.Kind != providerKindLocalText && strings.TrimSpace(r.KeyEnc) == "") {
 		return zero, errProviderUnavailable
 	}
 	if r.Scope == providerScopeUser && r.OwnerID.String != actorID {
 		return zero, errProviderUnavailable
 	}
-	key, err := s.box.OpenString(r.KeyEnc, providerKeyAAD(r.ID))
-	if err != nil || strings.TrimSpace(key) == "" {
+	key := ""
+	if r.KeyEnc != "" {
+		key, err = s.box.OpenString(r.KeyEnc, providerKeyAAD(r.ID))
+	}
+	if err != nil || (r.Kind != providerKindLocalText && strings.TrimSpace(key) == "") {
 		return zero, errProviderUnavailable
 	}
 	owner := ""
@@ -368,7 +397,7 @@ func (s *providerStore) ResolveDispatch(ctx context.Context, actorID, id string)
 		owner = r.OwnerID.String
 	}
 	return dispatchProvider{ID: r.ID, Kind: r.Kind, Scope: r.Scope, OwnerID: owner, Key: key,
-		KeyEnc: r.KeyEnc, KeyHint: r.KeyHint, Enabled: r.Enabled}, nil
+		KeyEnc: r.KeyEnc, KeyHint: r.KeyHint, Enabled: r.Enabled, BaseURL: r.BaseURL, Local: r.localConfig()}, nil
 }
 
 func (s *providerStore) recordTest(ctx context.Context, providerID, expectedKeyEnc, state, requestID string) error {
@@ -456,7 +485,10 @@ func providerByID(ctx context.Context, q db.Querier, id string, lock bool) (prov
 }
 
 func validateProviderRecord(r providerRecord) error {
-	if !db.ValidID(r.ID) || !validProviderKind(r.Kind) || !validProviderName(r.Name) || r.BaseURL != "" || r.Config != "{}" {
+	if !db.ValidID(r.ID) || !validProviderKind(r.Kind) || !validProviderName(r.Name) || (r.Kind != providerKindLocalText && (r.BaseURL != "" || r.Config != "{}")) {
+		return errProviderInvalid
+	}
+	if r.Kind == providerKindLocalText && validateLocalTextConfig(r.BaseURL, r.localConfig()) != nil {
 		return errProviderInvalid
 	}
 	switch r.Scope {
@@ -493,7 +525,7 @@ func authorizeProvider(actor providerActor, r providerRecord) error {
 func (r providerRecord) view() providerView {
 	last := providerTestState{}
 	if strings.TrimSpace(r.LastTest) != "" && r.LastTest != "{}" {
-		if err := json.Unmarshal([]byte(r.LastTest), &last); err != nil || (last.State != "ok" && last.State != "error") {
+		if err := json.Unmarshal([]byte(r.LastTest), &last); err != nil || (last.State != "ok" && last.State != "error" && !(last.State == "" && customStepNumber(last.Step) > 0)) {
 			last = providerTestState{State: "error"}
 		}
 		last.RequestID = sanitizeRequestID(last.RequestID)
@@ -504,7 +536,7 @@ func (r providerRecord) view() providerView {
 		owner = r.OwnerID.String
 	}
 	return providerView{ID: r.ID, Kind: r.Kind, Name: r.Name, KeyHint: r.KeyHint, Enabled: r.Enabled,
-		Scope: r.Scope, OwnerID: owner, LastTest: last, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+		Scope: r.Scope, OwnerID: owner, LastTest: last, LocalModel: r.localConfig().Model, Endpoint: r.BaseURL, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 
 // validProviderKey accepts a non-empty key of visible ASCII only. A key with

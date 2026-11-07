@@ -5,6 +5,7 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
+	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 )
 
@@ -18,6 +19,7 @@ type Module struct {
 func New(d *core.Deps) *Module {
 	svc := &service{db: d.DB, auth: d.Auth}
 	core.Provide[Service](d, svc)
+	core.Provide[BibleService](d, svc)
 	return &Module{d: d, svc: svc}
 }
 
@@ -31,8 +33,8 @@ func (m *Module) Routes(r *core.Router) {}
 // validator. All job scopes pass through the same authoritative lock checker.
 func (m *Module) Init(context.Context) error {
 	m.svc.assets = core.MustUse[*assets.Service](m.d)
-	m.d.Jobs.AddValidator(func(ctx context.Context, p *jobs.EnqueueParams) error {
-		return m.svc.CheckScopeWritable(ctx, p.Scope)
+	m.d.Jobs.AddTxValidator(func(ctx context.Context, tx *db.Tx, p *jobs.EnqueueParams) error {
+		return m.svc.CheckScopeWritableTx(ctx, tx, p.Scope)
 	})
 	return nil
 }

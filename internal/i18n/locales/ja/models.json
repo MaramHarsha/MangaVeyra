@@ -63,7 +63,7 @@
   "models.status.ready": "準備完了",
   "models.status.request": "前回の確認のリクエストID：{id}",
   "models.status.unchecked": "未確認",
-  "models.subtitle": "{server} の自動ルーティングで使えるモデルとプロバイダー",
+  "models.subtitle": "{server} の{routing}で使えるモデルとプロバイダー",
   "models.table.caption": "自動ルーティングで使えるテキストモデル",
   "models.test.action": "接続を確認",
   "models.test.failed": "接続確認に失敗しました",
@@ -85,5 +85,9 @@
   "models.toggle.placeholder": "内蔵プレースホルダーは常にオンです",
   "models.toggle.save": "保存",
   "models.use.scripts": "脚本",
-  "models.use.scripts_fallback": "脚本・フォールバック"
+  "models.use.scripts_fallback": "脚本・フォールバック",
+  "models.fal.connect": "falを接続",
+  "models.fal.form_subtitle": "ご自身のfalキーを接続して画像を生成します。",
+  "models.subtitle.routing": "自動ルーティング",
+  "models.table.image_caption": "自動ルーティングで使える画像モデル"
 }

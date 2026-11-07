@@ -1,6 +1,6 @@
 {
   "profile": "product-admin",
-  "sourceRoots": ["internal/ai", "internal/studioui", "web/src/styles"],
+  "sourceRoots": ["internal/ai", "internal/studioui", "internal/export", "internal/editor", "web/src/styles"],
   "locale": "ja-JP",
   "canonicalMap": "UX-CONTRACT.md",
   "requiredCapabilities": ["Select/Listbox", "Form", "Toast", "CRUD"],
@@ -12,7 +12,7 @@
   },
   "requiredCommands": ["go-focused", "edition", "templ", "frontend-check", "frontend-test", "frontend-build"],
   "commands": {
-    "go-focused": "go test -count=1 ./internal/ai ./internal/studioui ./internal/studio ./internal/gen ./internal/jobs",
+    "go-focused": "go test -count=1 ./internal/ai ./internal/studioui ./internal/studio ./internal/gen ./internal/jobs ./internal/pagestore ./internal/lettering ./internal/compose ./internal/export ./internal/editor",
     "edition": "go test -count=1 ./internal/editioncheck/...",
     "templ": "templ generate",
     "frontend-check": "cd web && npm run check",

@@ -17,6 +17,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/gen"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
 )
@@ -30,10 +31,11 @@ const (
 // The wizard offers exactly the genres and art styles of onboarding (A5), so a
 // creator meets one list and one set of labels ("genre.*", "style.*").
 var (
-	genreValues    = authui.Genres
-	styleValues    = artStyleValues()
-	formatValues   = []string{"manga_rtl", "comic_ltr", "webtoon"}
-	languageValues = []string{"en", "ja"}
+	genreValues  = authui.Genres
+	styleValues  = artStyleValues()
+	formatValues = []string{"manga_rtl", "comic_ltr", "webtoon"}
+	// languageValues are the manga content languages (shared contract).
+	languageValues = pagedoc.ContentLanguages
 )
 
 // pageSize maps a paged print size to the project's canvas. B5 keeps the

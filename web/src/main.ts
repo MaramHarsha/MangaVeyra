@@ -14,6 +14,12 @@ import { shortcutFor } from './lib/keys';
 import { Realtime, wsURL } from './lib/realtime';
 import { passwordStrength } from './lib/password';
 import './lib/studio';
+import './lib/export';
+import { installForms } from './lib/forms';
+import { installCounters } from './lib/counter';
+import { installAutoSubmit } from './lib/filters';
+import { installPageTurns } from './lib/transitions';
+import './lib/models';
 import { mountIslands, unmountIslands } from './islands/registry';
 
 declare global {
@@ -30,6 +36,9 @@ declare global {
 
 const root = document.documentElement;
 root.classList.add('js');
+installForms();
+installCounters();
+installAutoSubmit();
 
 // ---- HTMX -------------------------------------------------------------------
 
@@ -236,6 +245,10 @@ function setUnread(n: number): void {
     dot.hidden = n <= 0;
   });
 }
+
+// ---- page turns ---------------------------------------------------------------
+
+installPageTurns(window, root);
 
 // ---- start -------------------------------------------------------------------
 

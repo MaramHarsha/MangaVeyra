@@ -1,0 +1,26 @@
+id: sdxl-base
+name: SDXL Base
+maker: Stability AI
+kind: image
+licence: openrail++
+commercial: true
+providers: [local-worker]
+references: 0
+text_in_art: false
+bw: true
+edit: true
+mask: true
+max_width: 1024
+max_height: 1024
+max_count: 4
+vram_mb: 6000
+quality: 65
+speed: 50
+gpu_seconds: 40
+worker:
+  diffusers:
+    repo: stabilityai/stable-diffusion-xl-base-1.0
+    family: sdxl
+    default_steps: 28
+    default_guidance: 6
+    job_types: [image.generate, image.edit, image.inpaint, character.sheet]

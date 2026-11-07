@@ -9,6 +9,7 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/ai"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
 )
@@ -84,6 +85,14 @@ func (v newProjectView) errorSteps() []string {
 	return out
 }
 
+// uploadHint is the id a file picker points aria-describedby at.
+func uploadHint(id string, invalid bool) string {
+	if invalid {
+		return id + "-error"
+	}
+	return id + "-hint"
+}
+
 func stepIndex(step string) int {
 	for i, s := range wizardSteps {
 		if s == step {
@@ -101,25 +110,59 @@ type noChapterView struct {
 }
 
 type storyView struct {
-	Project     studio.Project
-	Chapter     studio.Chapter
-	Chapters    []studio.Chapter
-	Script      studio.ScriptDoc
-	Job         *jobView
-	CanEdit     bool
-	CanGenerate bool
-	ReadOnly    bool
-	Conflict    bool
-	Notice      string
-	Error       string
+	Project      studio.Project
+	Chapter      studio.Chapter
+	Chapters     []studio.Chapter
+	Script       studio.ScriptDoc
+	Job          *jobView
+	CanEdit      bool
+	CanGenerate  bool
+	CanMakePages bool
+	ReadOnly     bool
+	Conflict     bool
+	Notice       string
+	Error        string
 	// View is "prose" for the read-only prose rendering; otherwise the
 	// editable panel table shows.
 	View string
+	// SceneIndex is the scene shown in the centre (C1 shows one scene, as
+	// designed; the tree switches scenes).
+	SceneIndex int
+	// FocusLine is the dialogue speaker field to focus after a no-JS "add
+	// line" re-render; Dirty marks such a re-render as an unsaved draft.
+	FocusLine string
+	Dirty     bool
 	// SubmittedRevision is set when the editor is re-rendered from a rejected
 	// save. The form must post back the revision the user started from, never
 	// the chapter's current one, or a resubmit would silently overwrite a save
 	// that landed in between.
 	SubmittedRevision *string
+}
+
+// currentScene is the scene the centre shows.
+func (v storyView) currentScene() studio.ScriptScene {
+	if v.SceneIndex < 0 || v.SceneIndex >= len(v.Script.Scenes) {
+		return studio.ScriptScene{}
+	}
+	return v.Script.Scenes[v.SceneIndex]
+}
+
+// sceneURL is the URL of the open scene; the first scene is the chapter URL.
+func (v storyView) sceneURL() string {
+	if v.SceneIndex <= 0 {
+		return storyPath(v.Project.ID, v.Chapter.ID)
+	}
+	return scenePath(v.Project.ID, v.Chapter.ID, v.currentScene().ID)
+}
+
+// sceneIndexOf finds a scene by ID; an unknown or empty ID means the first.
+func sceneIndexOf(doc studio.ScriptDoc, sceneID string) int {
+	for i, scene := range doc.Scenes {
+		if scene.ID == sceneID {
+			return i
+		}
+	}
+	return 0
 }
 
 // formRevision is the optimistic revision the script form posts back.
@@ -151,8 +194,8 @@ func defaultNewProjectValues(ctxLocale string) newProjectValues {
 		chapter = "第1話"
 	}
 	language := "en"
-	if contains(languageValues, ctxLocale) {
-		language = ctxLocale
+	if tag := pagedoc.NormalizeContentLanguage(ctxLocale); tag != "" {
+		language = tag
 	}
 	return newProjectValues{
 		ChapterTitle: chapter,
@@ -180,6 +223,19 @@ func storyPath(projectID, chapterID string) string {
 		return base
 	}
 	return base + "/" + url.PathEscape(chapterID)
+}
+
+// scenePath is one scene of a chapter in the Story editor.
+func scenePath(projectID, chapterID, sceneID string) string {
+	if sceneID == "" {
+		return storyPath(projectID, chapterID)
+	}
+	return storyPath(projectID, chapterID) + "/" + url.PathEscape(sceneID)
+}
+
+// editorPath is the D1 editor of a chapter.
+func editorPath(projectID, chapterID string) string {
+	return "/studio/p/" + url.PathEscape(projectID) + "/chapters/" + url.PathEscape(chapterID) + "/edit"
 }
 
 func jobPath(projectID, chapterID, jobID string) string {

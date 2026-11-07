@@ -1,0 +1,35 @@
+# Illustrious XL (SDXL architecture, anime/manga linework). Default base for Character Lock training.
+id: illustrious-xl
+name: Illustrious XL
+maker: OnomaAI Research
+kind: image
+vram_mb: 10000
+min_vram_mb: 5000
+worker:
+  diffusers:
+    repo: OnomaAIResearch/Illustrious-xl-early-release-v0
+    family: sdxl
+    controlnet_openpose: xinsir/controlnet-openpose-sdxl-1.0
+    controlnet_lineart: xinsir/controlnet-scribble-sdxl-1.0
+    ip_adapter: {repo: h94/IP-Adapter, subfolder: sdxl_models, weight_name: ip-adapter_sdxl.bin, scale: 0.6}
+    scheduler: euler_a
+    default_steps: 28
+    default_guidance: 6.0
+    prompt_suffix: "masterpiece, best quality"
+    negative_prefix: "worst quality, low quality"
+    trainable: true
+
+licence: unverified
+commercial: false
+providers: [local-worker]
+references: 0
+text_in_art: false
+bw: true
+edit: false
+mask: false
+max_width: 2048
+max_height: 2048
+max_count: 4
+quality: 70
+speed: 40
+gpu_seconds: 20

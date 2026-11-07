@@ -142,6 +142,9 @@
   width: 4px;
   background: var(--mv-accent);
   transform: skewY(-20deg);
+  height: auto;
+  clip-path: none;
+  opacity: 1;
 }
 .mv-sidebar__sep { height: 1px; margin: 10px 4px; background: var(--mv-line); flex: none; }
 .mv-sidebar__server {
@@ -563,12 +566,12 @@
 
 /* Sidebar tooltips only help when the sidebar is collapsed to icons. */
 @media (min-width: 1025px) {
-  .mv-sidenav__item[data-tip]::before,
+  .mv-sidenav__item[data-tip]:not([aria-current="page"])::before,
   .mv-sidenav__item[data-tip]::after { display: none; }
 }
 @media (max-width: 1024px) {
   .mv-sidenav__item[data-tip]::after { left: calc(100% + 12px); bottom: auto; top: 50%; transform: translateY(-50%); }
-  .mv-sidenav__item[data-tip]::before { display: none; }
+  .mv-sidenav__item[data-tip]:not([aria-current="page"])::before { display: none; }
 }
 
 /* ---- reader and editor shells -------------------------------------------- */

@@ -85,6 +85,8 @@
 .mv-models-table__col-provider { width: 19%; }
 .mv-models-table__col-use { width: 24%; }
 .mv-models-table__col-status { width: 124px; }
+/* Status badges share the design's fixed width (READY, NOT CONNECTED, LICENCE GUARD). */
+.mv-models-table__status > .mv-badge { box-sizing: border-box; width: 110px; justify-content: flex-start; overflow: hidden; text-overflow: ellipsis; }
 .mv-models-table__col-cost { width: 124px; }
 .mv-models-table__col-on { width: 104px; }
 

@@ -94,6 +94,18 @@ func TestAIAndGateComponents(t *testing.T) {
 	has(t, render(t, withText(StatusWindow("Status · Creator", ""), "<b>x</b>")), "mv-status__title")
 }
 
+func TestStudioCardsRenderStoredArtAndHonestReferenceStatus(t *testing.T) {
+	has(t, render(t, ProjectCard(ProjectCardProps{Href: "/studio/projects", Title: "Tidebreak Courier", Variant: "studio",
+		ThumbURL: "/media/page.png", ThumbLabel: "Page thumbnail", Class: "project-library-item"})),
+		"mv-pcard--studio", "project-library-item", `src="/media/page.png"`, `alt="Page thumbnail"`)
+	card := render(t, CharacterCard(CharacterCardProps{FirstName: "Rin", Variant: "bible", ArtURL: "/media/ref.png",
+		ArtLabel: "Rin's reference", Lock: -1, StatusLabel: "Reference images", StatusTone: ToneInfo}))
+	has(t, card, "mv-ccard--bible", `src="/media/ref.png"`, "Reference images")
+	if strings.Contains(card, "mv-lock__score") {
+		t.Fatal("reference-only character claimed a trained score")
+	}
+}
+
 func TestOverlaysAndStates(t *testing.T) {
 	has(t, render(t, withText(Modal(ModalProps{ID: "m", Title: "Regenerate page 7?"}), "body")), `<dialog`, `aria-labelledby="m-title"`, `method="dialog"`, `aria-label="Close"`)
 	has(t, render(t, Toast(ToastProps{Tone: ToneSuccess, Title: "Chapter 8 published", Href: "/s/x", Action: "View"})), "mv-toast--success", "ti-circle-check")
@@ -123,3 +135,20 @@ func TestHelpers(t *testing.T) {
 }
 
 type templWriter = io.Writer
+
+func TestFileDropAndVariationCaption(t *testing.T) {
+	drop := render(t, FileDrop(FileDropProps{ID: "ref", Name: "file", Accept: "image/png", Prompt: "Choose an image", DescribedBy: "ref-hint"}))
+	for _, want := range []string{`<label class="mv-filedrop" for="ref">`, `type="file"`, `name="file"`, `accept="image/png"`,
+		`aria-describedby="ref-hint"`, "Choose an image", "ti-upload"} {
+		if !strings.Contains(drop, want) {
+			t.Errorf("file drop lacks %q: %s", want, drop)
+		}
+	}
+	picker := render(t, VariationPicker("Pick a look", "hint", "index", "0", []Variation{
+		{Value: "0", Label: "Sheet 1", Caption: "SHEET 1 · FRONT / SIDE / FACE", ImageURL: "/media/a.png", Lock: -1},
+		{Value: "1", Label: "Sheet 2", ImageURL: "/media/b.png", Lock: -1},
+	}))
+	if strings.Count(picker, `class="mv-var__caption"`) != 1 || !strings.Contains(picker, "SHEET 1 · FRONT / SIDE / FACE") {
+		t.Errorf("variation captions: %s", picker)
+	}
+}

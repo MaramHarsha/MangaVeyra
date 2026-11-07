@@ -2,10 +2,12 @@ package ai
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/setup"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
 )
@@ -16,7 +18,10 @@ type Module struct {
 	providers   *providerStore
 	providerAPI *providerService
 	text        *textService
+	image       *imageService
+	catalog     *modelCatalog
 	spend       *SpendStore
+	private     *privateEndpointPolicy
 	now         func() time.Time
 	repairEvery time.Duration
 	repairBatch int
@@ -36,11 +41,38 @@ func newModule(d *core.Deps, doer httpDoer, now func() time.Time) *Module {
 	spend := NewSpendStore(d.DB, d.Settings)
 	spend.Now = now
 	text := newTextService(d.DB, d.Settings, providers, client, spend, now).withClient(providerKindOpenAI, openai)
-	m := &Module{d: d, providers: providers, providerAPI: &providerService{store: providers, settings: d.Settings, client: client,
-		testers: map[string]remoteKeyTester{providerKindOpenAI: openai}},
-		text: text, spend: spend, now: now, repairEvery: time.Minute, repairBatch: 1000}
+	private := &privateEndpointPolicy{fallback: d.Cfg != nil && d.Cfg.AllowPrivateProviderURLs}
+	if d.Settings != nil {
+		private.keys = d.Settings
+	}
+	text.localDoer = newLocalTextHTTPClient(private)
+	directory := ""
+	if d.Cfg != nil {
+		directory = d.Cfg.ManifestDir()
+	}
+	catalog := &modelCatalog{db: d.DB, directory: directory}
+	// Image calls may take minutes (OpenAI documents up to two for complex
+	// prompts); they get the same guarded transport with a longer client
+	// timeout than text, still bounded by postImage's per-call deadline.
+	imageDoer := doer
+	if c, ok := doer.(*http.Client); ok {
+		clone := *c
+		clone.Timeout = imageHTTPTimeout
+		imageDoer = &clone
+	}
+	images := &imageService{d: d, providers: providers, catalog: catalog, spend: text, doer: imageDoer}
+	m := &Module{d: d, image: images, catalog: catalog, providers: providers, providerAPI: &providerService{store: providers, settings: d.Settings, client: client,
+		testers: map[string]remoteKeyTester{providerKindOpenAI: openai, providerKindFal: falKeyTester{doer: doer}}, localDoer: text.localDoer},
+		text: text, spend: spend, private: private, now: now, repairEvery: time.Minute, repairBatch: 1000}
 	core.Provide[TextService](d, text)
+	core.Provide[ImageService](d, images)
+	core.Provide[ImageFallback](d, images.fallback)
+	core.Provide[jobs.ManifestLookup](d, catalog.workerManifest)
+	if d.Jobs != nil {
+		d.Jobs.MarkPrivateInput("image.generate", "image.edit", "image.inpaint", TaskCharacterSheet)
+	}
 	core.Provide[setup.ModelStep](d, m)
+	core.Provide[RouteNamer](d, m)
 	return m
 }
 
@@ -86,6 +118,28 @@ func (m *Module) timeNow() time.Time {
 
 // Routes implements core.Module.
 func (m *Module) Routes(r *core.Router) {
+	r.Page("GET /models/routing", m.routingPage, core.RequireSession)
+	r.Page("POST /models/routing", m.saveRouting, core.RequireSession)
+	r.Page("POST /models/routing/pins", m.savePin, core.RequireSession)
+	r.Page("POST /models/routing/pins/{id}/delete", m.deletePin, core.RequireSession)
+	for _, step := range customSteps {
+		r.Page("GET /models/providers/new/"+step, m.customPage, core.RequireSession)
+		r.Page("POST /models/providers/new/"+step, m.customPost, core.RequireSession)
+	}
+	r.Page("GET /models/providers/custom", func(w http.ResponseWriter, r *http.Request) error {
+		core.Redirect(w, r, customURL("connect", ""))
+		return nil
+	}, core.RequireSession)
+	r.Page("GET /models/providers/new/fal", func(w http.ResponseWriter, r *http.Request) error {
+		q := r.URL.Query()
+		q.Set("kind", providerKindFal)
+		r.URL.RawQuery = q.Encode()
+		return m.newProviderPage(w, r)
+	}, core.RequireSession)
+	r.Page("GET /models/providers/new/ollama", func(w http.ResponseWriter, r *http.Request) error {
+		core.Redirect(w, r, customURL("connect", ""))
+		return nil
+	}, core.RequireSession)
 	r.Page("GET /models", m.modelsPage, core.RequireSession)
 	r.Page("GET /models/providers/new", m.newProviderPage, core.RequireSession)
 	r.Page("POST /models/providers", m.createProvider, core.RequireSession)

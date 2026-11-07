@@ -149,6 +149,7 @@ type Character struct {
 	Refs            []CharacterRef `json:"refs"`
 	Outfits         []Outfit       `json:"outfits"`
 	Order           int            `json:"order"`
+	UpdatedAt       time.Time      `json:"updated_at"`
 }
 
 // NewCharacter is the validated input for a project character.
@@ -163,6 +164,44 @@ type NewCharacter struct {
 	Personality string
 	SpeechStyle string
 	Category    string
+}
+
+// UpdateCharacterInput edits a character at the caller's loaded revision.
+type UpdateCharacterInput struct {
+	ProjectID, CharacterID string
+	Character              NewCharacter
+	ExpectedUpdatedAt      time.Time
+}
+
+// NewCharacterRef attaches an existing same-project image to a character.
+type NewCharacterRef struct {
+	ProjectID, CharacterID, AssetID, Kind, Label string
+	Portrait                                     bool
+	ExpectedUpdatedAt                            time.Time
+}
+
+// NewOutfit adds a named outfit variant at a character revision.
+type NewOutfit struct {
+	ProjectID, CharacterID, Name, Description, AssetID string
+	IsDefault                                          bool
+	ExpectedUpdatedAt                                  time.Time
+}
+
+// NewSettingItem creates a location, prop, or style reference.
+type NewSettingItem struct {
+	ProjectID, Kind, Name, Description, AssetID string
+	Tags                                        []string
+}
+
+// BibleService owns authorized character/reference/outfit/setting mutations.
+// It is provided independently so the original Studio service stays narrow.
+type BibleService interface {
+	UpdateCharacter(context.Context, Actor, UpdateCharacterInput) (Character, error)
+	AddCharacterRef(context.Context, Actor, NewCharacterRef) (CharacterRef, error)
+	CreateOutfit(context.Context, Actor, NewOutfit) (Outfit, error)
+	CreateOutfitTx(context.Context, *db.Tx, Actor, NewOutfit) (Outfit, error)
+	CreateSettingItem(context.Context, Actor, NewSettingItem) (SettingItem, error)
+	CreateSettingItemTx(context.Context, *db.Tx, Actor, NewSettingItem) (SettingItem, error)
 }
 
 // CharacterRef is one reference image.
@@ -285,6 +324,7 @@ type Service interface {
 	// Authorize checks the actor may perform action in project (membership, site
 	// role, token scopes, active account). Returns ErrNotFound or ErrForbidden.
 	Authorize(ctx context.Context, actor Actor, projectID string, action Action) error
+	AuthorizeTx(ctx context.Context, tx *db.Tx, actor Actor, projectID string, action Action) error
 	// ActorFromUser builds an Actor for a user ID (looks up the site role).
 	ActorFromUser(ctx context.Context, userID string) (Actor, error)
 
@@ -315,6 +355,7 @@ type Service interface {
 	CreateCharacter(ctx context.Context, actor Actor, in NewCharacter) (Character, error)
 	ListCharacters(ctx context.Context, projectID string) ([]Character, error)
 	GetCharacter(ctx context.Context, id string) (Character, error)
+	GetCharacterTx(ctx context.Context, tx *db.Tx, id string) (Character, error)
 	// AddCharacterRefTx attaches a stored image to a character's references.
 	AddCharacterRefTx(ctx context.Context, tx *db.Tx, characterID, assetID, kind, label string) (CharacterRef, error)
 	// SetCharacterPortraitTx sets the portrait (main reference) image.
@@ -330,4 +371,5 @@ type Service interface {
 	// the project and reject lettering layers. It is registered as a
 	// jobs.Validator by the studio module.
 	CheckScopeWritable(ctx context.Context, s jobs.Scope) error
+	CheckScopeWritableTx(ctx context.Context, tx *db.Tx, s jobs.Scope) error
 }

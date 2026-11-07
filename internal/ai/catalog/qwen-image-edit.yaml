@@ -1,0 +1,32 @@
+# Qwen-Image-Edit — instruction edits and text in art (Apache-2.0). ~40 GB in bf16; sequential offload on smaller GPUs.
+id: qwen-image-edit
+name: Qwen-Image Edit
+maker: Qwen (Alibaba)
+kind: image
+vram_mb: 42000
+min_vram_mb: 8000
+worker:
+  diffusers:
+    repo: Qwen/Qwen-Image-Edit
+    family: qwen-image
+    dtype: bfloat16
+    edit: instruct
+    offload_mode: sequential
+    default_steps: 40
+    default_guidance: 4.0
+    job_types: [image.edit]
+
+licence: Apache-2.0
+commercial: true
+providers: [local-worker]
+references: 8
+text_in_art: true
+bw: true
+edit: true
+mask: false
+max_width: 2048
+max_height: 2048
+max_count: 4
+quality: 90
+speed: 40
+gpu_seconds: 40

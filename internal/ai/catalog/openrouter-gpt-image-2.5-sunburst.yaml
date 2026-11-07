@@ -1,0 +1,20 @@
+# GPT Image 2.5 Sunburst through OpenRouter (ADR 0009). Pin-only backup: Auto
+# never selects it. Masked edits are server-constrained (mask sent as a reference).
+id: openai/gpt-image-2.5-sunburst
+name: GPT Image 2.5 Sunburst (OpenRouter)
+maker: OpenAI
+kind: image
+licence: provider-commercial
+commercial: true
+providers: [openrouter]
+references: 32
+text_in_art: false
+bw: true
+edit: true
+mask: true
+max_width: 4096
+max_height: 4096
+max_count: 4
+quality: 95
+speed: 60
+gpu_seconds: 0

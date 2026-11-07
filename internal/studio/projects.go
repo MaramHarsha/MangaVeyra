@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
 )
 
 const projectCols = `p.id, p.owner_id, p.title, p.slug, p.premise, p.logline, p.genres, p.tags, p.style,
@@ -241,6 +242,10 @@ func normalizeNewProject(in NewProject) NewProject {
 	if in.Language == "" {
 		in.Language = "en"
 	}
+	// Store the canonical content language tag ("ko-KR" → "ko", "zh-TW" → "zh-Hant").
+	if canonical := pagedoc.NormalizeContentLanguage(in.Language); canonical != "" {
+		in.Language = canonical
+	}
 	if in.PageWidth == 0 {
 		in.PageWidth = 1600
 	}
@@ -265,6 +270,9 @@ func validateNewProject(in NewProject) error {
 		if err != nil {
 			return err
 		}
+	}
+	if !pagedoc.IsContentLanguage(in.Language) {
+		return fmt.Errorf("%w: language must be one of %s", ErrInvalid, strings.Join(pagedoc.ContentLanguages, ", "))
 	}
 	switch in.Format {
 	case "manga_rtl", "comic_ltr", "webtoon":

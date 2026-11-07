@@ -15,4 +15,5 @@ __pycache__/
 *.egg-info/
 /e2e/test-results/
 /e2e/playwright-report/
+/premium-audit.json
 .DS_Store

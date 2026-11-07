@@ -33,6 +33,10 @@ type Publisher interface {
 // module registers spend guards. Returning an error rejects the job.
 type Validator func(ctx context.Context, p *EnqueueParams) error
 
+// TxValidator checks a scope against the same transaction that inserts a job.
+// It must use tx for database access and perform no external side effects.
+type TxValidator func(ctx context.Context, tx *db.Tx, p *EnqueueParams) error
+
 // Reroute is a fallback decision: run the job again on another model/provider.
 type Reroute struct {
 	ModelID    string
@@ -88,12 +92,13 @@ type Queue struct {
 	log      *slog.Logger
 	opts     Options
 
-	mu         sync.RWMutex
-	validators []Validator
-	failover   Failover
-	onFinish   []func(context.Context, *Job)
-	onCancel   []func(jobID string)
-	access     func(ctx context.Context, id httpx.Identity, j *Job) bool
+	mu           sync.RWMutex
+	validators   []Validator
+	txValidators []TxValidator
+	failover     Failover
+	onFinish     []func(context.Context, *Job)
+	onCancel     []func(jobID string)
+	access       func(ctx context.Context, id httpx.Identity, j *Job) bool
 	// privateInput lists job types whose input never leaves the server
 	// through the jobs API (it may carry private project material).
 	privateInput map[string]bool
@@ -164,6 +169,13 @@ func (q *Queue) SetPublisher(p Publisher) {
 func (q *Queue) AddValidator(v Validator) {
 	q.mu.Lock()
 	q.validators = append(q.validators, v)
+	q.mu.Unlock()
+}
+
+// AddTxValidator registers an authoritative transactional enqueue check.
+func (q *Queue) AddTxValidator(v TxValidator) {
+	q.mu.Lock()
+	q.txValidators = append(q.txValidators, v)
 	q.mu.Unlock()
 }
 
@@ -247,6 +259,28 @@ func (q *Queue) signal() {
 
 // Enqueue validates and stores a job.
 func (q *Queue) Enqueue(ctx context.Context, p EnqueueParams) (*Job, error) {
+	var job *Job
+	err := q.db.WithTx(ctx, func(tx *db.Tx) error {
+		var err error
+		job, err = q.EnqueueTx(ctx, tx, p)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	q.publish(job, "job.queued", "")
+	q.signal()
+	return job, nil
+}
+
+// EnqueueTx validates and stores a job and its created event in tx. The caller
+// owns commit/rollback; no publication or wake-up occurs before commit. The
+// executor's durable poll discovers committed jobs even if the caller crashes.
+// Legacy validators must be read-only; database scope checks use TxValidator.
+func (q *Queue) EnqueueTx(ctx context.Context, tx *db.Tx, p EnqueueParams) (*Job, error) {
+	if tx == nil {
+		return nil, errors.New("jobs: enqueue requires a transaction")
+	}
 	if p.Type == "" {
 		return nil, httpx.ErrBadRequest("job type is required")
 	}
@@ -261,6 +295,7 @@ func (q *Queue) Enqueue(ctx context.Context, p EnqueueParams) (*Job, error) {
 	}
 	q.mu.RLock()
 	validators := append([]Validator{}, q.validators...)
+	txValidators := append([]TxValidator{}, q.txValidators...)
 	q.mu.RUnlock()
 	for _, v := range validators {
 		if err := v(ctx, &p); err != nil {
@@ -286,9 +321,14 @@ func (q *Queue) Enqueue(ctx context.Context, p EnqueueParams) (*Job, error) {
 	if !p.RunAfter.IsZero() {
 		runAfter = p.RunAfter.UTC()
 	}
-	err = q.db.WithTx(ctx, func(tx *db.Tx) error {
+	err = func() error {
 		if p.Guard != nil {
 			if err := p.Guard(ctx, tx); err != nil {
+				return guardError{err}
+			}
+		}
+		for _, v := range txValidators {
+			if err := v(ctx, tx, &p); err != nil {
 				return guardError{err}
 			}
 		}
@@ -302,7 +342,7 @@ func (q *Queue) Enqueue(ctx context.Context, p EnqueueParams) (*Job, error) {
 			return err
 		}
 		return addEvent(ctx, tx, id, "created", "", map[string]any{"model_id": p.ModelID, "provider_id": p.ProviderID, "estimate": p.Estimate})
-	})
+	}()
 	if err != nil {
 		var guarded guardError
 		if errors.As(err, &guarded) {
@@ -313,13 +353,7 @@ func (q *Queue) Enqueue(ctx context.Context, p EnqueueParams) (*Job, error) {
 		}
 		return nil, fmt.Errorf("jobs: enqueue: %w", err)
 	}
-	j, err := q.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	q.publish(j, "job.queued", "")
-	q.signal()
-	return j, nil
+	return q.get(ctx, tx, id)
 }
 
 // guardError carries an EnqueueParams.Guard rejection out of the transaction
@@ -576,6 +610,22 @@ func (q *Queue) Claim(ctx context.Context, p ClaimParams) (*Job, error) {
 			// Serialise claimers so per-user running limits cannot be overshot by concurrent claims.
 			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(7468326820)`); err != nil {
 				return err
+			}
+		}
+		if p.Executor == ExecutorWorker {
+			// Registered workers may run on another machine. Until same-host
+			// locality is attested, Local only must not hand any prompt/file to
+			// them. Read uncached after claim-lock contention, not from the
+			// earlier fair-share settings snapshot.
+			current, err := q.settings.InstanceTx(ctx, tx)
+			if err != nil {
+				return err
+			}
+			if err := current.Validate(); err != nil {
+				return err
+			}
+			if current.LocalOnly {
+				return nil
 			}
 		}
 		if p.WorkerID != "" && p.MaxRunning > 0 {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/gen"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
@@ -18,6 +19,8 @@ type Module struct {
 	d      *core.Deps
 	studio studio.Service
 	gen    gen.Service
+	bible  studio.BibleService
+	assets *assets.Service
 	ui     *web.UI
 }
 
@@ -46,19 +49,24 @@ func (m *Module) Init(context.Context) error {
 	if m.ui, ok = core.Use[*web.UI](m.d); !ok {
 		return errors.New("studioui: web UI unavailable")
 	}
+	m.bible = core.MustUse[studio.BibleService](m.d)
+	m.assets = core.MustUse[*assets.Service](m.d)
 	return nil
 }
 
 // Routes mounts the session-only Studio browser screens. Bearer tokens are
 // deliberately rejected by core.RequireSession before any handler runs.
 func (m *Module) Routes(r *core.Router) {
+	m.RegisterBibleRoutes(r)
 	r.Page("GET /studio/new", m.newProjectRedirect, core.RequireSession)
 	r.Page("GET /studio/new/{step}", m.newProjectPage, core.RequireSession)
 	r.Page("POST /studio/new/premise", m.createProject, core.RequireSession)
 	r.Page("GET /studio/p/{project}/story", m.projectStory, core.RequireSession)
 	r.Page("POST /studio/p/{project}/story/chapters", m.createChapter, core.RequireSession)
 	r.Page("GET /studio/p/{project}/story/{chapter}", m.chapterStory, core.RequireSession)
+	r.Page("GET /studio/p/{project}/story/{chapter}/{scene}", m.chapterStory, core.RequireSession)
 	r.Page("POST /studio/p/{project}/story/{chapter}/generate", m.generateScript, core.RequireSession)
+	r.Page("POST /studio/p/{project}/story/{chapter}/pages", m.makePages, core.RequireSession)
 	r.Page("GET /studio/p/{project}/story/{chapter}/jobs/{job}", m.scriptJob, core.RequireSession)
 	r.Page("POST /studio/p/{project}/story/{chapter}/jobs/{job}/retry", m.retryScriptJob, core.RequireSession)
 	r.Page("POST /studio/p/{project}/story/{chapter}/script", m.editScript, core.RequireSession)

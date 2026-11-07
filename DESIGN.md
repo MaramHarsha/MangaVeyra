@@ -78,7 +78,7 @@ Anton is for short display labels only. Hanken Grotesk owns Latin UI and prose; 
 
 ## Layout
 
-The runtime 4 px spacing scale is canonical. The application shell keeps its 56 px top bar, 224 px desktop sidebar, and 76 px mobile bottom navigation. Gate A creation uses a two-column workbench—form plus concise production summary—collapsing to one column below 900 px. The story screen uses a narrow chapter rail and a flexible manuscript column; on small screens the rail becomes an in-flow section above the manuscript rather than a second hidden DOM. Forms keep labels above fields, 40 px routine controls, 48 px primary touch targets where space permits, and stable space for errors. Loading and validation must not shift action geometry.
+The runtime 4 px spacing scale is canonical. The application shell keeps its 56 px top bar, 224 px desktop sidebar, and 76 px responsive bottom navigation. B3 uses the approved five-step wizard and live summary. C1 uses the approved chapter/scene tree, compact manuscript table and assistant pane; the assistant hides below 1180 px and the tree hides on phones. B2/C2–C5, G11/G12 and the editor/export workbench retain their desktop artboard grids. Narrow screens adapt those desktop grids with the existing responsive patterns; unfinished mobile artboards are outside Phase 1. Forms keep labels above fields, stable action geometry and 44 px touch targets on phones.
 
 ## Elevation & Depth
 
@@ -104,7 +104,7 @@ The app shell owns desktop sidebar/mobile bottom navigation. Breadcrumbs and cha
 
 ### Forms and overlays
 
-`internal/web/ui` owns fields, inputs, textareas, native selects, segmented controls, notices, and dialogs. Forms declare `novalidate` so server validation is authoritative and errors are rendered inline plus in a summary when multiple fields fail. Textareas use `resize: none`; deliberate sizes are set by component modifiers and responsive CSS. Secret inputs are always blank after submission, never copied back into HTML, logs, notices, or query strings. Uploads show type/size constraints before selection. Dialogs are reserved for destructive or high-consequence confirmation, not routine editing.
+`internal/web/ui` owns fields, inputs, textareas, native selects, segmented controls, notices, and dialogs. The editor's Svelte adapters consume those same classes/tokens because templ cannot render client-side controls. Forms declare `novalidate` so server validation is authoritative and errors are rendered inline plus in a summary when multiple fields fail. `web/src/lib/forms.ts` owns submission busy state, duplicate prevention and unsaved-navigation protection for forms and rich islands. Textareas use `resize: none`; deliberate sizes are set by component modifiers and responsive CSS. Secret inputs are always blank after submission, never copied back into HTML, logs, notices, or query strings. Uploads show type/size constraints before selection. Designed editor overlays and the shared unsaved/destructive confirmation modal use the existing dialog owner.
 
 ### Iconography
 

@@ -35,7 +35,7 @@ const (
 	ollamaConnectHref = "/models/providers/new/ollama"
 )
 
-// Capability tabs of G2, in design order. Text is the only populated one.
+// Capability tabs of G2, in design order. Image and Text are populated.
 const (
 	capImage = "image"
 	capText  = "text"
@@ -62,6 +62,7 @@ type modelsPageView struct {
 	Cap       string
 	Tiles     []modelsTileView
 	Providers []providerView
+	Images    []imageModelView
 }
 
 // capCount is the number of model rows behind one capability tab: the
@@ -69,7 +70,16 @@ type modelsPageView struct {
 // for the other capabilities.
 func (v modelsPageView) capCount(capability string) int {
 	if capability == capText {
-		return 1 + len(v.Providers)
+		count := 1
+		for _, p := range v.Providers {
+			if p.Kind != providerKindFal {
+				count++
+			}
+		}
+		return count
+	}
+	if capability == capImage {
+		return len(v.Images)
 	}
 	return 0
 }
@@ -136,19 +146,24 @@ func (m *Module) modelsPage(w http.ResponseWriter, r *http.Request) error {
 		LocalOnly: inst.LocalOnly, CanAdd: actor.Admin || inst.UsersMayAddProviders,
 		Cap: modelsCapability(r.URL.Query().Get("cap"))}
 	v.Tiles = m.modelsTiles(ctx, actor, providers, inst)
+	v.Images, err = m.catalogueRows(ctx, actor, providers, inst)
+	if err != nil {
+		return err
+	}
 	return m.ui.Page(w, r, http.StatusOK, web.PageOpts{Title: i18n.T(ctx, "models.title"),
 		MobileTitle: i18n.T(ctx, "models.mobile_title"), BackURL: "/settings",
 		Section: layout.SectionStudio, Nav: layout.NavModels, Tab: layout.TabMe}, ModelsPage(v))
 }
 
-// modelsCapability returns the selected capability tab (text by default).
+// modelsCapability returns the selected capability tab. The designed G2
+// opens on Image.
 func modelsCapability(raw string) string {
 	for _, c := range modelCapabilities {
 		if raw == c {
 			return c
 		}
 	}
-	return capText
+	return capImage
 }
 
 // modelsTiles builds the designed row of four summary tiles with real status:
@@ -184,11 +199,29 @@ func (m *Module) modelsTiles(ctx context.Context, actor providerActor, manageabl
 		openRouter.State, openRouter.Detail = tileOff, i18n.T(ctx, "models.tile.blocked")
 	}
 
+	falTile := modelsTileView{Icon: "bolt", Name: "fal", Detail: i18n.T(ctx, "models.tile.not_connected"), State: tileOff, Href: falConnectHref}
+	ollamaTile := modelsTileView{Icon: "server-2", Name: "Ollama", Detail: i18n.T(ctx, "models.tile.not_connected"), State: tileOff, Href: ollamaConnectHref}
+	for _, candidate := range candidates {
+		switch candidate.Kind {
+		case providerKindFal:
+			falTile.State = tileOn
+			falTile.Detail = i18n.T(ctx, "aiimage.tile.fal")
+		case providerKindLocalText:
+			ollamaTile.State = tileOn
+			ollamaTile.Detail = candidate.Model
+		}
+	}
+	if inst.LocalOnly {
+		falTile.State = tileOff
+		ollamaTile.State = tileOff
+		falTile.Detail = i18n.T(ctx, "models.tile.blocked")
+		ollamaTile.Detail = falTile.Detail
+	}
 	return []modelsTileView{
 		local,
 		openRouter,
-		{Icon: "bolt", Name: "fal", Detail: i18n.T(ctx, "models.tile.fal"), State: tileOff, Href: falConnectHref},
-		{Icon: "server-2", Name: "Ollama", Detail: i18n.T(ctx, "models.tile.ollama"), State: tileOff, Href: ollamaConnectHref},
+		falTile,
+		ollamaTile,
 	}
 }
 
@@ -211,6 +244,10 @@ func (m *Module) newProviderPage(w http.ResponseWriter, r *http.Request) error {
 		return core.ErrInternal(errors.New("ai: web UI unavailable"))
 	}
 	kind := r.URL.Query().Get("kind")
+	if kind == providerKindLocalText {
+		core.Redirect(w, r, customURL("connect", ""))
+		return nil
+	}
 	if !validProviderKind(kind) {
 		return core.ErrNotFound()
 	}
@@ -259,7 +296,7 @@ func (m *Module) createProvider(w http.ResponseWriter, r *http.Request) error {
 	if kind == "" {
 		kind = providerKindOpenRouter
 	}
-	if !validProviderKind(kind) {
+	if !validProviderKind(kind) || kind == providerKindLocalText {
 		return core.ErrNotFound()
 	}
 	v := providerFormView{Kind: kind, Name: web.FormValue(r, "name"), Scope: scope,
@@ -335,7 +372,7 @@ func (m *Module) testProvider(w http.ResponseWriter, r *http.Request) error {
 		kind = "error"
 	}
 	web.Flash(w, r, kind, row.Notice, "")
-	core.Redirect(w, r, "/models")
+	core.Redirect(w, r, modelsReturnURL(r))
 	return nil
 }
 
@@ -374,7 +411,7 @@ func (m *Module) setProviderEnabled(w http.ResponseWriter, r *http.Request) erro
 			Tone: ui.ToneSuccess, Notice: message}), nil)
 	}
 	web.Flash(w, r, "success", message, "")
-	core.Redirect(w, r, "/models")
+	core.Redirect(w, r, modelsReturnURL(r))
 	return nil
 }
 
@@ -403,7 +440,7 @@ func (m *Module) replaceProviderKey(w http.ResponseWriter, r *http.Request) erro
 			return web.Render(w, r, http.StatusUnprocessableEntity, ProviderRows(row), nil)
 		}
 		web.Flash(w, r, "error", row.Notice, "")
-		core.Redirect(w, r, "/models")
+		core.Redirect(w, r, modelsReturnURL(r))
 		return nil
 	}
 	view, err := m.providers.ReplaceKey(ctx, actor, id, key)
@@ -416,7 +453,7 @@ func (m *Module) replaceProviderKey(w http.ResponseWriter, r *http.Request) erro
 			Tone: ui.ToneSuccess, Notice: message}), nil)
 	}
 	web.Flash(w, r, "success", message, "")
-	core.Redirect(w, r, "/models")
+	core.Redirect(w, r, modelsReturnURL(r))
 	return nil
 }
 
@@ -449,6 +486,9 @@ func (m *Module) providerPageError(ctx context.Context, err error) error {
 // status it shows. Cards without an entry are designed but not built.
 var setupProviderKinds = map[string]string{
 	providerKindOpenRouter: providerKindOpenRouter,
+	"fal":                  providerKindFal,
+	"ollama":               providerKindLocalText,
+	"custom":               providerKindLocalText,
 	"vendor":               providerKindOpenAI,
 }
 
@@ -519,6 +559,15 @@ func providerKindStatus(providers []providerView, kind string) string {
 }
 
 func providerKindName(kind string) string {
+	if kind == providerKindFal {
+		return "fal"
+	}
+	if kind == providerKindLocalText {
+		return "OpenAI-compatible"
+	}
+	if kind == providerKindWorker {
+		return "Local worker"
+	}
 	if route, ok := routeForKind(kind); ok {
 		return route.Label
 	}
@@ -526,6 +575,9 @@ func providerKindName(kind string) string {
 }
 
 func providerKindModel(kind string) string {
+	if kind == providerKindFal {
+		return "FLUX.1 schnell / inpainting"
+	}
 	if route, ok := routeForKind(kind); ok {
 		return route.Model
 	}
@@ -536,6 +588,12 @@ func providerKindModel(kind string) string {
 // reservation from the route table, rounded up to whole cents so the "≤"
 // stays true. It is the user's own spend on their key, not a price.
 func providerCostLabel(ctx context.Context, kind string) string {
+	if kind == providerKindLocalText {
+		return i18n.T(ctx, "models.cost.none")
+	}
+	if kind == providerKindFal {
+		return "≤ $0.280 / call"
+	}
 	route, ok := routeForKind(kind)
 	if !ok {
 		return ""
@@ -553,4 +611,13 @@ func formatUSD(v float64) string {
 // hardware recommendation. It performs no network I/O.
 func (m *Module) Recommend(_ context.Context, gpus []jobs.GPU) (*setup.Recommendation, error) {
 	return setup.RecommendFor(gpus), nil
+}
+
+// modelsReturnURL brings a no-JavaScript row action back to its tab: image
+// rows post with ?cap=image; the text table's connection rows do not.
+func modelsReturnURL(r *http.Request) string {
+	if r.URL.Query().Get("cap") == capImage {
+		return "/models?cap=image"
+	}
+	return "/models?cap=text"
 }

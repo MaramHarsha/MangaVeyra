@@ -68,8 +68,8 @@ func TestModelsRoutesRequireBrowserSession(t *testing.T) {
 func TestModelsCreateAuthorizationAndSecretRecovery(t *testing.T) {
 	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
 		admin := ta.Login(t, ta.Admin.Username)
-		page := admin.Get("/models")
-		if page.StatusCode != http.StatusOK || !strings.Contains(string(page.Body), "placeholder-text") ||
+		page := admin.Get("/models?cap=text")
+		if page.StatusCode != http.StatusOK || !strings.Contains(string(page.Body), "<strong>Placeholder text</strong>") ||
 			!strings.Contains(string(page.Body), `href="/models/providers/new?kind=openrouter"`) {
 			t.Fatalf("models page = %d: %.2500s", page.StatusCode, page.Body)
 		}
@@ -189,7 +189,7 @@ func TestModelsLifecycleIDORAndLocalOnlyTestGuard(t *testing.T) {
 			inst.LocalOnly = true
 			inst.RoutingMode = settings.RoutingLocalOnly
 		})
-		localPage := admin.Get("/models")
+		localPage := admin.Get("/models?cap=text")
 		if localPage.StatusCode != http.StatusOK || !strings.Contains(string(localPage.Body), "Local only is enabled") ||
 			!strings.Contains(string(localPage.Body), `disabled`) {
 			t.Fatalf("local-only page = %d: %.2500s", localPage.StatusCode, localPage.Body)
@@ -234,7 +234,7 @@ func TestModelsLifecycleIDORAndLocalOnlyTestGuard(t *testing.T) {
 func TestModelsOpenAIConnectionFlow(t *testing.T) {
 	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
 		admin := ta.Login(t, ta.Admin.Username)
-		page := admin.Get("/models")
+		page := admin.Get("/models?cap=text")
 		if page.StatusCode != http.StatusOK || !strings.Contains(string(page.Body), `href="/models/providers/new?kind=openai"`) ||
 			!strings.Contains(string(page.Body), "<span>OpenAI</span>") {
 			t.Fatalf("models page lacks the OpenAI action: %d", page.StatusCode)
@@ -265,7 +265,7 @@ func TestModelsOpenAIConnectionFlow(t *testing.T) {
 		if kind != "openai" {
 			t.Fatalf("stored kind = %q", kind)
 		}
-		listed := admin.Get("/models")
+		listed := admin.Get("/models?cap=text")
 		body := string(listed.Body)
 		if !strings.Contains(body, "OpenAI · Studio OpenAI") || !strings.Contains(body, "gpt-6-luna") ||
 			!strings.Contains(body, "ti-brand-openai") || strings.Contains(body, secret) {
@@ -357,32 +357,38 @@ func assertEveryTargetIsServed(t *testing.T, ta *testutil.TestApp, body string) 
 func TestModelsPageMatchesDesignedLayout(t *testing.T) {
 	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
 		admin := ta.Login(t, ta.Admin.Username)
-		r := admin.Get("/models")
+		r := admin.Get("/models?cap=text")
 		body := mainOf(t, r)
 		mustContain(t, string(r.Body), `<span class="mv-topbar__title" aria-hidden="true">Models</span>`,
 			`<a class="mv-iconlink mv-topbar__back" href="/settings"`)
 
 		// Header: designed title, subtitle with the server name and both actions.
 		mustContain(t, body, `<h1 class="mv-pagehead__title">Models &amp; providers</h1>`,
-			"Everything auto-routing can use on 127.0.0.1")
+			`Everything <a href="/models/routing">auto-routing</a> can use on 127.0.0.1`)
 		mustAppearInOrder(t, body, "Add custom", "Add provider")
 
 		// Summary tiles in design order with real status.
 		mustAppearInOrder(t, body, `<ul class="mv-models__tiles`,
 			"<strong>Local worker</strong> <span>No worker connected</span>", "mv-models-tile__dot--off",
 			"<strong>OpenRouter</strong> <span>Not connected</span>", "mv-models-tile__dot--off",
-			`<li class="mv-models-tile is-soon"`, "<strong>fal</strong>", `<span class="mv-soon">Soon</span>`,
-			`<li class="mv-models-tile is-soon"`, "<strong>Ollama</strong>", `<span class="mv-soon">Soon</span>`, "</ul>")
+			"<strong>fal</strong>", "Not connected",
+			"<strong>Ollama</strong>", "Not connected", "</ul>")
 
-		// Capability tabs: text is the default and the only populated one.
+		// Capability tabs in design order; this request selects Text.
 		mustAppearInOrder(t, body, `<nav class="mv-seg" aria-label="Capabilities">`,
-			`href="/models?cap=image">Image 0</a>`, `href="/models?cap=text" aria-current="true">Text 1</a>`,
+			`href="/models?cap=image">Image 15</a>`, `href="/models?cap=text" aria-current="true">Text 1</a>`,
 			`href="/models?cap=video">Video 0</a>`, `href="/models?cap=voice">Voice 0</a>`, `href="/models?cap=ocr">OCR 0</a>`)
+		// The designed G2 opens on Image, with only the two designed header
+		// actions (G11 is reached from the subtitle's "auto-routing").
+		landing := mainOf(t, admin.Get("/models"))
+		mustContain(t, landing, `href="/models?cap=image" aria-current="true">Image 15</a>`,
+			`<caption class="mv-sr-only">Image models auto-routing can use</caption>`)
+		mustNotContain(t, landing, "Text models auto-routing can use", `href="/models/routing" class="mv-btn`)
 
 		// The designed table with the built-in placeholder row.
 		mustAppearInOrder(t, body, `<table class="mv-table mv-models-table">`,
 			">Model</th>", ">Provider</th>", ">Router uses it for</th>", ">Status</th>", ">Cost</th>", ">On</th>",
-			`id="provider-placeholder"`, "<strong>placeholder-text</strong>", "Built-in", "Scripts · fallback",
+			`id="provider-placeholder"`, "<strong>Placeholder text</strong>", "Built-in", "Scripts · fallback",
 			`<span class="mv-badge mv-badge--success">Ready</span>`, "None",
 			`id="enabled-placeholder" name="" value="on" checked disabled`)
 		mustNotContain(t, body, "Local only is enabled")
@@ -392,37 +398,40 @@ func TestModelsPageMatchesDesignedLayout(t *testing.T) {
 
 func TestModelsPageSoonItemsNeverLink(t *testing.T) {
 	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
-		body := mainOf(t, ta.Login(t, ta.Admin.Username).Get("/models"))
-		for _, path := range []string{"/models/providers/custom", "/models/providers/new/fal", "/models/providers/new/google",
-			"/models/providers/new/xai", "/models/providers/new/ollama", "/models/routing"} {
+		body := mainOf(t, ta.Login(t, ta.Admin.Username).Get("/models?cap=text"))
+		for _, path := range []string{"/models/providers/new/google", "/models/providers/new/xai"} {
 			if ta.Router.Serves(http.MethodGet, path) {
 				t.Fatalf("%s is served now; update the Soon expectations", path)
 			}
 			mustNotContain(t, body, `href="`+path)
 		}
-		// "Add custom" is a disabled button with the Soon tag.
-		mustContain(t, body, `<a class="mv-btn mv-btn--quiet is-soon" aria-disabled="true"`,
-			`Add custom<span class="mv-soon">Soon</span>`)
+		// Built connection flows and routing are now real destinations.
+		mustContain(t, body, `href="/models/providers/custom"`, `href="/models/routing"`)
+		for _, path := range []string{"/models/providers/custom", "/models/providers/new/fal", "/models/providers/new/ollama", "/models/routing"} {
+			if !ta.Router.Serves(http.MethodGet, path) {
+				t.Fatalf("missing built route %s", path)
+			}
+		}
 		// "Add provider" lists OpenRouter and OpenAI as links, the rest as Soon.
 		mustAppearInOrder(t, body, `<details class="mv-dropdown mv-dropdown--end mv-models__add">`,
 			`href="/models/providers/new?kind=openrouter" role="menuitem"`, "<span>OpenRouter</span>",
-			`class="mv-menu__item is-soon"`, "<span>fal</span>", `<span class="mv-soon">Soon</span>`,
+			`href="/models/providers/new/fal" role="menuitem"`, "<span>fal</span>",
 			`href="/models/providers/new?kind=openai" role="menuitem"`, "<span>OpenAI</span>",
 			`class="mv-menu__item is-soon"`, "<span>Google</span>", `<span class="mv-soon">Soon</span>`,
 			`class="mv-menu__item is-soon"`, "<span>xAI</span>", `<span class="mv-soon">Soon</span>`,
-			`class="mv-menu__item is-soon"`, "<span>Ollama</span>", `<span class="mv-soon">Soon</span>`, "</details>")
+			`href="/models/providers/new/ollama" role="menuitem"`, "<span>Ollama</span>", "</details>")
 
 		// Empty capability tabs use the designed empty state with a Soon tag.
-		for capability, title := range map[string]string{"image": "No image models yet", "video": "No video models yet",
+		for capability, title := range map[string]string{"video": "No video models yet",
 			"voice": "No voice models yet", "ocr": "No OCR models yet"} {
 			tab := mainOf(t, ta.Login(t, ta.Admin.Username).Get("/models?cap="+capability))
 			mustContain(t, tab, `href="/models?cap=`+capability+`" aria-current="true"`, "シーン…", title,
 				"This version routes text only.", `<span class="mv-soon">Soon</span>`)
-			mustNotContain(t, tab, "<table", "placeholder-text")
+			mustNotContain(t, tab, "<table", "Placeholder text")
 		}
-		// Unknown tabs fall back to text.
+		// Unknown tabs fall back to the designed default, Image.
 		mustContain(t, mainOf(t, ta.Login(t, ta.Admin.Username).Get("/models?cap=bogus")),
-			`href="/models?cap=text" aria-current="true">Text 1</a>`, "placeholder-text")
+			`href="/models?cap=image" aria-current="true">Image 15</a>`, "Placeholder art")
 	})
 }
 
@@ -444,7 +453,7 @@ func TestModelsPageRowsActionsAndSecrets(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		r := admin.Get("/models")
+		r := admin.Get("/models?cap=text")
 		body := mainOf(t, r)
 		mustContain(t, body, `href="/models?cap=text" aria-current="true">Text 3</a>`,
 			"<strong>OpenRouter</strong> <span>1 text model</span>", "mv-models-tile__dot--on")
@@ -483,10 +492,10 @@ func TestModelsPageRowsActionsAndSecrets(t *testing.T) {
 
 		// Without JavaScript the switch submits checkbox-then-hidden values.
 		off := postModelsForm(admin, enabledPath, url.Values{"enabled": {"false"}})
-		if off.StatusCode != http.StatusSeeOther || off.Header.Get("Location") != "/models" {
+		if off.StatusCode != http.StatusSeeOther || off.Header.Get("Location") != "/models?cap=text" {
 			t.Fatalf("switch off = %d %q", off.StatusCode, off.Header.Get("Location"))
 		}
-		mustContain(t, mainOf(t, admin.Get("/models")), `id="enabled-`+orID+`" name="enabled" value="true" aria-label`,
+		mustContain(t, mainOf(t, admin.Get("/models?cap=text")), `id="enabled-`+orID+`" name="enabled" value="true" aria-label`,
 			`<span class="mv-badge mv-badge--muted">Disabled</span>`)
 		on := postModelsForm(admin, enabledPath, url.Values{"enabled": {"true", "false"}})
 		if on.StatusCode != http.StatusSeeOther {
@@ -528,7 +537,7 @@ func TestModelsPageRowsActionsAndSecrets(t *testing.T) {
 		if err := ta.Deps.DB.Get(context.Background(), &replacedCipher, `SELECT key_enc FROM providers WHERE id = ?`, orID); err != nil {
 			t.Fatal(err)
 		}
-		for _, b := range []string{string(replaced.Body), string(invalid.Body), string(admin.Get("/models").Body)} {
+		for _, b := range []string{string(replaced.Body), string(invalid.Body), string(admin.Get("/models?cap=text").Body)} {
 			mustNotContain(t, b, newSecret, replacedCipher, orCipher)
 		}
 	})
@@ -553,7 +562,7 @@ func TestModelsPageLocalOnlyWorkerAndPermissions(t *testing.T) {
 			inst.Limits.MonthlyRemoteSpendUSD = 0
 		})
 
-		body := mainOf(t, admin.Get("/models"))
+		body := mainOf(t, admin.Get("/models?cap=text"))
 		mustContain(t, body, "<strong>Local worker</strong> <span>NVIDIA RTX 4090</span>",
 			"<strong>OpenRouter</strong> <span>Paused by Local only</span>", "Local only is enabled")
 		mustAppearInOrder(t, body, "<strong>Local worker</strong>", "mv-models-tile__dot--on", "<strong>OpenRouter</strong>",
@@ -570,7 +579,7 @@ func TestModelsPageLocalOnlyWorkerAndPermissions(t *testing.T) {
 
 		// A creator who may not add providers sees no add links.
 		_, creator := ta.UserClient(t, auth.RoleCreator)
-		creatorBody := mainOf(t, creator.Get("/models"))
+		creatorBody := mainOf(t, creator.Get("/models?cap=text"))
 		mustContain(t, creatorBody, `data-tip="Only an admin can add providers on this server."`, "Add provider",
 			`href="/models?cap=text" aria-current="true">Text 1</a>`)
 		mustNotContain(t, creatorBody, `href="/models/providers/new`, "Guarded OR")
@@ -587,11 +596,11 @@ func TestSetupStepThreeShowsDesignedProviderRows(t *testing.T) {
 	body := string(r.Body)
 	mustAppearInOrder(t, body, `<div class="mv-providers">`,
 		"OpenRouter", `href="/models/providers/new?kind=openrouter&amp;next=/setup/models"`,
-		">fal<", "Fast hosted open models", `is-soon`, `<span class="mv-soon">Soon</span>`,
+		">fal<", "Fast hosted open models", `href="/models/providers/new/fal"`,
 		"OpenAI · Google · xAI", "Direct vendor keys", `href="/models/providers/new?kind=openai&amp;next=/setup/models"`,
-		"Ollama · local text model", "For script, translation and routing", `is-soon`, `<span class="mv-soon">Soon</span>`,
-		"Custom connection", "OpenAI-compatible, ComfyUI workflow, any HTTP API", `is-soon`, `<span class="mv-soon">Soon</span>`)
-	mustNotContain(t, body, `href="/models/providers/new/fal`, `href="/models/providers/new/ollama`, `href="/models/providers/custom`)
+		"Ollama · local text model", "For script, translation and routing", `href="/models/providers/new/ollama"`,
+		"Custom connection", "OpenAI-compatible, ComfyUI workflow, any HTTP API", `href="/models/providers/custom"`)
+	mustNotContain(t, body, `href="/models/providers/new/google`, `href="/models/providers/new/xai`)
 
 	if got := postModelsForm(admin, "/models/providers", url.Values{"kind": {"openai"}, "name": {"Setup vendor"},
 		"key": {"sk-setup-vendor-secret"}, "scope": {"server"}, "next": {"/setup/models"}}); got.StatusCode != http.StatusSeeOther ||

@@ -198,6 +198,58 @@ func TestWizardMapsPageSizeAndOnboardingStyle(t *testing.T) {
 	mustContain(t, body, `name="style" value="chibi" checked`, `data-summary="style">Chibi · 4-koma<`)
 }
 
+// B3 offers every manga content language with a localized name, defaults to
+// the interface language and stores the chosen tag; anything else is refused.
+func TestWizardOffersEveryContentLanguage(t *testing.T) {
+	ta := testutil.NewTestApp(t)
+	ctx := context.Background()
+	_, client := ta.UserClient(t, auth.RoleCreator)
+	names := map[string][2]string{
+		"en": {"English", "英語"}, "ja": {"Japanese", "日本語"}, "ko": {"Korean", "韓国語"},
+		"zh-Hans": {"Chinese (Simplified)", "中国語（簡体字）"}, "zh-Hant": {"Chinese (Traditional)", "中国語（繁体字）"},
+		"es": {"Spanish", "スペイン語"}, "fr": {"French", "フランス語"}, "de": {"German", "ドイツ語"},
+		"pt": {"Portuguese", "ポルトガル語"}, "hi": {"Hindi", "ヒンディー語"},
+	}
+	selectRe := regexp.MustCompile(`(?s)<select[^>]*name="language"[^>]*>(.*?)</select>`)
+	optionRe := regexp.MustCompile(`<option value="([^"]+)"( selected)?>([^<]+)</option>`)
+	for i, locale := range []string{"en", "ja"} {
+		client.Header.Set("Accept-Language", locale)
+		page := client.Get("/studio/new/generate")
+		m := selectRe.FindStringSubmatch(string(page.Body))
+		if page.StatusCode != http.StatusOK || m == nil {
+			t.Fatalf("%s wizard = %d, language select found %v", locale, page.StatusCode, m != nil)
+		}
+		var order []string
+		for _, o := range optionRe.FindAllStringSubmatch(m[1], -1) {
+			order = append(order, o[1])
+			if want := names[o[1]][i]; html.UnescapeString(o[3]) != want {
+				t.Errorf("%s label for %s = %q, want %q", locale, o[1], o[3], want)
+			}
+			if (o[2] != "") != (o[1] == locale) {
+				t.Errorf("%s: option %s selected=%v", locale, o[1], o[2] != "")
+			}
+		}
+		if got := strings.Join(order, ","); got != "en,ja,ko,zh-Hans,zh-Hant,es,fr,de,pt,hi" {
+			t.Errorf("%s options = %s", locale, got)
+		}
+	}
+	client.Header.Del("Accept-Language")
+	for _, lang := range []string{"ko", "zh-Hant", "hi"} {
+		title := "Salt Road " + lang
+		if r := postWizardFields(t, client, map[string]string{"title": title, "language": lang}); r.StatusCode != http.StatusSeeOther {
+			t.Fatalf("%s create = %d %.400s", lang, r.StatusCode, r.Body)
+		}
+		var stored string
+		if err := ta.Deps.DB.Get(ctx, &stored, `SELECT language FROM projects WHERE title = ?`, title); err != nil || stored != lang {
+			t.Fatalf("%s stored %q %v", lang, stored, err)
+		}
+	}
+	r := postWizardFields(t, client, map[string]string{"title": "Unknown Tongue", "language": "xx"})
+	if r.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(string(r.Body), `data-current="generate"`) {
+		t.Fatalf("unknown language = %d", r.StatusCode)
+	}
+}
+
 // htmlForm collects what a browser would submit from the first form whose
 // opening tag contains marker: enabled inputs, textareas and selected options.
 func htmlForm(t *testing.T, page, marker string) url.Values {
@@ -217,7 +269,20 @@ func htmlForm(t *testing.T, page, marker string) url.Values {
 		return html.UnescapeString(m[1]), true
 	}
 	values := url.Values{}
-	for _, tag := range regexp.MustCompile(`<input\b[^>]*>`).FindAllString(form, -1) {
+	inputRe := regexp.MustCompile(`<input\b[^>]*>`)
+	openTag := form[:strings.Index(form, ">")+1]
+	// A <template> is inert: its controls are never submitted.
+	form = regexp.MustCompile(`(?s)<template\b.*?</template>`).ReplaceAllString(form, "")
+	inputs := inputRe.FindAllString(form, -1)
+	// Controls outside the form element join it through the form attribute.
+	if id, ok := attr(openTag, "id"); ok && id != "" {
+		for _, tag := range inputRe.FindAllString(page, -1) {
+			if owner, ok := attr(tag, "form"); ok && owner == id {
+				inputs = append(inputs, tag)
+			}
+		}
+	}
+	for _, tag := range inputs {
 		name, _ := attr(tag, "name")
 		typ, _ := attr(tag, "type")
 		if _, disabled := attr(tag, "disabled"); name == "" || disabled || typ == "submit" || typ == "button" || typ == "file" {
@@ -275,9 +340,10 @@ func TestStoryEditorPanelsProseSoonAndSaveRoundTrip(t *testing.T) {
 		}
 		mustContain(t, body,
 			// tree
-			`data-scene-link`, `href="#scene-`+scene.ID+`"`, `data-prose-href="#prose-`+scene.ID+`"`, "Ch. 1 · The Quiet Bell",
-			// centre
-			"Harbor Ghosts · Ch. 1", "Ch. 1 · Scene 1", `role="columnheader"`, ">Panel<", ">Camera · emotion<",
+			`data-scene-link`, `href="`+f.storyURL+`/`+scene.ID+`"`, `aria-current="page"`, "Ch. 1 · The Quiet Bell",
+			"Import text into this chapter",
+			// centre: "Ch. N · Scene M" over the scene title, as designed
+			"Ch. 1 · Scene 1", `form="mv-c1-script"`, `role="columnheader"`, ">Panel<", ">Camera · emotion<",
 			">Action · dialogue<", ">SFX<", `id="scene-`+scene.ID+`"`,
 			`href="`+f.storyURL+`?view=prose"`, ">Prose<", ">Panels<",
 			// Soon: Make pages from script and the Script assistant
@@ -289,22 +355,18 @@ func TestStoryEditorPanelsProseSoonAndSaveRoundTrip(t *testing.T) {
 			`for="sfx-`+panel.ID+`-0"`, `for="sfx-note-`+panel.ID+`-0"`,
 			"Panel "+panel.Label+" · Dialogue 1 · Speaker", "Panel "+panel.Label+" · Sound effect 1 · Lettering",
 		)
-		makePages := regexp.MustCompile(`<button[^>]*is-soon[^>]*disabled[^>]*>\s*<i[^>]*ti-layout-board`).FindString(body)
-		if makePages == "" {
-			t.Error("Make pages from script is not a disabled Soon control")
-		}
+		mustContain(t, body, `action="`+f.storyURL+`/pages"`, `name="revision"`)
 		ask := regexp.MustCompile(`<input[^>]*id="mv-c1-ask"[^>]*>`).FindString(body)
 		if !strings.Contains(ask, "disabled") {
 			t.Errorf("assistant input = %s", ask)
 		}
-		if strings.Count(body, `<span class="mv-soon">Soon</span>`) < 4 { // make pages ×2, chip, input
+		if strings.Count(body, `<span class="mv-soon">Soon</span>`) < 2 { // assistant chip and input
 			t.Errorf("Soon tags = %d", strings.Count(body, `<span class="mv-soon">Soon</span>`))
 		}
-		mustNotContain(t, body, `action="`+f.storyURL+`/pages"`)
 
 		prose := string(f.client.Get(f.storyURL + "?view=prose").Body)
 		mustContain(t, prose, `<article class="mv-c1__prose" data-view-panel="prose" aria-label`, `data-view-panel="panels" hidden`,
-			`href="#prose-`+scene.ID+`"`, "Then I&#39;ll take the roof!", ">WHOOSH<")
+			`href="`+f.storyURL+`/`+scene.ID+`?view=prose"`, "Then I&#39;ll take the roof!", ">WHOOSH<")
 
 		// Round trip: post exactly what the rendered Panels form submits.
 		values := htmlForm(t, body, `data-view-panel="panels"`)

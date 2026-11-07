@@ -131,6 +131,7 @@
 }
 .mv-link:hover { color: var(--mv-text); }
 .mv-link--plain { text-decoration: none; }
+
 .mv-link--danger { color: var(--mv-error); }
 
 /* ---- inputs (07) --------------------------------------------------------- */
@@ -217,7 +218,9 @@
 .mv-input:disabled, .mv-textarea:disabled, .mv-select:disabled, .mv-input[readonly] {
   opacity: .45;
 }
-.mv-input[readonly] { opacity: 1; color: var(--mv-text-2); }
+/* Read-only values (a summary of what the user entered) read as values, not as
+   fields waiting for input. */
+.mv-input[readonly] { opacity: 1; border-color: transparent; background: var(--mv-surface-2); color: var(--mv-text-2); cursor: default; }
 
 .mv-input--lg { font-size: .9375rem; }
 .mv-stack > .mv-btn:not(.mv-btn--full),
@@ -238,6 +241,43 @@
   font-size: .6875rem;
   color: var(--mv-text-3);
 }
+.mv-field__count.is-full { color: var(--mv-warning); }
+
+/* File picker in the design's dashed upload area (G10 "Import comics"); the
+   native button takes the quiet button look and still shows the file name. */
+.mv-filedrop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mv-space-2);
+  min-height: 120px;
+  padding: var(--mv-space-4);
+  border: 2px dashed var(--mv-line);
+  color: var(--mv-text-2);
+  font-size: var(--mv-fs-ui);
+  text-align: center;
+  cursor: pointer;
+}
+.mv-filedrop > .ti { font-size: 28px; }
+.mv-filedrop:hover, .mv-filedrop:focus-within { border-color: var(--mv-text-3); color: var(--mv-text); }
+.mv-filedrop.is-invalid { border-color: var(--mv-error); }
+.mv-filedrop__input { max-width: 100%; color: var(--mv-text-2); font: inherit; font-size: var(--mv-fs-small); cursor: pointer; }
+.mv-filedrop__input:focus-visible { outline: var(--mv-focus-width) solid var(--mv-focus); outline-offset: 3px; }
+.mv-filedrop__input::file-selector-button {
+  height: var(--mv-control-sm);
+  margin-inline-end: var(--mv-space-3);
+  padding: 0 12px;
+  border: 1px solid var(--mv-line);
+  border-radius: var(--mv-radius-control);
+  background: var(--mv-surface-2);
+  color: var(--mv-text);
+  font: inherit;
+  font-size: .8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mv-filedrop__input:hover::file-selector-button { border-color: var(--mv-text-3); }
 
 /* Input with prefix/suffix (http://, search icon, "/" key, strength label, Change link). */
 .mv-input-group {
@@ -439,6 +479,9 @@
   color: var(--mv-bg);
 }
 .mv-seg input:focus-visible + .mv-seg__item { outline: var(--mv-focus-width) solid var(--mv-focus); outline-offset: 2px; }
+/* A segmented control the viewer cannot change reads as disabled. */
+.mv-seg input:disabled + .mv-seg__item { cursor: not-allowed; color: var(--mv-text-3); }
+.mv-seg input:disabled:checked + .mv-seg__item { background: var(--mv-surface-2); color: var(--mv-text-2); }
 .mv-seg--lg .mv-seg__item { padding: 8px 12px; min-height: 36px; }
 
 /* Genre chips (A5) and choice cards (A5, G8). */
@@ -682,6 +725,11 @@
 .mv-pcard__menu { position: relative; z-index: 1; color: var(--mv-text-2); }
 .mv-pcard__meta { font-size: .75rem; color: var(--mv-text-2); }
 .mv-pcard__badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.mv-card-image { position: relative; overflow: hidden; }
+.mv-card-image > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.mv-pcard--studio .mv-pcard__thumb { height: 140px; }
+.mv-pcard--studio .mv-pcard__body { gap: 6px; padding: 10px 12px 12px; }
+.mv-pcard--studio .mv-pcard__title { font-size: .875rem; }
 .mv-pcard:hover { border-color: var(--mv-text-3); }
 
 .mv-scard {
@@ -743,6 +791,13 @@
 .mv-ccard__name span { display: block; }
 .mv-ccard__desc { font-size: .8125rem; line-height: 1.45; color: var(--mv-text-2); }
 .mv-ccard__lock { margin-top: auto; display: flex; flex-direction: column; gap: 5px; }
+.mv-ccard--bible { grid-template-columns: 130px 1fr; min-height: 210px; }
+.mv-ccard--bible .mv-ccard__art { min-height: 210px; }
+.mv-ccard--bible .mv-ccard__body { gap: 7px; }
+.mv-ccard--bible .mv-ccard__kanji { font-size: 70px; }
+.mv-ccard--bible .mv-ccard__name { font-size: 1.875rem; }
+.mv-ccard--bible .mv-ccard__desc { font-size: .75rem; }
+.mv-ccard--bible .mv-ccard__role { font-size: .625rem; }
 
 .mv-lock {
   --mv-lock: var(--mv-success);
@@ -848,7 +903,7 @@
   min-width: 0;
 }
 .mv-route .ti { font-size: 15px; color: var(--mv-acc-text); }
-.mv-route__auto { font-weight: 600; }
+.mv-route__auto { flex: none; font-weight: 600; white-space: nowrap; }
 .mv-route__pick { color: var(--mv-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .mv-route-line { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .8125rem; }
 
@@ -932,6 +987,24 @@
   color: var(--mv-success);
   font-family: var(--mv-font-mono);
   font-size: .625rem;
+}
+/* A committed image keeps its slot label, like the tone placeholder's. */
+.mv-var__caption {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  max-width: calc(100% - 16px);
+  padding: 2px 5px;
+  background: var(--mv-surface);
+  color: var(--mv-text-2);
+  font-family: var(--mv-font-mono);
+  font-size: .625rem;
+  letter-spacing: .04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mv-var:has(> input:checked) { outline: 3px solid var(--mv-accent); outline-offset: 2px; }
 .mv-var:has(> input:checked) .mv-var__key { background: var(--mv-accent); color: var(--mv-on-accent); }
@@ -1510,11 +1583,39 @@
   white-space: nowrap;
 }
 .mv-btn .mv-soon { margin-inline-start: var(--mv-space-2); }
+/* A sidebar item keeps its Soon tag inside the sidebar: a long label (the
+   Japanese "エージェントとプラグイン") truncates instead, and the label may use
+   the last few pixels of the gap before the tag. */
+.mv-sidenav__item.is-soon > .mv-sidebar__label { margin-inline-end: -4px; }
+.mv-sidenav__item.is-soon > .mv-soon { flex: none; }
 .is-soon { cursor: default; }
 .is-soon:not(.mv-btn) { color: var(--mv-text-3); }
 a.is-soon:not(.mv-btn):hover { color: var(--mv-text-3); background: transparent; }
 .mv-btn.is-soon { opacity: .6; }
+/* A primary or danger action that is not built yet keeps its designed place,
+   but fading the whole filled button left its label and Soon tag at ~1.1:1.
+   It reads as unavailable through a muted fill instead, so both stay legible
+   (≥ 4.5:1 in both themes). */
+.mv-btn:is(.mv-btn--primary, .mv-btn--danger):is(:disabled, [aria-disabled="true"], .is-disabled, .is-soon):has(> .mv-soon) {
+  opacity: 1;
+  background: color-mix(in srgb, var(--mv-accent) 30%, var(--mv-bg));
+  border-color: color-mix(in srgb, var(--mv-accent) 30%, var(--mv-bg));
+  color: var(--mv-text-2);
+  box-shadow: none;
+}
+.mv-btn--danger:is(:disabled, [aria-disabled="true"], .is-disabled, .is-soon):has(> .mv-soon) {
+  background: color-mix(in srgb, var(--mv-error) 30%, var(--mv-bg));
+  border-color: color-mix(in srgb, var(--mv-error) 30%, var(--mv-bg));
+}
+.mv-btn:is(.mv-btn--primary, .mv-btn--danger) > .mv-soon { border-color: currentColor; color: inherit; }
 .mv-search.is-soon .mv-search__input { cursor: default; }
 @media (max-width: 1024px) {
   .mv-sidebar .mv-soon { display: none; }
+}
+
+@media (max-width: 768px) {
+  .mv-btn, .mv-iconlink, .mv-select, .mv-seg .mv-seg__item, .mv-toggle, .mv-check, summary {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }

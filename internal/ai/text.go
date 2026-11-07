@@ -27,9 +27,10 @@ type textService struct {
 	settings  instanceReader
 	providers *providerStore
 	// clients holds one transport per remote provider kind (remoteRoutes).
-	clients map[string]remoteTextClient
-	spend   remoteSpendStore
-	now     func() time.Time
+	clients   map[string]remoteTextClient
+	localDoer httpDoer
+	spend     remoteSpendStore
+	now       func() time.Time
 }
 
 type textDecision struct {
@@ -84,6 +85,9 @@ func (s *textService) PlanText(ctx context.Context, req TextPlanRequest) (TextPl
 	in, err := decodeScriptInput(req.Input)
 	if err != nil {
 		return zero, badInputError(err)
+	}
+	if local, handled, err := s.planLocalText(ctx, req, in); handled {
+		return local, err
 	}
 	pin, err := validatePins(req.PinProviderID, req.PinModelID)
 	if err != nil {
@@ -208,6 +212,9 @@ func (s *textService) GenerateText(ctx context.Context, req TextGenerateRequest)
 			return zero, &GenerateError{Code: CodeBadOutput, SafeMessage: "The offline script could not be generated.", Err: err}
 		}
 		return TextResult{Document: doc, ProviderID: PlaceholderID, ModelID: PlaceholderText}, nil
+	}
+	if !req.Plan.Remote && req.Plan.ProviderID != PlaceholderID {
+		return s.generateLocalText(ctx, req, in)
 	}
 	route, known := routeForModel(req.Plan.ModelID)
 	if !req.Plan.Remote || req.Plan.ProviderID == "" || !known || req.JobID == "" || req.Attempt <= 0 {

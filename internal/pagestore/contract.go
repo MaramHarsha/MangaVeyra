@@ -37,6 +37,8 @@ type Change struct {
 	Action string
 	// Summary is a short human sentence ("Region edit · Rin's hand").
 	Summary string
+	// ExpectedVersion optionally fences lock, delete and revert browser actions.
+	ExpectedVersion int
 }
 
 // PageSummary is a page row for filmstrips and lists.
@@ -101,6 +103,9 @@ type Service interface {
 	// chapter's last page, renumbering as needed. IDs in the documents are kept
 	// when they are valid ULIDs and replaced otherwise; the stored pages are returned.
 	CreatePagesTx(ctx context.Context, tx *db.Tx, chapterID string, pages []pagedoc.Page, ch Change) ([]pagedoc.Page, error)
+	// ReplaceChapterPagesTx replaces only this chapter's pages after checking
+	// every ancestor/descendant lock, inside the caller's job commit fence.
+	ReplaceChapterPagesTx(ctx context.Context, tx *db.Tx, chapterID string, pages []pagedoc.Page, ch Change) ([]pagedoc.Page, error)
 
 	// SavePage replaces a page document. baseVersion must equal the stored
 	// version (else ErrVersion). Locked panels and layers must be unchanged

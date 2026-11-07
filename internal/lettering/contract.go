@@ -13,11 +13,16 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
 )
 
-// Font keys.
+// Font keys. Every key renders every supported script: runs a font lacks fall
+// back, glyph by glyph, to the other bundled fonts (see fonts.go).
 const (
-	FontComic = "comic" // Comic Neue Bold — dialogue
+	FontComic = "comic" // Comic Neue Bold — Latin dialogue
 	FontSFX   = "sfx"   // Bangers — Latin sound effects
 	FontJP    = "jp"    // Noto Sans JP Black — Japanese text and SFX
+	FontKO    = "ko"    // Noto Sans KR Black — Korean text and SFX
+	FontSC    = "sc"    // Noto Sans SC Black — Simplified Chinese text and SFX
+	FontTC    = "tc"    // Noto Sans TC Black — Traditional Chinese text and SFX
+	FontDeva  = "deva"  // Noto Sans Devanagari Black — Hindi text and SFX
 )
 
 // TextLine is one positioned line (or column, for vertical text).
@@ -29,7 +34,8 @@ type TextLine struct {
 	Y        float64 `json:"y"`
 	Vertical bool    `json:"vertical"`
 	// Ruby lines are furigana placed beside/above their base text.
-	Ruby bool `json:"ruby,omitempty"`
+	Ruby     bool    `json:"ruby,omitempty"`
+	FontSize float64 `json:"font_size,omitempty"`
 }
 
 // BubbleLayout is the computed geometry of one bubble in one language.
@@ -42,7 +48,10 @@ type BubbleLayout struct {
 	// TextBox is the inner box text is laid out in.
 	TextBox pagedoc.Rect `json:"text_box"`
 	Font    string       `json:"font"` // font key
-	// FontFamily is the CSS family the client must use ("Comic Neue", "Bangers", "Noto Sans JP").
+	// FontFamily is the CSS family of the bubble's font key ("Comic Neue",
+	// "Bangers", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", "Noto Sans TC",
+	// "Noto Sans Devanagari"). TextPath is authoritative: it already contains
+	// fallback glyphs from other bundled fonts.
 	FontFamily string     `json:"font_family"`
 	FontWeight int        `json:"font_weight"`
 	FontSize   float64    `json:"font_size"` // page pixels
@@ -55,6 +64,13 @@ type BubbleLayout struct {
 	Stroke      string  `json:"stroke"`
 	StrokeWidth float64 `json:"stroke_width"`
 	TextColor   string  `json:"text_color"`
+	// TextPath is the authoritative shaped glyph outline, including ruby,
+	// in page pixels. Editor SVG and export draw the identical path.
+	TextPath        string        `json:"text_path"`
+	Rotate          float64       `json:"rotate"`
+	RotationCenter  pagedoc.Point `json:"rotation_center"`
+	TextStroke      string        `json:"text_stroke,omitempty"`
+	TextStrokeWidth float64       `json:"text_stroke_width,omitempty"`
 }
 
 // Line is one line of dialogue to place automatically.
@@ -69,7 +85,8 @@ type Line struct {
 // Engine lays out and draws lettering.
 type Engine interface {
 	// Layout computes the bubble geometry for lang (auto-fit, line breaks,
-	// vertical text for ja when the bubble is vertical, tail path).
+	// vertical text when the bubble is vertical and the language allows it,
+	// tail path).
 	Layout(b pagedoc.Bubble, lang string) (BubbleLayout, error)
 	// LayoutPage lays out every bubble of a page.
 	LayoutPage(p pagedoc.Page, lang string) ([]BubbleLayout, error)
@@ -78,7 +95,8 @@ type Engine interface {
 	Draw(ctx *canvas.Context, l BubbleLayout) error
 	// AutoPlace creates bubbles for dialogue lines inside a panel: speech near
 	// the top in reading order, captions in a corner, SFX large and angled,
-	// avoiding overlap with each other. vertical selects vertical Japanese.
+	// avoiding overlap with each other. vertical selects vertical lettering
+	// (honoured only where pagedoc.VerticalAllowed(lang)).
 	AutoPlace(p pagedoc.Page, panelID string, lines []Line, lang string, vertical bool) ([]pagedoc.Bubble, error)
 	// ReadingOrder returns bubble IDs in reading order for the page direction
 	// (rtl: right-to-left then top-to-bottom within panel order).

@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -182,7 +183,8 @@ type Tail struct {
 
 // BubbleStyle controls lettering.
 type BubbleStyle struct {
-	// Font is a lettering font key ("comic", "sfx", "jp"); empty picks by kind and language.
+	// Font is a lettering font key (one of LetteringFonts); empty picks by kind
+	// and language.
 	Font string `json:"font,omitempty"`
 	// Size is the font size in page pixels; 0 means auto.
 	Size float64 `json:"size,omitempty"`
@@ -228,7 +230,8 @@ type Bubble struct {
 	Tail     Tail        `json:"tail"`
 	Style    BubbleStyle `json:"style"`
 	Vertical bool        `json:"vertical"`
-	// Texts maps a BCP-47 language tag ("en", "ja") to the text in that language.
+	// Texts maps a BCP-47 language tag (normally one of ContentLanguages) to the
+	// text in that language.
 	Texts map[string]BubbleText `json:"texts"`
 }
 
@@ -330,20 +333,69 @@ func (p *Panel) LayerOfKind(kind, characterID string) *Layer {
 	return nil
 }
 
-// Text returns the bubble text for lang, falling back to any language when missing.
-func (b *Bubble) Text(lang string) BubbleText {
-	if t, ok := b.Texts[lang]; ok {
-		return t
-	}
-	for _, k := range []string{"en", "ja"} {
-		if t, ok := b.Texts[k]; ok {
-			return t
+// LetteringFonts lists the lettering font keys a bubble style may name. The
+// lettering package bundles one font per key and falls back across all of
+// them per glyph run, so any key renders every content language.
+var LetteringFonts = []string{"comic", "sfx", "jp", "ko", "sc", "tc", "deva"}
+
+// IsLetteringFont reports whether key is one of LetteringFonts.
+func IsLetteringFont(key string) bool {
+	for _, k := range LetteringFonts {
+		if k == key {
+			return true
 		}
 	}
-	for _, t := range b.Texts {
-		return t
+	return false
+}
+
+// TextLanguage returns the key of texts that best serves lang: the exact tag,
+// then the same content language under another spelling ("ja-JP" → "ja",
+// "zh-TW" → "zh-Hant"), then the first content language present in
+// ContentLanguages order, then the smallest remaining key. It returns "" when
+// texts is empty.
+func TextLanguage(texts map[string]BubbleText, lang string) string {
+	if len(texts) == 0 {
+		return ""
 	}
-	return BubbleText{}
+	if _, ok := texts[lang]; ok && lang != "" {
+		return lang
+	}
+	if canonical := NormalizeContentLanguage(lang); canonical != "" {
+		if _, ok := texts[canonical]; ok {
+			return canonical
+		}
+		keys := sortedKeys(texts)
+		for _, k := range keys {
+			if NormalizeContentLanguage(k) == canonical {
+				return k
+			}
+		}
+	}
+	if base := strings.SplitN(lang, "-", 2)[0]; base != "" && base != lang {
+		if _, ok := texts[base]; ok {
+			return base
+		}
+	}
+	for _, k := range ContentLanguages {
+		if _, ok := texts[k]; ok {
+			return k
+		}
+	}
+	return sortedKeys(texts)[0]
+}
+
+func sortedKeys(texts map[string]BubbleText) []string {
+	keys := make([]string, 0, len(texts))
+	for k := range texts {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// Text returns the bubble text for lang, falling back as TextLanguage does.
+func (b *Bubble) Text(lang string) BubbleText {
+	return b.Texts[TextLanguage(b.Texts, lang)]
 }
 
 // Validate checks structural invariants. It does not check IDs against the
@@ -385,6 +437,8 @@ func (p *Page) Validate() error {
 		panelIDs[pn.ID] = true
 		if len(pn.Points) < 3 || len(pn.Points) > MaxPolygonPoints {
 			add("panel %d needs 3–%d points", i, MaxPolygonPoints)
+		} else if !validPolygon(pn.Points) {
+			add("panel %d polygon is degenerate or crosses itself", i)
 		}
 		for _, pt := range pn.Points {
 			if !finite(pt.X) || !finite(pt.Y) || pt.X < -1 || pt.Y < -1 || pt.X > float64(p.Width)+1 || pt.Y > float64(p.Height)+1 {
@@ -392,7 +446,7 @@ func (p *Page) Validate() error {
 				break
 			}
 		}
-		if utf8.RuneCountInString(pn.Prompt) > MaxPromptRunes {
+		if !utf8.ValidString(pn.Prompt) || utf8.RuneCountInString(pn.Prompt) > MaxPromptRunes {
 			add("panel %d prompt is too long", i)
 		}
 		switch pn.PromptSource {
@@ -421,6 +475,25 @@ func (p *Page) Validate() error {
 			if l.Opacity < 0 || l.Opacity > 1 || !finite(l.Opacity) {
 				add("layer %q opacity must be 0–1", l.ID)
 			}
+			if !finite(l.Transform.OffsetX) || !finite(l.Transform.OffsetY) || !finite(l.Transform.Rotate) ||
+				!finite(l.Transform.Scale) || l.Transform.Scale < 0 || l.Transform.Scale > 20 ||
+				math.Abs(l.Transform.OffsetX) > MaxPageSide*2 || math.Abs(l.Transform.OffsetY) > MaxPageSide*2 || math.Abs(l.Transform.Rotate) > 3600 {
+				add("layer %q transform is invalid", l.ID)
+			}
+			switch l.Blend {
+			case "", "normal", "multiply", "screen":
+			default:
+				add("layer %q blend is unsupported", l.ID)
+			}
+			if !utf8.ValidString(l.Prompt) || utf8.RuneCountInString(l.Prompt) > MaxPromptRunes {
+				add("layer %q prompt is invalid", l.ID)
+			}
+			if l.LockScore != nil && (!finite(*l.LockScore) || *l.LockScore < 0 || *l.LockScore > 1) {
+				add("layer %q lock score is invalid", l.ID)
+			}
+			if l.Kind == LayerLettering && (l.Asset != nil || l.Mask != nil) {
+				add("lettering layer %q cannot contain raster art", l.ID)
+			}
 		}
 	}
 	for i, b := range p.Bubbles {
@@ -438,11 +511,26 @@ func (p *Page) Validate() error {
 		if b.PanelID != "" && !panelIDs[b.PanelID] {
 			add("bubble %d refers to unknown panel %q", i, b.PanelID)
 		}
-		if b.Box.W <= 0 || b.Box.H <= 0 || !finite(b.Box.X) || !finite(b.Box.Y) {
+		if b.Box.W <= 0 || b.Box.H <= 0 || !finite(b.Box.W) || !finite(b.Box.H) || !finite(b.Box.X) || !finite(b.Box.Y) ||
+			b.Box.X < -1 || b.Box.Y < -1 || b.Box.X+b.Box.W > float64(p.Width)+1 || b.Box.Y+b.Box.H > float64(p.Height)+1 {
 			add("bubble %d box is invalid", i)
 		}
-		if b.Style.Size < 0 || b.Style.Size > 1000 {
+		if !finite(b.Style.Size) || b.Style.Size < 0 || b.Style.Size > 1000 || !finite(b.Style.Rotate) || math.Abs(b.Style.Rotate) > 3600 {
 			add("bubble %d font size is out of range", i)
+		}
+		if !finite(b.Tail.Tip.X) || !finite(b.Tail.Tip.Y) {
+			add("bubble %d tail is invalid", i)
+		}
+		if b.Style.Font != "" && !IsLetteringFont(b.Style.Font) {
+			add("bubble %d font is unsupported", i)
+		}
+		switch b.Style.Align {
+		case "", "left", "center", "right":
+		default:
+			add("bubble %d alignment is invalid", i)
+		}
+		if len(b.Texts) > 16 {
+			add("bubble %d has too many languages", i)
 		}
 		for lang, t := range b.Texts {
 			if lang == "" || len(lang) > 35 {
@@ -451,12 +539,27 @@ func (p *Page) Validate() error {
 			if !utf8.ValidString(t.Text) || utf8.RuneCountInString(t.Text) > MaxTextRunes {
 				add("bubble %d text (%s) is invalid or too long", i, lang)
 			}
+			switch t.Status {
+			case "", "draft", "machine", "reviewed", "approved", "overflow":
+			default:
+				add("bubble %d text status is invalid", i)
+			}
+			switch t.Source {
+			case "", "human", "ai":
+			default:
+				add("bubble %d text source is invalid", i)
+			}
 			n := utf8.RuneCountInString(t.Text)
+			lastEnd := 0
+			if len(t.Ruby) > 128 {
+				add("bubble %d has too many ruby runs", i)
+			}
 			for _, r := range t.Ruby {
-				if r.Start < 0 || r.End <= r.Start || r.End > n || r.Text == "" {
+				if r.Start < lastEnd || r.End <= r.Start || r.End > n || r.Text == "" || !utf8.ValidString(r.Text) || utf8.RuneCountInString(r.Text) > 512 {
 					add("bubble %d has an invalid ruby range", i)
 					break
 				}
+				lastEnd = r.End
 			}
 		}
 	}
@@ -464,3 +567,31 @@ func (p *Page) Validate() error {
 }
 
 func finite(f float64) bool { return !math.IsNaN(f) && !math.IsInf(f, 0) }
+
+func validPolygon(points []Point) bool {
+	var area float64
+	for i, a := range points {
+		b := points[(i+1)%len(points)]
+		if !finite(a.X) || !finite(a.Y) || a == b {
+			return false
+		}
+		area += a.X*b.Y - b.X*a.Y
+	}
+	if math.Abs(area) < 0.01 {
+		return false
+	}
+	cross := func(a, b, c Point) float64 { return (b.X-a.X)*(c.Y-a.Y) - (b.Y-a.Y)*(c.X-a.X) }
+	for i, a := range points {
+		b := points[(i+1)%len(points)]
+		for j := i + 1; j < len(points); j++ {
+			if j == i+1 || (i == 0 && j == len(points)-1) {
+				continue
+			}
+			c, d := points[j], points[(j+1)%len(points)]
+			if cross(a, b, c)*cross(a, b, d) < 0 && cross(c, d, a)*cross(c, d, b) < 0 {
+				return false
+			}
+		}
+	}
+	return true
+}

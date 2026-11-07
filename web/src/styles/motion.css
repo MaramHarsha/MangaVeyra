@@ -101,7 +101,7 @@
 
 /* Page turn: View Transitions for wizard steps and paged reading. */
 @view-transition { navigation: auto; }
-/* Ordinary navigations stay instant; pages that set data-transition="turn" (wizards, paged reader) turn. */
+/* Ordinary navigations skip the transition (web/src/lib/transitions.ts); pages that set data-transition="turn" (wizards, paged reader) turn. */
 ::view-transition-group(root),
 ::view-transition-old(root),
 ::view-transition-new(root) {

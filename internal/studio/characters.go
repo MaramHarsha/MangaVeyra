@@ -7,13 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 )
 
 const characterCols = `c.id, c.project_id, c.name, c.kanji, c.role, c.role_line, c.age, c.look, c.personality,
-	c.speech_style, c.category, c.lock_status, c.lock_score, c.portrait_asset_id, c.lora_asset_id, c.trigger_word, c.order_idx`
+	c.speech_style, c.category, c.lock_status, c.lock_score, c.portrait_asset_id, c.lora_asset_id, c.trigger_word, c.order_idx, c.updated_at`
 
 type characterRow struct {
 	ID              string          `db:"id"`
@@ -33,13 +34,14 @@ type characterRow struct {
 	LoraAssetID     sql.NullString  `db:"lora_asset_id"`
 	TriggerWord     string          `db:"trigger_word"`
 	Order           int             `db:"order_idx"`
+	UpdatedAt       time.Time       `db:"updated_at"`
 }
 
 func (r characterRow) character() Character {
 	c := Character{ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Kanji: r.Kanji, Role: r.Role, RoleLine: r.RoleLine,
 		Age: r.Age, Look: r.Look, Personality: r.Personality, SpeechStyle: r.SpeechStyle, Category: r.Category,
 		LockStatus: r.LockStatus, PortraitAssetID: r.PortraitAssetID.String, LoraAssetID: r.LoraAssetID.String,
-		TriggerWord: r.TriggerWord, Refs: []CharacterRef{}, Outfits: []Outfit{}, Order: r.Order}
+		TriggerWord: r.TriggerWord, Refs: []CharacterRef{}, Outfits: []Outfit{}, Order: r.Order, UpdatedAt: r.UpdatedAt.UTC()}
 	if r.LockScore.Valid {
 		v := r.LockScore.Float64
 		c.LockScore = &v
@@ -169,6 +171,9 @@ func (s *service) AddCharacterRefTx(ctx context.Context, tx *db.Tx, characterID,
 	if asset.ProjectID == nil || *asset.ProjectID != projectID {
 		return CharacterRef{}, ErrForbidden
 	}
+	if err := imageAssetMetadata(asset); err != nil {
+		return CharacterRef{}, err
+	}
 	var order int
 	if err := tx.Get(ctx, &order, `SELECT COALESCE(MAX(order_idx) + 1, 0) FROM character_refs WHERE character_id = ?`, characterID); err != nil {
 		return CharacterRef{}, fmt.Errorf("studio: allocate reference order: %w", err)
@@ -177,6 +182,9 @@ func (s *service) AddCharacterRefTx(ctx context.Context, tx *db.Tx, characterID,
 	if _, err := tx.Exec(ctx, `INSERT INTO character_refs (id, character_id, asset_id, kind, label, order_idx, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, ref.ID, characterID, ref.AssetID, ref.Kind, ref.Label, ref.Order, db.Now()); err != nil {
 		return CharacterRef{}, fmt.Errorf("studio: insert character reference: %w", err)
+	}
+	if err := touchCharacter(ctx, tx, characterID); err != nil {
+		return CharacterRef{}, err
 	}
 	return ref, nil
 }
@@ -205,6 +213,9 @@ func (s *service) SetCharacterPortraitTx(ctx context.Context, tx *db.Tx, charact
 	}
 	if asset.ProjectID == nil || *asset.ProjectID != projectID {
 		return ErrForbidden
+	}
+	if err := imageAssetMetadata(asset); err != nil {
+		return err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE characters SET portrait_asset_id = ?, updated_at = ? WHERE id = ?`, assetID, db.Now(), characterID); err != nil {
 		return fmt.Errorf("studio: update character portrait: %w", err)

@@ -165,17 +165,24 @@ describe('Wizard', () => {
 
 const storyHTML = `
 <div data-story-views>
-  <a href="#scene-s1" data-scene-link data-panels-href="#scene-s1" data-prose-href="#prose-s1">Sc. 1</a>
+  <a href="/studio/p/p1/story/c1/s2" data-scene-link>Sc. 2</a>
   <div data-view-toggle>
     <nav class="mv-seg"><a href="/studio/p/p1/story/c1?view=prose">Prose</a><a href="/studio/p/p1/story/c1" aria-current="true">Panels</a></nav>
   </div>
   <article data-view-panel="prose" hidden>
     <h2 data-mirror="scene.s1.title">Harbour at dusk</h2>
-    <strong data-mirror="panel.p1.dialogue.0.speaker" data-fallback="Caption">Kaito</strong>
+    <div data-prose-lines="p1" data-label-speech="Speech" data-label-thought="Thought" data-label-caption="Caption">
+      <p data-mirror="panel.p1.action">Rin runs.</p>
+      <p data-prose-line="p1.0"><strong data-mirror="panel.p1.dialogue.0.speaker">Kaito</strong><span data-mirror="panel.p1.dialogue.0.text">Late.</span></p>
+    </div>
   </article>
-  <form data-view-panel="panels">
+  <form class="mv-c1__script" data-view-panel="panels">
     <input name="scene.s1.title" value="Harbour at dusk">
-    <input name="panel.p1.dialogue.0.speaker" value="Kaito">
+    <textarea name="panel.p1.action">Rin runs.</textarea>
+    <div data-lines="p1">
+      <div class="mv-c1__line" data-line="p1.0" data-kind="speech"><input name="panel.p1.dialogue.0.speaker" value="Kaito"><textarea name="panel.p1.dialogue.0.text">Late.</textarea></div>
+      <div class="mv-c1__line" data-line="p1.3" data-kind="caption"><input name="panel.p1.dialogue.3.speaker" value=""><textarea name="panel.p1.dialogue.3.text">The ferry leaves.</textarea></div>
+    </div>
   </form>
 </div>`;
 
@@ -185,7 +192,7 @@ describe('StoryViews', () => {
     document.body.innerHTML = storyHTML;
   });
 
-  it('switches to Prose in place, showing unsaved edits', () => {
+  it('switches to Prose in place, showing unsaved edits and lines', () => {
     const root = document.querySelector<HTMLElement>('[data-story-views]')!;
     new StoryViews(root);
     const form = root.querySelector('form')!;
@@ -195,22 +202,16 @@ describe('StoryViews', () => {
     expect(root.querySelector<HTMLElement>('article')?.hidden).toBe(false);
     expect(form.hidden).toBe(true);
     expect(root.querySelector('h2')?.textContent).toBe('Rooftop chase');
-    expect(root.querySelector('strong')?.textContent).toBe('Caption');
-    expect(root.querySelector('a[data-scene-link]')?.getAttribute('href')).toBe('#prose-s1');
+    const lines = Array.from(root.querySelectorAll('article [data-prose-line]')).map((p) => p.textContent);
+    expect(lines).toEqual(['SpeechLate.', 'CaptionThe ferry leaves.']);
+    expect(root.querySelector('a[data-scene-link]')?.getAttribute('href')).toBe('/studio/p/p1/story/c1/s2?view=prose');
     expect(window.location.search).toBe('?view=prose');
     expect(root.querySelector('[data-view-toggle] a[href*="view=prose"]')?.getAttribute('aria-current')).toBe('true');
 
     click(root.querySelector('[data-view-toggle] a:not([href*="view"])'));
     expect(form.hidden).toBe(false);
     expect(window.location.search).toBe('');
-    expect(root.querySelector('a[data-scene-link]')?.getAttribute('href')).toBe('#scene-s1');
-  });
-
-  it('marks the scene picked in the tree', () => {
-    enhanceStudio(document);
-    const link = document.querySelector('a[data-scene-link]')!;
-    click(link);
-    expect(link.getAttribute('aria-current')).toBe('location');
+    expect(root.querySelector('a[data-scene-link]')?.getAttribute('href')).toBe('/studio/p/p1/story/c1/s2');
   });
 
   it('mirror ignores nodes without a matching field', () => {
@@ -218,5 +219,12 @@ describe('StoryViews', () => {
     root.insertAdjacentHTML('beforeend', '<p data-mirror="missing">kept</p>');
     mirror(root, root.querySelector('form')!);
     expect(root.querySelector('[data-mirror="missing"]')?.textContent).toBe('kept');
+  });
+
+  it('enhanceStudio wires the story views once', () => {
+    enhanceStudio(document);
+    enhanceStudio(document);
+    click(document.querySelector('[data-view-toggle] a[href*="view=prose"]'));
+    expect(document.querySelector<HTMLElement>('article')?.hidden).toBe(false);
   });
 });

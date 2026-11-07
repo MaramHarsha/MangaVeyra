@@ -22,7 +22,11 @@ type Options struct {
 	NoLettering bool
 	// BleedPx extends the canvas on every side (page pixels) with white.
 	BleedPx float64
-	// Placeholder draws labelled screentone where a layer has no art.
+	// Placeholder is ignored and kept only so existing callers compile: a
+	// layer without art draws nothing, and an empty panel renders as a clean
+	// white storyboard area with its border, matching the editor.
+	//
+	// Deprecated: no longer has any effect.
 	Placeholder bool
 	// BorderWidth is the panel border width in page pixels (0 → 6).
 	BorderWidth float64

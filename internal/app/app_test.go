@@ -22,6 +22,9 @@ func TestHealthReadyVersionAndModules(t *testing.T) {
 	for _, d := range testdb.Dialects() {
 		t.Run(d, func(t *testing.T) {
 			ta := testutil.NewTestApp(t, testutil.WithDialect(d))
+			if ta.JobAPI.Manifests == nil {
+				t.Fatal("worker claims have no installed model manifest lookup")
+			}
 			c := ta.NewClient()
 			if r := c.Get("/healthz"); r.StatusCode != 200 || !strings.Contains(string(r.Body), `"status":"ok"`) {
 				t.Fatalf("healthz: %d %s", r.StatusCode, r.Body)

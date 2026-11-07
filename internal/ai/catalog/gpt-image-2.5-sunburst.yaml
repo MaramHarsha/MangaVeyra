@@ -1,0 +1,22 @@
+# GPT Image 2.5 Sunburst through a direct OpenAI connection (ADR 0009).
+# Auto prefers it while an OpenAI connection is enabled. One call sends at most
+# two reference images; `references` is the job-level bound the router accepts.
+id: gpt-image-2.5-sunburst
+name: GPT Image 2.5 Sunburst
+maker: OpenAI
+kind: image
+licence: provider-commercial
+commercial: true
+providers: [openai]
+references: 32
+text_in_art: false
+bw: true
+edit: true
+# Native masked edits; the server still restores every pixel outside the mask.
+mask: true
+max_width: 4096
+max_height: 4096
+max_count: 4
+quality: 95
+speed: 65
+gpu_seconds: 0

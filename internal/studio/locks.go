@@ -21,7 +21,7 @@ func checkScopeWritable(ctx context.Context, q db.Querier, scope jobs.Scope) err
 		return nil
 	case jobs.ScopeProject:
 		var id string
-		if err := q.Get(ctx, &id, `SELECT id FROM projects WHERE id = ?`, scope.ProjectID); err != nil {
+		if err := q.Get(ctx, &id, `SELECT id FROM projects WHERE id = ?`+scopeRowLock(q), scope.ProjectID); err != nil {
 			return scopeLookupError(err)
 		}
 		return nil
@@ -30,7 +30,7 @@ func checkScopeWritable(ctx context.Context, q db.Querier, scope jobs.Scope) err
 			ProjectID string `db:"project_id"`
 			Locked    bool   `db:"locked"`
 		}
-		if err := q.Get(ctx, &row, `SELECT project_id, locked FROM chapters WHERE id = ?`, scope.ChapterID); err != nil {
+		if err := q.Get(ctx, &row, `SELECT project_id, locked FROM chapters WHERE id = ?`+scopeRowLock(q), scope.ChapterID); err != nil {
 			return scopeLookupError(err)
 		}
 		if row.ProjectID != scope.ProjectID {
@@ -48,7 +48,7 @@ func checkScopeWritable(ctx context.Context, q db.Querier, scope jobs.Scope) err
 			PageLocked    bool   `db:"page_locked"`
 		}
 		if err := q.Get(ctx, &row, `SELECT pg.project_id AS page_project_id, c.project_id, c.locked AS chapter_locked, pg.locked AS page_locked
-			FROM pages pg JOIN chapters c ON c.id = pg.chapter_id WHERE pg.id = ?`, scope.PageID); err != nil {
+			FROM pages pg JOIN chapters c ON c.id = pg.chapter_id WHERE pg.id = ?`+scopeRowLock(q), scope.PageID); err != nil {
 			return scopeLookupError(err)
 		}
 		if row.ProjectID != scope.ProjectID || row.PageProjectID != scope.ProjectID {
@@ -71,7 +71,7 @@ func checkScopeWritable(ctx context.Context, q db.Querier, scope jobs.Scope) err
 		if err := q.Get(ctx, &row, `SELECT pa.project_id AS panel_project_id, pg.project_id AS page_project_id,
 			c.project_id, pa.page_id, c.locked AS chapter_locked,
 			pg.locked AS page_locked, pa.locked AS panel_locked FROM panels pa
-			JOIN pages pg ON pg.id = pa.page_id JOIN chapters c ON c.id = pg.chapter_id WHERE pa.id = ?`, scope.PanelID); err != nil {
+			JOIN pages pg ON pg.id = pa.page_id JOIN chapters c ON c.id = pg.chapter_id WHERE pa.id = ?`+scopeRowLock(q), scope.PanelID); err != nil {
 			return scopeLookupError(err)
 		}
 		if row.ProjectID != scope.ProjectID || row.PageProjectID != scope.ProjectID ||
@@ -98,7 +98,7 @@ func checkScopeWritable(ctx context.Context, q db.Querier, scope jobs.Scope) err
 			c.project_id, l.panel_id, l.kind, c.locked AS chapter_locked,
 			pg.locked AS page_locked, pa.locked AS panel_locked, l.locked AS layer_locked FROM layers l
 			JOIN panels pa ON pa.id = l.panel_id JOIN pages pg ON pg.id = pa.page_id
-			JOIN chapters c ON c.id = pg.chapter_id WHERE l.id = ?`, scope.LayerID); err != nil {
+			JOIN chapters c ON c.id = pg.chapter_id WHERE l.id = ?`+scopeRowLock(q), scope.LayerID); err != nil {
 			return scopeLookupError(err)
 		}
 		if row.ProjectID != scope.ProjectID || row.PageProjectID != scope.ProjectID || row.PanelProjectID != scope.ProjectID ||
@@ -115,6 +115,13 @@ func checkScopeWritable(ctx context.Context, q db.Querier, scope jobs.Scope) err
 	default:
 		return ErrInvalid
 	}
+}
+
+func scopeRowLock(q db.Querier) string {
+	if _, transactional := q.(*db.Tx); transactional && q.Dialect() == db.Postgres {
+		return " FOR UPDATE"
+	}
+	return ""
 }
 
 func scopeLookupError(err error) error {

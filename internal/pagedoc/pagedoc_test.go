@@ -2,6 +2,7 @@ package pagedoc
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 )
 
@@ -43,8 +44,25 @@ func TestValidateRejects(t *testing.T) {
 		"bad ruby": func(p *Page) {
 			p.Bubbles[0].Texts["en"] = BubbleText{Text: "ab", Ruby: []Ruby{{Start: 1, End: 5, Text: "x"}}}
 		},
-		"prompt source": func(p *Page) { p.Panels[0].PromptSource = "robot" },
-		"provenance":    func(p *Page) { p.Panels[0].Layers[0].Provenance = "" },
+		"prompt source":   func(p *Page) { p.Panels[0].PromptSource = "robot" },
+		"provenance":      func(p *Page) { p.Panels[0].Layers[0].Provenance = "" },
+		"nan box":         func(p *Page) { p.Bubbles[0].Box.W = math.NaN() },
+		"infinite box":    func(p *Page) { p.Bubbles[0].Box.H = math.Inf(1) },
+		"outside bubble":  func(p *Page) { p.Bubbles[0].Box.X = 1700 },
+		"nan font":        func(p *Page) { p.Bubbles[0].Style.Size = math.NaN() },
+		"nan transform":   func(p *Page) { p.Panels[0].Layers[0].Transform.Rotate = math.NaN() },
+		"negative scale":  func(p *Page) { p.Panels[0].Layers[0].Transform.Scale = -1 },
+		"bad blend":       func(p *Page) { p.Panels[0].Layers[0].Blend = "arbitrary-css" },
+		"flat polygon":    func(p *Page) { p.Panels[0].Points = []Point{{1, 1}, {2, 2}, {3, 3}} },
+		"crossed polygon": func(p *Page) { p.Panels[0].Points = []Point{{10, 10}, {100, 100}, {10, 100}, {100, 10}} },
+		"raster lettering": func(p *Page) {
+			p.Panels[0].Layers[0].Kind = LayerLettering
+			p.Panels[0].Layers[0].Asset = &AssetRef{ID: "art"}
+		},
+		"bad text source": func(p *Page) { t := p.Bubbles[0].Texts["en"]; t.Source = "model-html"; p.Bubbles[0].Texts["en"] = t },
+		"overlapping ruby": func(p *Page) {
+			p.Bubbles[0].Texts["en"] = BubbleText{Text: "abcd", Ruby: []Ruby{{Start: 0, End: 3, Text: "a"}, {Start: 2, End: 4, Text: "b"}}}
+		},
 	}
 	for name, mutate := range cases {
 		p := validPage()
@@ -103,5 +121,46 @@ func TestSuggest(t *testing.T) {
 	}
 	if s := Suggest(3, DirVertical); s[0].ID != "webtoon-strip" {
 		t.Fatalf("vertical should prefer webtoon, got %s", s[0].ID)
+	}
+}
+
+func TestTextLanguageFallsBackThroughContentLanguages(t *testing.T) {
+	texts := map[string]BubbleText{"zh-Hant": {Text: "港"}, "ko": {Text: "항"}, "pt": {Text: "porto"}}
+	for lang, want := range map[string]string{
+		"zh-Hant": "zh-Hant", "zh-TW": "zh-Hant", "zh-hk": "zh-Hant", "ko-KR": "ko", "pt-BR": "pt",
+		"en": "ko", "": "ko", "ja": "ko",
+	} {
+		if got := TextLanguage(texts, lang); got != want {
+			t.Fatalf("TextLanguage(%q) = %q, want %q", lang, got, want)
+		}
+	}
+	legacy := map[string]BubbleText{"en-GB": {Text: "harbour"}, "x-custom": {Text: "?"}}
+	if got := TextLanguage(legacy, "en"); got != "en-GB" {
+		t.Fatalf("stored regional tag: %q", got)
+	}
+	if got := TextLanguage(map[string]BubbleText{"x-a": {}, "x-b": {}}, "fr"); got != "x-a" {
+		t.Fatalf("unknown tags fall back to the smallest key: %q", got)
+	}
+	if TextLanguage(nil, "en") != "" {
+		t.Fatal("empty texts")
+	}
+	b := Bubble{Texts: texts}
+	if b.Text("zh-TW").Text != "港" || b.Text("de").Text != "항" {
+		t.Fatal("Bubble.Text fallback")
+	}
+}
+
+func TestValidateAcceptsEveryLetteringFont(t *testing.T) {
+	for _, key := range append([]string{""}, LetteringFonts...) {
+		p := validPage()
+		p.Bubbles[0].Style.Font = key
+		if err := p.Validate(); err != nil {
+			t.Fatalf("font %q rejected: %v", key, err)
+		}
+	}
+	p := validPage()
+	p.Bubbles[0].Style.Font = "papyrus"
+	if p.Validate() == nil {
+		t.Fatal("unknown font accepted")
 	}
 }
