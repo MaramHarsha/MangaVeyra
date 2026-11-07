@@ -31,9 +31,9 @@ const (
 // The wizard offers exactly the genres and art styles of onboarding (A5), so a
 // creator meets one list and one set of labels ("genre.*", "style.*").
 var (
-	genreValues    = authui.Genres
-	styleValues    = artStyleValues()
-	formatValues   = []string{"manga_rtl", "comic_ltr", "webtoon"}
+	genreValues  = authui.Genres
+	styleValues  = artStyleValues()
+	formatValues = []string{"manga_rtl", "comic_ltr", "webtoon"}
 	// languageValues are the manga content languages (shared contract).
 	languageValues = pagedoc.ContentLanguages
 )
