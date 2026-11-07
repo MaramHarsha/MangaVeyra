@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"mime"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -104,10 +105,25 @@ func TestRealPagesToQueuedExportAndDownload(t *testing.T) {
 			if download.StatusCode != http.StatusOK || !bytes.Equal(download.Body, data) {
 				t.Fatal("signed download failed", download.StatusCode)
 			}
+			downloadPath := base + "/jobs/" + id + "/download"
+			if !bytes.Contains(resp.Body, []byte(downloadPath)) {
+				t.Fatal("browser download must use the named export endpoint")
+			}
+			download = client.Get(downloadPath)
+			disposition, params, err := mime.ParseMediaType(download.Header.Get("Content-Disposition"))
+			if err != nil || disposition != "attachment" || params["filename"] != result.Filename || !strings.HasSuffix(params["filename"], ".cbz") {
+				t.Fatalf("export filename = %q, %v", download.Header.Get("Content-Disposition"), err)
+			}
+			if download.StatusCode != http.StatusOK || download.Header.Get("Content-Type") != result.ContentType || !bytes.Equal(download.Body, data) {
+				t.Fatal("named download failed", download.StatusCode)
+			}
 			other, outsider := ta.UserClient(t, "creator")
 			_ = other
 			if got := outsider.Get(base); got.StatusCode != http.StatusNotFound {
 				t.Fatalf("cross-project E2 leak: %d", got.StatusCode)
+			}
+			if got := outsider.Get(downloadPath); got.StatusCode != http.StatusNotFound {
+				t.Fatalf("cross-project download leak: %d", got.StatusCode)
 			}
 		})
 	}

@@ -14,6 +14,7 @@ import { shortcutFor } from './lib/keys';
 import { Realtime, wsURL } from './lib/realtime';
 import { passwordStrength } from './lib/password';
 import './lib/studio';
+import './lib/export';
 import { installForms } from './lib/forms';
 import { mountIslands, unmountIslands } from './islands/registry';
 

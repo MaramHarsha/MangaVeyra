@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"mime"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/compose"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
@@ -41,6 +41,7 @@ func (m *Module) routes(r *core.Router) {
 	r.Page("GET "+base, m.page, core.RequireSession)
 	r.Page("POST "+base, m.enqueue, core.RequireSession)
 	r.Page("GET "+base+"/jobs/{job}", m.status, core.RequireSession)
+	r.Page("GET "+base+"/jobs/{job}/download", m.download, core.RequireSession)
 	r.Page("POST "+base+"/jobs/{job}/cancel", m.cancel, core.RequireSession)
 	r.Page("GET "+base+"/preview/{page}", m.preview, core.RequireSession)
 }
@@ -275,8 +276,37 @@ func (m *Module) result(ctx context.Context, v *exportView) {
 	if err != nil || a.ProjectID == nil || *a.ProjectID != v.Project.ID {
 		return
 	}
-	result.URL = m.s.assets.URL(a, time.Hour)
+	result.URL = v.Base + "/jobs/" + url.PathEscape(v.Job.ID) + "/download"
 	v.Result = &result
+}
+func (m *Module) download(w http.ResponseWriter, r *http.Request) error {
+	actor, v, err := m.load(r)
+	if err != nil {
+		return err
+	}
+	v.Job, err = m.job(r.Context(), actor, v, r.PathValue("job"))
+	if err != nil {
+		return err
+	}
+	m.result(r.Context(), &v)
+	if v.Result == nil {
+		return core.ErrNotFound()
+	}
+	a, err := m.s.assets.Get(r.Context(), v.Result.AssetID)
+	if err != nil || a.Kind != "export" {
+		return core.ErrNotFound()
+	}
+	object, info, err := m.d.Store.Get(r.Context(), a.Key)
+	if err != nil {
+		return core.ErrNotFound()
+	}
+	defer object.Close()
+	w.Header().Set("Content-Type", v.Result.ContentType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": v.Result.Filename}))
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeContent(w, r, v.Result.Filename, info.ModTime, object)
+	return nil
 }
 func (m *Module) status(w http.ResponseWriter, r *http.Request) error {
 	actor, v, err := m.load(r)

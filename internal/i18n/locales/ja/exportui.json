@@ -52,7 +52,6 @@
   "exportui.direction.rtl": "マンガ・右から左",
   "exportui.direction.ltr": "コミック・左から右",
   "exportui.direction.vertical": "ウェブトゥーン・縦スクロール",
-  "exportui.direction.": "",
   "exportui.job.queued": "書き出し待ち",
   "exportui.job.running": "書き出し中",
   "exportui.job.done": "書き出し完了",

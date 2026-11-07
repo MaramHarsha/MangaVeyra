@@ -52,7 +52,6 @@
   "exportui.direction.rtl": "Manga · right to left",
   "exportui.direction.ltr": "Comic · left to right",
   "exportui.direction.vertical": "Webtoon · top to bottom",
-  "exportui.direction.": "",
   "exportui.job.queued": "Export queued",
   "exportui.job.running": "Rendering export",
   "exportui.job.done": "Export ready",

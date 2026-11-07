@@ -44,7 +44,11 @@ templ exportScreen(c *layout.Chrome, v exportView) {
 					}
 				</div>
 				<aside class="mv-exportui__properties"><h2>{ i18n.T(ctx,"exportui.properties") }</h2><span>{ v.Project.PageSize }</span><span>{ strconv.Itoa(v.Page.Width) } × { strconv.Itoa(v.Page.Height) }</span></aside>
-				<footer class="mv-exportui__status"><span>{ i18n.T(ctx,"exportui.page_count","count",len(v.Pages)) }</span><span>{ i18n.T(ctx,"exportui.direction."+v.Page.Direction) }</span><span>{ v.Project.PageSize }</span><span>{ i18n.T(ctx,"exportui.self_host") }</span></footer>
+				<footer class="mv-exportui__status"><span>{ i18n.T(ctx,"exportui.page_count","count",len(v.Pages)) }</span>
+					if v.Page.Direction!="" {
+						<span>{ i18n.T(ctx,"exportui.direction."+v.Page.Direction) }</span>
+					}
+					<span>{ v.Project.PageSize }</span><span>{ i18n.T(ctx,"exportui.self_host") }</span></footer>
 			</div>
 			<div class="mv-exportui__scrim"></div>
 			@ui.Modal(ui.ModalProps{ID: "chapter-export", Title: i18n.T(ctx, "exportui.title", "number", v.Chapter.Number), Static: true, Class: "mv-exportui__panel"}) {
