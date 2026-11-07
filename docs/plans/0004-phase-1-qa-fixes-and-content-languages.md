@@ -1,6 +1,6 @@
 # Phase 1 QA fixes and manga content languages
 
-- Status: Active
+- Status: Active — milestones L, E, S and X integrated; final desktop QA pass
 - Branch: `phase-1/first-playable` (PR #7); starting commit `addcd9e`.
 - Normative inputs: AGENTS.md, plan 0002/0003, ADRs 0001–0007, the approved desktop handoff in
   `../MangaVeyra_All_Pages/`.
@@ -39,21 +39,21 @@ logical commits, and return changed files, tests run and the ADR 0004 text they 
 edits `docs/**`, `README.md`, `go.mod`/`go.sum`, `web/package*.json`, `internal/core/**`, `internal/app/**`,
 `internal/pagedoc/languages*.go`, migrations, `e2e/**`, and cherry-picks results.
 
-1. [ ] **L — Languages and lettering.** `internal/lettering/**` (fonts, fallback, shaping, line breaking for
+1. [x] **L — Languages and lettering.** `internal/lettering/**` (fonts, fallback, shaping, line breaking for
    Korean/Chinese/Devanagari, vertical punctuation), `internal/compose/**` (empty panels render the same as the
    editor), `internal/export/service.go|http.go|contract.go` (Unicode filenames with ASCII fallback, language
    options and ComicInfo for all languages), `internal/studio/**` (project language validation), `internal/gen/**`
    and `internal/ai/placeholder.go` (placeholder scripts in the project language with
    dialogue, so auto-lettering runs without keys), `internal/seed/**` (demo label overlap), `internal/pagedoc/**`
    except languages.go. Font binaries may be added under `internal/lettering/fonts/` with OFL notices.
-2. [ ] **E — Editor (D1/D2/D3/D8/D13 + no-JS proof).** `web/src/islands/editor/**`, `web/src/styles/editor.css`,
+2. [x] **E — Editor (D1/D2/D3/D8/D13 + no-JS proof).** `web/src/islands/editor/**`, `web/src/styles/editor.css`,
    `internal/editor/**`, editor locales. Top-bar overflow, bubble placement, localized layer names, font/vertical
    defaults per contract, panel/region generation de-duplication, every D-screen gap from the QA report.
-3. [ ] **S — Studio and models (B2/B3/C1–C5/G2/G11/G12).** `internal/studioui/**`, `internal/ai/**` except
+3. [x] **S — Studio and models (B2/B3/C1–C5/G2/G11/G12).** `internal/studioui/**`, `internal/ai/**` except
    `placeholder.go`, `internal/web/ui/**`, `web/src/lib/**` (not export.ts), `web/src/styles/components.css`,
    studio/models styles and locales. Story→editor dead end, C1 dialogue lines, wizard language options, live
    counters, G11 placeholder decisions, G12 flow and private-endpoint path, every B/C/G gap from the QA report.
-4. [ ] **X — Export screen (E2).** `internal/export/templates.templ` (+ generated), `web/src/styles/exportui.css`,
+4. [x] **X — Export screen (E2).** `internal/export/templates.templ` (+ generated), `web/src/styles/exportui.css`,
    `web/src/lib/export.ts`, exportui locales. The editor shell behind the modal matches D1; modal gaps; language
    labels for all ten languages.
 5. [ ] **Root integration.** Cherry-pick, resolve, ADR 0004 §8 and ADR 0008 (content languages and fonts), README,

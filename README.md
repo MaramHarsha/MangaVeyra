@@ -54,7 +54,11 @@
 - **Page production:** polygon panels with independent background/character/FX layers, four variations, exact masked
   region edits, revision-bound saves, locks, history/revert and a lazy Svelte/Pixi editor with undo/redo.
 - **Lettering and export:** shared shaped glyph paths, bubble shapes/tails, RTL reading order, vertical Japanese and
-  ruby; PNG ZIP, CBZ and vector-lettered PDF with B5/A5/KDP trims, actual trim/bleed boxes and optional credits.
+  Chinese, and ruby; PNG ZIP, CBZ and vector-lettered PDF with B5/A5/KDP trims, actual trim/bleed boxes and optional
+  credits.
+- **Manga content languages:** projects, lettering and exports in English, Japanese, Korean, Simplified and
+  Traditional Chinese, Spanish, French, German, Portuguese and Hindi, with bundled OFL fonts and per-glyph fallback
+  (ADR 0008). The interface is English and Japanese.
 - **Original demo:** `mangaveyra seed --demo` creates the unpublished Tidebreak Courier project for an existing
   account, with labelled placeholder artwork. Rerunning preserves your edits.
 - **Python AI worker:** deterministic placeholder output, diffusers and ComfyUI adapters, LoRA training, panel and
