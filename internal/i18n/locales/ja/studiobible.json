@@ -73,7 +73,7 @@
   "bible.outfits.default": "デフォルト",
   "bible.outfits.make_default": "デフォルトの衣装として使用",
   "bible.relationships.title": "関係",
-  "bible.relationships.hint": "キャラクターの関係を管理する機能は準備中です。",
+  "bible.relationships.hint": "キャラクター同士の関係は準備中です。",
   "bible.field.name": "名前",
   "bible.field.kanji": "漢字の透かし",
   "bible.field.role": "役割",
@@ -170,5 +170,8 @@
   "bible.projects.state.draft": "下書き",
   "bible.projects.state.script": "脚本",
   "bible.projects.state.shared": "共有された作品",
-  "bible.projects.state.archived": "アーカイブ済み"
+  "bible.projects.state.archived": "アーカイブ済み",
+  "bible.relationships.add": "関係",
+  "bible.role_line.placeholder": "役割の表示文（例：ランタン税の取り立て人）",
+  "bible.upload.prompt": "アップロードする画像を選ぶ"
 }

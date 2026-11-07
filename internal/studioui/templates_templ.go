@@ -1201,7 +1201,7 @@ func wizardPremise(v newProjectView) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = ui.Input(ui.InputProps{ID: "source_file", Name: "source_file", Type: "file", Invalid: v.Errors["source_file"] != "", Attrs: templ.Attributes{"accept": ".txt,text/plain"}}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.FileDrop(ui.FileDropProps{ID: "source_file", Name: "source_file", Accept: ".txt,text/plain", Prompt: i18n.T(ctx, "studioui.new.upload_prompt"), Invalid: v.Errors["source_file"] != "", DescribedBy: uploadHint("source_file", v.Errors["source_file"] != "")}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

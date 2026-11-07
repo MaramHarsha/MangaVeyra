@@ -263,7 +263,7 @@ templ wizardPremise(v newProjectView) {
 		}
 		<span class="mv-wizard__or">{ i18n.T(ctx, "studioui.new.or") }</span>
 		@ui.Field(ui.FieldProps{ID: "source_file", Label: i18n.T(ctx, "studioui.new.upload_label"), Hint: i18n.T(ctx, "studioui.new.upload_hint"), Error: v.Errors["source_file"]}) {
-			@ui.Input(ui.InputProps{ID: "source_file", Name: "source_file", Type: "file", Invalid: v.Errors["source_file"] != "", Attrs: templ.Attributes{"accept": ".txt,text/plain"}})
+			@ui.FileDrop(ui.FileDropProps{ID: "source_file", Name: "source_file", Accept: ".txt,text/plain", Prompt: i18n.T(ctx, "studioui.new.upload_prompt"), Invalid: v.Errors["source_file"] != "", DescribedBy: uploadHint("source_file", v.Errors["source_file"] != "")})
 		}
 		@ui.Notice(ui.ToneInfo, "shield-lock") {
 			<p>{ i18n.T(ctx, "studioui.new.private_source") }</p>

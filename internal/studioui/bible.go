@@ -242,7 +242,7 @@ func (m *Module) charactersPage(w http.ResponseWriter, r *http.Request) error {
 		if c.LockStatus == "training" || c.LockStatus == "failed" {
 			status = i18n.T(r.Context(), "bible.lock."+c.LockStatus)
 		}
-		v.CharacterCards = append(v.CharacterCards, ui.CharacterCardProps{Href: characterPath(v.Project.ID, c.ID), Kanji: c.Kanji, Role: characterRole(c), FirstName: first, LastName: last, Desc: characterDescription(c), Lock: lock, LockLabel: i18n.T(r.Context(), "bible.lock.title"), ArtLabel: i18n.T(r.Context(), "bible.characters.art"), ArtURL: m.assetURL(r.Context(), c.PortraitAssetID), Variant: "bible", StatusLabel: status, StatusTone: ui.ToneMuted})
+		v.CharacterCards = append(v.CharacterCards, ui.CharacterCardProps{Href: characterPath(v.Project.ID, c.ID), Kanji: c.Kanji, Role: characterRole(r.Context(), c), FirstName: first, LastName: last, Desc: characterDescription(c), Lock: lock, LockLabel: i18n.T(r.Context(), "bible.lock.title"), ArtLabel: i18n.T(r.Context(), "bible.characters.art"), ArtURL: m.assetURL(r.Context(), c.PortraitAssetID), Variant: "bible", StatusLabel: status, StatusTone: ui.ToneMuted})
 	}
 	return m.renderBible(w, r, http.StatusOK, v)
 }
@@ -257,11 +257,47 @@ func characterDescription(c studio.Character) string {
 	return c.Look
 }
 
-func characterRole(c studio.Character) string {
-	if c.RoleLine != "" {
-		return c.RoleLine
+// characterRoles are the roles the role select offers (C4 and the C3 profile).
+var characterRoles = []string{"lead", "rival", "mentor", "antagonist", "sidekick", "supporting"}
+
+// roleLabel names a role: a designed role in the interface language, else the
+// creator's own word.
+func roleLabel(ctx context.Context, role string) string {
+	role = strings.TrimSpace(role)
+	if contains(characterRoles, strings.ToLower(role)) {
+		return i18n.T(ctx, "bible.role."+strings.ToLower(role))
 	}
-	return c.Role
+	return role
+}
+
+// characterRole is the C2 card eyebrow, "ROLE · ROLE LINE" as designed. A role
+// line that already starts with the role does not repeat it.
+func characterRole(ctx context.Context, c studio.Character) string {
+	return joinParts(roleParts(ctx, c)...)
+}
+
+// characterEyebrow is the C3 eyebrow, "ROLE · ROLE LINE · PROJECT", without a
+// dangling separator when a part is empty.
+func characterEyebrow(ctx context.Context, c studio.Character, project string) string {
+	return joinParts(append(roleParts(ctx, c), project)...)
+}
+
+func roleParts(ctx context.Context, c studio.Character) []string {
+	role, line := roleLabel(ctx, c.Role), strings.TrimSpace(c.RoleLine)
+	if role != "" && line != "" && strings.HasPrefix(strings.ToLower(line), strings.ToLower(role)) {
+		role = ""
+	}
+	return []string{role, line}
+}
+
+func joinParts(parts ...string) string {
+	kept := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			kept = append(kept, part)
+		}
+	}
+	return strings.Join(kept, " · ")
 }
 
 func bibleFirstError(v biblePage) string {
@@ -962,7 +998,8 @@ func bibleFieldLabel(ctx context.Context, key string) string { return i18n.T(ctx
 func bibleCandidateVars(ctx context.Context, candidates []gen.Candidate) []ui.Variation {
 	out := make([]ui.Variation, 0, len(candidates))
 	for _, c := range candidates {
-		out = append(out, ui.Variation{Value: strconv.Itoa(c.Index), Label: i18n.T(ctx, "bible.new.sheet", "number", c.Index+1), Lock: -1, ImageURL: c.URL})
+		label := i18n.T(ctx, "bible.new.sheet", "number", c.Index+1)
+		out = append(out, ui.Variation{Value: strconv.Itoa(c.Index), Label: label, Caption: label, Lock: -1, ImageURL: c.URL})
 	}
 	return out
 }

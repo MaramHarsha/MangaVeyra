@@ -73,7 +73,7 @@
   "bible.outfits.default": "DEFAULT",
   "bible.outfits.make_default": "Use as the default outfit",
   "bible.relationships.title": "Relationships",
-  "bible.relationships.hint": "Character relationships are coming soon.",
+  "bible.relationships.hint": "Relationships between characters are coming soon.",
   "bible.field.name": "Name",
   "bible.field.kanji": "Kanji watermark",
   "bible.field.role": "Role",
@@ -172,5 +172,10 @@
   "bible.projects.state.shared": "Shared with you",
   "bible.projects.state.archived": "Archived",
   "bible.projects.count.one": "{count} project · {shared} shared with you",
-  "bible.projects.count.other": "{count} projects · {shared} shared with you"
+  "bible.projects.count.other": "{count} projects · {shared} shared with you",
+  "bible.lock.references.one": "{count} reference",
+  "bible.lock.references.other": "{count} references",
+  "bible.relationships.add": "Relationship",
+  "bible.role_line.placeholder": "role line, e.g. lantern-tax collector",
+  "bible.upload.prompt": "Choose an image to upload"
 }

@@ -300,7 +300,7 @@ templ BibleCharacter(v biblePage) {
 			<header class="mv-bible__detail-header">
 				<div>
 					<p class="mv-bible__eyebrow">
-						{ v.Character.RoleLine } · { v.Project.Title }
+						{ characterEyebrow(ctx, v.Character, v.Project.Title) }
 					</p>
 					<h1>
 						{ v.Character.Name }
@@ -403,9 +403,19 @@ templ BibleCharacter(v biblePage) {
 			<section class="mv-bible__relationships">
 				<h2>
 					{ i18n.T(ctx,"bible.relationships.title") }
-				</h2>@ui.Notice(ui.ToneInfo, "users") {
-	{ i18n.T(ctx,"bible.relationships.hint") } @ui.SoonTag()
-}
+				</h2>
+				<div class="mv-bible__relationship-strip">
+					<span class="mv-bible__relationship mv-bible__relationship--add is-soon" aria-disabled="true" title={ i18n.T(ctx, "bible.relationships.hint") }>
+						<span class="mv-bible__relationship-avatar" aria-hidden="true">
+							@ui.Icon("user-plus", 16)
+						</span>
+						<span class="mv-bible__relationship-text">
+							<strong>{ i18n.T(ctx,"bible.relationships.add") }</strong>
+							<span>{ i18n.T(ctx,"bible.relationships.hint") }</span>
+						</span>
+						@ui.SoonTag()
+					</span>
+				</div>
 			</section>
 			if v.CanEdit {
 				<div>
@@ -449,6 +459,30 @@ templ bibleTextArea(v biblePage, name, value string, max, rows int) {
 	}
 }
 
+// bibleRoleField is the designed Role field: the role select and the role
+// line read as one value ("Antagonist · lantern-tax collector").
+templ bibleRoleField(v biblePage) {
+	{{ errorText := v.Errors["role"] }}
+	if errorText == "" {
+		{{ errorText = v.Errors["role_line"] }}
+	}
+	<div class="mv-field">
+		<label class="mv-field__label" for="bible-role"><span>{ bibleFieldLabel(ctx, "role") }</span></label>
+		<div class={ "mv-bible__rolefield", ui.If(errorText != "", "is-invalid") }>
+			@ui.Select(ui.SelectProps{ID: "bible-role", Name: "role", Value: v.Form.Role, Options: bibleRoleOptions(ctx, v.Form.Role), Invalid: v.Errors["role"] != "", Class: "mv-bible__roleselect", Attrs: bibleControlAttrs(v, "role")})
+			<span class="mv-bible__roledot" aria-hidden="true">·</span>
+			<label class="mv-sr-only" for="bible-role_line">{ bibleFieldLabel(ctx, "role_line") }</label>
+			@ui.Input(ui.InputProps{ID: "bible-role_line", Name: "role_line", Value: v.Form.RoleLine, MaxLength: 1000, Placeholder: i18n.T(ctx, "bible.role_line.placeholder"), Invalid: v.Errors["role_line"] != "", Class: "mv-bible__roleline", Autofocus: v.Errors["role_line"] != "" && bibleFirstError(v) == "role_line"})
+		</div>
+		if errorText != "" {
+			<span class="mv-field__error" id="bible-role-error" role="alert">
+				@ui.Icon("alert-triangle", 14)
+				<span>{ errorText }</span>
+			</span>
+		}
+	</div>
+}
+
 templ bibleCategory(v biblePage) {
 	@ui.Field(ui.FieldProps{ID: "bible-category", Label: bibleFieldLabel(ctx, "category"), Error: v.Errors["category"]}) {
 		@ui.Select(ui.SelectProps{ID: "bible-category", Name: "category", Value: v.Form.Category, Invalid: v.Errors["category"] != "", Options: bibleOptions(ctx, "category", "main", "supporting", "extra"), Attrs: bibleControlAttrs(v, "category")})
@@ -457,15 +491,7 @@ templ bibleCategory(v biblePage) {
 
 templ bibleUpload(v biblePage) {
 	@ui.Field(ui.FieldProps{ID: "bible-file", Label: i18n.T(ctx, "bible.field.file"), Hint: i18n.T(ctx, "bible.upload.hint"), Error: v.Errors["file"], Class: "mv-bible__upload"}) {
-		<input
-			class="mv-input"
-			id="bible-file"
-			type="file"
-			name="file"
-			accept="image/png,image/jpeg,image/webp,image/gif"
-			aria-describedby={ uploadDescribed(v) }
-			aria-invalid={ strconv.FormatBool(v.Errors["file"] != "") }
-		/>
+		@ui.FileDrop(ui.FileDropProps{ID: "bible-file", Name: "file", Accept: "image/png,image/jpeg,image/webp,image/gif", Prompt: i18n.T(ctx, "bible.upload.prompt"), Invalid: v.Errors["file"] != "", DescribedBy: uploadDescribed(v)})
 	}
 }
 
@@ -491,9 +517,7 @@ templ BibleNewCharacter(v biblePage) {
 		<form action={ templ.URL(characterPath(v.Project.ID, "") + "/new") } method="post" enctype="multipart/form-data" class="mv-bible__new-form" novalidate data-guard-unsaved>
 			<input type="hidden" name="mode" value={ v.Form.Mode }/><input type="hidden" name="revision" value={ v.Form.Revision }/><input type="hidden" name="character_id" value={ v.Form.CharacterID }/>
 			@bibleTextField(v, "name", v.Form.Name, 160)
-			@ui.Field(ui.FieldProps{ID: "bible-role", Label: bibleFieldLabel(ctx, "role"), Error: v.Errors["role"]}) {
-				@ui.Select(ui.SelectProps{ID: "bible-role", Name: "role", Value: v.Form.Role, Options: bibleRoleOptions(ctx, v.Form.Role), Invalid: v.Errors["role"] != "", Attrs: bibleControlAttrs(v, "role")})
-			}
+			@bibleRoleField(v)
 			@bibleTextArea(v, "look", v.Form.Look, 4000, 3)
 			@bibleTextArea(v, "personality", v.Form.Personality, 4000, 2)
 			<fieldset class="mv-bible__style">
@@ -512,7 +536,6 @@ templ BibleNewCharacter(v biblePage) {
 				</summary>
 				<div class="mv-stack mv-stack--sm">
 					@bibleTextField(v, "kanji", v.Form.Kanji, 160)
-					@bibleTextField(v, "role_line", v.Form.RoleLine, 1000)
 					@bibleTextField(v, "age", v.Form.Age, 80)
 					@bibleTextField(v, "speech_style", v.Form.SpeechStyle, 2000)
 					@bibleCategory(v)
@@ -573,7 +596,7 @@ func bibleStyleOptions(ctx context.Context, v biblePage) []ui.Option {
 }
 
 func bibleRoleOptions(ctx context.Context, value string) []ui.Option {
-	values := []string{"", "lead", "rival", "mentor", "antagonist", "sidekick", "supporting"}
+	values := append([]string{""}, characterRoles...)
 	out := bibleOptions(ctx, "role", values...)
 	if !contains(values, value) {
 		out = append(out, ui.Option{Value: value, Label: value})
@@ -616,8 +639,7 @@ templ BibleProfileForm(v biblePage) {
 		</h2><input type="hidden" name="revision" value={ v.Form.Revision }/>
 		@bibleTextField(v, "name", v.Form.Name, 160)
 		@bibleTextField(v, "kanji", v.Form.Kanji, 160)
-		@bibleTextField(v, "role", v.Form.Role, 160)
-		@bibleTextField(v, "role_line", v.Form.RoleLine, 1000)
+		@bibleRoleField(v)
 		@bibleTextField(v, "age", v.Form.Age, 80)
 		@bibleTextArea(v, "look", v.Form.Look, 4000, 3)
 		@bibleTextArea(v, "personality", v.Form.Personality, 4000, 3)

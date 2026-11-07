@@ -85,6 +85,14 @@ func (v newProjectView) errorSteps() []string {
 	return out
 }
 
+// uploadHint is the id a file picker points aria-describedby at.
+func uploadHint(id string, invalid bool) string {
+	if invalid {
+		return id + "-error"
+	}
+	return id + "-hint"
+}
+
 func stepIndex(step string) int {
 	for i, s := range wizardSteps {
 		if s == step {

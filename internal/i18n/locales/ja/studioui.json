@@ -248,5 +248,6 @@
   "studioui.script.state.failed": "保存できませんでした · 再試行中",
   "studioui.script.state.conflict": "別の場所で変更されました · 再読み込み",
   "studioui.script.state.locked": "話がロックされています · 未保存",
-  "studioui.script.state.invalid": "保存できません · 正しくない項目があります"
+  "studioui.script.state.invalid": "保存できません · 正しくない項目があります",
+  "studioui.new.upload_prompt": ".txtファイルを選ぶ"
 }
