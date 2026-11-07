@@ -37,6 +37,8 @@ type Change struct {
 	Action string
 	// Summary is a short human sentence ("Region edit · Rin's hand").
 	Summary string
+	// ExpectedVersion optionally fences lock, delete and revert browser actions.
+	ExpectedVersion int
 }
 
 // PageSummary is a page row for filmstrips and lists.

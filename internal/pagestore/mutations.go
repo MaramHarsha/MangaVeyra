@@ -131,6 +131,9 @@ func (s *store) SetLock(ctx context.Context, pageID, panelID, layerID string, lo
 		if err != nil {
 			return err
 		}
+		if ch.ExpectedVersion != 0 && ch.ExpectedVersion != p.Version {
+			return ErrVersion
+		}
 		if layerID != "" {
 			pn := p.Panel(panelID)
 			if pn == nil {
@@ -243,6 +246,9 @@ func (s *store) DeletePage(ctx context.Context, id string, ch Change) error {
 		if err != nil {
 			return err
 		}
+		if ch.ExpectedVersion != 0 && ch.ExpectedVersion != p.Version {
+			return ErrVersion
+		}
 		if err := s.studio.CheckScopeWritableTx(ctx, tx, jobs.Scope{Kind: jobs.ScopePage, ProjectID: p.ProjectID, PageID: id}); err != nil {
 			return writable(err)
 		}
@@ -339,6 +345,9 @@ func (s *store) Revert(ctx context.Context, pageID, versionID string, ch Change)
 		current, err := s.GetPageTx(ctx, tx, pageID)
 		if err != nil {
 			return err
+		}
+		if ch.ExpectedVersion != 0 && ch.ExpectedVersion != current.Version {
+			return ErrVersion
 		}
 		old, err := versionDoc(ctx, tx, versionID)
 		if err != nil {

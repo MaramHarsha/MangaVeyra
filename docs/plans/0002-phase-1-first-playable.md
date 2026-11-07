@@ -92,6 +92,16 @@ lettering layers. Server-derived ancestry may be indexed internally; it is never
 
 ### Additive Gate B/C contract clarifications (2026-11-07)
 
+- `pagestore.Change.ExpectedVersion` optionally fences browser lock, delete and revert actions against the loaded
+  page revision under the page row lock; zero retains the trusted internal caller behavior.
+- `jobs.Queue.EnqueueTx` stores a fully validated job and its created event in the caller's transaction. Studio scope
+  validation uses `AddTxValidator` so newly created pages are visible. Guards run in the same transaction; no network
+  call, publication or wake-up occurs before commit. The durable executor poll discovers committed children after a
+  crash. `pages.from_script` atomically stores pages and its optional per-panel children through this API.
+- Art children of the same `pages.from_script` batch may cross sibling page revisions only when every intervening
+  snapshot belongs to a successful panel job in that batch and the target panel fingerprint is unchanged. Any human,
+  lettering, lock, or unrelated generation change invalidates the original revision.
+
 These additions are frozen before parallel implementation; existing Gate A signatures remain compatible.
 
 - `studio.AuthorizeTx(ctx, tx, actor, projectID, action)` and `CheckScopeWritableTx(ctx, tx, scope)` expose the
