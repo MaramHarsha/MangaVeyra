@@ -92,6 +92,12 @@ lettering layers. Server-derived ancestry may be indexed internally; it is never
 
 ### Additive Gate B/C contract clarifications (2026-11-07)
 
+- `ai.ImageGenerateRequest.CallSlot` is a stable zero-based component index (default 0, bounded to 0–15).
+  Worker child idempotency is `(parent job, claimed attempt, call slot)`, with an immutable request digest within
+  each slot. Gen passes its durable component index; slots above zero must correspond to a stored component.
+  Every child still has one attempt, shares the parent's explicit scope, and stays within the aggregate approved
+  layer/attempt estimate. Different layer calls must not collide or permit a changed request to reuse a slot.
+
 - `pagestore.Change.ExpectedVersion` optionally fences browser lock, delete and revert actions against the loaded
   page revision under the page row lock; zero retains the trusted internal caller behavior.
 - `jobs.Queue.EnqueueTx` stores a fully validated job and its created event in the caller's transaction. Studio scope

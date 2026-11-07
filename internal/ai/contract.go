@@ -190,10 +190,13 @@ type ImageGenerateRequest struct {
 	ActorID, JobID string
 	ProjectID      string
 	Attempt        int
-	Prompt         string
-	Negative       string
-	Width, Height  int
-	Seed           int64
+	// CallSlot is the stable component index within this parent attempt (0–15).
+	// Worker child idempotency retains a separate immutable digest for each slot.
+	CallSlot      int
+	Prompt        string
+	Negative      string
+	Width, Height int
+	Seed          int64
 	// Count is the number of images (variations), 1–4.
 	Count      int
 	Style      string
