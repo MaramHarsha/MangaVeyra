@@ -8,14 +8,15 @@
  import {
   Autosave, DraftHistory, FONT_FAMILIES, FONT_KEYS, applyLayout, avatarTone, bounds, bubbleWritable, cameraOption, canReorderBubble,
   canUseLayout, canonical, clone, defaultFont, initials, jobSeconds, layerLabel, layoutPoints, moveBubble, moveBubbleTo, movePanel,
-  newBubble, newID, ptToPx, pxToPt, reorderBubble, rubyFor, savedAgo, setBubbleKind, shotOption, verticalAllowed,
+  humanize, newBubble, newID, panelLabel as labelFor, plural, ptToPx, pxToPt, reorderBubble, rubyFor, savedAgo, setBubbleKind, shortTitle, shotOption, verticalAllowed,
   type SaveResult, type SaveState,
  } from './document';
  import type {Beat, Bubble, Candidate, Compute, Job, Layer, Layout, Lettering, Page, PageResponse, Panel, Props, Rect, Version} from './types';
 
  let {initial: bootstrap, mode: initialMode = '', tool: initialTool = '', panel: initialTray = '', job: initialJob = ''}: Props = $props();
  const initial = untrack(() => bootstrap), bootMode = untrack(() => initialMode), bootTool = untrack(() => initialTool), bootTray = untrack(() => initialTray), bootJob = untrack(() => initialJob);
- const t = (key: string, args: Record<string, string | number> = {}) => Object.entries(args).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), initial.messages[key] || key);
+ // Messages with a {count} use the catalogue's plural forms (".one"/".other").
+ const t = (key: string, args: Record<string, string | number> = {}) => Object.entries(args).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), typeof args.count === 'number' && !(key in initial.messages) ? plural(initial.messages, key, args.count, initial.lang) : initial.messages[key] || key);
  const lang = initial.project.language;
  const characters = initial.characters;
  const KINDS: Bubble['kind'][] = ['speech', 'thought', 'shout', 'whisper', 'caption', 'sfx'];
@@ -63,6 +64,7 @@
  let layoutFilter = $state('suggested');
  let pickerLayouts = $state.raw<Layout[]>(initial.layouts);
  let pickerBeat = $state<Beat | null>(initial.current ? initial.beats?.[String(initial.current.page.number)] || null : null);
+ let pickerBlank = $state(false);
  let pickedLayout = $state(initial.layouts.find(l => l.suggested)?.id || initial.layouts[0]?.id || '');
 
  /* ---- jobs ---- */
@@ -74,7 +76,7 @@
  let destroyed = false;
 
  /* ---- region and lettering ---- */
- let mask = $state<Blob | null>(null), maskTool = $state('brush'), feather = $state(12), brushSize = $state(32), regionPrompt = $state('');
+ let mask = $state<Blob | null>(null), maskTool = $state('brush'), feather = $state(12), brushSize = $state(32), regionPrompt = $state(''), clearMask = $state(0);
  let rectangle = $state<Rect>({x: 0, y: 0, w: 100, h: 100}), rectangleSelection = $state<Rect | null>(null), regionWidth = $state(0);
  let rubyStart = $state(0), rubyEnd = $state(1), rubyText = $state('');
  let dragBubble = $state('');
@@ -89,8 +91,10 @@
  const bubble = $derived(page?.bubbles.find(b => b.id === bubbleID));
  const activeLayout = $derived(pickerLayouts.find(l => l.id === pickedLayout));
  const selectedCandidate = $derived(candidates.find(c => c.index === candidateIndex));
- const writableArt = $derived(!!page && initial.permissions.art && !initial.chapter.locked && !page.locked && !panel?.locked && !busy);
- const writableLetter = $derived(!!page && initial.permissions.letter && !initial.chapter.locked && !page.locked && !panel?.locked && !textLayer?.locked && !busy);
+ // Page-level edits (layouts) need no selected panel; panel edits do.
+ const writablePage = $derived(!!page && initial.permissions.art && !initial.chapter.locked && !page.locked && !page.panels.some(p => p.locked) && !busy);
+ const writableArt = $derived(!!page && !!panel && initial.permissions.art && !initial.chapter.locked && !page.locked && !panel.locked && !busy);
+ const writableLetter = $derived(!!page && !!panel && initial.permissions.letter && !initial.chapter.locked && !page.locked && !panel.locked && !textLayer?.locked && !busy);
  const selectedText = $derived(bubble?.texts[lang] || {text: '', source: 'human', status: 'draft'});
  const currentKind = $derived(bubble?.kind || nextKind);
  const characterLayers = $derived(panel?.layers.filter(l => l.kind === 'character') || []);
@@ -105,6 +109,25 @@
  const drift = $derived(candidates.find(c => c.lock_score !== undefined && c.lock_score < .9));
  const driftName = $derived(characters.find(c => c.id === characterLayers[0]?.character_id)?.name || characterLayers[0]?.name || '');
  const jobRunning = $derived(activeJob?.state === 'queued' || activeJob?.state === 'running');
+
+ /* ---- routing preview (the chip and help line before anything is queued) ---- */
+ interface RouteInfo {available: boolean; model_id?: string; model_name?: string; provider_id?: string; remote: boolean; placeholder: boolean; estimate_seconds?: number; remote_cost: boolean; message?: string}
+ let route = $state<RouteInfo | null>(null);
+ let routeSeq = 0;
+ const routeWhere = $derived(!route?.available ? '' : route.placeholder ? t('route.builtin') : route.remote ? route.provider_id || '' : t('route.local'));
+ const routeText = $derived(!route?.available ? route?.message || t('route.pending') : [route.model_name || route.model_id || '', routeWhere, route.estimate_seconds ? t('route.estimate', {seconds: Math.round(route.estimate_seconds)}) : ''].filter(Boolean).join(' · '));
+ const routeHelp = $derived(!route?.available ? t('four_variations') : t('four_variations_route', {where: compute?.gpu || routeWhere, cost: route.remote_cost ? t('route.own_key') : t('route.no_cost')}));
+ async function refreshRoute() {
+  if (!page || !panel || !initial.permissions.generate) { route = null; return; }
+  const seq = ++routeSeq, kind = tool === 'region' ? 'region' : 'panel';
+  const query = new URLSearchParams({kind, panel_id: panel.id, layer_id: kind === 'region' ? layerID : ''});
+  try { const out = await request<RouteInfo>(`${pageAPI()}/route?${query}`); if (seq === routeSeq && !destroyed) route = out; } catch { if (seq === routeSeq) route = null; }
+ }
+ $effect(() => { void [page?.id, panelID, tool, layerID, characterLayers.length]; untrack(() => void refreshRoute()); });
+ // D8 "Reroll only one layer": characters first, then background and FX, with short names.
+ const rerollLayers = $derived([...(panel?.layers.filter(l => l.kind !== 'lettering') || [])].sort((a, b) => ({character: 0, background: 1, fx: 2, lettering: 3})[a.kind] - ({character: 0, background: 1, fx: 2, lettering: 3})[b.kind]));
+ function rerollName(l: Layer) { const name = label(l).split(' · ')[0].trim(); return l.kind === 'character' ? name.split(/\s+/)[0] : name; }
+ function historyAction(action: string) { return initial.messages[`history.action.${action}`] || humanize(action); }
 
  const meter = $derived.by(() => {
   const c = compute, jobs = (c?.queued || 0) + (c?.running || 0);
@@ -139,8 +162,11 @@
    for (const k of ['wide', 'medium', 'close'] as const) if (b[k] > 0) details.push(t(`layout.beat.${k}`, {count: b[k]}));
    return t('layout.beat', {page: page.number, details: details.join(', ')});
   }
-  return t('layout.hint', {page: page.number, count: page.panels.length || 5});
+  if (pickerBlank || !page.panels.length) return t('layout.hint_blank', {page: page.number});
+  return t('layout.hint', {page: page.number, count: page.panels.length});
  });
+ // Suggested layouts best fit first (server rank), then the rest in catalogue order.
+ const rankedLayouts = $derived([...pickerLayouts].sort((a, b) => (a.rank || 99) - (b.rank || 99)));
  const pageHasWork = $derived(!!page && (page.bubbles.length > 0 || page.panels.some(p => p.prompt || p.layers.some(l => l.asset))));
 
  function gb(mb?: number) { return number.format((mb || 0) / 1024); }
@@ -210,6 +236,10 @@
   else proceed();
  }
  function selectPanel(id: string) { panelID = id; layerID = page?.panels.find(p => p.id === id)?.layers.find(l => l.kind !== 'lettering')?.id || ''; const b = page?.bubbles.find(v => v.panel_id === id); if (b) bubbleID = b.id; }
+ // A page always has its first panel selected when the selection is gone
+ // (a new page, a page switch, a layout applied, an undo), so the inspector
+ // never shows a form that edits nothing.
+ $effect(() => { const p = page, id = panelID; if (p && !p.panels.some(v => v.id === id)) untrack(() => selectPanel(p.panels[0]?.id || '')); });
  function selectBubble(id: string) { bubbleID = id; const b = page?.bubbles.find(v => v.id === id); if (b?.panel_id) panelID = b.panel_id; if (mode !== 'lettering') switchMode('lettering'); tray = 'properties'; tool = 'select'; }
  function setMask(blob: Blob | null) { mask = blob; emitDirty(); }
  function switchMode(next: string) { if (dirty) void flush(); mode = next; tool = 'select'; tray = 'properties'; menu = ''; }
@@ -324,16 +354,18 @@
   layoutTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   layoutFilter = 'suggested';
   try {
-   const out = await request<{layouts: Layout[]; beat?: Beat}>(`${pageAPI()}/layouts`);
-   pickerLayouts = out.layouts; pickerBeat = out.beat || null;
-  } catch { pickerLayouts = initial.layouts; pickerBeat = null; }
-  const usable = pickerLayouts.filter(l => page && canUseLayout(page, l));
-  pickedLayout = (usable.find(l => l.id === page?.layout_id) || usable.find(l => l.suggested) || usable[0] || pickerLayouts[0])?.id || '';
+   const out = await request<{layouts: Layout[]; beat?: Beat; blank?: boolean}>(`${pageAPI()}/layouts`);
+   pickerLayouts = out.layouts; pickerBeat = out.beat || null; pickerBlank = !!out.blank;
+  } catch { pickerLayouts = initial.layouts; pickerBeat = null; pickerBlank = !page.panels.length; }
+  // The page's own layout stays selected; otherwise the best fit is
+  // preselected, except on a blank page, which waits for a choice.
+  const usable = rankedLayouts.filter(l => page && canUseLayout(page, l));
+  pickedLayout = (usable.find(l => l.id === page?.layout_id) || (pickerBlank ? undefined : usable.find(l => l.suggested)))?.id || '';
   tray = 'layouts';
  }
  function closeLayouts() { tray = 'properties'; layoutDialog?.close(); layoutTrigger?.focus(); }
  function chooseLayout() {
-  if (!page || !activeLayout || !writableArt) return;
+  if (!page || !activeLayout || !writablePage) return;
   try { mark(applyLayout(page, activeLayout, tilt)); closeLayouts(); toast(t('layout.applied')); } catch { error = t('layout.preserve'); }
  }
  $effect(() => { if (tray === 'layouts' && layoutDialog && !layoutDialog.open) layoutDialog.showModal(); else if (tray !== 'layouts' && layoutDialog?.open) layoutDialog.close(); });
@@ -396,7 +428,8 @@
  }
 
  /* ---- generation (D1/D8/D13) ---- */
- function makeRegion() { if (!layer?.asset) { error = t('region.no_art'); return; } tool = 'region'; mode = 'pages'; tray = 'properties'; scope = 'region'; }
+ // A panel job's variations never stand in as region candidates.
+ function makeRegion() { if (!layer?.asset) { error = t('region.no_art'); return; } if (activeJob && activeJob.type !== 'region.edit') { clearTimeout(pollTimer); jobAbort?.abort(); activeJob = null; jobID = ''; candidates = []; } tool = 'region'; mode = 'pages'; tray = 'properties'; scope = 'region'; }
  function closeRegion() { guard(() => { tool = 'select'; mask = null; scope = 'panel'; emitDirty(); }); }
  async function generate(kind = scope, layerOverride = '') {
   if (!page || !panel || !initial.permissions.generate || busy) return;
@@ -549,7 +582,7 @@
 
 {#snippet chip(l: Layer)}
  {@const c = characters.find(v => v.id === l.character_id)}
- {@const name = label(l)}
+ {@const name = c?.name || label(l)}
  {@const score = l.lock_score ?? c?.lock_score}
  <button type="button" class="mv-ed__chip" class:selected={l.id === layerID} aria-pressed={l.id === layerID} title={name} onclick={() => layerID = l.id}>
   <span class={`mv-avatar mv-avatar--xs mv-avatar--c${avatarTone(l.character_id || l.id)}`} aria-hidden="true">{initials(name)}</span>
@@ -561,7 +594,7 @@
 <svelte:window onkeydown={key} onpointerdown={outside}/>
 <div bind:this={owner} class={`mv-ed${tray === 'layouts' ? ' mv-ed--layouts' : ''}${tool === 'region' ? ' mv-ed--region' : ''}${mode === 'lettering' ? ' mv-ed--lettering' : ''}`} aria-busy={busy}>
  <header class="mv-ed__bar">
-  <a class="mv-ed__back" href={`/studio/p/${initial.project.id}/story/${initial.chapter.id}`} aria-label={t('back')} onclick={(e) => followLink(e, `/studio/p/${initial.project.id}/story/${initial.chapter.id}`)}><img src="/static/brand/mark-color-on-dark-gate-blue.svg" width="24" height="24" alt=""/></a>
+  <a class="mv-ed__back" href={`/studio/p/${initial.project.id}/story/${initial.chapter.id}`} aria-label={t('back')} onclick={(e) => followLink(e, `/studio/p/${initial.project.id}/story/${initial.chapter.id}`)}><img class="mv-only-dark" src="/static/brand/mark-color-on-dark-gate-blue.svg" width="24" height="24" alt=""/><img class="mv-only-light" src="/static/brand/mark-color-on-light-gate-blue.svg" width="24" height="24" alt=""/></a>
   <div class="mv-ed__crumbs">
    <span class="mv-ed__project" title={initial.project.title}>{initial.project.title}</span>
    <i class="ti ti-chevron-right mv-ed__crumb" aria-hidden="true"></i>
@@ -589,7 +622,7 @@
    <button type="button" class="mv-seg__item" disabled>{t('animate')}<span class="mv-soon">{t('soon')}</span></button>
   </nav>
   <div class="mv-ed__bar-end">
-   <button type="button" class="mv-ed__collaboration mv-iconlink" disabled aria-label={`${t('collaboration')} · ${t('soon')}`} title={`${t('collaboration')} · ${t('soon')}`}><i class="ti ti-users" aria-hidden="true"></i></button>
+   <button type="button" class="mv-ed__collaboration mv-iconlink" disabled aria-label={`${t('collaboration')} · ${t('soon')}`} title={`${t('collaboration')} · ${t('soon')}`}><i class="ti ti-users" aria-hidden="true"></i><span class="mv-soon">{t('soon')}</span></button>
    <span class={`mv-meter mv-ed__meter${meter.idle ? ' mv-meter--idle' : ''}${meter.offline ? ' mv-meter--offline' : ''}`} role="status" aria-label={meter.title} title={meter.title}><i class="ti ti-cpu" aria-hidden="true"></i><span class="mv-bar mv-meter__bar" style:--mv-p={`${meter.load}%`} aria-hidden="true"></span><span class="mv-meter__label">{meter.text}</span></span>
    <Button variant="bare" icon="history" label={t('history.title')} small disabled={!page} onclick={() => void openHistory()}/>
    <div class="mv-ed__menu-wrap">
@@ -631,11 +664,7 @@
    {#each pages as p (p.id)}
     <button type="button" class="mv-ed__page-thumb" class:selected={p.id === page?.id} aria-current={p.id === page?.id ? 'page' : undefined} aria-label={t('page.number', {number: p.number})} disabled={busy} onclick={() => { if (p.id !== page?.id) void leave(() => void load(p.id)); }}>
      <span class="mv-ed__thumb-frame">
-      {#if p.thumb?.url}<img src={p.thumb.url} alt=""/>
-      {:else}
-       {@const polygons = p.id === page?.id ? page.panels.map(v => v.points) : initial.layouts.find(l => l.id === p.layout_id)?.points || []}
-       <svg class="mv-ed__thumb-layout" viewBox={`0 0 ${initial.project.page_width} ${initial.project.page_height}`} aria-hidden="true"><defs><pattern id={`thumb-${p.id}`} width="56" height="56" patternUnits="userSpaceOnUse"><rect width="56" height="56" class="mv-ed__thumb-paper"/><circle cx="18" cy="18" r="9" class="mv-ed__thumb-dot"/></pattern></defs><rect width={initial.project.page_width} height={initial.project.page_height} class="mv-ed__layout-paper"/>{#each polygons as points}<polygon points={points.map(point => `${point.x},${point.y}`).join(' ')} fill={`url(#thumb-${p.id})`} class="mv-ed__thumb-panel"/>{/each}</svg>
-      {/if}
+      <img src={`${initial.api}/pages/${p.id}/thumb?v=${p.version}`} alt="" width="88" height="124" loading="lazy"/>
       {#if p.locked}<span class="mv-ed__thumb-lock"><i class="ti ti-lock" aria-label={t('locked')}></i></span>{/if}
      </span>
      <span class="mv-ed__thumb-number" aria-hidden="true">{p.number}</span>
@@ -644,7 +673,7 @@
   </nav>
   <section class="mv-ed__layers" aria-label={t('layers')}>
    <div class="mv-ed__section-head mv-ed__rail-head">
-    <strong>{t('layers')}{#if panel && page} · {t('panel.label', {page: page.number, panel: panelIndex + 1})}{/if}</strong>
+    <strong>{panel && page ? `${t('layers')} · ${t('panel.label', {page: page.number, panel: panelIndex + 1})}` : t('layers')}</strong>
     <span class="mv-ed__menu-wrap">
      <button type="button" class="mv-iconlink" aria-label={t('layer.add')} title={t('layer.add')} aria-haspopup="menu" aria-expanded={menu === 'layers'} disabled={!panel || !writableArt} onclick={(e) => toggleMenu('layers', e)}><i class="ti ti-plus" aria-hidden="true"></i></button>
      {#if menu === 'layers' && panel}
@@ -690,7 +719,7 @@
    <div class="mv-ed__region-stage">
     <div class="mv-ed__region-heading"><button type="button" class="mv-iconlink" aria-label={t('back_to_page')} onclick={closeRegion}><i class="ti ti-arrow-left" aria-hidden="true"></i></button><span>{t('region.heading', {page: page.number, panel: panelName, zoom: regionZoom})}</span></div>
     {#key layer.id}
-     <RegionMask asset={layer.asset} candidateURL={selectedCandidate?.url} tool={maskTool} {feather} size={brushSize} label={panel?.prompt.split('.').map(s => s.trim()).filter(Boolean).slice(0, 2).join(' · ').toUpperCase().slice(0, 48) || ''} {t} onMask={setMask} onDisplay={(w) => regionWidth = w} disabled={busy || !!candidates.length} selection={rectangleSelection} initialMask={mask}/>
+     <RegionMask asset={layer.asset} candidateURL={selectedCandidate?.url} tool={maskTool} {feather} size={brushSize} label={panel ? labelFor(page.number, panelIndex, panel, initial.script_actions || {}, t).split(' · ').slice(1).join(' · ') : ''} clearKey={clearMask} {t} onMask={setMask} onDisplay={(w) => regionWidth = w} disabled={busy || !!candidates.length} selection={rectangleSelection} initialMask={mask}/>
     {/key}
     <fieldset class="mv-ed__region-variations">
      <legend class="mv-sr-only">{t('variations.pick')}</legend>
@@ -706,7 +735,7 @@
     </fieldset>
    </div>
   {:else}
-   <CanvasStage {page} {lettering} selectedPanel={proof ? '' : panelID} selectedBubble={!proof && mode === 'lettering' ? bubbleID : ''} showOrder={!proof && mode === 'lettering'} canArt={writableArt && !proof} canLetter={writableLetter && !proof} previewURL={tray === 'variations' ? selectedCandidate?.url : undefined} previewPanel={panelID} previewLabel={tray === 'variations' && candidates.length ? t('variations.preview', {number: candidates.findIndex(c => c.index === candidateIndex) + 1}) : ''} panelActions={mode === 'pages' && tray === 'properties' && tool === 'select' && !proof ? panelActions : undefined} {zoom} {t} onPanel={selectPanel} onBubble={selectBubble} onMovePanel={(id, dx, dy) => page && mark(movePanel(page, id, dx, dy), false)} onMoveBubble={(id, dx, dy) => page && mark(moveBubble(page, id, dx, dy))}/>
+   <CanvasStage {page} {lettering} actions={initial.script_actions || {}} selectedPanel={proof ? '' : panelID} selectedBubble={!proof && mode === 'lettering' ? bubbleID : ''} showOrder={!proof && mode === 'lettering'} canArt={writableArt && !proof} canLetter={writableLetter && !proof} previewURL={tray === 'variations' ? selectedCandidate?.url : undefined} previewPanel={panelID} previewLabel={tray === 'variations' && candidates.length ? t('variations.preview', {number: candidates.findIndex(c => c.index === candidateIndex) + 1}) : ''} panelActions={mode === 'pages' && tray === 'properties' && tool === 'select' && !proof ? panelActions : undefined} {zoom} {t} onPanel={selectPanel} onBubble={selectBubble} onMovePanel={(id, dx, dy) => page && mark(movePanel(page, id, dx, dy), false)} onMoveBubble={(id, dx, dy) => page && mark(moveBubble(page, id, dx, dy))}/>
   {/if}
  </section>
 
@@ -716,7 +745,7 @@
   {:else if tray === 'history'}
    <div class="mv-ed__section-head mv-ed__inspector-head"><div><strong>{t('history.title')}</strong>{#if page}<small>{t('page.number', {number: page.number})}</small>{/if}</div><button type="button" class="mv-iconlink" aria-label={t('close')} onclick={() => tray = 'properties'}><i class="ti ti-x" aria-hidden="true"></i></button></div>
    <div class="mv-ed__inspector-scroll">
-    {#each versions as v (v.id)}<article class="mv-ed__version"><strong>{t('history.version', {number: v.number})}</strong><time datetime={v.created_at}>{new Intl.DateTimeFormat(initial.lang, {dateStyle: 'medium', timeStyle: 'short'}).format(new Date(v.created_at))}</time><p>{v.action}</p><Button small disabled={!initial.permissions.art && !initial.permissions.letter || busy} onclick={() => revert(v)}>{t('history.revert')}</Button></article>{:else}<p class="mv-ed__help mv-ed__pad">{t('history.empty')}</p>{/each}
+    {#each versions as v (v.id)}<article class="mv-ed__version"><strong>{t('history.version', {number: v.number})}</strong><time datetime={v.created_at}>{new Intl.DateTimeFormat(initial.lang, {dateStyle: 'medium', timeStyle: 'short'}).format(new Date(v.created_at))}</time><p>{historyAction(v.action)}</p><Button small disabled={!initial.permissions.art && !initial.permissions.letter || busy} onclick={() => revert(v)}>{t('history.revert')}</Button></article>{:else}<p class="mv-ed__help mv-ed__pad">{t('history.empty')}</p>{/each}
    </div>
   {:else if tray === 'variations'}
    <div class="mv-ed__section-head mv-ed__inspector-head"><div><strong>{t('variations.heading', {panel: panelName})}</strong><small>{variationStatus}</small></div><button type="button" class="mv-iconlink" aria-label={t('close')} onclick={() => tray = 'properties'}><i class="ti ti-x" aria-hidden="true"></i></button></div>
@@ -740,7 +769,7 @@
     </fieldset>
     <section class="mv-ed__property">
      <div class="mv-ed__property-head"><strong>{t('variations.layer')}</strong></div>
-     <div class="mv-ed__actions">{#each panel?.layers.filter(l => l.kind !== 'lettering') || [] as l (l.id)}<Button small icon="refresh" disabled={busy || !initial.permissions.generate || l.locked} onclick={() => void generate('layer', l.id)}>{label(l)}</Button>{/each}</div>
+     <div class="mv-ed__reroll">{#each rerollLayers as l (l.id)}<button type="button" class="mv-ed__reroll-button" title={label(l)} disabled={busy || !initial.permissions.generate || l.locked} onclick={() => void generate('layer', l.id)}><i class="ti ti-refresh" aria-hidden="true"></i><span>{rerollName(l)}</span></button>{/each}</div>
      <p class="mv-ed__help">{drift ? t('variations.drift_hint', {number: candidates.indexOf(drift) + 1, name: driftName || t('layer.character'), score: Math.round((drift.lock_score || 0) * 100)}) : t('variations.layer_hint')}</p>
     </section>
     <section class="mv-ed__property">
@@ -762,7 +791,7 @@
    <div class="mv-ed__section-head mv-ed__inspector-head"><div><strong>{t('region.title')}</strong><small>{t('region.subtitle', {panel: panelName})}</small></div><button type="button" class="mv-iconlink" aria-label={t('close')} onclick={closeRegion}><i class="ti ti-x" aria-hidden="true"></i></button></div>
    <div class="mv-ed__inspector-scroll">
     <div class="mv-ed__property">
-     <div class="mv-ed__property-head"><strong>{t('region.select')}</strong></div>
+     <div class="mv-ed__property-head"><strong>{t('region.select')}</strong><button type="button" class="mv-ed__soon-link" disabled={!mask || busy || !!candidates.length} onclick={() => clearMask++}>{t('region.clear_short')}</button></div>
      <div class="mv-seg mv-seg--full mv-ed__tools" role="group" aria-label={t('region.select')}>
       {#each MASK_TOOLS as [k, icon]}<button type="button" class="mv-seg__item" aria-pressed={maskTool === k} onclick={() => maskTool = k}><i class={`ti ti-${icon}`} aria-hidden="true"></i>{t(`region.${k}`)}</button>{/each}
       <button type="button" class="mv-seg__item" disabled title={t('soon')}><i class="ti ti-click" aria-hidden="true"></i>{t('region.object')}<span class="mv-soon">{t('soon')}</span></button>
@@ -778,6 +807,7 @@
     </section>
     <details class="mv-ed__property">
      <summary>{t('region.options')}</summary>
+     <p class="mv-ed__help">{t('region.keyboard')}</p>
      <label class="mv-field"><span class="mv-field__label">{t('region.brush_size')}</span><input class="mv-input" type="number" min="1" max="512" bind:value={brushSize}/></label>
      <span class="mv-field__label">{t('region.rectangle')}</span>
      <div class="mv-ed__geometry">{#each ['x', 'y', 'w', 'h'] as axis}<label><span>{axis.toUpperCase()}</span><input class="mv-input" type="number" value={rectangle[axis as keyof Rect]} onchange={(e) => rectangle = {...rectangle, [axis]: Number(e.currentTarget.value)}}/></label>{/each}</div>
@@ -786,7 +816,7 @@
     {#if activeJob && !candidates.length}<p class="mv-ed__property mv-ed__help" role="status">{variationStatus}</p>{/if}
    </div>
    <div class="mv-ed__generate">
-    <div class="mv-route"><i class="ti ti-route" aria-hidden="true"></i><strong>{t('auto')}</strong><span class="mv-route__pick">→ {activeJob?.model_name || t('route.pending')}</span></div>
+    <div class="mv-route"><i class="ti ti-route" aria-hidden="true"></i><strong>{t('auto')}</strong><span class="mv-route__pick">→ {activeJob?.model_name ? activeJob.model_name : routeText}</span></div>
     {#if candidates.length}
      <div class="mv-ed__region-buttons">
       <Button icon="arrow-back-up" label={t('undo')} disabled={busy} onclick={discardRegionResult}/>
@@ -840,7 +870,7 @@
          <button type="button" class="mv-ed__reading-select" aria-pressed={bubbleID === b.id} onclick={() => selectBubble(b.id)}>
           <span class="mv-ed__order" aria-hidden="true">{b.order + 1}</span>
           <span class="mv-ed__reading-who">{who}</span>
-          <span class="mv-ed__reading-text">{b.texts[lang]?.text || t(`bubble.${b.kind}`)}</span>
+          {#if b.texts[lang]?.text}<span class="mv-ed__reading-text">{b.texts[lang].text}</span>{:else}<span class="mv-ed__reading-text is-empty">{t('reading.empty')}</span>{/if}
          </button>
          <button type="button" class="mv-ed__grip" data-grip={b.id} draggable={page && canReorderBubble(page, b.id, i ? -1 : 1) || undefined} aria-label={t('reading.move', {number: b.order + 1})} disabled={!page || !initial.permissions.letter || initial.chapter.locked || busy || !bubbleWritable(page, b)} onkeydown={(e) => gripKey(e, b.id)} ondragstart={(e) => { dragBubble = b.id; e.dataTransfer?.setData('text/plain', b.id); }} ondragend={() => dragBubble = ''}><i class="ti ti-grip-vertical" aria-hidden="true"></i></button>
         </li>
@@ -850,9 +880,18 @@
     </section>
    </fieldset>
    <div class="mv-ed__inspector-actions"><Button full icon="wand" disabled={!writableLetter || !page?.bubbles.length || page?.panels.some(p => p.locked || p.layers.some(l => l.kind === 'lettering' && l.locked))} onclick={() => void preview(true)}>{t('reflow')}</Button></div>
+  {:else if !panel}
+   <div class="mv-ed__section-head mv-ed__inspector-head"><div><strong>{page ? t('page.number', {number: page.number}) : t('properties')}</strong><small>{page ? t('page.panels', {count: page.panels.length}) : ''}</small></div></div>
+   <div class="mv-ed__inspector-scroll">
+    <div class="mv-ed__no-panel">
+     <i class="ti ti-layout-grid-add" aria-hidden="true"></i>
+     <strong>{page?.panels.length ? t('empty.panel') : t('panel.empty_title')}</strong>
+     {#if page && !page.panels.length}<p class="mv-ed__help">{t('panel.empty_body')}</p><Button variant="primary" icon="layout-grid" disabled={!initial.permissions.art || busy || page.locked} onclick={() => void openLayouts()}>{t('panel.choose_layout')}</Button>{/if}
+    </div>
+   </div>
   {:else}
    <div class="mv-ed__section-head mv-ed__inspector-head">
-    <div><strong>{panel && page ? t('panel.label', {page: page.number, panel: panelIndex + 1}) : t('properties')}</strong><small title={panel?.prompt}>{panel ? (panel.prompt.trim() || t('panel.no_prompt')) : t('empty.panel')}</small></div>
+    <div><strong>{page ? t('panel.label', {page: page.number, panel: panelIndex + 1}) : t('properties')}</strong><small title={panel.prompt}>{shortTitle(panel, initial.script_actions) || t('panel.no_prompt')}</small></div>
     <label class="mv-toggle mv-ed__lock-switch"><span>{t('lock')}</span><input type="checkbox" role="switch" checked={!!panel?.locked} disabled={!initial.permissions.lock || !panel || busy} onchange={(e) => { e.currentTarget.checked = !!panel?.locked; void lockTarget('panel'); }}/><span class="mv-toggle__track" aria-hidden="true"></span></label>
    </div>
    <fieldset class="mv-ed__inspector-scroll mv-ed__fieldset" disabled={!page || busy}>
@@ -872,17 +911,17 @@
     <section class="mv-ed__property">
      <div class="mv-ed__property-head"><strong>{t('pose_camera')}</strong></div>
      <div class="mv-ed__poses">{#each ['leap', 'crouch', 'run'] as pose}<button type="button" class="mv-ed__pose" disabled title={t('soon')}><span>{t(`pose.${pose}`)}</span><span class="mv-soon">{t('soon')}</span></button>{/each}<button type="button" class="mv-ed__pose mv-ed__pose--sketch" disabled title={t('soon')}><i class="ti ti-scribble" aria-hidden="true"></i>{t('sketch')}<span class="mv-soon">{t('soon')}</span></button></div>
-     <div class="mv-seg mv-seg--full" role="group" aria-label={t('pose_camera')}>{#each ['low', 'eye', 'high', 'bird'] as camera}<button type="button" class="mv-seg__item" aria-pressed={cameraOption(panel?.camera) === camera} disabled={!writableArt} onclick={() => editPanel(p => p.camera = camera)}>{t(`camera.${camera}`)}</button>{/each}</div>
-     <div class="mv-seg mv-seg--full" role="group" aria-label={t('pose_camera')}>{#each ['wide', 'medium', 'close'] as shot}<button type="button" class="mv-seg__item" aria-pressed={shotOption(panel?.shot) === shot} disabled={!writableArt} onclick={() => editPanel(p => p.shot = shot)}>{t(`shot.${shot}`)}</button>{/each}</div>
+     <div class="mv-seg mv-seg--full" role="group" aria-label={t('pose_camera')}>{#each ['low', 'eye', 'high', 'bird'] as camera}<button type="button" class="mv-seg__item" aria-pressed={(cameraOption(panel?.camera) || 'eye') === camera} disabled={!writableArt} onclick={() => editPanel(p => p.camera = camera)}>{t(`camera.${camera}`)}</button>{/each}</div>
+     <div class="mv-seg mv-seg--full" role="group" aria-label={t('pose_camera')}>{#each ['wide', 'medium', 'close'] as shot}<button type="button" class="mv-seg__item" aria-pressed={(shotOption(panel?.shot) || 'medium') === shot} disabled={!writableArt} onclick={() => editPanel(p => p.shot = shot)}>{t(`shot.${shot}`)}</button>{/each}</div>
     </section>
     <label class="mv-field mv-ed__property"><span class="mv-ed__property-head"><strong>{t('style')}</strong></span><span class="mv-select-wrap"><select class="mv-select" value={panel?.style || initial.project.style} disabled={!writableArt} onchange={(e) => editPanel(p => p.style = e.currentTarget.value)}>{#each styleOptions as o (o.id)}<option value={o.id}>{o.label}</option>{/each}</select><i class="ti ti-chevron-down" aria-hidden="true"></i></span></label>
     {#if layer}<details class="mv-ed__property" data-layer-properties><summary>{t('layer.properties')} · {label(layer)}</summary><label>{t('opacity')}<input class="mv-range" type="range" min="0" max="1" step=".05" value={layer.opacity} disabled={!writableArt || layer.locked} oninput={(e) => editLayer(l => l.opacity = Number(e.currentTarget.value))}/></label><label>{t('blend')}<span class="mv-select-wrap"><select class="mv-select" value={layer.blend || 'normal'} disabled={!writableArt || layer.locked} onchange={(e) => editLayer(l => l.blend = e.currentTarget.value as Layer['blend'])}>{#each ['normal', 'multiply', 'screen'] as blend}<option value={blend}>{t(`blend.${blend}`)}</option>{/each}</select><i class="ti ti-chevron-down" aria-hidden="true"></i></span></label><div class="mv-ed__geometry">{#each ['offset_x', 'offset_y', 'scale', 'rotate'] as property}<label>{t(`transform.${property}`)}<input class="mv-input" type="number" step={property === 'scale' ? '.1' : '1'} value={layer.transform[property as keyof Layer['transform']] || 0} disabled={!writableArt || layer.locked} onchange={(e) => editLayer(l => l.transform = {...l.transform, [property]: Number(e.currentTarget.value)})}/></label>{/each}</div><label class="mv-check"><input type="checkbox" checked={layer.transform.flip_x || false} disabled={!writableArt || layer.locked} onchange={(e) => editLayer(l => l.transform.flip_x = e.currentTarget.checked)}/><span class="mv-check__box"><i class="ti ti-check" aria-hidden="true"></i></span><span>{t('flip')}</span></label></details>{/if}
     {#if panel}<details class="mv-ed__property"><summary>{t('geometry')}</summary><p>{t('geometry.hint')}</p>{#each panel.points as point, i}<div class="mv-ed__field-pair"><label>{i + 1} X<input class="mv-input" type="number" value={point.x} disabled={!writableArt} onchange={(e) => editPanel(p => p.points[i].x = Number(e.currentTarget.value))}/></label><label>{i + 1} Y<input class="mv-input" type="number" value={point.y} disabled={!writableArt} onchange={(e) => editPanel(p => p.points[i].y = Number(e.currentTarget.value))}/></label></div>{/each}</details>{/if}
    </fieldset>
    <div class="mv-ed__generate">
-    <div class="mv-route"><i class="ti ti-route" aria-hidden="true"></i><strong>{t('auto')}</strong><span class="mv-route__pick">→ {activeJob?.model_name || t('route.pending')}</span></div>
+    <div class="mv-route"><i class="ti ti-route" aria-hidden="true"></i><strong>{t('auto')}</strong><span class="mv-route__pick">→ {routeText}</span></div>
     <Button full variant="primary" icon="sparkles" busy={busy} disabled={!page || !panel || !initial.permissions.generate || page.locked || !!panel.locked || !!layer?.locked && scope === 'layer'} onclick={() => void generate()}>{t(scope === 'layer' ? 'regenerate_layer' : 'regenerate_panel')}<span class="mv-ed__kbd">⌘↵</span></Button>
-    <span class="mv-ed__help mv-ed__center">{compute?.gpu ? t('four_variations_gpu', {gpu: compute.gpu}) : t('four_variations')}</span>
+    <span class="mv-ed__help mv-ed__center">{routeHelp}</span>
    </div>
   {/if}
  </aside>
@@ -898,17 +937,17 @@
  <dialog bind:this={layoutDialog} class="mv-modal mv-ed__layout-dialog" aria-labelledby="editor-layout-title" aria-describedby="editor-layout-hint" onclose={() => { if (tray === 'layouts') tray = 'properties'; layoutTrigger?.focus(); }}>
   {#if page}
    <div class="mv-ed__layout-browser">
-    <div class="mv-modal__head"><h1 id="editor-layout-title">{t('layout.title', {number: page.number})}</h1><div class="mv-seg"><button type="button" class="mv-seg__item" aria-pressed={layoutFilter === 'suggested'} onclick={() => layoutFilter = 'suggested'}>{t('layout.suggested')}</button><button type="button" class="mv-seg__item" aria-pressed={layoutFilter === 'all'} onclick={() => layoutFilter = 'all'}>{t('layout.all')}</button><button type="button" class="mv-seg__item" disabled>{t('layout.saved')}<span class="mv-soon">{t('soon')}</span></button></div></div>
+    <div class="mv-modal__head"><h1 id="editor-layout-title">{t('layout.title', {number: page.number})}</h1><div class="mv-seg"><button type="button" class="mv-seg__item" aria-pressed={layoutFilter === 'suggested'} onclick={() => layoutFilter = 'suggested'}>{t('layout.suggested')}</button><button type="button" class="mv-seg__item" aria-pressed={layoutFilter === 'all'} onclick={() => layoutFilter = 'all'}>{t('layout.all')}</button><button type="button" class="mv-seg__item mv-ed__layout-saved" disabled>{t('layout.saved')}<span class="mv-soon">{t('soon')}</span></button></div></div>
     <p class="mv-ed__layout-hint" id="editor-layout-hint"><i class="ti ti-sparkles" aria-hidden="true"></i>{layoutHint}</p>
     <div class="mv-ed__layout-body">
      <div class="mv-ed__layout-grid" role="radiogroup" aria-label={t('layouts')}>
-      {#each pickerLayouts.filter(l => layoutFilter === 'all' || l.suggested) as l (l.id)}
-       <button type="button" class="mv-ed__layout-card" class:selected={pickedLayout === l.id} role="radio" aria-checked={pickedLayout === l.id} disabled={!canUseLayout(page, l)} onclick={() => pickedLayout = l.id}><svg viewBox={`0 0 ${page.width} ${page.height}`} preserveAspectRatio="none" aria-hidden="true"><rect width={page.width} height={page.height} class="mv-ed__layout-paper"/>{#each layoutPoints(l, tilt) as points}<polygon points={points.map(p => `${p.x},${p.y}`).join(' ')} class="mv-ed__layout-panel"/>{/each}</svg><span>{l.name} · {l.panels}</span></button>
+      {#each (layoutFilter === 'all' ? pickerLayouts : rankedLayouts.filter(l => l.suggested)) as l (l.id)}
+       <button type="button" class="mv-ed__layout-card" class:selected={pickedLayout === l.id} role="radio" aria-checked={pickedLayout === l.id} aria-label={`${l.name}, ${t('page.panels', {count: l.panels})}`} disabled={!canUseLayout(page, l)} onclick={() => pickedLayout = l.id}><svg viewBox={`0 0 ${page.width} ${page.height}`} preserveAspectRatio="none" aria-hidden="true"><rect width={page.width} height={page.height} class="mv-ed__layout-paper"/>{#each layoutPoints(l, tilt) as points}<polygon points={points.map(p => `${p.x},${p.y}`).join(' ')} class="mv-ed__layout-panel"/>{/each}</svg><span aria-hidden="true">{l.name}</span></button>
       {/each}
       <span class="mv-ed__layout-card mv-ed__layout-custom" aria-disabled="true"><span class="mv-ed__layout-custom-tile"><i class="ti ti-grid-dots" aria-hidden="true"></i>{t('layout.custom')}<span class="mv-soon">{t('soon')}</span></span></span>
      </div>
     </div>
-    <div class="mv-modal__foot mv-ed__layout-footer"><label class="mv-toggle"><input type="checkbox" role="switch" bind:checked={tilt}/><span class="mv-toggle__track" aria-hidden="true"></span><span>{t('layout.tilt')}</span></label><Button variant="quiet" onclick={closeLayouts}>{t('cancel')}</Button><Button variant="primary" disabled={!writableArt || !activeLayout || !canUseLayout(page, activeLayout)} onclick={chooseLayout}>{t('layout.use')}</Button></div>
+    <div class="mv-modal__foot mv-ed__layout-footer"><label class="mv-toggle"><input type="checkbox" role="switch" bind:checked={tilt}/><span class="mv-toggle__track" aria-hidden="true"></span><span>{t('layout.tilt')}</span></label><Button variant="quiet" onclick={closeLayouts}>{t('cancel')}</Button><Button variant="primary" disabled={!writablePage || !activeLayout || !canUseLayout(page, activeLayout)} onclick={chooseLayout}>{t('layout.use')}</Button></div>
    </div>
   {/if}
  </dialog>

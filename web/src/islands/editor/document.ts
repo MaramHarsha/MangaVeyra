@@ -179,7 +179,7 @@ export function placeBubble(page: Page, panelID: string, size: {w: number; h: nu
   const pad = Math.max(6, page.width * .008);
   const step = Math.max(8, Math.min(w, h) / 4);
   const rtl = page.direction === 'rtl';
-  const taken = page.bubbles.map(b => b.box);
+  const taken = [...page.bubbles.map(b => b.box), ...page.bubbles.map(b => tailArea(b, page.width / 1600 * 10)).filter((r): r is Rect => !!r)];
   const inside = (r: Rect) => !panel || [
     {x: r.x, y: r.y}, {x: r.x + r.w, y: r.y}, {x: r.x + r.w, y: r.y + r.h}, {x: r.x, y: r.y + r.h}, {x: r.x + r.w / 2, y: r.y + r.h / 2},
   ].every(p => contains(panel.points, p));
@@ -195,6 +195,15 @@ export function placeBubble(page: Page, panelID: string, size: {w: number; h: nu
   const n = page.bubbles.filter(b => b.panel_id === panelID).length + 1, offset = 24 * (page.width / 1600) * n;
   const x = rtl ? Math.max(left, right - offset) : Math.min(right, left + offset);
   return clampRect({x, y: Math.min(Math.max(top, top + offset), Math.max(top, bottom)), w, h}, page);
+}
+
+/** tailArea is the box a bubble's tail occupies, from its tip to the nearest edge of the bubble. */
+export function tailArea(b: Bubble, pad = 10): Rect | null {
+  if (!b.tail?.enabled) return null;
+  const tip = b.tail.tip;
+  const nx = Math.max(b.box.x, Math.min(b.box.x + b.box.w, tip.x)), ny = Math.max(b.box.y, Math.min(b.box.y + b.box.h, tip.y));
+  const x = Math.min(tip.x, nx) - pad, y = Math.min(tip.y, ny) - pad;
+  return {x, y, w: Math.abs(tip.x - nx) + pad * 2, h: Math.abs(tip.y - ny) + pad * 2};
 }
 
 function clampRect(r: Rect, page: Page): Rect {
@@ -325,6 +334,70 @@ export function shotOption(value = ''): '' | 'wide' | 'medium' | 'close' {
   if (v.includes('medium') || v.includes('mid') || v.includes('waist')) return 'medium';
   if (v.includes('wide') || v.includes('establish') || v.includes('long') || v.includes('full') || v.includes('splash')) return 'wide';
   return '';
+}
+
+/** firstClause is the opening clause of a sentence ("Rin vaults the railing, coat flaring." → "Rin vaults the railing"). */
+export function firstClause(text: string): string {
+  const s = (text || '').replace(/\s+/g, ' ').trim();
+  const m = s.match(/^(.+?)(?:[.!?;:…。！？；：、，]|,\s|\s[—–]\s|$)/u);
+  return (m?.[1] || s).trim();
+}
+
+/**
+ * shortTitle is a panel's short beat for the inspector subtitle: the first
+ * clause of its script action while the prompt still comes from the script,
+ * otherwise of its prompt.
+ */
+export function shortTitle(panel: Pick<Panel, 'prompt' | 'prompt_source' | 'script_panel_id'>, actions: Record<string, string> = {}): string {
+  const action = panel.script_panel_id && panel.prompt_source === 'script' ? actions[panel.script_panel_id] : '';
+  return firstClause(action || panel.prompt);
+}
+
+/** emWidth estimates a string's width in em: wide (CJK, fullwidth) characters are 1 em, others 0.62 em (monospace). */
+export function emWidth(text: string): number {
+  let w = 0;
+  for (const c of text) {
+    const cp = c.codePointAt(0) || 0;
+    w += cp >= 0x1100 && (cp <= 0x115f || (cp >= 0x2e80 && cp <= 0xa4cf) || (cp >= 0xac00 && cp <= 0xd7a3) || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xfe30 && cp <= 0xfe4f) || (cp >= 0xff00 && cp <= 0xff60) || (cp >= 0xffe0 && cp <= 0xffe6) || cp >= 0x1f300) ? 1 : 0.62;
+  }
+  return w;
+}
+
+/** fitText ellipsizes text so it is at most maxEm wide. */
+export function fitText(text: string, maxEm: number): string {
+  if (emWidth(text) <= maxEm) return text;
+  const chars = Array.from(text);
+  while (chars.length && emWidth(chars.join('') + '…') > maxEm) chars.pop();
+  return chars.length ? chars.join('').trimEnd() + '…' : '';
+}
+
+/**
+ * panelLabel is the canvas label "N.M · BEAT · CAMERA" (design D1): the
+ * beat is the short title's first four words, and the last part is a notable
+ * camera angle (low, high, bird) or else the shot size, when either is known.
+ */
+export function panelLabel(page: number, index: number, panel: Pick<Panel, 'prompt' | 'prompt_source' | 'script_panel_id' | 'camera' | 'shot'>, actions: Record<string, string>, t: (key: string) => string): string {
+  const parts = [`${page}.${index + 1}`];
+  const title = shortTitle(panel, actions);
+  const words = title.split(' ');
+  const beat = words.length > 1 ? words.slice(0, 4).join(' ') : Array.from(title).slice(0, 12).join('');
+  if (beat) parts.push(beat.toUpperCase());
+  const camera = cameraOption(panel.camera), shot = shotOption(panel.shot);
+  if (camera && camera !== 'eye') parts.push(t(`camera.${camera}`).toUpperCase());
+  else if (shot) parts.push(t(`shot.${shot}`).toUpperCase());
+  return parts.join(' · ');
+}
+
+/** plural picks the catalogue's plural form of key for count ("1 panel", "3 panels"); Japanese and Chinese have one form. */
+export function plural(messages: Record<string, string>, key: string, count: number, lang: string): string {
+  const form = ['ja', 'zh', 'ko'].includes(lang.split('-')[0]) || count !== 1 ? 'other' : 'one';
+  return messages[`${key}.${form}`] ?? messages[`${key}.other`] ?? messages[key] ?? key;
+}
+
+/** humanize turns a stored identifier ("seed_demo") into readable text ("Seed demo"). */
+export function humanize(id: string): string {
+  const s = id.replace(/[_-]+/g, ' ').trim();
+  return s ? s[0].toUpperCase() + s.slice(1) : id;
 }
 
 /** initials for an avatar chip ("Rin Asagiri" → "RA", "凛" → "凛"). */

@@ -1,9 +1,8 @@
 <script lang="ts">
- import {onMount} from 'svelte';
+ import {onMount,untrack} from 'svelte';
  import {maskPoint} from './document';
  import type {Asset,Point,Rect} from './types';
- import Button from './Button.svelte';
- let {asset,candidateURL='',tool='brush',feather=12,size=32,label='',t,onMask,onDisplay,disabled=false,selection=null,initialMask=null}:{asset:Asset;candidateURL?:string;selection?:Rect|null;initialMask?:Blob|null;tool?:string;feather?:number;size?:number;label?:string;t:(key:string,args?:Record<string,string|number>)=>string;onMask:(blob:Blob|null)=>void;onDisplay?:(width:number)=>void;disabled?:boolean}=$props();
+ let {asset,candidateURL='',tool='brush',feather=12,size=32,label='',t,onMask,onDisplay,disabled=false,selection=null,initialMask=null,clearKey=0}:{asset:Asset;candidateURL?:string;clearKey?:number;selection?:Rect|null;initialMask?:Blob|null;tool?:string;feather?:number;size?:number;label?:string;t:(key:string,args?:Record<string,string|number>)=>string;onMask:(blob:Blob|null)=>void;onDisplay?:(width:number)=>void;disabled?:boolean}=$props();
  const comparisonID=`region-comparison-${Math.random().toString(36).slice(2)}`;
  const width=$derived(asset.width||1),height=$derived(asset.height||1);
  let split=$state(50);
@@ -29,6 +28,9 @@
  onMount(()=>{mask=document.createElement('canvas');mask.width=width;mask.height=height;ctx=mask.getContext('2d',{willReadFrequently:true});if(initialMask)void createImageBitmap(initialMask).then(bitmap=>{if(!ctx)return;ctx.drawImage(bitmap,0,0);const data=ctx.getImageData(0,0,width,height);for(let i=0;i<data.data.length;i+=4){data.data[i+3]=data.data[i];data.data[i]=255;data.data[i+1]=255;data.data[i+2]=255}ctx.putImageData(data,0,0);bitmap.close();dirty=true;refresh();measure()});const resize=new ResizeObserver(()=>onDisplay?.(image?.getBoundingClientRect().width||0));resize.observe(image);return()=>{ctx=null;mask=null;resize.disconnect()}});
  $effect(()=>{if(selection&&ctx){ctx.clearRect(0,0,width,height);ctx.fillStyle='#ffffff';ctx.fillRect(Math.max(0,selection.x),Math.max(0,selection.y),Math.max(1,selection.w),Math.max(1,selection.h));dirty=true;refresh();emit()}});
  $effect(()=>{if(feather>=0&&dirty&&mask)emit()});
+ // The inspector's Clear action bumps clearKey.
+ let seenClear=untrack(()=>clearKey);
+ $effect(()=>{if(clearKey!==seenClear){seenClear=clearKey;untrack(clear)}});
 </script>
 <div class="mv-ed__region-proof" bind:this={frame} style:--split={`${split}%`}>
  <img bind:this={image} src={asset.url} alt={t('region.before')} width={asset.width} height={asset.height}/>
@@ -43,4 +45,3 @@
   <input class="mv-ed__compare-input" type="range" min="0" max="100" bind:value={split} aria-label={t('region.compare')} aria-valuetext={`${split}%`}/>
  </div>
 </div>
-<div class="mv-ed__region-actions"><Button small icon="eraser" onclick={clear} disabled={!dirty||disabled}>{t('region.clear')}</Button><p>{t('region.keyboard')}</p></div>

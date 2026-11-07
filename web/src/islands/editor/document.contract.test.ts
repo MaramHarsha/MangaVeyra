@@ -1,6 +1,7 @@
 import {describe, it, expect} from 'vitest';
 import {
   Autosave, DraftHistory, FONT_FAMILIES, FONT_KEYS, type SaveResult, cameraOption, defaultFont, initials, jobSeconds, layerLabel,
+  emWidth, firstClause, fitText, humanize, panelLabel, plural, shortTitle, tailArea,
   moveBubbleTo, newBubble, normalizeLanguage, ptToPx, pxToPt, savedAgo, setBubbleKind, shotOption, verticalAllowed, verticalByDefault,
 } from './document';
 import type {Layer, Page, Rect} from './types';
@@ -191,6 +192,53 @@ describe('display helpers', () => {
     h.accept({...edited, version: 8});
     expect(h.dirty).toBe(false);
     expect(h.past).toHaveLength(1);
+  });
+});
+
+describe('panel titles and labels', () => {
+  const t = (key: string) => ({'camera.low': 'Low', 'camera.high': 'High', 'shot.wide': 'Wide', 'shot.close': 'Close'} as Record<string, string>)[key] || key;
+  it('takes the first clause of the script action, or of an edited prompt', () => {
+    expect(firstClause('Rin vaults the railing, coat flaring, harbour lights below.')).toBe('Rin vaults the railing');
+    expect(firstClause('At Bellward’s landing. Sora catches the rope.')).toBe('At Bellward’s landing');
+    expect(firstClause('灯台へ走る。風が強い。')).toBe('灯台へ走る');
+    const panel = {prompt: 'low angle. medium. tense. Rin vaults the railing, coat flaring.', prompt_source: 'script', script_panel_id: 'sp'};
+    expect(shortTitle(panel, {sp: 'Rin vaults the railing, coat flaring.'})).toBe('Rin vaults the railing');
+    expect(shortTitle({...panel, prompt_source: 'user', prompt: 'Kaito reacts. Then runs.'}, {sp: 'old'})).toBe('Kaito reacts');
+  });
+  it('formats "N.M · BEAT · CAMERA" labels with a notable camera or the shot', () => {
+    expect(panelLabel(7, 2, {prompt: 'Rin vaults the railing, coat flaring', prompt_source: 'user', camera: 'low angle', shot: 'medium'}, {}, t)).toBe('7.3 · RIN VAULTS THE RAILING · LOW');
+    expect(panelLabel(7, 0, {prompt: 'Salt city at dusk.', prompt_source: 'user', camera: 'eye level', shot: 'wide establishing'}, {}, t)).toBe('7.1 · SALT CITY AT DUSK · WIDE');
+    expect(panelLabel(1, 0, {prompt: '', prompt_source: 'user', camera: 'storyboard', shot: 'placeholder'}, {}, t)).toBe('1.1');
+  });
+  it('measures wide characters as one em and ellipsizes to fit any script', () => {
+    expect(emWidth('ABCD')).toBeCloseTo(2.48);
+    expect(emWidth('灯台へ')).toBe(3);
+    expect(emWidth('등대')).toBe(2);
+    const ja = fitText('1.1 · 灯台へ走る少女の物語の始まり', 8);
+    expect(emWidth(ja)).toBeLessThanOrEqual(8);
+    expect(ja.endsWith('…')).toBe(true);
+    expect(fitText('7.3 · RIN', 20)).toBe('7.3 · RIN');
+  });
+  it('keeps new bubbles clear of earlier bubbles’ tails', () => {
+    const p = page();
+    p.panels[0].points = [{x: 50, y: 50}, {x: 550, y: 50}, {x: 550, y: 750}, {x: 50, y: 750}];
+    const first = newBubble(p, 'panel', 'speech', 'en');
+    first.tail.tip = {x: first.box.x - 60, y: first.box.y + first.box.h + 140};
+    p.bubbles.push(first);
+    const tail = tailArea(first)!;
+    for (let i = 0; i < 4; i++) {
+      const b = newBubble(p, 'panel', 'speech', 'en');
+      expect(apart(b.box, tail)).toBe(true);
+      p.bubbles.push(b);
+    }
+    expect(tailArea({...first, tail: {...first.tail, enabled: false}})).toBeNull();
+  });
+  it('picks plural forms and humanizes identifiers', () => {
+    const m = {'page.panels.one': '{count} panel', 'page.panels.other': '{count} panels'};
+    expect(plural(m, 'page.panels', 1, 'en')).toBe('{count} panel');
+    expect(plural(m, 'page.panels', 3, 'en')).toBe('{count} panels');
+    expect(plural(m, 'page.panels', 1, 'ja')).toBe('{count} panels');
+    expect(humanize('seed_demo')).toBe('Seed demo');
   });
 });
 
