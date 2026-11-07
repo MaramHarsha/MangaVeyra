@@ -4,8 +4,12 @@ import (
 	"context"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/ai"
+	"github.com/MaramHarsha/MangaVeyra/internal/assets"
+	"github.com/MaramHarsha/MangaVeyra/internal/compose"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/lettering"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagestore"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 )
 
@@ -17,10 +21,10 @@ type Module struct {
 
 // New creates the module.
 func New(d *core.Deps) *Module {
-	svc := &service{queue: d.Jobs, auth: d.Auth}
+	svc := &service{queue: d.Jobs, auth: d.Auth, db: d.DB}
 	// Script inputs carry the project's private adaptation source.
 	if d.Jobs != nil {
-		d.Jobs.MarkPrivateInput(JobScript)
+		d.Jobs.MarkPrivateInput(JobScript, JobCharacterSheet, JobPanel, JobRegionEdit, JobPagesFromScript, JobLetterPage)
 	}
 	core.Provide[Service](d, svc)
 	return &Module{d: d, svc: svc}
@@ -37,11 +41,18 @@ func (m *Module) Routes(r *core.Router) {}
 func (m *Module) Init(context.Context) error {
 	m.svc.text = core.MustUse[ai.TextService](m.d)
 	m.svc.studio = core.MustUse[studio.Service](m.d)
+	m.svc.images = core.MustUse[ai.ImageService](m.d)
+	m.svc.pages = core.MustUse[pagestore.Service](m.d)
+	m.svc.assets = core.MustUse[*assets.Service](m.d)
+	m.svc.lettering = core.MustUse[lettering.Engine](m.d)
+	m.svc.renderer = core.MustUse[compose.Renderer](m.d)
+	m.svc.fallback, _ = core.Use[ai.ImageFallback](m.d)
+	m.svc.queue.SetFailover(m.svc.failoverImage)
 	return nil
 }
 
 // JobHandlers implements core.JobHandlers. Later generation handlers remain
 // deferred until their owning gates are implemented.
 func (m *Module) JobHandlers() map[string]jobs.Handler {
-	return map[string]jobs.Handler{JobScript: m.svc.handleScript}
+	return map[string]jobs.Handler{JobScript: m.svc.handleScript, JobCharacterSheet: m.svc.handleImage, JobPanel: m.svc.handleImage, JobRegionEdit: m.svc.handleImage, JobPagesFromScript: m.svc.handlePages}
 }

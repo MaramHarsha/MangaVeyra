@@ -11,7 +11,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 )
 
-func TestModuleRegistersGateAServiceAndOnlyScriptHandler(t *testing.T) {
+func TestModuleRegistersGateAServiceAndGenerationHandlers(t *testing.T) {
 	d := &core.Deps{}
 	module := gen.New(d)
 	registered, ok := core.Use[gen.Service](d)
@@ -22,12 +22,12 @@ func TestModuleRegistersGateAServiceAndOnlyScriptHandler(t *testing.T) {
 		t.Fatalf("New provided services %v, want exactly gen.Service", got)
 	}
 	handlers := module.JobHandlers()
-	if len(handlers) != 1 || handlers[gen.JobScript] == nil {
-		t.Fatalf("JobHandlers = %v, want only %q", handlers, gen.JobScript)
+	if len(handlers) != 5 || handlers[gen.JobScript] == nil {
+		t.Fatalf("JobHandlers = %v, want the script and image/page handlers including %q", handlers, gen.JobScript)
 	}
 }
 
-func TestWiredModuleResolvesDependenciesAndDefersGateBWithoutJobs(t *testing.T) {
+func TestWiredModuleResolvesDependenciesAndRejectsInvalidGenerationWithoutJobs(t *testing.T) {
 	forEachGenDialect(t, func(t *testing.T, ta *testutil.TestApp) {
 		svc := core.MustUse[gen.Service](ta.Deps)
 		var before int
@@ -48,8 +48,8 @@ func TestWiredModuleResolvesDependenciesAndDefersGateBWithoutJobs(t *testing.T) 
 		checks = append(checks, err)
 		checks = append(checks, svc.ApplyVariation(context.Background(), actor, "", 0))
 		for i, err := range checks {
-			if !errors.Is(err, gen.ErrDeferredFeature) {
-				t.Fatalf("deferred call %d returned %v", i, err)
+			if err == nil || errors.Is(err, gen.ErrDeferredFeature) {
+				t.Fatalf("invalid call %d returned %v", i, err)
 			}
 		}
 		var after int

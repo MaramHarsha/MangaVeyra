@@ -271,8 +271,11 @@ func validateTextPlan(plan ai.TextPlan, requestedMode, pinProvider, pinModel str
 		if placeholder || plan.Estimate.USD <= 0 || plan.Estimate.GPUSeconds != 0 {
 			return errors.New("invalid remote text plan")
 		}
-	} else if !placeholder || plan.ProviderID != ai.PlaceholderID || plan.ModelID != ai.PlaceholderText ||
-		plan.Estimate.USD != 0 || plan.Estimate.GPUSeconds != 0 {
+	} else if placeholder {
+		if plan.ProviderID != ai.PlaceholderID || plan.ModelID != ai.PlaceholderText || plan.Estimate.USD != 0 || plan.Estimate.GPUSeconds != 0 {
+			return errors.New("invalid local text plan")
+		}
+	} else if plan.Estimate.USD != 0 {
 		return errors.New("invalid local text plan")
 	}
 	if len(plan.Decision) == 0 || len(plan.Decision) > maxDecisionBytes || !utf8.Valid(plan.Decision) ||

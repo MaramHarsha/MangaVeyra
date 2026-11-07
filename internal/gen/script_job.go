@@ -34,7 +34,7 @@ func (s *service) handleScript(ctx context.Context, run *jobs.Run) error {
 	if err != nil {
 		return badInputJobError("The stored script job input is invalid.")
 	}
-	if payload.Remote != (job.ProviderID != ai.PlaceholderID) {
+	if job.ProviderID == ai.PlaceholderID && (payload.Remote || job.ModelID != ai.PlaceholderText) {
 		return badInputJobError("The stored script route is inconsistent.")
 	}
 	perAttemptEstimate, err := unscaleCost(job.Estimate, scriptMaxAttempts)

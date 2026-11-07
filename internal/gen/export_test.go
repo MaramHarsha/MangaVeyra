@@ -16,3 +16,8 @@ func SetTextServiceForTest(target Service, text ai.TextService) {
 func SetStudioServiceForTest(target Service, studioService studio.Service) {
 	target.(*service).studio = studioService
 }
+
+// SetImageServiceForTest injects an offline provider into the app-owned Gen service.
+func SetImageServiceForTest(target Service, images ai.ImageService) {
+	target.(*service).images = images
+}

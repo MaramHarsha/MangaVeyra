@@ -1,6 +1,5 @@
-// Package gen plans and executes durable generation jobs.
-//
-// Gate A implements provider-to-persisted script generation. Image, page,
-// variation, region and character-sheet operations return ErrDeferredFeature
-// until their later product gates own the required persistence paths.
+// Package gen plans and executes revision-bound script, character-sheet,
+// layered panel, region edit and script-to-pages jobs. Candidate art remains
+// separate from structured lettering and all persisted side effects are
+// fenced by the queue lease and live Studio authorization.
 package gen
