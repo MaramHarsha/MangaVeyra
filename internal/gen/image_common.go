@@ -31,6 +31,13 @@ type component struct {
 	CharacterID string `json:"character_id,omitempty"`
 	Name        string `json:"name"`
 	Prompt      string `json:"prompt"`
+	// ADR 0009 fields. OwnRefs means References lists exactly this
+	// component's reference assets (possibly none); payloads queued before
+	// it send every job reference, as they always did.
+	OwnRefs    bool     `json:"own_refs,omitempty"`
+	References []string `json:"references,omitempty"`
+	Background string   `json:"background,omitempty"`
+	Negative   string   `json:"negative,omitempty"`
 }
 type imagePayload struct {
 	Version           int             `json:"version"`

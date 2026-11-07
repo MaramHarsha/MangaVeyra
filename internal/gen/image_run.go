@@ -129,6 +129,7 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 	}
 	totalInputBytes := 0
 	var references []ai.ImageRef
+	refByID := map[string]ai.ImageRef{}
 	for _, id := range p.References {
 		data, a, err := s.readOwned(ctx, p.Scope.ProjectID, id)
 		if err != nil {
@@ -138,7 +139,9 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 		if totalInputBytes > 48<<20 {
 			return mapImageJobError(ctx, studio.ErrInvalid)
 		}
-		references = append(references, ai.ImageRef{Data: data, ContentType: a.ContentType, Role: "reference"})
+		ref := ai.ImageRef{Data: data, ContentType: a.ContentType, Role: "reference"}
+		references = append(references, ref)
+		refByID[id] = ref
 	}
 	var initRef, maskRef *ai.ImageRef
 	var init, mask []byte
@@ -196,7 +199,22 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 		if err = s.db.WithTx(ctx, func(tx *db.Tx) error { return s.checkImageTx(ctx, tx, p, actor) }); err != nil {
 			return mapImageJobError(ctx, err)
 		}
-		result, err := s.images.GenerateImage(ctx, ai.ImageGenerateRequest{Plan: plan, ActorID: actor.UserID, JobID: j.ID, ProjectID: p.Scope.ProjectID, Attempt: j.Attempts, CallSlot: i, Prompt: c.Prompt, Negative: "Lettering, speech balloons, captions, text. Other layer content.", Width: plan.Needs.Width, Height: plan.Needs.Height, Count: plan.Needs.Count, Seed: seedFor(j.ID, i), Style: p.Style, References: references, Init: initRef, Mask: maskRef})
+		// ADR 0009 payloads carry each component's own references, alpha
+		// behaviour and avoid list; older payloads keep their original call.
+		callRefs, prompt, negative := references, c.Prompt, legacyNegative
+		if c.OwnRefs {
+			callRefs = make([]ai.ImageRef, 0, len(c.References))
+			for _, id := range c.References {
+				callRefs = append(callRefs, refByID[id])
+			}
+			if c.Negative != "" {
+				negative = c.Negative
+			}
+			if p.Plan.Task == ai.TaskRegionEdit {
+				prompt = regionEditPrompt(p.Style, c.Kind, c.Prompt)
+			}
+		}
+		result, err := s.images.GenerateImage(ctx, ai.ImageGenerateRequest{Plan: plan, ActorID: actor.UserID, JobID: j.ID, ProjectID: p.Scope.ProjectID, Attempt: j.Attempts, CallSlot: i, Prompt: prompt, Negative: negative, Width: plan.Needs.Width, Height: plan.Needs.Height, Count: plan.Needs.Count, Seed: seedFor(j.ID, i), Style: p.Style, Background: c.Background, References: callRefs, Init: initRef, Mask: maskRef})
 		if err != nil {
 			return mapAIJobError(ctx, run, err)
 		}

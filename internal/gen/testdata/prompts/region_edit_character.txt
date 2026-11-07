@@ -1,0 +1,6 @@
+Edit only the masked region of this original manga character layer.
+Change: close her left hand into a fist.
+Match the surrounding ink linework, line weight, screentone and lighting exactly so the edit is seamless. Black-and-white manga: clean ink linework, screentone shading, solid blacks, high contrast. Black ink and grey screentone only, no colour.
+Keep everything outside the mask unchanged.
+Keep the transparent background transparent.
+Rules: original artwork only; no text, letters, numbers, speech bubbles, captions, sound-effect lettering, signatures, watermarks or logos; no panel borders, frames or gutters; one single image, not a comic page; non-explicit, no nudity, no gore.

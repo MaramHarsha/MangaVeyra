@@ -19,9 +19,21 @@ func validatePayloadTarget(p imagePayload) error {
 			return studio.ErrInvalid
 		}
 	}
+	known := map[string]bool{}
+	for _, id := range p.References {
+		known[id] = true
+	}
 	for _, c := range p.Components {
 		if strings.TrimSpace(c.Prompt) == "" || !utf8.ValidString(c.Prompt) || len([]rune(c.Prompt)) > pagedoc.MaxPromptRunes || !utf8.ValidString(c.Name) || len([]rune(c.Name)) > 240 {
 			return studio.ErrInvalid
+		}
+		if c.Background != "" && c.Background != "opaque" && c.Background != "transparent" || !utf8.ValidString(c.Negative) || len(c.Negative) > negativeBytes || !c.OwnRefs && len(c.References) > 0 || len(c.References) > 32 {
+			return studio.ErrInvalid
+		}
+		for _, id := range c.References {
+			if !known[id] {
+				return studio.ErrInvalid
+			}
 		}
 	}
 	switch p.Plan.Task {

@@ -239,7 +239,8 @@ func TestRegionWhiteMaskPreservesEveryOutsidePixel(t *testing.T) {
 	forEachGenDialect(t, func(t *testing.T, ta *testutil.TestApp) {
 		ctx := context.Background()
 		f, ps := prepareArt(t, ta, 1)
-		gen.SetImageServiceForTest(f.gen, &fakeImages{})
+		fake := &fakeImages{}
+		gen.SetImageServiceForTest(f.gen, fake)
 		p := createArtPages(t, f, ps, false)[0]
 		a := assets.From(ta.Deps)
 		src := image.NewNRGBA(image.Rect(0, 0, 64, 64))
@@ -282,6 +283,12 @@ func TestRegionWhiteMaskPreservesEveryOutsidePixel(t *testing.T) {
 		done := runArtJob(t, ta, j.ID)
 		if done.State != jobs.StateDone {
 			t.Fatalf("region: %+v", done.Error)
+		}
+		// ADR 0009: the creator's instruction stays primary inside a
+		// mask-limited, lettering-free edit prompt; a background stays opaque.
+		edit := fake.requests[0]
+		if !strings.HasPrefix(edit.Prompt, "Edit only the masked region of this original manga background layer.") || !strings.Contains(edit.Prompt, "Change: Repair the compass.") || !strings.Contains(edit.Prompt, "no text, letters") || edit.Background != "opaque" || len(edit.References) != 0 || edit.Init == nil || edit.Mask == nil {
+			t.Fatalf("region request = %q background=%q refs=%d", edit.Prompt, edit.Background, len(edit.References))
 		}
 		cs, err := f.gen.Candidates(ctx, f.actor, j.ID)
 		if err != nil {
@@ -627,7 +634,7 @@ func TestLargestLayerBundleCandidateRemainsReadable(t *testing.T) {
 			t.Fatal(err)
 		}
 		p, _ = ps.GetPage(ctx, p.ID)
-		j, err := f.gen.EnqueuePanel(ctx, f.actor, gen.PanelRequest{ProjectID: p.ProjectID, PageID: p.ID, PanelID: pn.ID, Variations: 4, ExpectedVersion: p.Version, Prompt: strings.Repeat("\x00", pagedoc.MaxPromptRunes)})
+		j, err := f.gen.EnqueuePanel(ctx, f.actor, gen.PanelRequest{ProjectID: p.ProjectID, PageID: p.ID, PanelID: pn.ID, Variations: 4, ExpectedVersion: p.Version, Prompt: strings.Repeat("<", pagedoc.MaxPromptRunes)})
 		if err != nil {
 			t.Fatal(err)
 		}

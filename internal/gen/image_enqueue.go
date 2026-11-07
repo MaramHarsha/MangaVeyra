@@ -3,7 +3,7 @@ package gen
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"math"
 	"sort"
 	"strings"
@@ -83,13 +83,16 @@ func (s *service) EnqueueCharacterSheet(ctx context.Context, actor studio.Actor,
 		req.Style = project.Style
 	}
 	req.ExpectedUpdatedAt = c.UpdatedAt
-	p := imagePayload{Version: imagePayloadVersion, Request: requestJSON(req), Actor: storedActor{actor.UserID, actor.TokenID}, Scope: jobs.Scope{Kind: jobs.ScopeProject, ProjectID: req.ProjectID}, CharacterID: c.ID, ExpectedUpdatedAt: c.UpdatedAt, Style: req.Style, Plan: ai.ImagePlan{Task: ai.TaskCharacterSheet}, Components: []component{{Name: c.Name + " · sheet", Prompt: truncateRunes("Original character reference sheet; front, side, back and expressions. "+c.Name+". "+c.Look+". "+c.Personality, 4000)}}}
-	for _, ref := range c.Refs {
+	sheet := component{Name: c.Name + " · sheet", Prompt: sheetPrompt(req.Style, c), OwnRefs: true, Background: "opaque", Negative: sheetNegative(req.Style)}
+	p := imagePayload{Version: imagePayloadVersion, Request: requestJSON(req), Actor: storedActor{actor.UserID, actor.TokenID}, Scope: jobs.Scope{Kind: jobs.ScopeProject, ProjectID: req.ProjectID}, CharacterID: c.ID, ExpectedUpdatedAt: c.UpdatedAt, Style: req.Style, Plan: ai.ImagePlan{Task: ai.TaskCharacterSheet}}
+	for _, ref := range orderedRefs(c.Refs) {
 		if len(p.References) == 4 {
 			break
 		}
 		p.References = append(p.References, ref.AssetID)
 	}
+	sheet.References = append([]string(nil), p.References...)
+	p.Components = []component{sheet}
 	if err = s.plan(ctx, &p, req.RoutingMode, "", 1024, 1024, n); err != nil {
 		return nil, err
 	}
@@ -134,22 +137,24 @@ func (s *service) preparePanel(ctx context.Context, actor studio.Actor, req Pane
 		return imagePayload{}, err
 	}
 	p := imagePayload{PanelType: pn.Shot, Version: imagePayloadVersion, Request: requestJSON(req), Actor: storedActor{actor.UserID, actor.TokenID}, Scope: jobs.Scope{Kind: jobs.ScopePanel, ProjectID: req.ProjectID, PageID: page.ID, PanelID: pn.ID}, PageID: page.ID, PanelID: pn.ID, ExpectedVersion: page.Version, TargetHash: hashPanel(*pn), Style: project.Style, BatchID: batchID, Plan: ai.ImagePlan{Task: ai.TaskPanel}}
-	prompt := pn.Prompt
-	if req.Prompt != "" {
-		prompt = req.Prompt
+	style := project.Style
+	if strings.TrimSpace(pn.Style) != "" {
+		style = pn.Style
 	}
-	if prompt == "" {
-		prompt = "Original manga scene. " + pn.Camera + " " + pn.Shot
+	var doc studio.ScriptDoc
+	haveDoc := false
+	if pn.ScriptPanelID != "" && page.ChapterID != "" {
+		got, err := s.studio.GetScript(ctx, page.ChapterID)
+		switch {
+		case err == nil:
+			doc, haveDoc = got, true
+		case !errors.Is(err, studio.ErrNotFound):
+			return p, err
+		}
 	}
+	scene := panelScene(*pn, req.Prompt, doc, haveDoc)
 	add := func(l pagedoc.Layer) {
-		instruction := "Environment only; no characters."
-		if l.Kind == pagedoc.LayerCharacter {
-			instruction = "Only this character, isolated on transparent background; no setting or other characters."
-		}
-		if l.Kind == pagedoc.LayerFX {
-			instruction = "Effects only on transparent background; no setting or characters."
-		}
-		p.Components = append(p.Components, component{LayerID: l.ID, Kind: l.Kind, CharacterID: l.CharacterID, Name: l.Name, Prompt: truncateRunes(fmt.Sprintf("%s. %s layer only. %s", prompt+" "+instruction, l.Kind, l.Name), 4000)})
+		p.Components = append(p.Components, component{LayerID: l.ID, Kind: l.Kind, CharacterID: l.CharacterID, Name: l.Name, OwnRefs: true, Background: layerBackground(l.Kind), Negative: layerNegative(style, l.Kind)})
 	}
 	if req.LayerID != "" {
 		l := pn.Layer(req.LayerID)
@@ -186,21 +191,34 @@ func (s *service) preparePanel(ctx context.Context, actor studio.Actor, req Pane
 	if len(p.Components) > maxComponents {
 		return p, studio.ErrInvalid
 	}
+	// Each character layer carries only its own character's references
+	// (sheets first, at most four); backgrounds and effects carry none.
 	seen := map[string]bool{}
 	for idx, c := range p.Components {
+		focus := castMember{}
 		if c.CharacterID != "" {
 			character, err := s.studio.GetCharacter(ctx, c.CharacterID)
 			if err != nil || character.ProjectID != req.ProjectID {
 				return p, studio.ErrForbidden
 			}
-			p.Components[idx].Prompt = truncateRunes(c.Prompt+" Appearance: "+character.Look+". "+character.Personality, pagedoc.MaxPromptRunes)
-			for _, r := range character.Refs {
-				if !seen[r.AssetID] && len(p.References) < 32 {
+			focus = castMember{Name: character.Name, Look: character.Look, Outfit: defaultOutfit(character)}
+			for _, r := range orderedRefs(character.Refs) {
+				if !seen[r.AssetID] {
+					if len(p.References) >= 32 {
+						continue
+					}
 					seen[r.AssetID] = true
 					p.References = append(p.References, r.AssetID)
 				}
+				if len(p.Components[idx].References) < 4 {
+					p.Components[idx].References = append(p.Components[idx].References, r.AssetID)
+				}
 			}
 		}
+		if focus.Name == "" && c.Kind == pagedoc.LayerCharacter {
+			focus.Name = c.Name
+		}
+		p.Components[idx].Prompt = layerPrompt(style, scene, c.Kind, focus)
 	}
 	bounds := pagedoc.Bounds(pn.Points)
 	scale := math.Min(1, 1024/math.Max(bounds.W, bounds.H))
@@ -258,7 +276,14 @@ func (s *service) EnqueueRegionEdit(ctx context.Context, actor studio.Actor, req
 	if err != nil || asset.Width != w || asset.Height != h {
 		return nil, studio.ErrInvalid
 	}
-	p := imagePayload{Version: imagePayloadVersion, Request: requestJSON(req), Actor: storedActor{actor.UserID, actor.TokenID}, Scope: jobs.Scope{Kind: jobs.ScopeRegion, ProjectID: req.ProjectID, LayerID: l.ID, Region: requestJSON(map[string]string{"mask_asset_id": req.MaskAssetID})}, PageID: page.ID, PanelID: pn.ID, ExpectedVersion: page.Version, TargetHash: hashPanel(*pn), InitAssetID: l.Asset.ID, MaskAssetID: req.MaskAssetID, Plan: ai.ImagePlan{Task: ai.TaskRegionEdit}, Components: []component{{LayerID: l.ID, Kind: l.Kind, CharacterID: l.CharacterID, Name: l.Name, Prompt: req.Prompt}}}
+	project, err := s.studio.GetProject(ctx, req.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	// The component keeps the creator's instruction (the layer's stored
+	// prompt); the handler wraps it with regionEditPrompt at dispatch.
+	edit := component{LayerID: l.ID, Kind: l.Kind, CharacterID: l.CharacterID, Name: l.Name, Prompt: req.Prompt, OwnRefs: true, Background: layerBackground(l.Kind), Negative: layerNegative(project.Style, l.Kind)}
+	p := imagePayload{Version: imagePayloadVersion, Request: requestJSON(req), Actor: storedActor{actor.UserID, actor.TokenID}, Scope: jobs.Scope{Kind: jobs.ScopeRegion, ProjectID: req.ProjectID, LayerID: l.ID, Region: requestJSON(map[string]string{"mask_asset_id": req.MaskAssetID})}, PageID: page.ID, PanelID: pn.ID, ExpectedVersion: page.Version, TargetHash: hashPanel(*pn), InitAssetID: l.Asset.ID, MaskAssetID: req.MaskAssetID, Style: project.Style, Plan: ai.ImagePlan{Task: ai.TaskRegionEdit}, Components: []component{edit}}
 	if err = s.plan(ctx, &p, req.RoutingMode, "", w, h, n); err != nil {
 		return nil, err
 	}
