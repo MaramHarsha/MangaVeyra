@@ -95,3 +95,42 @@ func TestCreateProjectAuthorizationAndValidationAreAtomic(t *testing.T) {
 		}
 	})
 }
+
+func TestCreateProjectAcceptsContentLanguagesOnly(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		svc := studioService(ta)
+		owner := ta.CreateUser(t, "", auth.RoleCreator)
+		actor, err := svc.ActorFromUser(ctx, owner.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		create := func(lang string) (studio.Project, error) {
+			in := newProjectInput("Harbour Lights "+lang, "")
+			in.Language = lang
+			return svc.CreateProject(ctx, actor, in)
+		}
+		for input, want := range map[string]string{
+			"en": "en", "ja": "ja", "ko": "ko", "zh-Hans": "zh-Hans", "zh-Hant": "zh-Hant", "es": "es", "fr": "fr",
+			"de": "de", "pt": "pt", "hi": "hi", "": "en", " ko-KR ": "ko", "zh-TW": "zh-Hant", "zh_CN": "zh-Hans",
+			"zh": "zh-Hans", "pt-BR": "pt", "JA": "ja", "hi-IN": "hi", "en-US-x-private": "en",
+		} {
+			project, err := create(input)
+			if err != nil {
+				t.Fatalf("language %q rejected: %v", input, err)
+			}
+			var stored string
+			if err := ta.Deps.DB.Get(ctx, &stored, `SELECT language FROM projects WHERE id = ?`, project.ID); err != nil {
+				t.Fatal(err)
+			}
+			if project.Language != want || stored != want {
+				t.Fatalf("language %q stored as %q/%q, want %q", input, project.Language, stored, want)
+			}
+		}
+		for _, input := range []string{"ru", "klingon", "x-private", "ar", "zh-Latn-x", "<script>"} {
+			if _, err := create(input); !errors.Is(err, studio.ErrInvalid) || !strings.Contains(err.Error(), "language") {
+				t.Fatalf("language %q error = %v, want a language validation error", input, err)
+			}
+		}
+	})
+}
