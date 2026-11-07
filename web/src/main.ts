@@ -17,6 +17,7 @@ import './lib/studio';
 import './lib/export';
 import { installForms } from './lib/forms';
 import { installCounters } from './lib/counter';
+import { installAutoSubmit } from './lib/filters';
 import './lib/models';
 import { mountIslands, unmountIslands } from './islands/registry';
 
@@ -36,6 +37,7 @@ const root = document.documentElement;
 root.classList.add('js');
 installForms();
 installCounters();
+installAutoSubmit();
 
 // ---- HTMX -------------------------------------------------------------------
 

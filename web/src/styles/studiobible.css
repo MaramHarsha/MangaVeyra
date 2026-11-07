@@ -13,6 +13,8 @@
 .mv-bible__search .mv-input-group { padding-inline: 10px; }
 .mv-bible__search .mv-input { border: 0; min-width: 0; }
 .mv-bible__view { margin-inline-start: auto; }
+/* Filter selects are as wide as their current choice, as in the artboard. */
+.mv-bible__select .mv-select { field-sizing: content; min-width: 0; padding-inline-end: 34px; }
 .mv-bible__projects { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
 .mv-bible__projects--list { grid-template-columns: 1fr; }
 .mv-bible__projects--list .mv-pcard { display: grid; grid-template-columns: 160px minmax(0, 1fr); }

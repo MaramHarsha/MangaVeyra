@@ -58,6 +58,8 @@ func TestDynamicKeysAreTranslated(t *testing.T) {
 	add("studioui.new.format.", formatValues, ".desc")
 	add("studioui.status.", projectStatuses)
 	add("studioui.language.", languageValues)
+	add("bible.member.", []string{"writer", "artist", "letterer", "editor", "viewer"})
+	add("bible.projects.state.", projectStates)
 	add("studioui.dialogue.", []string{"speech", "thought", "caption"})
 	add("studioui.new.try.", premiseSuggestions)
 	add("studioui.new.step.", wizardSteps)

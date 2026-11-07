@@ -141,7 +141,7 @@ func (m *Module) renderProjectLibrary(w http.ResponseWriter, r *http.Request, ta
 	if v.View != "list" {
 		v.View = "grid"
 	}
-	if !contains(projectStatuses, v.Status) {
+	if !contains(projectStates, v.Status) {
 		v.Status = ""
 	}
 	if !contains(formatValues, v.Format) {
@@ -161,11 +161,12 @@ func (m *Module) renderProjectLibrary(w http.ResponseWriter, r *http.Request, ta
 		}
 		return projects[i].UpdatedAt.After(projects[j].UpdatedAt)
 	})
+	now := time.Now()
 	for _, p := range projects {
 		if v.Query != "" && !strings.Contains(strings.ToLower(p.Title), strings.ToLower(v.Query)) {
 			continue
 		}
-		if v.Status != "" && p.Status != v.Status {
+		if v.Status != "" && projectState(p) != v.Status {
 			continue
 		}
 		if v.Format != "" && p.Format != v.Format {
@@ -178,11 +179,9 @@ func (m *Module) renderProjectLibrary(w http.ResponseWriter, r *http.Request, ta
 		if target == "setting" {
 			href = settingPath(p.ID)
 		}
-		meta := i18n.T(r.Context(), "bible.projects.premise")
-		if p.LatestChapterNumber > 0 {
-			meta = i18n.T(r.Context(), "bible.projects.chapter", "number", p.LatestChapterNumber)
-		}
-		v.ProjectCards = append(v.ProjectCards, ui.ProjectCardProps{Href: href, Title: p.Title, Meta: meta, ThumbLabel: i18n.T(r.Context(), "bible.projects.thumbnail"), ThumbURL: m.assetURL(r.Context(), p.ThumbAssetID), Variant: "studio", Badges: []ui.BadgeSpec{{Tone: statusTone(p.Status), Text: i18n.T(r.Context(), "studioui.status."+projectStatus(p.Status))}}})
+		v.ProjectCards = append(v.ProjectCards, ui.ProjectCardProps{Href: href, Title: p.Title, Meta: projectMeta(r.Context(), p, now),
+			ThumbLabel: i18n.T(r.Context(), "bible.projects.thumbnail"), ThumbURL: m.assetURL(r.Context(), p.ThumbAssetID), Variant: "studio",
+			Badges: []ui.BadgeSpec{projectBadge(r.Context(), p)}})
 	}
 	return m.renderBible(w, r, http.StatusOK, v)
 }

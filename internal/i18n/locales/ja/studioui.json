@@ -231,7 +231,7 @@
   "studioui.language.de": "ドイツ語",
   "studioui.language.pt": "ポルトガル語",
   "studioui.language.hi": "ヒンディー語",
-  "studioui.story.heading": "{chapter} · {scene}",
+  "studioui.story.heading": "{chapter}：{scene}",
   "studioui.story.import": "この話にテキストを取り込む",
   "studioui.assist.route": "モデルルーティング",
   "studioui.script.details": "シーンの詳細",

@@ -197,6 +197,10 @@ func TestBibleLibrariesFilterAndDenyCrossProjectOrBearer(t *testing.T) {
 		filtered := c.Get("/studio/projects?q=Courier&sort=title&view=list")
 		mustContain(t, string(filtered.Body), "Tidebreak Courier", "mv-bible__projects--list", "Clear project search")
 		mustNotContain(t, string(filtered.Body), "Glass Orchard", "Private Lantern")
+		// B2: filters apply on change with JavaScript; Apply is only for no-JS.
+		mustContain(t, string(filtered.Body), `class="mv-btn mv-btn--ghost mv-nojs-only"`, `name="status" data-autosubmit`,
+			`name="format" data-autosubmit`, `name="sort" data-autosubmit`, ">Premise only<", ">Draft</span>")
+		mustNotContain(t, string(filtered.Body), "In progress")
 		if resp := c.Get("/studio/characters?project=" + p.ID); resp.StatusCode != 303 || resp.Header.Get("Location") != paths[0] {
 			t.Fatalf("choose=%d %s", resp.StatusCode, resp.Header.Get("Location"))
 		}

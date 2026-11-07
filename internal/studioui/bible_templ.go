@@ -545,7 +545,7 @@ func BibleProjects(v biblePage) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = ui.Select(ui.SelectProps{ID: "project-status", Name: "status", Value: v.Status, Options: projectStatusOptions(ctx)}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Select(ui.SelectProps{ID: "project-status", Name: "status", Value: v.Status, Options: projectStatusOptions(ctx), Class: "mv-bible__select", Attrs: autoSubmit}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -567,7 +567,7 @@ func BibleProjects(v biblePage) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = ui.Select(ui.SelectProps{ID: "project-format", Name: "format", Value: v.Format, Options: projectFormatOptions(ctx)}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Select(ui.SelectProps{ID: "project-format", Name: "format", Value: v.Format, Options: projectFormatOptions(ctx), Class: "mv-bible__select", Attrs: autoSubmit}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -589,7 +589,7 @@ func BibleProjects(v biblePage) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = ui.Select(ui.SelectProps{ID: "project-sort", Name: "sort", Value: v.Sort, Options: bibleOptions(ctx, "sort", "edited", "title", "oldest")}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Select(ui.SelectProps{ID: "project-sort", Name: "sort", Value: v.Sort, Options: bibleOptions(ctx, "sort", "edited", "title", "oldest"), Class: "mv-bible__select", Attrs: autoSubmit}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -639,7 +639,7 @@ func BibleProjects(v biblePage) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Ghost, Icon: "filter"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Ghost, Icon: "filter", Class: "mv-nojs-only"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -758,11 +758,15 @@ func BibleProjects(v biblePage) templ.Component {
 	})
 }
 
+// autoSubmit makes a filter select apply on change (web/src/lib/filters.ts);
+// Apply stays only for browsers without JavaScript.
+var autoSubmit = templ.Attributes{"data-autosubmit": true}
+
 func projectStatusOptions(ctx context.Context) []ui.Option {
 
 	out := []ui.Option{{Value: "", Label: i18n.T(ctx, "bible.projects.any_status")}}
-	for _, status := range projectStatuses {
-		out = append(out, ui.Option{Value: status, Label: i18n.T(ctx, "studioui.status."+status)})
+	for _, state := range projectStates {
+		out = append(out, ui.Option{Value: state, Label: i18n.T(ctx, "bible.projects.state."+state)})
 	}
 	return out
 }
@@ -806,7 +810,7 @@ func BibleCharacters(v biblePage) templ.Component {
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(v.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 206, Col: 13}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 210, Col: 13}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 		if templ_7745c5c3_Err != nil {
@@ -819,7 +823,7 @@ func BibleCharacters(v biblePage) templ.Component {
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.characters.count", "count", len(v.Characters), "locked", v.Counts["locked"], "training", v.Counts["training"]))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 209, Col: 128}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 213, Col: 128}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 		if templ_7745c5c3_Err != nil {
@@ -849,7 +853,7 @@ func BibleCharacters(v biblePage) templ.Component {
 				var templ_7745c5c3_Var42 string
 				templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.characters.new"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 216, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 220, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 				if templ_7745c5c3_Err != nil {
@@ -888,7 +892,7 @@ func BibleCharacters(v biblePage) templ.Component {
 			var templ_7745c5c3_Var43 templ.SafeURL
 			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(characterPath(v.Project.ID, "") + "/new"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 231, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 235, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
@@ -909,7 +913,7 @@ func BibleCharacters(v biblePage) templ.Component {
 			var templ_7745c5c3_Var44 string
 			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.characters.add"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 235, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 239, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 			if templ_7745c5c3_Err != nil {
@@ -922,7 +926,7 @@ func BibleCharacters(v biblePage) templ.Component {
 			var templ_7745c5c3_Var45 string
 			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.characters.add_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 238, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 242, Col: 46}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 			if templ_7745c5c3_Err != nil {
@@ -994,7 +998,7 @@ func bibleImage(url, label, class string) templ.Component {
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.ResolveAttributeValue(url)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 250, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 254, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 			if templ_7745c5c3_Err != nil {
@@ -1007,7 +1011,7 @@ func bibleImage(url, label, class string) templ.Component {
 			var templ_7745c5c3_Var50 string
 			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.ResolveAttributeValue(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 250, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 254, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
 			if templ_7745c5c3_Err != nil {
@@ -1064,7 +1068,7 @@ func BibleCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var52 string
 			templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(v.Character.Kanji)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 263, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 267, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 			if templ_7745c5c3_Err != nil {
@@ -1115,7 +1119,7 @@ func BibleCharacter(v biblePage) templ.Component {
 				var templ_7745c5c3_Var54 string
 				templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.refs.add"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 279, Col: 35}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 283, Col: 35}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 				if templ_7745c5c3_Err != nil {
@@ -1136,7 +1140,7 @@ func BibleCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var55 string
 			templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.refs.all", "count", len(v.Media)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 285, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 289, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 			if templ_7745c5c3_Err != nil {
@@ -1164,7 +1168,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var56 string
 		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(v.Character.RoleLine)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 299, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 303, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 		if templ_7745c5c3_Err != nil {
@@ -1177,7 +1181,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var57 string
 		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(v.Project.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 299, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 303, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 		if templ_7745c5c3_Err != nil {
@@ -1190,7 +1194,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var58 string
 		templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(v.Character.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 302, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 306, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 		if templ_7745c5c3_Err != nil {
@@ -1219,7 +1223,7 @@ func BibleCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var60 string
 			templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.character.use"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 308, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 312, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var60))
 			if templ_7745c5c3_Err != nil {
@@ -1268,7 +1272,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var63 string
 		templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.lock.title"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 318, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 322, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 		if templ_7745c5c3_Err != nil {
@@ -1286,7 +1290,7 @@ func BibleCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var64 string
 			templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(int(*v.Character.LockScore*100 + .5)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 322, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 326, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 			if templ_7745c5c3_Err != nil {
@@ -1309,7 +1313,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var65 string
 		templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.lock.references", "count", len(v.Character.Refs)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 329, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 333, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 		if templ_7745c5c3_Err != nil {
@@ -1322,7 +1326,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var66 string
 		templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.lock.hint"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 332, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 336, Col: 37}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var66))
 		if templ_7745c5c3_Err != nil {
@@ -1335,7 +1339,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var67 string
 		templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.field.age"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 338, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 342, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 		if templ_7745c5c3_Err != nil {
@@ -1348,7 +1352,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var68 string
 		templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(displayBibleValue(ctx, v.Character.Age))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 341, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 345, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
 		if templ_7745c5c3_Err != nil {
@@ -1361,7 +1365,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var69 string
 		templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.character.voice"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 346, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 350, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 		if templ_7745c5c3_Err != nil {
@@ -1382,7 +1386,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var70 string
 		templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.field.speech_style"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 354, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 358, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
 		if templ_7745c5c3_Err != nil {
@@ -1395,7 +1399,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var71 string
 		templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(displayBibleValue(ctx, v.Character.SpeechStyle))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 357, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 361, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 		if templ_7745c5c3_Err != nil {
@@ -1408,7 +1412,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var72 string
 		templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.character.appears"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 362, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 366, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var72))
 		if templ_7745c5c3_Err != nil {
@@ -1429,7 +1433,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var73 string
 		templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.outfits.title"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 372, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 376, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 		if templ_7745c5c3_Err != nil {
@@ -1473,7 +1477,7 @@ func BibleCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var76 string
 			templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(outfit.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 379, Col: 22}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 383, Col: 22}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
 			if templ_7745c5c3_Err != nil {
@@ -1491,7 +1495,7 @@ func BibleCharacter(v biblePage) templ.Component {
 				var templ_7745c5c3_Var77 string
 				templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.outfits.default"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 382, Col: 50}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 386, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
 				if templ_7745c5c3_Err != nil {
@@ -1515,7 +1519,7 @@ func BibleCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var78 templ.SafeURL
 			templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(characterPath(v.Project.ID, v.Character.ID) + "?add=outfit#outfit-form"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 391, Col: 96}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 395, Col: 96}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
 			if templ_7745c5c3_Err != nil {
@@ -1532,7 +1536,7 @@ func BibleCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var79 string
 			templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.outfits.add"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 394, Col: 40}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 398, Col: 40}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 			if templ_7745c5c3_Err != nil {
@@ -1550,7 +1554,7 @@ func BibleCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var80 string
 		templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.relationships.title"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 401, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 405, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
 		if templ_7745c5c3_Err != nil {
@@ -1575,7 +1579,7 @@ func BibleCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var82 string
 			templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.relationships.hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 403, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 407, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 			if templ_7745c5c3_Err != nil {
@@ -1615,7 +1619,7 @@ func BibleCharacter(v biblePage) templ.Component {
 				var templ_7745c5c3_Var84 string
 				templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.character.edit"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 409, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 413, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var84))
 				if templ_7745c5c3_Err != nil {
@@ -1642,7 +1646,7 @@ func BibleCharacter(v biblePage) templ.Component {
 				var templ_7745c5c3_Var86 string
 				templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.new.generate"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 412, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 416, Col: 40}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var86))
 				if templ_7745c5c3_Err != nil {
@@ -1873,7 +1877,7 @@ func bibleUpload(v biblePage) templ.Component {
 			var templ_7745c5c3_Var95 string
 			templ_7745c5c3_Var95, templ_7745c5c3_Err = templ.ResolveAttributeValue(uploadDescribed(v))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 462, Col: 40}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 466, Col: 40}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var95)
 			if templ_7745c5c3_Err != nil {
@@ -1886,7 +1890,7 @@ func bibleUpload(v biblePage) templ.Component {
 			var templ_7745c5c3_Var96 string
 			templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(v.Errors["file"] != ""))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 463, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 467, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var96)
 			if templ_7745c5c3_Err != nil {
@@ -1941,7 +1945,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var98 string
 		templ_7745c5c3_Var98, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.new.title"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 479, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 483, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var98))
 		if templ_7745c5c3_Err != nil {
@@ -1954,7 +1958,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var99 string
 		templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.JoinStringErrs(v.Project.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 482, Col: 21}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 486, Col: 21}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var99))
 		if templ_7745c5c3_Err != nil {
@@ -1975,7 +1979,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var100 templ.SafeURL
 		templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(characterPath(v.Project.ID, "") + "/new"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 487, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 491, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var100))
 		if templ_7745c5c3_Err != nil {
@@ -1988,7 +1992,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var101 string
 		templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Form.Mode)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 488, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 492, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var101)
 		if templ_7745c5c3_Err != nil {
@@ -2001,7 +2005,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var102 string
 		templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Form.Revision)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 488, Col: 119}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 492, Col: 119}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var102)
 		if templ_7745c5c3_Err != nil {
@@ -2014,7 +2018,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var103 string
 		templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Form.CharacterID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 488, Col: 190}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 492, Col: 190}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var103)
 		if templ_7745c5c3_Err != nil {
@@ -2065,7 +2069,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var105 string
 		templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.field.style"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 496, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 500, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var105))
 		if templ_7745c5c3_Err != nil {
@@ -2087,7 +2091,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var106 string
 			templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinStringErrs(v.Errors["style"])
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 499, Col: 90}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 503, Col: 90}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
 			if templ_7745c5c3_Err != nil {
@@ -2125,7 +2129,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 		var templ_7745c5c3_Var107 string
 		templ_7745c5c3_Var107, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.new.profile_details"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 507, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 511, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var107))
 		if templ_7745c5c3_Err != nil {
@@ -2175,7 +2179,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 				var templ_7745c5c3_Var109 string
 				templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.new.save_upload"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 520, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 524, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var109))
 				if templ_7745c5c3_Err != nil {
@@ -2211,7 +2215,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 				var templ_7745c5c3_Var111 string
 				templ_7745c5c3_Var111, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.new.generate"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 525, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 529, Col: 40}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var111))
 				if templ_7745c5c3_Err != nil {
@@ -2242,7 +2246,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var112 templ.SafeURL
 			templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(sheetPath(v.Project.ID, v.Character.ID, v.Job.ID) + "/apply"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 535, Col: 90}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 539, Col: 90}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var112))
 			if templ_7745c5c3_Err != nil {
@@ -2271,7 +2275,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 				var templ_7745c5c3_Var114 string
 				templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.new.keep"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 538, Col: 36}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 542, Col: 36}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var114))
 				if templ_7745c5c3_Err != nil {
@@ -2295,7 +2299,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var115 string
 			templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.new.pick", "count", 0))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 544, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 548, Col: 46}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var115))
 			if templ_7745c5c3_Err != nil {
@@ -2308,7 +2312,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var116 string
 			templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.new.refine"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 547, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 551, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var116))
 			if templ_7745c5c3_Err != nil {
@@ -2344,7 +2348,7 @@ func BibleNewCharacter(v biblePage) templ.Component {
 			var templ_7745c5c3_Var118 string
 			templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.new.training_hint"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 557, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 561, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var118))
 			if templ_7745c5c3_Err != nil {
@@ -2453,7 +2457,7 @@ func BibleSheetJob(v biblePage) templ.Component {
 			var templ_7745c5c3_Var121 string
 			templ_7745c5c3_Var121, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.refresh"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 603, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 607, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var121))
 			if templ_7745c5c3_Err != nil {
@@ -2501,7 +2505,7 @@ func BibleProfileForm(v biblePage) templ.Component {
 		var templ_7745c5c3_Var123 templ.SafeURL
 		templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(characterPath(v.Project.ID, v.Character.ID)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 609, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 613, Col: 118}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var123))
 		if templ_7745c5c3_Err != nil {
@@ -2514,7 +2518,7 @@ func BibleProfileForm(v biblePage) templ.Component {
 		var templ_7745c5c3_Var124 string
 		templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.character.edit"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 611, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 615, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var124))
 		if templ_7745c5c3_Err != nil {
@@ -2527,7 +2531,7 @@ func BibleProfileForm(v biblePage) templ.Component {
 		var templ_7745c5c3_Var125 string
 		templ_7745c5c3_Var125, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Form.Revision)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 612, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 616, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var125)
 		if templ_7745c5c3_Err != nil {
@@ -2613,7 +2617,7 @@ func BibleReferenceForm(v biblePage) templ.Component {
 		var templ_7745c5c3_Var127 templ.SafeURL
 		templ_7745c5c3_Var127, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(characterPath(v.Project.ID, v.Character.ID) + "/references"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 627, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 631, Col: 136}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var127))
 		if templ_7745c5c3_Err != nil {
@@ -2626,7 +2630,7 @@ func BibleReferenceForm(v biblePage) templ.Component {
 		var templ_7745c5c3_Var128 string
 		templ_7745c5c3_Var128, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.refs.add"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 629, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 633, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var128))
 		if templ_7745c5c3_Err != nil {
@@ -2639,7 +2643,7 @@ func BibleReferenceForm(v biblePage) templ.Component {
 		var templ_7745c5c3_Var129 string
 		templ_7745c5c3_Var129, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Form.Revision)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 630, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 634, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var129)
 		if templ_7745c5c3_Err != nil {
@@ -2723,7 +2727,7 @@ func BibleOutfitForm(v biblePage) templ.Component {
 		var templ_7745c5c3_Var132 templ.SafeURL
 		templ_7745c5c3_Var132, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(characterPath(v.Project.ID, v.Character.ID) + "/outfits"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 642, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 646, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var132))
 		if templ_7745c5c3_Err != nil {
@@ -2736,7 +2740,7 @@ func BibleOutfitForm(v biblePage) templ.Component {
 		var templ_7745c5c3_Var133 string
 		templ_7745c5c3_Var133, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.outfits.add"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 644, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 648, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var133))
 		if templ_7745c5c3_Err != nil {
@@ -2749,7 +2753,7 @@ func BibleOutfitForm(v biblePage) templ.Component {
 		var templ_7745c5c3_Var134 string
 		templ_7745c5c3_Var134, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Form.Revision)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 645, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 649, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var134)
 		if templ_7745c5c3_Err != nil {
@@ -2827,7 +2831,7 @@ func bibleFormActions(back string) templ.Component {
 			var templ_7745c5c3_Var137 string
 			templ_7745c5c3_Var137, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "ui.cancel"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 657, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 661, Col: 28}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var137))
 			if templ_7745c5c3_Err != nil {
@@ -2854,7 +2858,7 @@ func bibleFormActions(back string) templ.Component {
 			var templ_7745c5c3_Var139 string
 			templ_7745c5c3_Var139, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.save"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 660, Col: 29}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 664, Col: 29}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var139))
 			if templ_7745c5c3_Err != nil {
@@ -2902,7 +2906,7 @@ func BibleSetting(v biblePage) templ.Component {
 		var templ_7745c5c3_Var141 string
 		templ_7745c5c3_Var141, templ_7745c5c3_Err = templ.JoinStringErrs(v.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 669, Col: 13}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 673, Col: 13}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var141))
 		if templ_7745c5c3_Err != nil {
@@ -2915,7 +2919,7 @@ func BibleSetting(v biblePage) templ.Component {
 		var templ_7745c5c3_Var142 string
 		templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.setting.subtitle"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 672, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 676, Col: 42}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
 		if templ_7745c5c3_Err != nil {
@@ -2941,7 +2945,7 @@ func BibleSetting(v biblePage) templ.Component {
 				var templ_7745c5c3_Var144 string
 				templ_7745c5c3_Var144, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.setting.add"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 678, Col: 38}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 682, Col: 38}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var144))
 				if templ_7745c5c3_Err != nil {
@@ -2998,7 +3002,7 @@ func BibleSetting(v biblePage) templ.Component {
 				var templ_7745c5c3_Var145 string
 				templ_7745c5c3_Var145, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 698, Col: 18}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 702, Col: 18}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var145))
 				if templ_7745c5c3_Err != nil {
@@ -3011,7 +3015,7 @@ func BibleSetting(v biblePage) templ.Component {
 				var templ_7745c5c3_Var146 string
 				templ_7745c5c3_Var146, templ_7745c5c3_Err = templ.JoinStringErrs(item.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 701, Col: 25}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 705, Col: 25}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var146))
 				if templ_7745c5c3_Err != nil {
@@ -3079,7 +3083,7 @@ func BibleSettingForm(v biblePage) templ.Component {
 		var templ_7745c5c3_Var148 templ.SafeURL
 		templ_7745c5c3_Var148, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(settingPath(v.Project.ID)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 718, Col: 123}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 722, Col: 123}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var148))
 		if templ_7745c5c3_Err != nil {
@@ -3092,7 +3096,7 @@ func BibleSettingForm(v biblePage) templ.Component {
 		var templ_7745c5c3_Var149 string
 		templ_7745c5c3_Var149, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "bible.setting.add"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 720, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/bible.templ`, Line: 724, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var149))
 		if templ_7745c5c3_Err != nil {

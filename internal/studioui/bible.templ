@@ -143,16 +143,16 @@ templ BibleProjects(v biblePage) {
 			}
 		</div>
 		@ui.Field(ui.FieldProps{ID: "project-status", Label: i18n.T(ctx, "bible.projects.status"), Class: "mv-bible__filter-field"}) {
-			@ui.Select(ui.SelectProps{ID: "project-status", Name: "status", Value: v.Status, Options: projectStatusOptions(ctx)})
+			@ui.Select(ui.SelectProps{ID: "project-status", Name: "status", Value: v.Status, Options: projectStatusOptions(ctx), Class: "mv-bible__select", Attrs: autoSubmit})
 		}
 		@ui.Field(ui.FieldProps{ID: "project-format", Label: i18n.T(ctx, "bible.projects.format"), Class: "mv-bible__filter-field"}) {
-			@ui.Select(ui.SelectProps{ID: "project-format", Name: "format", Value: v.Format, Options: projectFormatOptions(ctx)})
+			@ui.Select(ui.SelectProps{ID: "project-format", Name: "format", Value: v.Format, Options: projectFormatOptions(ctx), Class: "mv-bible__select", Attrs: autoSubmit})
 		}
 		@ui.Field(ui.FieldProps{ID: "project-sort", Label: i18n.T(ctx, "bible.projects.sort"), Class: "mv-bible__filter-field"}) {
-			@ui.Select(ui.SelectProps{ID: "project-sort", Name: "sort", Value: v.Sort, Options: bibleOptions(ctx, "sort", "edited", "title", "oldest")})
+			@ui.Select(ui.SelectProps{ID: "project-sort", Name: "sort", Value: v.Sort, Options: bibleOptions(ctx, "sort", "edited", "title", "oldest"), Class: "mv-bible__select", Attrs: autoSubmit})
 		}
 		<input type="hidden" name="view" value={ v.View }/>
-		@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Ghost, Icon: "filter"}) {
+		@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Ghost, Icon: "filter", Class: "mv-nojs-only"}) {
 			{ i18n.T(ctx,"bible.filters.apply") }
 		}
 		<div class="mv-bible__view">
@@ -179,11 +179,15 @@ templ BibleProjects(v biblePage) {
 	}
 }
 
+// autoSubmit makes a filter select apply on change (web/src/lib/filters.ts);
+// Apply stays only for browsers without JavaScript.
+var autoSubmit = templ.Attributes{"data-autosubmit": true}
+
 func projectStatusOptions(ctx context.Context) []ui.Option {
 
 	out := []ui.Option{{Value: "", Label: i18n.T(ctx, "bible.projects.any_status")}}
-	for _, status := range projectStatuses {
-		out = append(out, ui.Option{Value: status, Label: i18n.T(ctx, "studioui.status."+status)})
+	for _, state := range projectStates {
+		out = append(out, ui.Option{Value: state, Label: i18n.T(ctx, "bible.projects.state."+state)})
 	}
 	return out
 }
