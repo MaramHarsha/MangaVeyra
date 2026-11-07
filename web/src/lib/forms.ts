@@ -133,6 +133,11 @@ export function installForms(doc: Document = document): () => void {
       event.returnValue = '';
     }
   };
+  // A background save (the C1 autosave) makes the current values the saved ones.
+  const saved = (event: Event) => {
+    const form = (event as CustomEvent).detail?.form;
+    if (form instanceof HTMLFormElement && guarded.has(form)) original.set(form, fingerprint(form));
+  };
   const pageshow = () => { leaving = false; pending.forEach((_, form) => release(form)); enhance(); };
   doc.addEventListener('submit', submit);
   doc.addEventListener('click', click);
@@ -141,6 +146,7 @@ export function installForms(doc: Document = document): () => void {
   doc.addEventListener('htmx:afterSettle', enhance);
   doc.addEventListener('mv:unsaved', richChanged);
   doc.addEventListener('mv:guard-navigation', guardNavigation);
+  doc.addEventListener('mv:form-saved', saved);
   dialog()?.addEventListener('close', closed);
   win.addEventListener('beforeunload', beforeUnload);
   win.addEventListener('pageshow', pageshow);
@@ -153,6 +159,7 @@ export function installForms(doc: Document = document): () => void {
     doc.removeEventListener('htmx:afterSettle', enhance);
     doc.removeEventListener('mv:unsaved', richChanged);
     doc.removeEventListener('mv:guard-navigation', guardNavigation);
+    doc.removeEventListener('mv:form-saved', saved);
     dialog()?.removeEventListener('close', closed);
     win.removeEventListener('beforeunload', beforeUnload);
     win.removeEventListener('pageshow', pageshow);

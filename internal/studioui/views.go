@@ -117,11 +117,44 @@ type storyView struct {
 	// View is "prose" for the read-only prose rendering; otherwise the
 	// editable panel table shows.
 	View string
+	// SceneIndex is the scene shown in the centre (C1 shows one scene, as
+	// designed; the tree switches scenes).
+	SceneIndex int
+	// FocusLine is the dialogue speaker field to focus after a no-JS "add
+	// line" re-render; Dirty marks such a re-render as an unsaved draft.
+	FocusLine string
+	Dirty     bool
 	// SubmittedRevision is set when the editor is re-rendered from a rejected
 	// save. The form must post back the revision the user started from, never
 	// the chapter's current one, or a resubmit would silently overwrite a save
 	// that landed in between.
 	SubmittedRevision *string
+}
+
+// currentScene is the scene the centre shows.
+func (v storyView) currentScene() studio.ScriptScene {
+	if v.SceneIndex < 0 || v.SceneIndex >= len(v.Script.Scenes) {
+		return studio.ScriptScene{}
+	}
+	return v.Script.Scenes[v.SceneIndex]
+}
+
+// sceneURL is the URL of the open scene; the first scene is the chapter URL.
+func (v storyView) sceneURL() string {
+	if v.SceneIndex <= 0 {
+		return storyPath(v.Project.ID, v.Chapter.ID)
+	}
+	return scenePath(v.Project.ID, v.Chapter.ID, v.currentScene().ID)
+}
+
+// sceneIndexOf finds a scene by ID; an unknown or empty ID means the first.
+func sceneIndexOf(doc studio.ScriptDoc, sceneID string) int {
+	for i, scene := range doc.Scenes {
+		if scene.ID == sceneID {
+			return i
+		}
+	}
+	return 0
 }
 
 // formRevision is the optimistic revision the script form posts back.
@@ -182,6 +215,14 @@ func storyPath(projectID, chapterID string) string {
 		return base
 	}
 	return base + "/" + url.PathEscape(chapterID)
+}
+
+// scenePath is one scene of a chapter in the Story editor.
+func scenePath(projectID, chapterID, sceneID string) string {
+	if sceneID == "" {
+		return storyPath(projectID, chapterID)
+	}
+	return storyPath(projectID, chapterID) + "/" + url.PathEscape(sceneID)
 }
 
 // editorPath is the D1 editor of a chapter.

@@ -269,7 +269,20 @@ func htmlForm(t *testing.T, page, marker string) url.Values {
 		return html.UnescapeString(m[1]), true
 	}
 	values := url.Values{}
-	for _, tag := range regexp.MustCompile(`<input\b[^>]*>`).FindAllString(form, -1) {
+	inputRe := regexp.MustCompile(`<input\b[^>]*>`)
+	openTag := form[:strings.Index(form, ">")+1]
+	// A <template> is inert: its controls are never submitted.
+	form = regexp.MustCompile(`(?s)<template\b.*?</template>`).ReplaceAllString(form, "")
+	inputs := inputRe.FindAllString(form, -1)
+	// Controls outside the form element join it through the form attribute.
+	if id, ok := attr(openTag, "id"); ok && id != "" {
+		for _, tag := range inputRe.FindAllString(page, -1) {
+			if owner, ok := attr(tag, "form"); ok && owner == id {
+				inputs = append(inputs, tag)
+			}
+		}
+	}
+	for _, tag := range inputs {
 		name, _ := attr(tag, "name")
 		typ, _ := attr(tag, "type")
 		if _, disabled := attr(tag, "disabled"); name == "" || disabled || typ == "submit" || typ == "button" || typ == "file" {
@@ -327,9 +340,10 @@ func TestStoryEditorPanelsProseSoonAndSaveRoundTrip(t *testing.T) {
 		}
 		mustContain(t, body,
 			// tree
-			`data-scene-link`, `href="#scene-`+scene.ID+`"`, `data-prose-href="#prose-`+scene.ID+`"`, "Ch. 1 · The Quiet Bell",
-			// centre
-			"Harbor Ghosts · Ch. 1", "Ch. 1 · Scene 1", `role="columnheader"`, ">Panel<", ">Camera · emotion<",
+			`data-scene-link`, `href="`+f.storyURL+`/`+scene.ID+`"`, `aria-current="page"`, "Ch. 1 · The Quiet Bell",
+			"Import text into this chapter",
+			// centre: "Ch. N · Scene M" over the scene title, as designed
+			"Ch. 1 · Scene 1", `form="mv-c1-script"`, `role="columnheader"`, ">Panel<", ">Camera · emotion<",
 			">Action · dialogue<", ">SFX<", `id="scene-`+scene.ID+`"`,
 			`href="`+f.storyURL+`?view=prose"`, ">Prose<", ">Panels<",
 			// Soon: Make pages from script and the Script assistant
@@ -352,7 +366,7 @@ func TestStoryEditorPanelsProseSoonAndSaveRoundTrip(t *testing.T) {
 
 		prose := string(f.client.Get(f.storyURL + "?view=prose").Body)
 		mustContain(t, prose, `<article class="mv-c1__prose" data-view-panel="prose" aria-label`, `data-view-panel="panels" hidden`,
-			`href="#prose-`+scene.ID+`"`, "Then I&#39;ll take the roof!", ">WHOOSH<")
+			`href="`+f.storyURL+`/`+scene.ID+`?view=prose"`, "Then I&#39;ll take the roof!", ">WHOOSH<")
 
 		// Round trip: post exactly what the rendered Panels form submits.
 		values := htmlForm(t, body, `data-view-panel="panels"`)

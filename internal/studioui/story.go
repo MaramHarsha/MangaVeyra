@@ -86,6 +86,18 @@ func (m *Module) chapterStory(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return pageObjectError(err)
 	}
+	if sceneID := r.PathValue("scene"); sceneID != "" {
+		index := -1
+		for i, scene := range v.Script.Scenes {
+			if scene.ID == sceneID {
+				index = i
+			}
+		}
+		if index < 0 {
+			return core.ErrNotFound()
+		}
+		v.SceneIndex = index
+	}
 	if r.URL.Query().Get("view") == viewProse {
 		v.View = viewProse
 	}
