@@ -9,6 +9,13 @@ This does not amend ADR 0005's text model or failed-call accounting.
 | fal generation | `POST https://fal.run/fal-ai/flux/schnell` | explicit width/height ≤1024; 1–4 outputs; four steps; safety enabled; no extensions | `$0.003 × n × ceil(width × height / 1,000,000)` |
 | fal inpainting | `POST https://fal.run/fal-ai/flux-lora/inpainting` | same dimensions/count; init+mask; 28 steps; empty LoRA list; safety enabled | `$0.035 × n × ceil(width × height / 1,000,000)` |
 
+ADR 0009 (proposed) adds the rows in `image_routes.go`: direct OpenAI GPT Image
+2.5 Sunburst/Flare (`/v1/images/generations` and `/v1/images/edits`, Auto
+preferred) and pin-only OpenRouter GPT Image 2.5 Sunburst, Nano Banana 2.1 and
+Nano Banana Pro. Their quotes are integer nano-USD sums of the published
+output-token rule, a 6,144-byte prompt bound and per-input-image allowances;
+`openai_image_test.go` pins every figure.
+
 1024² conservatively reserves two decimal megapixels per image: $0.006 for
 Schnell and $0.07 for fal inpainting. Unknown routes or manifest-supplied prices
 cannot dispatch. HTTP redirects are disabled, and fal output downloads allow
