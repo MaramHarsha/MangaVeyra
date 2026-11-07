@@ -12,3 +12,8 @@ func TestVariationPickerShowsCommittedImageAndKeepsPlaceholderFallback(t *testin
 		t.Fatal("unscored references displayed a lock score")
 	}
 }
+
+func TestSegmentedLinksIconsRetainAccessibleLabelsAndSelection(t *testing.T) {
+	markup := render(t, SegmentedLinks("Project view", []SegLink{{Href: "/studio/projects?view=grid", Label: "Grid", Icon: "layout-grid", Current: true}, {Href: "/studio/projects?view=list", Label: "List", Icon: "list"}}))
+	has(t, markup, `aria-label="Project view"`, `aria-current="true"`, `title="Grid"`, `ti-layout-grid`, `<span class="mv-sr-only">Grid</span>`, `ti-list`, `<span class="mv-sr-only">List</span>`)
+}
