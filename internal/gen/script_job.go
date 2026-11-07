@@ -26,7 +26,7 @@ func (s *service) handleScript(ctx context.Context, run *jobs.Run) error {
 	}
 	job := run.Job
 	if job.Type != JobScript || job.Executor != jobs.ExecutorGo || !db.ValidID(job.ID) || !db.ValidID(job.UserID) ||
-		job.MaxAttempts != scriptMaxAttempts || job.Attempts < 1 || job.Attempts > scriptMaxAttempts ||
+		job.MaxAttempts != scriptMaxAttempts || job.AttemptBase < 0 || job.RoundAttempt() < 1 || job.RoundAttempt() > scriptMaxAttempts ||
 		job.Scope.Kind != jobs.ScopeChapter || job.Scope.Validate() != nil {
 		return badInputJobError("The stored script job is invalid.")
 	}
@@ -58,6 +58,12 @@ func (s *service) handleScript(ctx context.Context, run *jobs.Run) error {
 	}
 	if chapter.ProjectID != job.Scope.ProjectID {
 		return badInputJobError("The script chapter no longer belongs to this project.")
+	}
+	// The save below is fenced on this revision. Checking it before the
+	// provider call means a job that can no longer land (the manuscript was
+	// edited or another job already saved) fails without paying for a call.
+	if !payload.ExpectedUpdatedAt.IsZero() && !chapter.UpdatedAt.UTC().Equal(payload.ExpectedUpdatedAt.UTC()) {
+		return badInputJobError("The script can no longer be saved.")
 	}
 	if err := s.studio.CheckScopeWritable(ctx, job.Scope); err != nil {
 		return mapStudioJobError(ctx, err)

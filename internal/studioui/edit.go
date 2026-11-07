@@ -40,7 +40,10 @@ func (m *Module) editScript(w http.ResponseWriter, r *http.Request) error {
 		return core.ErrBadRequest(i18n.T(ctx, "studioui.error.form"))
 	}
 	edited, parseErr := applyScriptForm(view.Script, r)
-	revision, revisionErr := time.Parse(time.RFC3339Nano, r.PostFormValue("revision"))
+	submittedRevision := r.PostFormValue("revision")
+	revision, revisionErr := time.Parse(time.RFC3339Nano, submittedRevision)
+	// Every re-render below keeps the revision the user started from.
+	view.SubmittedRevision = &submittedRevision
 	if parseErr != nil || revisionErr != nil {
 		view.Script = edited
 		view.Error = i18n.T(ctx, "studioui.script.error.validation")

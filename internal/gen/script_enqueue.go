@@ -34,6 +34,11 @@ const (
 	maxPromptCharacterText = 2_000
 )
 
+// ErrScriptJobActive is returned by EnqueueScript when the chapter already has
+// a queued or running script job. The check runs in the enqueue transaction
+// under the chapter row lock, so concurrent requests enqueue at most one job.
+var ErrScriptJobActive = errors.New("gen: a script job is already active for this chapter")
+
 type scriptJobPayload struct {
 	Version           int            `json:"version"`
 	ExpectedUpdatedAt time.Time      `json:"expected_updated_at"`
@@ -76,6 +81,9 @@ func (s *service) EnqueueScript(ctx context.Context, claimed studio.Actor, req S
 	}
 	if chapter.ProjectID != req.ProjectID {
 		return nil, studio.ErrForbidden
+	}
+	if !req.ExpectedUpdatedAt.IsZero() && !chapter.UpdatedAt.UTC().Equal(req.ExpectedUpdatedAt.UTC()) {
+		return nil, studio.ErrConflict
 	}
 	if err := s.studio.CheckScopeWritable(ctx, scope); err != nil {
 		return nil, err
@@ -163,7 +171,41 @@ func (s *service) EnqueueScript(ctx context.Context, claimed studio.Actor, req S
 		Type: JobScript, Scope: scope, UserID: actor.UserID, Executor: jobs.ExecutorGo,
 		ModelID: plan.ModelID, ProviderID: plan.ProviderID, Decision: plan.Decision, Input: json.RawMessage(payloadJSON),
 		Estimate: actionEstimate, MaxAttempts: scriptMaxAttempts,
+		Guard: func(ctx context.Context, tx *db.Tx) error {
+			return guardScriptEnqueue(ctx, tx, req.ProjectID, req.ChapterID, chapter.UpdatedAt)
+		},
 	})
+}
+
+// guardScriptEnqueue runs inside the enqueue transaction. It locks the chapter
+// row (SQLite write transactions are already serialised), rejects a chapter
+// whose manuscript changed since planning and rejects a second active script
+// job, so a double submit cannot pay for two generations of one chapter.
+func guardScriptEnqueue(ctx context.Context, tx *db.Tx, projectID, chapterID string, revision time.Time) error {
+	lock := ""
+	if tx.Dialect() == db.Postgres {
+		lock = " FOR UPDATE"
+	}
+	var current time.Time
+	if err := tx.Get(ctx, &current, `SELECT updated_at FROM chapters WHERE id = ? AND project_id = ?`+lock,
+		chapterID, projectID); err != nil {
+		if db.IsNotFound(err) {
+			return studio.ErrNotFound
+		}
+		return err
+	}
+	if !current.UTC().Equal(revision.UTC()) {
+		return studio.ErrConflict
+	}
+	var active int
+	if err := tx.Get(ctx, &active, `SELECT COUNT(*) FROM jobs WHERE chapter_id = ? AND type = ? AND state IN (?, ?)`,
+		chapterID, JobScript, jobs.StateQueued, jobs.StateRunning); err != nil {
+		return err
+	}
+	if active != 0 {
+		return ErrScriptJobActive
+	}
+	return nil
 }
 
 func (s *service) resolveScriptActor(ctx context.Context, claimed studio.Actor, projectID string, estimate jobs.Cost, remote bool) (studio.Actor, *httpx.Token, error) {

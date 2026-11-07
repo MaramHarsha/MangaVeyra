@@ -334,3 +334,45 @@ func TestSearchIndex(t *testing.T) {
 		}
 	})
 }
+
+// WithReadTx statements share one snapshot: a write committed in between is
+// not visible until the read transaction ends, and it does not block writers.
+func TestWithReadTxSeesOneSnapshot(t *testing.T) {
+	testdb.ForEach(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		count := func(q interface {
+			Get(context.Context, any, string, ...any) error
+		}) int {
+			t.Helper()
+			var n int
+			if err := q.Get(ctx, &n, `SELECT COUNT(*) FROM instance_settings WHERE key LIKE ?`, "snapshot-%"); err != nil {
+				t.Fatal(err)
+			}
+			return n
+		}
+		if _, err := d.Exec(ctx, `INSERT INTO instance_settings (key, value) VALUES (?, ?)`, "snapshot-1", "1"); err != nil {
+			t.Fatal(err)
+		}
+		err := d.WithReadTx(ctx, func(tx *db.Tx) error {
+			if n := count(tx); n != 1 {
+				t.Fatalf("first read = %d, want 1", n)
+			}
+			if err := d.WithTx(ctx, func(w *db.Tx) error {
+				_, err := w.Exec(ctx, `INSERT INTO instance_settings (key, value) VALUES (?, ?)`, "snapshot-2", "2")
+				return err
+			}); err != nil {
+				t.Fatalf("concurrent write during read transaction: %v", err)
+			}
+			if n := count(tx); n != 1 {
+				t.Fatalf("second read inside the transaction = %d, want the same snapshot (1)", n)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := count(d); n != 2 {
+			t.Fatalf("read after the transaction = %d, want 2", n)
+		}
+	})
+}

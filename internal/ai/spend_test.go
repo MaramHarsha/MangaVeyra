@@ -260,20 +260,28 @@ func TestSpendReservationLifecycleAndIdempotency(t *testing.T) {
 		}
 
 		// Exercise the real public queue transition: Fail makes the job
-		// terminal, Retry resets attempts to zero, and Claim reuses attempt 1.
+		// terminal, Retry starts a new round, and Claim takes the next attempt
+		// number (attempts never repeat, so an old lease cannot match).
 		if failed, err := ta.Deps.Jobs.Fail(ctx, f.JobID, "", jobs.JobError{
 			Code: "upstream", Message: "provider failed", Retryable: false,
 		}, jobs.Cost{}); err != nil || failed.State != jobs.StateFailed {
 			t.Fatalf("queue fail: %+v, %v", failed, err)
 		}
-		if retried, err := ta.Deps.Jobs.Retry(ctx, f.JobID); err != nil || retried.Attempts != 0 || retried.State != jobs.StateQueued {
+		if retried, err := ta.Deps.Jobs.Retry(ctx, f.JobID); err != nil || retried.Attempts != 1 || retried.AttemptBase != 1 ||
+			retried.State != jobs.StateQueued {
 			t.Fatalf("queue retry: %+v, %v", retried, err)
 		}
 		claimed, err := ta.Deps.Jobs.Claim(ctx, jobs.ClaimParams{Executor: jobs.ExecutorGo, Types: []string{"script.generate"}})
-		if err != nil || claimed == nil || claimed.ID != f.JobID || claimed.Attempts != 1 {
+		if err != nil || claimed == nil || claimed.ID != f.JobID || claimed.Attempts != 2 || claimed.RoundAttempt() != 1 {
 			t.Fatalf("queue reclaim: %+v, %v", claimed, err)
 		}
+		// The previous round's attempt number no longer holds the job.
+		stale := reserveParams(f, db.NewID(), ai.SpendPurposeRetry, 0.05, fixed.Add(time.Minute))
+		if _, err := store.ReserveRemoteCall(ctx, stale); !errors.Is(err, ai.ErrJobAttemptNotRunning) {
+			t.Fatalf("stale-attempt reservation after retry = %v", err)
+		}
 		retryCall := reserveParams(f, db.NewID(), ai.SpendPurposeRetry, 0.05, fixed.Add(time.Minute))
+		retryCall.Attempt = claimed.Attempts
 		retryReservation, err := store.ReserveRemoteCall(ctx, retryCall)
 		if err != nil || retryReservation.CallSeq != 3 {
 			t.Fatalf("manual retry reservation: %+v, %v", retryReservation, err)
@@ -285,6 +293,7 @@ func TestSpendReservationLifecycleAndIdempotency(t *testing.T) {
 			t.Fatal(err)
 		}
 		canceledCall := reserveParams(f, db.NewID(), ai.SpendPurposeFailover, 0.15, fixed.Add(time.Minute))
+		canceledCall.Attempt = claimed.Attempts
 		canceledReservation, err := store.ReserveRemoteCall(ctx, canceledCall)
 		if err != nil || canceledReservation.CallSeq != 4 {
 			t.Fatalf("canceled-call reservation: %+v, %v", canceledReservation, err)

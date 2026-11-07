@@ -296,9 +296,10 @@ func (s *textService) remoteCall(ctx context.Context, req TextGenerateRequest, i
 	return out, nil
 }
 
-// initialSpendPurpose distinguishes a first execution from a manual queue
-// retry. Queue.Retry intentionally resets attempts to zero, so the reclaimed
-// execution is attempt 1 again and only durable job history can identify it.
+// initialSpendPurpose distinguishes a first execution from a retry. Attempts
+// never repeat (Queue.Retry starts a new round at attempt_base), so any
+// attempt above 1 is a retry; job history also covers rows created before
+// attempt_base existed.
 func (s *textService) initialSpendPurpose(ctx context.Context, jobID string, attempt int) (string, error) {
 	if attempt > 1 {
 		return SpendPurposeRetry, nil

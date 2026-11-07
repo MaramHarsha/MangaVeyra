@@ -49,14 +49,30 @@ func TestEnqueueScriptAssemblesPremiseAdaptPinsAndEffectiveDefault(t *testing.T)
 			t.Fatalf("premise input was not the deterministic Studio snapshot: %+v", premisePayload.Input)
 		}
 
+		// Only one script job may be active per chapter; each variant below
+		// is inspected and then canceled so the next one can be planned.
+		cancelQueued := func(job *jobs.Job) {
+			t.Helper()
+			if canceled, err := ta.Deps.Jobs.Cancel(ctx, job.ID); err != nil || canceled.State != jobs.StateCanceled {
+				t.Fatalf("cancel queued script job: %+v, %v", canceled, err)
+			}
+		}
+		if _, err := fixture.gen.EnqueueScript(ctx, fixture.actor, gen.ScriptRequest{
+			ProjectID: fixture.project.ID, ChapterID: fixture.chapter.ID, Mode: "premise", PagesTarget: 8,
+		}); !errors.Is(err, gen.ErrScriptJobActive) {
+			t.Fatalf("second active script job = %v, want ErrScriptJobActive", err)
+		}
+		cancelQueued(premiseJob)
+
 		explicit := "  explicit source\n\tkeeps bytes ✓  "
-		_, err = fixture.gen.EnqueueScript(ctx, fixture.actor, gen.ScriptRequest{
+		explicitJob, err := fixture.gen.EnqueueScript(ctx, fixture.actor, gen.ScriptRequest{
 			ProjectID: fixture.project.ID, ChapterID: fixture.chapter.ID, Mode: "adapt", SourceText: explicit,
 			RoutingMode: ai.ModeLocalOnly,
 		})
 		if err != nil {
 			t.Fatalf("enqueue explicit adaptation: %v", err)
 		}
+		cancelQueued(explicitJob)
 		_, err = fixture.gen.EnqueueScript(ctx, fixture.actor, gen.ScriptRequest{
 			ProjectID: fixture.project.ID, ChapterID: fixture.chapter.ID, Mode: "adapt",
 		})
@@ -64,10 +80,12 @@ func TestEnqueueScriptAssemblesPremiseAdaptPinsAndEffectiveDefault(t *testing.T)
 			t.Fatalf("enqueue fallback adaptation: %v", err)
 		}
 
+		// The rejected duplicate was planned before its enqueue guard ran.
 		requests := fake.planRequests()
-		if len(requests) != 3 {
-			t.Fatalf("PlanText calls = %d, want 3", len(requests))
+		if len(requests) != 4 {
+			t.Fatalf("PlanText calls = %d, want 4", len(requests))
 		}
+		requests = append(requests[:1], requests[2:]...)
 		if requests[0].RoutingMode != "" || requests[0].PinProviderID != ai.PlaceholderID || requests[0].PinModelID != ai.PlaceholderText {
 			t.Fatalf("default mode or pins changed before PlanText: %+v", requests[0])
 		}

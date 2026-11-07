@@ -127,11 +127,11 @@ func TestRemoteTextReservationsRepairUsageAndAttemptPurpose(t *testing.T) {
 				t.Fatalf("fail = %+v, %v", failed, err)
 			}
 			retried, err := queue.Retry(ctx, jobID)
-			if err != nil || retried.State != jobs.StateQueued || retried.Attempts != 0 {
+			if err != nil || retried.State != jobs.StateQueued || retried.Attempts != 1 || retried.AttemptBase != 1 {
 				t.Fatalf("retry = %+v, %v", retried, err)
 			}
 			claimed, err := queue.Claim(ctx, jobs.ClaimParams{Executor: jobs.ExecutorGo, Types: []string{TaskScript}})
-			if err != nil || claimed == nil || claimed.ID != jobID || claimed.Attempts != 1 {
+			if err != nil || claimed == nil || claimed.ID != jobID || claimed.Attempts != 2 || claimed.RoundAttempt() != 1 {
 				t.Fatalf("claim = %+v, %v", claimed, err)
 			}
 			doer := &queuedDoer{responders: []func(*http.Request) (*http.Response, error){

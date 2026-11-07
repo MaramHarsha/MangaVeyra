@@ -168,5 +168,16 @@
   "studioui.dashboard.continue": "原稿を開く",
   "studioui.dashboard.thumb": "原稿",
   "studioui.dashboard.script": "脚本",
-  "studioui.dashboard.page_label": "脚本校正"
+  "studioui.dashboard.page_label": "脚本校正",
+  "studioui.generate.changed": "このリクエストの準備中に原稿が変更されました。話数を再読み込みしてから、もう一度お試しください。",
+  "studioui.job.retry_blocked": "再試行しても同じ理由で失敗します。上記の原因を解決してから、新しく脚本を生成してください。",
+  "studioui.job.spend_limit_detail": "今月のリモート利用上限に達しました。管理者に上限の引き上げを依頼するか、リセット後にもう一度生成してください。",
+  "studioui.job.local_only_detail": "ローカル専用モードによりリモート経路がブロックされました。もう一度生成すると、ローカル経路で計画します。",
+  "studioui.job.no_provider_detail": "このリクエストを処理できるテキストプロバイダーがありません。モデル設定を確認してから、もう一度生成してください。",
+  "studioui.job.provider_auth_detail": "テキストプロバイダーが接続キーを拒否しました。モデル設定でキーを差し替えてから、もう一度生成してください。",
+  "studioui.job.provider_refused_detail": "テキストプロバイダーの利用ポリシーにより、このリクエストは拒否されました。",
+  "studioui.job.rate_limited_detail": "テキストプロバイダーが現在リクエストを制限しています。数分後に再試行してください。",
+  "studioui.job.bad_output_detail": "モデルが返した脚本は、1回の修正後も検証を通りませんでした。再試行するか、もう一度生成してください。",
+  "studioui.job.upstream_detail": "テキストプロバイダーから正しい応答がありませんでした。しばらくしてから再試行してください。",
+  "studioui.job.approval_detail": "このリモート操作を実行するには、人による承認が必要です。"
 }

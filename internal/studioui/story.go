@@ -139,8 +139,16 @@ func (m *Module) generateScript(w http.ResponseWriter, r *http.Request) error {
 	if strings.TrimSpace(source) != "" {
 		mode = "adapt"
 	}
+	// chapter was read before the "no script yet" check above, so binding the
+	// job to its revision makes that check atomic with the enqueue.
 	_, err = m.gen.EnqueueScript(ctx, actor, gen.ScriptRequest{ProjectID: project.ID, ChapterID: chapter.ID,
-		Mode: mode, Premise: project.Premise, SourceText: source, PagesTarget: pages})
+		Mode: mode, Premise: project.Premise, SourceText: source, PagesTarget: pages, ExpectedUpdatedAt: chapter.UpdatedAt})
+	switch {
+	case errors.Is(err, gen.ErrScriptJobActive):
+		return core.ErrConflict(i18n.T(ctx, "studioui.generate.active"))
+	case errors.Is(err, studio.ErrConflict):
+		return core.ErrConflict(i18n.T(ctx, "studioui.generate.changed"))
+	}
 	if err != nil {
 		web.Flash(w, r, "error", i18n.T(ctx, "studioui.generate.failed"), safeGenerationMessage(ctx, err))
 	} else {
@@ -195,6 +203,9 @@ func (m *Module) retryScriptJob(w http.ResponseWriter, r *http.Request) error {
 	}
 	if job.State != jobs.StateFailed && job.State != jobs.StateCanceled {
 		return core.ErrConflict(i18n.T(ctx, "studioui.job.retry_state"))
+	}
+	if !manualRetryAllowed(job) {
+		return core.ErrConflict(i18n.T(ctx, "studioui.job.retry_blocked"))
 	}
 	doc, err := m.studio.GetScript(ctx, chapter.ID)
 	if err != nil {
@@ -343,7 +354,7 @@ func (m *Module) makeJobView(ctx context.Context, job *jobs.Job, position int) *
 		v.State, v.Title = "ready", i18n.T(ctx, "studioui.job.done")
 		v.Detail, v.ResultLabel = i18n.T(ctx, "studioui.job.done_detail"), i18n.T(ctx, "studioui.job.result")
 	case jobs.StateFailed, jobs.StateCanceled:
-		v.State, v.Retryable = "failed", true
+		v.State, v.Retryable = "failed", manualRetryAllowed(job)
 		v.Title, v.Detail = i18n.T(ctx, "studioui.job.failed"), i18n.T(ctx, jobErrorKey(job))
 	default:
 		v.State, v.Title, v.Detail = "failed", i18n.T(ctx, "studioui.job.failed"), i18n.T(ctx, "studioui.job.failed_detail")

@@ -168,5 +168,16 @@
   "studioui.dashboard.continue": "Open manuscript",
   "studioui.dashboard.thumb": "MANUSCRIPT",
   "studioui.dashboard.script": "Script",
-  "studioui.dashboard.page_label": "SCRIPT PROOF"
+  "studioui.dashboard.page_label": "SCRIPT PROOF",
+  "studioui.generate.changed": "The manuscript changed while this request was being prepared. Reload the chapter and try again.",
+  "studioui.job.retry_blocked": "Retrying would fail the same way. Fix the cause shown above, then generate a new script.",
+  "studioui.job.spend_limit_detail": "The monthly remote-spend limit was reached. Ask an admin to raise it, or generate again after it resets.",
+  "studioui.job.local_only_detail": "Local-only mode blocked the remote route. Generate again to plan a local route.",
+  "studioui.job.no_provider_detail": "No text provider could serve this request. Check Models, then generate again.",
+  "studioui.job.provider_auth_detail": "The text provider rejected its connection key. Replace the key in Models, then generate again.",
+  "studioui.job.provider_refused_detail": "The text provider declined this request under its usage policy.",
+  "studioui.job.rate_limited_detail": "The text provider is limiting requests right now. Retry in a few minutes.",
+  "studioui.job.bad_output_detail": "The model returned a script that failed validation, even after one repair. Retry or generate again.",
+  "studioui.job.upstream_detail": "The text provider did not respond correctly. Retry in a moment.",
+  "studioui.job.approval_detail": "This remote action needs human approval before it can run."
 }

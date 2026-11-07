@@ -11,8 +11,17 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 )
 
+// GetScript reads the chapter, its scenes and its panels in one consistent
+// snapshot. Without it a generated script committed between the scene and
+// panel reads looked like panels for an unknown scene (HTTP 500).
 func (s *service) GetScript(ctx context.Context, chapterID string) (ScriptDoc, error) {
-	return getScript(ctx, s.db, chapterID)
+	var doc ScriptDoc
+	err := s.db.WithReadTx(ctx, func(tx *db.Tx) error {
+		var err error
+		doc, err = getScript(ctx, tx, chapterID)
+		return err
+	})
+	return doc, err
 }
 
 func getScript(ctx context.Context, q db.Querier, chapterID string) (ScriptDoc, error) {
@@ -209,7 +218,9 @@ func sameScriptStructure(current, edited ScriptDoc) error {
 	}
 	for sceneIndex := range current.Scenes {
 		before, after := current.Scenes[sceneIndex], edited.Scenes[sceneIndex]
-		if after.ID == "" || after.ID != before.ID || after.Key != before.Key || len(before.Panels) == 0 ||
+		// A scene may legitimately have no panels (plan 0001 bounds panels per
+		// document, not per scene); it only has to keep its shape.
+		if after.ID == "" || after.ID != before.ID || after.Key != before.Key ||
 			len(before.Panels) != len(after.Panels) {
 			return ErrConflict
 		}
@@ -348,7 +359,12 @@ func (s *service) ReplaceGeneratedScriptTx(ctx context.Context, tx *db.Tx, in Re
 		return ReplaceScriptResult{}, fmt.Errorf("studio: delete old script scenes: %w", err)
 	}
 
+	// The chapter timestamp is the optimistic revision fence, so it must move
+	// strictly forward even if the wall clock steps back.
 	now := db.Now()
+	if !now.After(chapter.UpdatedAt.UTC()) {
+		now = chapter.UpdatedAt.UTC().Add(time.Microsecond)
+	}
 	panelOrder := 0
 	pagePositions := map[int]int{}
 	pages := map[int]struct{}{}

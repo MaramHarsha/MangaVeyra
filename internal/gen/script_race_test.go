@@ -2,6 +2,7 @@ package gen_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -101,9 +102,18 @@ func TestScriptJobsPlannedFromSameRevisionCannotOverwriteWinner(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		second, err := fixture.gen.EnqueueScript(ctx, fixture.actor, gen.ScriptRequest{
+		// EnqueueScript itself refuses a second active job for the chapter.
+		if _, err := fixture.gen.EnqueueScript(ctx, fixture.actor, gen.ScriptRequest{
 			ProjectID: fixture.project.ID, ChapterID: fixture.chapter.ID, Mode: "premise",
-		})
+		}); !errors.Is(err, gen.ErrScriptJobActive) {
+			t.Fatalf("duplicate enqueue = %v, want ErrScriptJobActive", err)
+		}
+		// A job planned from the same revision can still exist (raw queue
+		// insert, or rows from before the guard); it must neither overwrite the
+		// winner nor pay for a provider call once the revision has moved.
+		second, err := ta.Deps.Jobs.Enqueue(ctx, jobs.EnqueueParams{Type: first.Type, Scope: first.Scope,
+			UserID: first.UserID, Executor: first.Executor, ModelID: first.ModelID, ProviderID: first.ProviderID,
+			Decision: first.Decision, Input: first.Input, Estimate: first.Estimate, MaxAttempts: first.MaxAttempts})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -123,6 +133,9 @@ func TestScriptJobsPlannedFromSameRevisionCannotOverwriteWinner(t *testing.T) {
 		if firstStored.State != jobs.StateDone || secondStored.State != jobs.StateFailed ||
 			secondStored.Error == nil || secondStored.Error.Code != jobs.ErrCodeBadInput {
 			t.Fatalf("same-revision jobs = first=%+v second=%+v", firstStored, secondStored)
+		}
+		if calls != 1 {
+			t.Fatalf("provider calls = %d, want 1 (stale job must stop before generating)", calls)
 		}
 		assertScriptAction(t, fixture, "First queued script wins.")
 	})

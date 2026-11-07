@@ -3,7 +3,6 @@ package studioui
 import (
 	"context"
 	"strconv"
-	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
@@ -193,6 +192,9 @@ templ StoryPage(v storyView) {
 					@ScriptEditor(v)
 				} else if v.Job != nil {
 					@JobPanel(v.Job)
+					if !v.Job.Active && v.CanGenerate && !v.Chapter.Locked {
+						@GenerationStart(v)
+					}
 				} else if v.CanGenerate && !v.Chapter.Locked {
 					@GenerationStart(v)
 				} else {
@@ -226,7 +228,7 @@ templ JobPanel(v *jobView) {
 
 templ ScriptEditor(v storyView) {
 	<form class="mv-script" method="post" action={ templ.URL(storyPath(v.Project.ID, v.Chapter.ID) + "/script") } novalidate>
-		<input type="hidden" name="revision" value={ v.Chapter.UpdatedAt.Format(time.RFC3339Nano) }/>
+		<input type="hidden" name="revision" value={ formRevision(v) }/>
 		<header class="mv-script__head"><div><span class="mv-label-mono">{ i18n.T(ctx, "studioui.script.label") }</span><h2>{ i18n.T(ctx, "studioui.script.title") }</h2></div><p>{ i18n.T(ctx, "studioui.script.no_autosave") }</p></header>
 		@ui.Field(ui.FieldProps{ID: "chapter_summary", Label: i18n.T(ctx, "studioui.script.summary")}) { @ui.Textarea(ui.TextareaProps{ID: "chapter_summary", Name: "chapter_summary", Value: v.Script.ChapterSummary, Rows: 4, MaxLength: 4000, Attrs: readOnlyAttrs(v.ReadOnly)}) }
 		for sceneIndex, scene := range v.Script.Scenes {

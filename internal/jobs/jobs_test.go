@@ -492,11 +492,14 @@ func TestRetryFailoverCancelAndLeaseExpiry(t *testing.T) {
 		if j.State != jobs.StateFailed || j.Error == nil || j.Error.Code != "timeout" || j.Actual.USD < 0.019 || j.FinishedAt == nil {
 			t.Fatalf("final failure: %+v", j)
 		}
-		// manual retry resets the attempt budget
-		if j, err = q.Retry(ctx, j.ID); err != nil || j.State != jobs.StateQueued || j.Attempts != 0 {
+		// manual retry starts a fresh round without reusing attempt numbers
+		if j, err = q.Retry(ctx, j.ID); err != nil || j.State != jobs.StateQueued || j.Attempts != 2 ||
+			j.AttemptBase != 2 || j.RoundAttempt() != 0 {
 			t.Fatalf("retry: %+v %v", j, err)
 		}
-		claim()
+		if c := claim(); c == nil || c.Attempts != 3 || c.RoundAttempt() != 1 {
+			t.Fatalf("claim after retry: %+v", c)
+		}
 		q.Complete(ctx, j.ID, "", nil, jobs.Cost{})
 
 		// Failover: the router moves the job to the next model.

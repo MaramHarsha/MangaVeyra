@@ -5,7 +5,9 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/ai"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
@@ -50,6 +52,19 @@ type storyView struct {
 	Conflict    bool
 	Notice      string
 	Error       string
+	// SubmittedRevision is set when the editor is re-rendered from a rejected
+	// save. The form must post back the revision the user started from, never
+	// the chapter's current one, or a resubmit would silently overwrite a save
+	// that landed in between.
+	SubmittedRevision *string
+}
+
+// formRevision is the optimistic revision the script form posts back.
+func formRevision(v storyView) string {
+	if v.SubmittedRevision != nil {
+		return *v.SubmittedRevision
+	}
+	return v.Chapter.UpdatedAt.Format(time.RFC3339Nano)
 }
 
 type jobView struct {
@@ -139,9 +154,52 @@ func jobErrorKey(j *jobs.Job) string {
 		return "studioui.job.capacity_detail"
 	case jobs.ErrCodeCanceled:
 		return "studioui.job.canceled_detail"
+	case ai.CodeSpendLimit:
+		return "studioui.job.spend_limit_detail"
+	case ai.CodeLocalOnly:
+		return "studioui.job.local_only_detail"
+	case ai.CodeNoProvider:
+		return "studioui.job.no_provider_detail"
+	case ai.CodeProviderAuth:
+		return "studioui.job.provider_auth_detail"
+	case ai.CodeProviderRefuse:
+		return "studioui.job.provider_refused_detail"
+	case ai.CodeRateLimited:
+		return "studioui.job.rate_limited_detail"
+	case ai.CodeBadOutput:
+		return "studioui.job.bad_output_detail"
+	case ai.CodeUpstream:
+		return "studioui.job.upstream_detail"
+	case ai.CodeApproval:
+		return "studioui.job.approval_detail"
 	default:
 		return "studioui.job.failed_detail"
 	}
+}
+
+// manualRetryAllowed reports whether retrying the same stored route can help.
+// Configuration failures (local-only, spend cap, missing or rejected provider,
+// approval, policy refusal, invalid brief) fail the same way again; the user
+// generates a new job instead, which plans a fresh route.
+func manualRetryAllowed(j *jobs.Job) bool {
+	if j == nil {
+		return false
+	}
+	if j.State == jobs.StateCanceled {
+		return true
+	}
+	if j.State != jobs.StateFailed {
+		return false
+	}
+	if j.Error == nil {
+		return true
+	}
+	switch j.Error.Code {
+	case ai.CodeSpendLimit, ai.CodeLocalOnly, ai.CodeNoProvider, ai.CodeProviderAuth, ai.CodeProviderRefuse,
+		ai.CodeApproval, jobs.ErrCodeBadInput, jobs.ErrCodeSafety:
+		return false
+	}
+	return true
 }
 
 func percent(progress float64) int {

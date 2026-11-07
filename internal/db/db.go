@@ -262,6 +262,37 @@ func (d *DB) WithTx(ctx context.Context, fn func(tx *Tx) error) (err error) {
 	return fn(tx)
 }
 
+// WithReadTx runs fn in a read-only transaction whose statements all see one
+// consistent snapshot, so a multi-statement read cannot observe a concurrent
+// commit half-way through. On SQLite it is a deferred WAL read transaction: it
+// takes no write lock and does not wait for writers. On Postgres it is
+// REPEATABLE READ READ ONLY. fn must not write.
+func (d *DB) WithReadTx(ctx context.Context, fn func(tx *Tx) error) (err error) {
+	opts := &sql.TxOptions{ReadOnly: true}
+	if d.dialect == Postgres {
+		opts.Isolation = sql.LevelRepeatableRead
+	}
+	sqltx, err := d.X.BeginTxx(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("db: begin read: %w", err)
+	}
+	tx := &Tx{X: sqltx, dialect: d.dialect}
+	defer func() {
+		if p := recover(); p != nil {
+			_ = sqltx.Rollback()
+			panic(p)
+		}
+		if err != nil {
+			_ = sqltx.Rollback()
+			return
+		}
+		if cerr := sqltx.Commit(); cerr != nil {
+			err = fmt.Errorf("db: commit read: %w", cerr)
+		}
+	}()
+	return fn(tx)
+}
+
 // IsNotFound reports whether err means "no row".
 func IsNotFound(err error) bool { return errors.Is(err, sql.ErrNoRows) }
 

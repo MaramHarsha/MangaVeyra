@@ -73,6 +73,10 @@ animation (Phase 5), World (Phase 7). The XP/rank layer stays deferred.
 Changing a contract requires updating this file first. Services are registered with `core.Provide` in the
 providing module's `New` and looked up with `core.MustUse` in `Init` or handlers.
 
+`gen.ScriptRequest.ExpectedUpdatedAt` (optional) binds an enqueue to the chapter revision the caller validated;
+`gen.EnqueueScript` rejects a changed chapter and a second queued/running script job for the chapter inside the
+enqueue transaction (`jobs.EnqueueParams.Guard`, `gen.ErrScriptJobActive`).
+
 Gate A's story form uses `studio.EditScript` with an optimistic chapter revision.
 It updates only the existing script structure and preserves scene/panel IDs. Job
 rediscovery uses `jobs.Filter.ChapterID` together with project, user and type filters;

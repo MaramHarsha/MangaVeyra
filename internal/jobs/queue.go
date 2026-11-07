@@ -63,6 +63,10 @@ type EnqueueParams struct {
 	MaxAttempts int  // default 3
 	ParentID    string
 	RunAfter    time.Time
+	// Guard, when set, runs inside the enqueue transaction before the insert.
+	// Returning an error aborts the enqueue. Use it for atomic de-duplication:
+	// lock the parent row, then check for an active job of the same kind.
+	Guard func(ctx context.Context, tx *db.Tx) error
 }
 
 // Options configure the queue.
@@ -249,6 +253,11 @@ func (q *Queue) Enqueue(ctx context.Context, p EnqueueParams) (*Job, error) {
 		runAfter = p.RunAfter.UTC()
 	}
 	err = q.db.WithTx(ctx, func(tx *db.Tx) error {
+		if p.Guard != nil {
+			if err := p.Guard(ctx, tx); err != nil {
+				return guardError{err}
+			}
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO jobs (id, type, scope, scope_kind, project_id, chapter_id, page_id, panel_id, layer_id,
 			user_id, state, executor, model_id, provider_id, decision, input, files, estimate, max_attempts, parent_id, priority, batch,
 			run_after, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -261,6 +270,10 @@ func (q *Queue) Enqueue(ctx context.Context, p EnqueueParams) (*Job, error) {
 		return addEvent(ctx, tx, id, "created", "", map[string]any{"model_id": p.ModelID, "provider_id": p.ProviderID, "estimate": p.Estimate})
 	})
 	if err != nil {
+		var guarded guardError
+		if errors.As(err, &guarded) {
+			return nil, guarded.err
+		}
 		if db.IsForeignKeyViolation(err) {
 			return nil, httpx.ErrBadRequest("job references an unknown project, user or parent job")
 		}
@@ -274,6 +287,13 @@ func (q *Queue) Enqueue(ctx context.Context, p EnqueueParams) (*Job, error) {
 	q.signal()
 	return j, nil
 }
+
+// guardError carries an EnqueueParams.Guard rejection out of the transaction
+// unchanged, so callers can match their own sentinel errors.
+type guardError struct{ err error }
+
+func (e guardError) Error() string { return e.err.Error() }
+func (e guardError) Unwrap() error { return e.err }
 
 func marshalObj(v any) (string, error) {
 	switch t := v.(type) {
@@ -825,7 +845,7 @@ func (q *Queue) fail(ctx context.Context, id string, f fence, jerr JobError, act
 	// Ask the router for a fallback outside the transaction (it may query other tables).
 	var reroute *Reroute
 	canceled := jerr.Code == ErrCodeCanceled || cur.CancelRequested
-	if !canceled && jerr.Code != ErrCodeBadInput && cur.Attempts < cur.MaxAttempts*2 {
+	if !canceled && jerr.Code != ErrCodeBadInput && cur.RoundAttempt() < cur.MaxAttempts*2 {
 		q.mu.RLock()
 		fo := q.failover
 		q.mu.RUnlock()
@@ -871,9 +891,9 @@ func (q *Queue) fail(ctx context.Context, id string, f fence, jerr JobError, act
 				err = addEvent(ctx, tx, id, "fallback", reroute.Reason, map[string]any{"from_model": cur.ModelID, "from_provider": cur.ProviderID,
 					"to_model": reroute.ModelID, "to_provider": reroute.ProviderID, "error": jerr})
 			}
-		case jerr.Retryable && cur.Attempts < cur.MaxAttempts:
+		case jerr.Retryable && cur.RoundAttempt() < cur.MaxAttempts:
 			event = "job.retry"
-			delay := q.opts.Backoff * time.Duration(1<<min(cur.Attempts-1, 6))
+			delay := q.opts.Backoff * time.Duration(1<<min(max(cur.RoundAttempt()-1, 0), 6))
 			res, err = tx.Exec(ctx, `UPDATE jobs SET state = 'queued', error = ?, actual = ?, progress = 0, step = 0, message = '',
 				worker_id = NULL, lease_expires_at = NULL, run_after = ?, updated_at = ? WHERE id = ?`+cond, append([]any{errJSON, db.MustJSON(total), now.Add(delay), now, id}, cargs...)...)
 			if err == nil {
@@ -983,12 +1003,15 @@ func (q *Queue) cancelOnce(ctx context.Context, id string) (*Job, bool, error) {
 	return j, requested, err
 }
 
-// Retry requeues a failed or canceled job with a fresh attempt budget.
+// Retry requeues a failed or canceled job with a fresh attempt budget. The
+// attempt counter is not reset: a new round starts at attempt_base, so a
+// handler still running from an earlier round can never match the lease of
+// the next claim (heartbeat, spend reservation and completion all pin it).
 func (q *Queue) Retry(ctx context.Context, id string) (*Job, error) {
 	var j *Job
 	err := q.db.WithTx(ctx, func(tx *db.Tx) error {
 		now := q.now()
-		res, err := tx.Exec(ctx, `UPDATE jobs SET state = 'queued', attempts = 0, progress = 0, step = 0, message = '', error = '{}',
+		res, err := tx.Exec(ctx, `UPDATE jobs SET state = 'queued', attempt_base = attempts, progress = 0, step = 0, message = '', error = '{}',
 			output = '{}', cancel_requested = FALSE, worker_id = NULL, lease_expires_at = NULL, run_after = NULL, finished_at = NULL, updated_at = ?
 			WHERE id = ? AND state IN ('failed', 'canceled')`, now, id)
 		if err != nil {

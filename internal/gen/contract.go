@@ -6,6 +6,7 @@ package gen
 
 import (
 	"context"
+	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
@@ -35,6 +36,11 @@ type ScriptRequest struct {
 	// authorization, local-only and availability checks still pass.
 	PinProviderID string `json:"pin_provider_id,omitempty"`
 	PinModelID    string `json:"pin_model_id,omitempty"`
+	// ExpectedUpdatedAt, when non-zero, is the chapter revision the caller
+	// validated (for example "this chapter has no script yet"). Enqueue fails
+	// with studio.ErrConflict when the chapter changed since, atomically with
+	// the job insert, so a caller's check-then-act cannot race a save.
+	ExpectedUpdatedAt time.Time `json:"expected_updated_at,omitempty"`
 }
 
 // CharacterSheetRequest generates reference sheets for a character.
