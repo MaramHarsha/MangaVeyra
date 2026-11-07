@@ -177,5 +177,7 @@
   "bible.lock.references.other": "{count} references",
   "bible.relationships.add": "Relationship",
   "bible.role_line.placeholder": "role line, e.g. lantern-tax collector",
-  "bible.upload.prompt": "Choose an image to upload"
+  "bible.upload.prompt": "Choose an image to upload",
+  "bible.setting.usage": "Panel usage",
+  "bible.route.cost": "~{amount}"
 }

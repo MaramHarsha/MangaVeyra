@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/ai"
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
@@ -54,6 +55,9 @@ type biblePage struct {
 	Errors                                                                        web.FormErrors
 	CanEdit, CanArt, CanGenerate, Editing, AddingOutfit, AddingRef, AddingSetting bool
 	Job                                                                           *jobs.Job
+	// RoutePick is the C4 route chip after a sheet job was routed
+	// ("Placeholder art · built-in").
+	RoutePick string
 	JobPosition                                                                   int
 	Candidates                                                                    []gen.Candidate
 }
@@ -391,6 +395,7 @@ func (m *Module) newCharacterPage(w http.ResponseWriter, r *http.Request) error 
 				return err
 			}
 		}
+		v.RoutePick = m.routePick(r.Context(), v.Job)
 		if v.Job.State == jobs.StateDone {
 			v.Candidates, err = m.gen.Candidates(r.Context(), actor, jobID)
 			if err != nil {
@@ -994,6 +999,25 @@ func bibleOptions(ctx context.Context, group string, values ...string) []ui.Opti
 	}
 	return out
 }
+// routePick describes the route a job used: model · provider · estimate.
+func (m *Module) routePick(ctx context.Context, job *jobs.Job) string {
+	if job == nil || job.ModelID == "" {
+		return ""
+	}
+	model, provider := job.ModelID, job.ProviderID
+	if namer, ok := core.Use[ai.RouteNamer](m.d); ok {
+		model, provider = namer.RouteNames(ctx, job.ModelID, job.ProviderID)
+	}
+	parts := []string{model, provider}
+	switch {
+	case job.Estimate.USD > 0:
+		parts = append(parts, i18n.T(ctx, "bible.route.cost", "amount", fmt.Sprintf("$%.2f", job.Estimate.USD)))
+	case job.Estimate.GPUSeconds > 0:
+		parts = append(parts, i18n.T(ctx, "compute.gpu_time", "seconds", int(job.Estimate.GPUSeconds+.5)))
+	}
+	return joinParts(parts...)
+}
+
 func bibleFieldLabel(ctx context.Context, key string) string { return i18n.T(ctx, "bible.field."+key) }
 func bibleCandidateVars(ctx context.Context, candidates []gen.Candidate) []ui.Variation {
 	out := make([]ui.Variation, 0, len(candidates))

@@ -46,6 +46,21 @@ func TestRelativeTimeAndProjectMeta(t *testing.T) {
 	}
 }
 
+// The FRONT slot shows the kept reference sheet until a front view exists.
+func TestFrontSlotFallsBackToTheKeptSheet(t *testing.T) {
+	v := biblePage{Media: []bibleMedia{{Description: "sheet", URL: "/media/sheet.png"}}}
+	if got := bibleSlot(v, "front").URL; got != "/media/sheet.png" {
+		t.Fatalf("front slot = %q", got)
+	}
+	if got := bibleSlot(v, "side").URL; got != "" {
+		t.Fatalf("side slot = %q", got)
+	}
+	v.Media = append(v.Media, bibleMedia{Description: "front", URL: "/media/front.png"})
+	if got := bibleSlot(v, "front").URL; got != "/media/front.png" {
+		t.Fatalf("front slot with a front view = %q", got)
+	}
+}
+
 func TestProjectBadgeUsesTheDesignWords(t *testing.T) {
 	ctx := i18n.WithLocale(context.Background(), "en")
 	for _, tc := range []struct {

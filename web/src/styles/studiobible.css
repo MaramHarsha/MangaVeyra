@@ -28,7 +28,7 @@
 .mv-bible__character-detail { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 28px; }
 .mv-bible__references { position: relative; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .mv-bible__portrait-wrap { position: relative; }
-.mv-bible__image { overflow: hidden; background: var(--mv-surface-2); }
+.mv-bible__image { position: relative; overflow: hidden; background: var(--mv-surface-2); }
 .mv-bible__image img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .mv-bible__portrait { height: 420px; }
 .mv-bible__kanji { position: absolute; z-index: 1; inset-block-start: 10px; inset-inline-end: 10px; font-family: var(--mv-font-jp); font-size: 90px; line-height: 1; color: var(--mv-text); opacity: .18; mix-blend-mode: difference; pointer-events: none; }
@@ -104,6 +104,9 @@
 .mv-bible__style .mv-seg { width: 100%; }
 .mv-bible__more { color: var(--mv-text-2); font-size: var(--mv-fs-meta); }
 .mv-bible__generate-actions { display: flex; flex-direction: column; gap: 10px; margin-block-start: auto; }
+.mv-bible__route .mv-route-line, .mv-bible__route .mv-route { display: flex; width: 100%; }
+.mv-bible__sheets > .mv-notice { border-color: var(--mv-line); }
+.mv-bible__sheets > form { display: flex; flex-direction: column; gap: 10px; }
 .mv-bible__sheets { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .mv-bible__sheet-heading { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 .mv-bible__sheet-heading span { font-size: var(--mv-fs-meta); color: var(--mv-text-2); }
@@ -119,7 +122,12 @@
 .mv-bible__setting-image { height: 150px; }
 .mv-bible__setting-card > div:last-child { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
 .mv-bible__setting-card h2 { font-size: var(--mv-fs-ui); overflow-wrap: anywhere; }
-.mv-bible__setting-card p { font-size: var(--mv-fs-meta); color: var(--mv-text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Usage line: "Panel usage · Soon · {description}" on one line, as the design's
+   "Used in 46 panels · night & dusk". */
+.mv-bible__usage { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--mv-fs-meta); color: var(--mv-text-2); white-space: nowrap; }
+.mv-bible__usage > * { flex: none; }
+.mv-bible__usage .mv-soon { margin: 0; }
+.mv-bible__usage > .mv-bible__usage-note { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mv-bible__tags { display: flex; gap: 4px; flex-wrap: wrap; }
 .mv-bible__setting-form { max-width: 760px; }
 

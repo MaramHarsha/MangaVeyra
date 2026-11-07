@@ -63,6 +63,7 @@ func newModule(d *core.Deps, doer httpDoer, now func() time.Time) *Module {
 		d.Jobs.MarkPrivateInput("image.generate", "image.edit", "image.inpaint", TaskCharacterSheet)
 	}
 	core.Provide[setup.ModelStep](d, m)
+	core.Provide[RouteNamer](d, m)
 	return m
 }
 

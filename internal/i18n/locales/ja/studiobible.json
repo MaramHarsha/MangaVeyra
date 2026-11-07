@@ -173,5 +173,7 @@
   "bible.projects.state.archived": "アーカイブ済み",
   "bible.relationships.add": "関係",
   "bible.role_line.placeholder": "役割の表示文（例：ランタン税の取り立て人）",
-  "bible.upload.prompt": "アップロードする画像を選ぶ"
+  "bible.upload.prompt": "アップロードする画像を選ぶ",
+  "bible.setting.usage": "使用コマ",
+  "bible.route.cost": "約{amount}"
 }

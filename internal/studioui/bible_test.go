@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -106,6 +107,10 @@ func TestBibleCreateUploadProfileOutfitSettingAndRestore(t *testing.T) {
 		}
 		page := c.Get(detail)
 		mustContain(t, string(page.Body), "凛 Asagiri", "MAIN REFERENCE", `src="/media/`, "Outfits", "Relationships", "Character Lock", `class="mv-bible__add-outfit"`, "Outfit", `disabled`)
+		// A real image keeps its slot caption ("MAIN REFERENCE · FULL BODY").
+		if !regexp.MustCompile(`(?s)<div class="mv-bible__image mv-bible__portrait">\s*<img [^>]*>\s*<span class="mv-tone__label" aria-hidden="true">MAIN REFERENCE · FULL BODY</span>`).MatchString(string(page.Body)) {
+			t.Error("main reference image lost its caption")
+		}
 		profile := url.Values{"name": {"凛 朝霧"}, "role": {"Courier"}, "role_line": {"LEAD · COURIER"}, "age": {"19"}, "look": {"Blue coat"}, "personality": {"Loyal"}, "speech_style": {"Short sentences"}, "category": {"main"}, "revision": {character.UpdatedAt.Format(time.RFC3339Nano)}}
 		if resp := postForm(c, detail, profile); resp.StatusCode != 303 {
 			t.Fatalf("profile=%d %.1000s", resp.StatusCode, resp.Body)
@@ -150,6 +155,11 @@ func TestBibleCreateUploadProfileOutfitSettingAndRestore(t *testing.T) {
 		}
 		locationPage := c.Get(base + "/setting?kind=location")
 		mustContain(t, string(locationPage.Body), "Salt City rooftops", "Locations 1", "Props 0", `src="/media/`)
+		// C5 card anatomy: caption on the art, title, the usage line in the Soon
+		// state followed by the description, then the tags.
+		mustContain(t, string(locationPage.Body), `<span class="mv-tone__label" aria-hidden="true">LOCATION REFERENCE</span>`,
+			`<p class="mv-bible__usage" title="Night &amp; dusk"><span>Panel usage</span><span class="mv-soon">Soon</span>`,
+			`<span class="mv-bible__usage-note">· Night &amp; dusk</span>`)
 		mustNotContain(t, string(c.Get(base+"/setting?kind=prop").Body), "Salt City rooftops")
 		mustContain(t, string(c.Get(base+"/characters?category=main").Body), "凛", "朝霧", "LEAD · COURIER")
 		mustNotContain(t, string(c.Get(base+"/characters?category=extra").Body), "凛 朝霧")

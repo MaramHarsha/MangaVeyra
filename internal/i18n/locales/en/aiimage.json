@@ -106,5 +106,10 @@
   "aiimage.tile.fal": "Image generation",
   "aiimage.use.edits": "Region edits",
   "aiimage.use.panels": "Panels · sheets · covers",
-  "aiimage.use.placeholder": "Panels · sheets · edits · fallback"
+  "aiimage.use.placeholder": "Panels · sheets · edits · fallback",
+  "aiimage.placeholder.art": "Placeholder art",
+  "aiimage.placeholder.text": "Placeholder text",
+  "aiimage.custom.blocked_title": "Ask an admin to add this provider",
+  "aiimage.custom.blocked_body": "Members can't add their own providers on this server. An admin can connect it for everyone, or allow members to add their own in Model routing.",
+  "aiimage.custom.blocked_back": "Back to models"
 }

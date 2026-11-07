@@ -45,6 +45,16 @@ func bibleReference(v biblePage, kind, label string) bibleMedia {
 	}
 	return bibleMedia{Label: label}
 }
+// bibleSlot is the reference shown in a strip slot. A kept reference sheet
+// (front / side / face) fills FRONT until a front view is uploaded.
+func bibleSlot(v biblePage, kind string) bibleMedia {
+	ref := bibleReference(v, kind, "")
+	if ref.URL == "" && kind == "front" {
+		ref = bibleReference(v, "sheet", "")
+	}
+	return ref
+}
+
 func bibleJobAttrs(v biblePage) templ.Attributes {
 
 	if v.Job == nil || (v.Job.State != jobs.StateQueued && v.Job.State != jobs.StateRunning) {
@@ -251,7 +261,10 @@ templ BibleCharacters(v biblePage) {
 
 templ bibleImage(url, label, class string) {
 	if url!="" {
-		<div class={ "mv-bible__image",class }><img src={ url } alt={ label } loading="lazy"/></div>
+		<div class={ "mv-bible__image",class }>
+			<img src={ url } alt={ label } loading="lazy"/>
+			<span class="mv-tone__label" aria-hidden="true">{ label }</span>
+		</div>
 	} else {
 		@ui.ToneBox(label, "", class)
 	}
@@ -270,7 +283,7 @@ templ BibleCharacter(v biblePage) {
 			</div>
 			<div class="mv-bible__ref-strip">
 				for _,kind:=range []string{"front","side","back","other"} {
-					@bibleImage(bibleReference(v, kind, "").URL, i18n.T(ctx, "bible.refs."+kind), "mv-bible__ref")
+					@bibleImage(bibleSlot(v, kind).URL, i18n.T(ctx, "bible.refs."+kind), "mv-bible__ref")
 				}
 			</div>
 			<div class="mv-bible__ref-strip">
@@ -547,7 +560,13 @@ templ BibleNewCharacter(v biblePage) {
 						{ i18n.T(ctx,"bible.new.save_upload") }
 					}
 				} else {
-					@ui.RouteChip(i18n.T(ctx, "bible.route.auto"), i18n.T(ctx, "bible.route.pending"), "", "")
+					<div class="mv-bible__route">
+						if v.RoutePick != "" {
+							@ui.RouteChip(i18n.T(ctx, "bible.route.auto"), v.RoutePick, "", "")
+						} else {
+							@ui.RouteChip(i18n.T(ctx, "bible.route.auto"), i18n.T(ctx, "bible.route.pending"), "", "")
+						}
+					</div>
 					@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Primary, Size: ui.LG, Full: true, Icon: "sparkles", Disabled: !v.CanGenerate || (v.Job != nil && (v.Job.State == jobs.StateQueued || v.Job.State == jobs.StateRunning))}) {
 						{ i18n.T(ctx,"bible.new.generate") }
 					}
@@ -723,8 +742,12 @@ templ BibleSetting(v biblePage) {
 						<h2>
 							{ item.Name }
 						</h2>
-						<p>
-							{ item.Description }
+						<p class="mv-bible__usage" title={ item.Description }>
+							<span>{ i18n.T(ctx,"bible.setting.usage") }</span>
+							@ui.SoonTag()
+							if item.Description!="" {
+								<span class="mv-bible__usage-note">· { item.Description }</span>
+							}
 						</p>
 						if len(item.Tags)>0 {
 							<div class="mv-bible__tags">
