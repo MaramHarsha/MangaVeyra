@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -124,19 +123,18 @@ func (m *Module) compute(r *http.Request) computeView {
 	return computeView{Queued: c.Queued, Running: c.Running, WorkersOnline: c.WorkersOnline, Load: c.Load(), GPU: c.GPU, VRAMUsedMB: c.VRAMUsedMB, VRAMTotalMB: c.VRAMTotalMB, WorkerName: c.WorkerName, Host: m.host(r)}
 }
 
-// host is the server name shown in the footer ("Self-host · studio.local").
+// host is the server shown in the footer ("Self-host · studio.local"), the
+// same value the app shell and the export screen show: the instance's public
+// URL, MV_PUBLIC_URL, or the request host.
 func (m *Module) host(r *http.Request) string {
-	if m.d.Cfg != nil && m.d.Cfg.PublicURL != "" {
-		if u, err := url.Parse(m.d.Cfg.PublicURL); err == nil && u.Hostname() != "" {
-			return u.Hostname()
-		}
+	public, configured := "", ""
+	if m.d.Settings != nil {
+		public = m.d.Settings.MustInstance(r.Context()).PublicURL
 	}
-	if h := r.Host; h != "" {
-		if u, err := url.Parse("http://" + h); err == nil && u.Hostname() != "" {
-			return u.Hostname()
-		}
+	if m.d.Cfg != nil {
+		configured = m.d.Cfg.PublicURL
 	}
-	return "localhost"
+	return web.ServerHost(public, configured, r.Host)
 }
 
 // queue returns the live compute state and the signed-in user's recent panel
@@ -176,5 +174,3 @@ func (m *Module) queue(w http.ResponseWriter, r *http.Request) error {
 	core.JSON(w, 200, map[string]any{"compute": m.compute(r), "jobs": out})
 	return nil
 }
-
-var _ = web.GB

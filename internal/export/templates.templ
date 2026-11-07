@@ -117,7 +117,7 @@ templ exportScreen(c *layout.Chrome, v exportView) {
 templ editorBackdrop(c *layout.Chrome, v exportView) {
 	<div class="mv-exportui__editor" aria-hidden="true" inert>
 		<header class="mv-exportui__bar">
-			@layout.ThemedImg("mv-exportui__logo", layout.BrandMarkDark, layout.BrandMarkLight, "", 26, 26)
+			@layout.ThemedImg("mv-exportui__logo", "/static/brand/mark-color-on-dark-gate-blue.svg", "/static/brand/mark-color-on-light-gate-blue.svg", "", 26, 26)
 			<div class="mv-exportui__crumb">
 				<span>{ v.Project.Title }</span>
 				@ui.Icon("chevron-right", 0)
@@ -135,13 +135,22 @@ templ editorBackdrop(c *layout.Chrome, v exportView) {
 			<div class="mv-seg mv-exportui__modes">
 				<span class="mv-seg__item" aria-current="true">{ i18n.T(ctx,"exportui.pages") }</span>
 				<span class="mv-seg__item">{ i18n.T(ctx,"exportui.lettering") }</span>
-				<span class="mv-seg__item">{ i18n.T(ctx,"exportui.translate") }</span>
-				<span class="mv-seg__item">{ i18n.T(ctx,"exportui.animate") }</span>
+				<span class="mv-seg__item">
+					{ i18n.T(ctx,"exportui.translate") }
+					@ui.SoonTag()
+				</span>
+				<span class="mv-seg__item">
+					{ i18n.T(ctx,"exportui.animate") }
+					@ui.SoonTag()
+				</span>
 			</div>
 			<div class="mv-exportui__bar-end">
-				if c != nil && c.User != nil {
-					@ui.Avatar(ui.AvatarProps{Name: userName(c), Key: c.User.ID, Size: "sm", Online: true})
-				}
+				// Presence matches the live editor: one collaboration control in
+				// the Soon state until real-time presence exists (ADR 0004 §8).
+				<span class="mv-btn mv-btn--sm is-soon mv-exportui__presence" aria-label={ i18n.T(ctx, "editor.collaboration") }>
+					@ui.Icon("users", 16)
+					@ui.SoonTag()
+				</span>
 				if c != nil && c.Meter != nil {
 					@ui.ComputeMeter(*c.Meter)
 				}

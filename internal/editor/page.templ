@@ -15,7 +15,7 @@ templ EditorDocument(c *layout.Chrome, data bootstrapData, props string) {
 		<div class="mv-ed mv-ed--static" data-island="editor" data-props={ props }>
 			<header class="mv-ed__bar">
 				<a href={ templ.URL("/studio/p/" + data.Project.ID + "/story/" + data.Chapter.ID) } class="mv-ed__back" aria-label={ label(ctx, "back") }>
-					<img src="/static/brand/mark-color-on-dark-gate-blue.svg" width="24" height="24" alt=""/>
+					@layout.ThemedImg("", "/static/brand/mark-color-on-dark-gate-blue.svg", "/static/brand/mark-color-on-light-gate-blue.svg", "", 24, 24)
 				</a>
 				<div class="mv-ed__crumbs">
 					<span class="mv-ed__project">{ data.Project.Title }</span>

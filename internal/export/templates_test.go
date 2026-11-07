@@ -164,10 +164,10 @@ func TestExportBackdropIsTheD1EditorShell(t *testing.T) {
 			// compute, history, zoom, Preview, Export, Publish (Soon).
 			bar := section(t, shell, `class="mv-exportui__bar"`, `</header>`)
 			chapter := i18n.T(ctx, "exportui.chapter_title", "number", 8, "title", "The Lighthouse Debt")
-			inOrder(t, bar, layout.BrandMarkDark, `<span>Tidebreak Courier</span>`, "ti-chevron-right", "<strong>"+chapter+"</strong>", "ti-chevron-down",
+			inOrder(t, bar, "/static/brand/mark-color-on-dark-gate-blue.svg", `<span>Tidebreak Courier</span>`, "ti-chevron-right", "<strong>"+chapter+"</strong>", "ti-chevron-down",
 				"ti-arrow-back-up", "ti-arrow-forward-up",
 				`<span class="mv-seg__item" aria-current="true">`+i18n.T(ctx, "exportui.pages")+`</span>`, i18n.T(ctx, "exportui.lettering"), i18n.T(ctx, "exportui.translate"), i18n.T(ctx, "exportui.animate"),
-				"mv-avatar--online", "2 queued", "ti-history", "ti-zoom-in", "100%",
+				"ti-users", "2 queued", "ti-history", "ti-zoom-in", "100%",
 				`<span class="mv-btn mv-btn--quiet mv-btn--sm">`, "ti-eye", i18n.T(ctx, "exportui.preview"),
 				`<span class="mv-btn mv-btn--quiet mv-btn--sm">`, "ti-download", i18n.T(ctx, "exportui.export"),
 				`<span class="mv-btn mv-btn--primary mv-btn--sm is-soon">`, i18n.T(ctx, "exportui.publish"), `<span class="mv-soon">`+i18n.T(ctx, "ui.soon")+`</span>`)

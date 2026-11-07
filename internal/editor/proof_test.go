@@ -40,7 +40,7 @@ func TestEditorNoJSProofIsCompleteAndLocalized(t *testing.T) {
 			`class="mv-ed__help mv-ed__loading"`, `<noscript><p class="mv-ed__help mv-ed__nojs">`,
 			`aria-label="Page 1"`, `aria-label="Page 2"`, `class="mv-ed__thumb-number" aria-hidden="true"`,
 			"Panel 1.1", "Background · rooftop", "Lettering",
-			`<span class="mv-ed__footer-end">Self-host · 127.0.0.1</span>`, "/pages/" + page.ID + "/thumb?v=",
+			`<span class="mv-ed__footer-end">Self-host · 127.0.0.1`, "/pages/" + page.ID + "/thumb?v=",
 		} {
 			if !strings.Contains(body, want) {
 				t.Fatalf("no-JS editor is missing %q", want)
