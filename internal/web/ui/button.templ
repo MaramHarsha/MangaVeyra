@@ -1,5 +1,7 @@
 package ui
 
+import "github.com/MaramHarsha/MangaVeyra/internal/i18n"
+
 // ButtonProps configure Button and LinkButton.
 type ButtonProps struct {
 	Variant Variant
@@ -77,8 +79,30 @@ templ Button(p ButtonProps) {
 	</button>
 }
 
-// LinkButton renders a link that looks like a button.
+// SoonTag marks a designed destination that is not built yet (ADR 0004 §7).
+templ SoonTag() {
+	<span class="mv-soon">{ i18n.T(ctx, "ui.soon") }</span>
+}
+
+// LinkButton renders a link that looks like a button. A link to a page this
+// server does not serve yet renders as a disabled control with a "Soon" tag.
 templ LinkButton(href string, p ButtonProps) {
+	if !Ready(ctx, href) {
+		<a class={ p.class(), "is-soon" } aria-disabled="true" title={ i18n.T(ctx, "ui.soon_hint") }>
+			if p.Icon != "" {
+				@Icon(p.Icon, p.iconSize())
+			}
+			{ children... }
+			@SoonTag()
+		</a>
+	} else {
+		@linkButton(href, p) {
+			{ children... }
+		}
+	}
+}
+
+templ linkButton(href string, p ButtonProps) {
 	<a
 		href={ templ.URL(href) }
 		class={ p.class() }

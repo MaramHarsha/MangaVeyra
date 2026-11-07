@@ -69,6 +69,8 @@
   "setup.provider.local.desc": "Your own GPU, nothing leaves the machine",
   "setup.provider.openrouter.name": "OpenRouter",
   "setup.provider.openrouter.desc": "One key for 30+ image models and text models",
+  "setup.provider.openai.name": "OpenAI",
+  "setup.provider.openai.desc": "Structured script generation directly with an OpenAI key",
   "setup.provider.fal.name": "fal",
   "setup.provider.fal.desc": "Fast hosted open models",
   "setup.provider.vendor.name": "OpenAI · Google · xAI",

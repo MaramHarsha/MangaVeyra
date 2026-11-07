@@ -119,7 +119,13 @@ func (m *Module) saveProfile(w http.ResponseWriter, r *http.Request) error {
 		fe.Add("bio", i18n.T(ctx, "settings.account.bio_long"))
 	}
 	if !fe.Has() {
-		_, err := m.d.Auth.UpdateProfile(ctx, core.UserFrom(ctx).ID, auth.ProfileUpdate{DisplayName: &name, Email: &email, Bio: &bio})
+		update := auth.ProfileUpdate{DisplayName: &name, Email: &email}
+		// The designed Account section (G1) has no bio field; keep an existing
+		// bio unless a form actually submits one.
+		if _, sent := r.PostForm["bio"]; sent {
+			update.Bio = &bio
+		}
+		_, err := m.d.Auth.UpdateProfile(ctx, core.UserFrom(ctx).ID, update)
 		if err == nil {
 			return m.saved(w, r, SecAccount, nil)
 		}

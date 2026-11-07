@@ -61,7 +61,7 @@ func TestScopeValidation(t *testing.T) {
 		{"page", jobs.Scope{Kind: jobs.ScopePage, ProjectID: "project", PageID: "page"}},
 		{"panel", jobs.Scope{Kind: jobs.ScopePanel, ProjectID: "project", PageID: "page", PanelID: "panel"}},
 		{"layer", jobs.Scope{Kind: jobs.ScopeLayer, ProjectID: "project", PanelID: "panel", LayerID: "layer"}},
-		{"region", jobs.Scope{Kind: jobs.ScopeRegion, ProjectID: "project", PanelID: "panel", Region: json.RawMessage(`{"box":[1,2,3,4]}`)}},
+		{"region", jobs.Scope{Kind: jobs.ScopeRegion, ProjectID: "project", LayerID: "layer", Region: json.RawMessage(`{"kind":"mask","asset_id":"mask"}`)}},
 		{"project", jobs.Scope{Kind: jobs.ScopeProject, ProjectID: "project"}},
 		{"none", none},
 	}
@@ -84,7 +84,7 @@ func TestScopeValidation(t *testing.T) {
 		{"page ids", jobs.Scope{Kind: jobs.ScopePage}, []string{"project_id", "page_id"}},
 		{"panel ids", jobs.Scope{Kind: jobs.ScopePanel}, []string{"project_id", "page_id", "panel_id"}},
 		{"layer ids", jobs.Scope{Kind: jobs.ScopeLayer}, []string{"project_id", "panel_id", "layer_id"}},
-		{"region fields", jobs.Scope{Kind: jobs.ScopeRegion}, []string{"project_id", "panel_id", "needs region"}},
+		{"region fields", jobs.Scope{Kind: jobs.ScopeRegion}, []string{"project_id", "layer_id", "needs region"}},
 		{"project id", jobs.Scope{Kind: jobs.ScopeProject}, []string{"project_id"}},
 	}
 	for _, tc := range missing {
@@ -110,7 +110,7 @@ func TestScopeValidation(t *testing.T) {
 		jobs.ScopePage:    {"chapter_id", "panel_id", "layer_id"},
 		jobs.ScopePanel:   {"chapter_id", "layer_id"},
 		jobs.ScopeLayer:   {"chapter_id", "page_id"},
-		jobs.ScopeRegion:  {"chapter_id", "page_id", "layer_id"},
+		jobs.ScopeRegion:  {"chapter_id", "page_id", "panel_id"},
 		jobs.ScopeProject: {"chapter_id", "page_id", "panel_id", "layer_id"},
 		jobs.ScopeNone:    {"project_id", "chapter_id", "page_id", "panel_id", "layer_id"},
 	}
@@ -159,10 +159,20 @@ func TestScopeValidation(t *testing.T) {
 
 	for _, region := range []json.RawMessage{nil, json.RawMessage{}, json.RawMessage(`null`), json.RawMessage(" \nnull\t")} {
 		t.Run("required region/"+string(region), func(t *testing.T) {
-			scope := jobs.Scope{Kind: jobs.ScopeRegion, ProjectID: "project", PanelID: "panel", Region: region}
+			scope := jobs.Scope{Kind: jobs.ScopeRegion, ProjectID: "project", LayerID: "layer", Region: region}
 			err := scope.Validate()
 			if err == nil || !strings.Contains(err.Error(), "needs region") {
 				t.Fatalf("Validate() error = %v, want required region", err)
+			}
+		})
+	}
+
+	for _, region := range []json.RawMessage{json.RawMessage(`[]`), json.RawMessage(`"mask"`), json.RawMessage(`{`)} {
+		t.Run("invalid region object/"+string(region), func(t *testing.T) {
+			scope := jobs.Scope{Kind: jobs.ScopeRegion, ProjectID: "project", LayerID: "layer", Region: region}
+			err := scope.Validate()
+			if err == nil || !strings.Contains(err.Error(), "needs a JSON object") {
+				t.Fatalf("Validate() error = %v, want JSON object error", err)
 			}
 		})
 	}
@@ -182,16 +192,32 @@ func TestEnqueueValidatorAndEvents(t *testing.T) {
 		q := ta.Deps.Jobs
 		rec := &recorder{}
 		q.SetPublisher(rec)
+		proj := seedProject(t, ta)
+		chapterID, pageID := db.NewID(), db.NewID()
+		lockedPanelID, panelID := db.NewID(), db.NewID()
+		now := db.Now()
+		if _, err := ta.Deps.DB.Exec(ctx, `INSERT INTO chapters (id, project_id, number, title, created_at, updated_at)
+			VALUES (?, ?, 1, 'Validator fixture', ?, ?)`, chapterID, proj, now, now); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ta.Deps.DB.Exec(ctx, `INSERT INTO pages (id, project_id, chapter_id, number, created_at, updated_at)
+			VALUES (?, ?, ?, 1, ?, ?)`, pageID, proj, chapterID, now, now); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ta.Deps.DB.Exec(ctx, `INSERT INTO panels (id, project_id, page_id, order_idx, created_at, updated_at)
+			VALUES (?, ?, ?, 0, ?, ?), (?, ?, ?, 1, ?, ?)`, lockedPanelID, proj, pageID, now, now,
+			panelID, proj, pageID, now, now); err != nil {
+			t.Fatal(err)
+		}
 		locked := errors.New("panel is locked")
 		q.AddValidator(func(ctx context.Context, p *jobs.EnqueueParams) error {
-			if p.Scope.PanelID == "locked-panel" {
+			if p.Scope.PanelID == lockedPanelID {
 				return httpx.ErrLocked(locked.Error())
 			}
 			return nil
 		})
-		proj := seedProject(t, ta)
 		_, err := q.Enqueue(ctx, jobs.EnqueueParams{Type: "image.generate", UserID: ta.Admin.ID,
-			Scope: jobs.Scope{Kind: jobs.ScopePanel, ProjectID: proj, PageID: "pg", PanelID: "locked-panel"}})
+			Scope: jobs.Scope{Kind: jobs.ScopePanel, ProjectID: proj, PageID: pageID, PanelID: lockedPanelID}})
 		var ae *httpx.APIError
 		if !errors.As(err, &ae) || ae.Code != httpx.CodeLocked {
 			t.Fatalf("lock validator not applied: %v", err)
@@ -200,12 +226,12 @@ func TestEnqueueValidatorAndEvents(t *testing.T) {
 			t.Fatal("invalid scope accepted")
 		}
 		j, err := q.Enqueue(ctx, jobs.EnqueueParams{Type: "image.generate", UserID: ta.Admin.ID, Executor: jobs.ExecutorWorker,
-			Scope: jobs.Scope{Kind: jobs.ScopePanel, ProjectID: proj, PageID: "pg", PanelID: "p1"}, Input: map[string]any{"prompt": "Rin on the pier"},
+			Scope: jobs.Scope{Kind: jobs.ScopePanel, ProjectID: proj, PageID: pageID, PanelID: panelID}, Input: map[string]any{"prompt": "Rin on the pier"},
 			Estimate: jobs.Cost{GPUSeconds: 40}, ModelID: "flux2-klein"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if j.State != jobs.StateQueued || j.Estimate.GPUSeconds != 40 || j.Scope.PanelID != "p1" || !strings.Contains(string(j.Input), "pier") {
+		if j.State != jobs.StateQueued || j.Estimate.GPUSeconds != 40 || j.Scope.PanelID != panelID || !strings.Contains(string(j.Input), "pier") {
 			t.Fatalf("job %+v", j)
 		}
 		for _, topic := range []string{"job:" + j.ID, "user:" + ta.Admin.ID, "project:" + proj, "admin:queue"} {
@@ -228,6 +254,126 @@ func seedProject(t *testing.T, ta *testutil.TestApp) string {
 		t.Fatal(err)
 	}
 	return id
+}
+
+func TestListComposesChapterScopeFilters(t *testing.T) {
+	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		projectID := seedProject(t, ta)
+		chapterA, chapterB := db.NewID(), db.NewID()
+		now := db.Now()
+		if _, err := ta.Deps.DB.Exec(ctx, `INSERT INTO chapters (id, project_id, number, title, created_at, updated_at)
+			VALUES (?, ?, 1, 'A', ?, ?), (?, ?, 2, 'B', ?, ?)`, chapterA, projectID, now, now,
+			chapterB, projectID, now, now); err != nil {
+			t.Fatal(err)
+		}
+		for _, chapterID := range []string{chapterA, chapterB} {
+			if _, err := ta.Deps.Jobs.Enqueue(ctx, jobs.EnqueueParams{Type: "script.generate", UserID: ta.Admin.ID,
+				Scope: jobs.Scope{Kind: jobs.ScopeChapter, ProjectID: projectID, ChapterID: chapterID}}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		got, err := ta.Deps.Jobs.List(ctx, jobs.Filter{UserID: ta.Admin.ID, ProjectID: projectID,
+			ChapterID: chapterA, Types: []string{"script.generate"}, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].Scope.ChapterID != chapterA || got[0].Scope.ProjectID != projectID ||
+			got[0].UserID != ta.Admin.ID || got[0].Type != "script.generate" {
+			t.Fatalf("chapter-filtered jobs = %#v", got)
+		}
+	})
+}
+
+func TestJobAPIBearerScopesAndProjectAllowlist(t *testing.T) {
+	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		owner := ta.CreateUser(t, "job-scope-owner", auth.RoleCreator)
+		projectA, projectB := db.NewID(), db.NewID()
+		chapterA, chapterB := db.NewID(), db.NewID()
+		now := db.Now()
+		if _, err := ta.Deps.DB.Exec(ctx, `INSERT INTO projects (id, owner_id, title, slug) VALUES
+			(?, ?, 'Allowed Project', ?), (?, ?, 'Blocked Project', ?)`,
+			projectA, owner.ID, "allowed-"+projectA, projectB, owner.ID, "blocked-"+projectB); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ta.Deps.DB.Exec(ctx, `INSERT INTO chapters (id, project_id, number, title, created_at, updated_at) VALUES
+			(?, ?, 1, 'Allowed Chapter', ?, ?), (?, ?, 1, 'Blocked Chapter', ?, ?)`,
+			chapterA, projectA, now, now, chapterB, projectB, now, now); err != nil {
+			t.Fatal(err)
+		}
+		enqueue := func(scope jobs.Scope, marker string) *jobs.Job {
+			job, err := ta.Deps.Jobs.Enqueue(ctx, jobs.EnqueueParams{Type: "script.generate", UserID: owner.ID,
+				Scope: scope, Input: map[string]any{"private_marker": marker}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return job
+		}
+		allowed := enqueue(jobs.Scope{Kind: jobs.ScopeChapter, ProjectID: projectA, ChapterID: chapterA}, "allowed-source")
+		blocked := enqueue(jobs.Scope{Kind: jobs.ScopeChapter, ProjectID: projectB, ChapterID: chapterB}, "blocked-source")
+		unscoped := enqueue(none, "unscoped-source")
+
+		makeToken := func(name string, scopes, projects []string) *testutil.Client {
+			raw, _, err := ta.Deps.Auth.CreateToken(ctx, auth.TokenInput{UserID: owner.ID, Kind: auth.TokenAPI,
+				Name: name, Scopes: scopes, ProjectIDs: projects})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return ta.BearerClient(raw)
+		}
+
+		noRead := makeToken("no job read", []string{"generate"}, []string{projectA})
+		if got := noRead.Get("/api/v1/jobs"); got.StatusCode != http.StatusForbidden {
+			t.Fatalf("unscoped job list = %d", got.StatusCode)
+		}
+
+		reader := makeToken("allowed job read", []string{"projects:read"}, []string{projectA})
+		list := reader.Get("/api/v1/jobs")
+		if list.StatusCode != http.StatusOK || !bytes.Contains(list.Body, []byte(allowed.ID)) ||
+			bytes.Contains(list.Body, []byte(blocked.ID)) || bytes.Contains(list.Body, []byte(unscoped.ID)) ||
+			bytes.Contains(list.Body, []byte("blocked-source")) || bytes.Contains(list.Body, []byte("unscoped-source")) {
+			t.Fatalf("project-restricted job list = %d %s", list.StatusCode, list.Body)
+		}
+		// Script inputs carry private adaptation source: an allowed reader sees
+		// the job, never its input.
+		if got := reader.Get("/api/v1/jobs/" + allowed.ID); got.StatusCode != http.StatusOK ||
+			!bytes.Contains(got.Body, []byte(allowed.ID)) || bytes.Contains(got.Body, []byte("allowed-source")) {
+			t.Fatalf("allowed job = %d %s", got.StatusCode, got.Body)
+		}
+		if list.StatusCode == http.StatusOK && bytes.Contains(list.Body, []byte("allowed-source")) {
+			t.Fatal("job list exposed a private script input")
+		}
+		for _, id := range []string{blocked.ID, unscoped.ID} {
+			if got := reader.Get("/api/v1/jobs/" + id); got.StatusCode != http.StatusNotFound {
+				t.Fatalf("restricted token read job %s = %d", id, got.StatusCode)
+			}
+		}
+		if got := reader.Get("/api/v1/jobs/" + blocked.ID + "/events"); got.StatusCode != http.StatusNotFound {
+			t.Fatalf("restricted token read events = %d", got.StatusCode)
+		}
+		if got := reader.Get("/api/v1/jobs/stats"); got.StatusCode != http.StatusForbidden {
+			t.Fatalf("token read aggregate stats = %d", got.StatusCode)
+		}
+		if got := reader.PostJSON("/api/v1/jobs/"+allowed.ID+"/cancel", nil); got.StatusCode != http.StatusForbidden {
+			t.Fatalf("read-only token canceled job = %d", got.StatusCode)
+		}
+
+		writer := makeToken("allowed job mutation", []string{"projects:write", "generate"}, []string{projectA})
+		if got := writer.PostJSON("/api/v1/jobs/"+blocked.ID+"/cancel", nil); got.StatusCode != http.StatusNotFound {
+			t.Fatalf("restricted token canceled foreign-project job = %d", got.StatusCode)
+		}
+		if got := writer.PostJSON("/api/v1/jobs/"+allowed.ID+"/cancel", nil); got.StatusCode != http.StatusOK {
+			t.Fatalf("authorized token cancel = %d %s", got.StatusCode, got.Body)
+		}
+		if got := writer.PostJSON("/api/v1/jobs/"+allowed.ID+"/retry", nil); got.StatusCode != http.StatusForbidden {
+			t.Fatalf("bearer token retried job = %d", got.StatusCode)
+		}
+		ownerSession := ta.Login(t, owner.Username)
+		if got := ownerSession.PostJSON("/api/v1/jobs/"+allowed.ID+"/retry", nil); got.StatusCode != http.StatusOK {
+			t.Fatalf("owner session retry = %d %s", got.StatusCode, got.Body)
+		}
+	})
 }
 
 func TestClaimOrderingAndFairShare(t *testing.T) {
@@ -351,11 +497,14 @@ func TestRetryFailoverCancelAndLeaseExpiry(t *testing.T) {
 		if j.State != jobs.StateFailed || j.Error == nil || j.Error.Code != "timeout" || j.Actual.USD < 0.019 || j.FinishedAt == nil {
 			t.Fatalf("final failure: %+v", j)
 		}
-		// manual retry resets the attempt budget
-		if j, err = q.Retry(ctx, j.ID); err != nil || j.State != jobs.StateQueued || j.Attempts != 0 {
+		// manual retry starts a fresh round without reusing attempt numbers
+		if j, err = q.Retry(ctx, j.ID); err != nil || j.State != jobs.StateQueued || j.Attempts != 2 ||
+			j.AttemptBase != 2 || j.RoundAttempt() != 0 {
 			t.Fatalf("retry: %+v %v", j, err)
 		}
-		claim()
+		if c := claim(); c == nil || c.Attempts != 3 || c.RoundAttempt() != 1 {
+			t.Fatalf("claim after retry: %+v", c)
+		}
 		q.Complete(ctx, j.ID, "", nil, jobs.Cost{})
 
 		// Failover: the router moves the job to the next model.

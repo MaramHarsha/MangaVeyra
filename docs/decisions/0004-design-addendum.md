@@ -7,6 +7,13 @@
 The design bundle is the visual source of truth. This record captures the corrections and additions agreed after the
 design review, so they survive even though the bundle is not under version control.
 
+> **Owner decision, 2026-11-07:** the HTML design bundle is final. The app matches it screen for screen, using the
+> design's own copy, including the game layer shown in the design (§2 is superseded for anything the design draws).
+> Milestone simplifications are not allowed (§6). A feature that does not exist yet keeps its designed control in
+> the disabled "Soon" state (§7). Only states the design never drew may be added (§3), built from the design's
+> components. The desktop artboards are the source of truth; the mobile artboards are not final and are not built
+> to yet. Phones get the responsive version of the desktop design.
+
 ## 1. Copy and naming corrections (already applied to the bundle)
 
 - **Accent colour.** The in-app accent is Gate blue `#3D8BFF` with ink text `#070A12` in both themes. Vermilion
@@ -56,3 +63,56 @@ state, error state, compute meter, routing chip):
   GPU worker.
 - The Lock score adds an outfit check (colour and silhouette of clothing regions) beside identity, because outfit
   drift is the most common complaint (implemented in Phase 2, embedder per ADR 0002).
+
+## 6. Gate A simplifications (removed 2026-11-07)
+
+Gate A first shipped narrower versions of four designed screens. On the owner's decision these are being replaced by
+the designed screens now, with unbuilt parts in the Soon state; the table records what each one was.
+
+| Screen | Design | Gate A version | Status (2026-11-07) |
+|---|---|---|---|
+| B3 New project wizard | Five steps (Premise, Genre, Style, Format, Generate) with format cards and a live summary | One page with the same fields as dropdowns | **Replaced** by the designed five-step wizard |
+| C1 Story editor | Arc/chapter/scene tree, compact panel table, Prose/Panels toggle, Script assistant, "Make pages from script" | Chapter list and a form per scene and panel | **Replaced** by the designed three-pane editor (assistant and "Make pages" in the Soon state) |
+| G2 Models & providers | Provider tiles, capability tabs, model table with router use, status and cost | One card per text connection | **Replaced** by the designed tiles, tabs and model table |
+| G12 Add custom provider | Four-step wizard for custom endpoints | A single key form for the fixed OpenRouter and OpenAI routes | Not built; "Add custom" is in the Soon state, and "Add provider" opens the key form for OpenRouter and OpenAI |
+
+## 7. Unbuilt destinations
+
+Navigation keeps every designed item in the designed order. Until a destination's page exists, its item renders
+disabled with a small "Soon" tag and no link, and buttons that would reach a missing page or endpoint render
+disabled with the same tag. No link or button may lead to a 404 or a missing endpoint.
+
+## 8. States and controls the design does not draw (recorded 2026-11-07)
+
+These exist because a real server needs them. Each one is built from the design's own components and sits where the
+nearest designed screen would put it.
+
+- **A2 Log in:** "Use a passkey" is shown as designed, in the Soon state, until passkeys exist.
+- **A3 Sign up:**
+  - Closed server: the designed "Join {server}" heading with a notice and a Log in button instead of the form.
+  - The username is derived from the email address, because the designed form has no username field.
+- **A4 Forgot password:** when the server has no email set up, the designed form stays, and a notice confirms the
+  admin route after submitting.
+- **G8 setup, step 3:** the GPU card also has "no worker" and "worker without a GPU" variants.
+- **G6 404:** until Explore exists, the primary action goes to the studio (signed in) or Log in.
+- **Top bar:** the compute meter shows status only until the queue page exists.
+- **G2 Models:**
+  - a "⋯" row menu (Test connection, Replace key, with a modal) and a scope line under the provider name, so each
+    connection can still be managed;
+  - the built-in placeholder row reads "Scripts · fallback" with cost "None";
+  - the fal and Ollama tiles carry short descriptions with the Soon tag.
+- **B3 wizard:**
+  - step 5 (Generate) and the premise "Try:" suggestions have no artboard;
+  - without JS all steps show stacked;
+  - "Draft saved" reads "Not saved until you generate" (no draft saving exists);
+  - pages per chapter is one number;
+  - the routing chip says the route is set by model routing;
+  - "Chapters to plan" is in the Soon state;
+  - design copy that promises features that do not exist yet (reflow, the 12-chapter outline) is worded as not yet
+    available.
+- **C1 story editor:**
+  - chapters are the top level of the tree (arcs are not stored yet);
+  - there is no continuity banner until a checker exists;
+  - each scene section has its own "Ch. N · Scene M" header;
+  - on narrow screens the assistant pane hides below 1180 px and the tree on phones (responsive layout).
+

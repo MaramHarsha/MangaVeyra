@@ -1,6 +1,10 @@
 package ui
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+)
 
 // FieldProps describe a labelled form field (design 04 §07).
 type FieldProps struct {
@@ -137,12 +141,21 @@ templ InputGroup(prefix string, invalid bool) {
 
 // SearchBox renders the search field with the "/" shortcut hint.
 templ SearchBox(id, name, value, placeholder, action string) {
-	<form class="mv-search" role="search" action={ templ.URL(action) } method="get">
-		@Icon("search", 16)
-		<label class="mv-sr-only" for={ id }>{ placeholder }</label>
-		<input class="mv-search__input" id={ id } type="search" name={ name } value={ value } placeholder={ placeholder } autocomplete="off"/>
-		<span class="mv-kbd" aria-hidden="true">/</span>
-	</form>
+	if !Ready(ctx, action) {
+		<div class="mv-search is-soon" role="search" title={ i18n.T(ctx, "ui.soon_hint") }>
+			@Icon("search", 16)
+			<label class="mv-sr-only" for={ id }>{ placeholder }</label>
+			<input class="mv-search__input" id={ id } type="search" placeholder={ placeholder } disabled/>
+			@SoonTag()
+		</div>
+	} else {
+		<form class="mv-search" role="search" action={ templ.URL(action) } method="get">
+			@Icon("search", 16)
+			<label class="mv-sr-only" for={ id }>{ placeholder }</label>
+			<input class="mv-search__input" id={ id } type="search" name={ name } value={ value } placeholder={ placeholder } autocomplete="off"/>
+			<span class="mv-kbd" aria-hidden="true">/</span>
+		</form>
+	}
 }
 
 // TextareaProps configure a textarea.

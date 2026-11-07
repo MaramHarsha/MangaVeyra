@@ -1,6 +1,6 @@
 # ADR 0003: Hard remote-spend reservations
 
-- Status: Accepted for milestone 0001; implementation pending
+- Status: Accepted and implemented for milestone 0001
 - Date: 2026-11-07
 - Related plan: `docs/plans/0001-script-vertical-slice.md`
 
@@ -58,8 +58,11 @@ reservation returns `Dispatch=false` and never permits a second HTTP call.
 Reserve derives the user and project from a running job at the exact attempt,
 re-resolves an enabled provider and its ownership/key state, assigns the next
 job-global call sequence, and checks user and server caps under the spend lock.
-The HTTP request starts only after commit. Each repair, retry, and failover receives
-its own reservation.
+Local-only and cap settings are reloaded uncached through that transaction after
+the lock is acquired. A settings update committed before admission is therefore
+authoritative even when this process still has an older settings cache. The HTTP
+request starts only after commit. Each repair, retry, and failover receives its own
+reservation.
 
 Reconciliation accepts `nil` actual usage to mean unknown and charges the estimate.
 A known zero is distinct. Identical reconciliation is idempotent; conflicting
@@ -84,8 +87,8 @@ the deterministic ledger row. Late reconciliation cannot rewrite repaired usage.
   for a cap to be mathematically hard before the call.
 - Reservation month is UTC at reservation time and does not change across month end.
 
-`settings.Instance.Validate` must also reject a negative
-`ServerMonthlyRemoteSpendUSD`; it currently validates only the user limit.
+`settings.Instance.Validate` rejects negative, non-finite, or overflowing values
+for both remote-spend limits.
 
 ## Required verification
 
@@ -99,13 +102,15 @@ Run the same tests on SQLite and PostgreSQL, using two database handles for race
 6. reserve-versus-reconcile races cannot undercount;
 7. crash/reopen, expiry repair, repeated repair, and late results;
 8. month rollover and deletion of live attribution rows;
-9. legacy ledger inclusion without linked-row double counting; and
-10. server-scope and user-scope cap policy.
+9. legacy ledger inclusion without linked-row double counting;
+10. server-scope and user-scope cap policy; and
+11. cap reductions and local-only updates committed during spend-lock contention
+    are observed before reservation insertion.
 
 ## Consequences and residual risks
 
 The approach adds a short global spend critical section but keeps network I/O out
 of it. It prevents concurrent overspend relative to estimates and fails closed
-through crashes. Settings are cached for three seconds today, so multi-process limit
-reductions need tighter invalidation before the deployment model expands beyond a
-single application process.
+through crashes. Policy changes that commit before the reservation acquires the
+spend lock fence that admission; changes committed after that point apply to the
+next admission rather than retroactively rewriting an already admitted call.

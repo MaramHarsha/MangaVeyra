@@ -12,7 +12,7 @@ import (
 )
 
 // sourceDirs are the packages built on the web layer whose strings must be translated.
-var sourceDirs = []string{".", "../authui", "../setup", "../account"}
+var sourceDirs = []string{".", "../authui", "../setup", "../account", "../ai", "../studioui"}
 
 var keyRe = regexp.MustCompile(`i18n\.T\(ctx, "([a-z0-9_.]+)"`)
 
@@ -23,7 +23,7 @@ var dynamicKeys = map[string][]string{
 	"setup.step.":                   {"admin", "instance", "models", "finish", "admin.short", "instance.short", "models.short", "finish.short"},
 	"settings.nav.":                 {"account", "appearance", "language", "reading", "notifications", "accessibility", "world", "data"},
 	"settings.theme.":               {"dark", "light", "system"},
-	"settings.notifications.group.": {"generation", "comments", "review", "chapter", "follow", "system", "update"},
+	"settings.notifications.group.": {"generation", "lock", "comments", "review", "chapter", "world", "update", "spend"},
 	"settings.notifications.":       {"in_app", "email", "push"},
 	"onboarding.creator.":           {"writer", "artist", "reader", "team", "writer.desc", "artist.desc", "reader.desc", "team.desc"},
 	"genre.":                        {"action", "fantasy", "mystery", "romance", "horror", "scifi", "slice_of_life", "comedy", "sports", "historical", "isekai", "thriller", "drama", "mecha", "supernatural"},
@@ -113,7 +113,7 @@ func TestEveryUsedKeyIsTranslated(t *testing.T) {
 var forbidden = regexp.MustCompile(`(?i)\b(price|prices|pricing|checkout|credits?|wallet|tips?|tipping|subscriptions?|subscribe|payouts?|upgrade to|buy now|purchase)\b`)
 
 func TestLocaleFilesHaveNoPaymentWords(t *testing.T) {
-	for _, name := range []string{"web", "authui", "setup", "account"} {
+	for _, name := range []string{"web", "authui", "setup", "account", "models", "studioui"} {
 		for _, lang := range []string{"en", "ja"} {
 			b, err := fs.ReadFile(i18n.Embedded(), lang+"/"+name+".json")
 			if err != nil {

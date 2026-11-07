@@ -3,6 +3,7 @@ package settings_test
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -142,5 +143,37 @@ func TestNightWindow(t *testing.T) {
 	n = settings.NightMode{StartHour: 1, EndHour: 7}
 	if !n.InWindow(at(1)) || n.InWindow(at(7)) {
 		t.Fatal("plain window")
+	}
+}
+
+func TestNegativeServerRemoteSpendLimitIsRejected(t *testing.T) {
+	inst := settings.DefaultInstance()
+	inst.Limits.ServerMonthlyRemoteSpendUSD = -0.01
+	if err := inst.Validate(); err == nil {
+		t.Fatal("negative server remote-spend limit accepted")
+	}
+}
+
+func TestRemoteSpendLimitsRejectNonFiniteAndOverflow(t *testing.T) {
+	invalid := map[string]float64{
+		"nan":                  math.NaN(),
+		"positive infinity":    math.Inf(1),
+		"negative infinity":    math.Inf(-1),
+		"microdollar overflow": float64(math.MaxInt64) / 1_000_000,
+	}
+	for name, value := range invalid {
+		t.Run(name, func(t *testing.T) {
+			for _, server := range []bool{false, true} {
+				inst := settings.DefaultInstance()
+				if server {
+					inst.Limits.ServerMonthlyRemoteSpendUSD = value
+				} else {
+					inst.Limits.MonthlyRemoteSpendUSD = value
+				}
+				if err := inst.Validate(); err == nil {
+					t.Fatalf("invalid remote-spend limit accepted (server=%v)", server)
+				}
+			}
+		})
 	}
 }

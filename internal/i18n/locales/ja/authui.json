@@ -112,5 +112,6 @@
   "style.chibi": "デフォルメ · 4コマ",
   "style.chibi.desc": "ギャグや番外編向けの丸いキャラクター",
   "style.sketch": "ラフスケッチ",
-  "style.sketch.desc": "鉛筆風。ネームや下書きに"
+  "style.sketch.desc": "鉛筆風。ネームや下書きに",
+  "auth.page.login.passkey": "パスキーを使う"
 }

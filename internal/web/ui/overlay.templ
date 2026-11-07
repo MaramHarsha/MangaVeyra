@@ -124,6 +124,14 @@ templ Menu(items []MenuItem) {
 						<span>{ it.Label }</span>
 					</button>
 				</form>
+			} else if !Ready(ctx, it.Href) {
+				<a class="mv-menu__item is-soon" role="menuitem" aria-disabled="true" title={ i18n.T(ctx, "ui.soon_hint") }>
+					if it.Icon != "" {
+						@Icon(it.Icon, 18)
+					}
+					<span>{ it.Label }</span>
+					@SoonTag()
+				</a>
 			} else {
 				<a
 					class={ Cls("mv-menu__item", If(it.Danger, "mv-menu__item--danger")) }

@@ -25,6 +25,49 @@ runtime path and tests exist.
   touch targets.
 - Samples, seeds, and tests use only original MangaVeyra characters and titles.
 
+## Design fidelity (required for every UI change)
+
+The product already has an approved, high-fidelity design. Build to it; do not
+create a new design.
+
+- The design is the HTML handoff in `../MangaVeyra_All_Pages/` (on the owner's
+  machine: `/Users/harsha/Desktop/Project-Ideas/MangaVeyra_All_Pages/`). It stays
+  outside this repository on purpose: it also contains World platform screens with
+  payment UI that must never enter this repo. Each screen is a
+  `div[data-screen-label="ID – Name – Platform"]` in a `.dc.html` file;
+  `docs/SCREENS.md` maps every screen ID to its file and route. Tokens and rules:
+  the bundle's `README.md` and `04 Design System.dc.html`.
+- Build to the **desktop** artboards. They are the source of truth. The mobile
+  artboards are not final (owner, 2026-11-07): do not build to them yet; phones
+  get the responsive version of the desktop design using the existing responsive
+  patterns.
+- Before building or changing a screen, open its desktop artboard and match it:
+  layout and grid, component choice, hierarchy, copy, iconography, states, and
+  navigation. Do not invent new layouts, colours, fonts, icon sets,
+  illustrations, spacing scales, or components where the design defines them.
+- Use only the existing tokens (`web/src/styles/tokens.css`) and UI kit
+  (`internal/web/ui`). A token or component the design lacks needs a written
+  reason in the plan and must follow the design system's patterns.
+- The owner's decision (2026-11-07): the design is final and deviations are not
+  allowed. Do not simplify a designed screen for a milestone (no one-page
+  versions of multi-step flows, no form instead of a designed editor). If part of
+  a designed screen depends on a feature that does not exist yet, build the full
+  designed screen and show that part in the disabled "Soon" state.
+- Use the design's own copy. Where the design has no artboard for a necessary
+  state (an error, an empty or offline case), build it only from the design's
+  components and patterns, record it in
+  `docs/decisions/0004-design-addendum.md`, and keep it visually consistent with
+  the nearest designed screen.
+- Navigation keeps the design's items and order. A destination that is not built
+  yet stays visible as a disabled "Soon" item; never ship a link or button that
+  leads to a 404 or a missing endpoint.
+- Before calling UI work done, compare it side by side with the desktop artboard
+  at 1440×900, check that it stays usable at 390×844, and record remaining
+  differences in the PR description.
+  `../MangaVeyra-design-alignment.md` lists the current gaps.
+- If the design folder is not readable from your environment, stop and ask the
+  user for access. Do not guess or redesign.
+
 ## Architecture and file boundaries
 
 - Feature packages do not import `internal/app`. Share narrow services through

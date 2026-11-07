@@ -39,7 +39,7 @@ func TestSectionsRender(t *testing.T) {
 	_, c := ta.UserClient(t, auth.RoleCreator)
 	for path, want := range map[string]string{
 		"/settings":               "Your login on",
-		"/settings/account":       "Two-step login",
+		"/settings/account":       "Two-factor authentication",
 		"/settings/appearance":    "Gate night",
 		"/settings/language":      "Reading languages",
 		"/settings/reading":       "Tap zones",

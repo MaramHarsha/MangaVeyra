@@ -140,6 +140,36 @@ func (r *Router) join(pattern string) string {
 	return full
 }
 
+// routerKey carries the dispatching router in each request context.
+type routerKey struct{}
+
+// Serves reports whether a registered route matches method and path (path
+// only, no query). Navigation uses it to render destinations that are not
+// built yet as disabled "Soon" items instead of links to a 404, without
+// registering placeholder routes that would later conflict (ADR 0004 §7).
+func (r *Router) Serves(method, path string) bool {
+	if r == nil || r.table == nil || !strings.HasPrefix(path, "/") {
+		return false
+	}
+	req, err := http.NewRequest(method, path, nil)
+	if err != nil {
+		return false
+	}
+	_, pattern := r.table.mux.Handler(req)
+	return pattern != ""
+}
+
+// Serves reports whether the router dispatching the current request serves
+// method and path. Without a router in ctx (for example when a component is
+// rendered in a unit test) every destination counts as available.
+func Serves(ctx context.Context, method, path string) bool {
+	r, _ := ctx.Value(routerKey{}).(*Router)
+	if r == nil {
+		return true
+	}
+	return r.Serves(method, path)
+}
+
 // Routes lists the registered routes sorted by pattern.
 func (r *Router) Routes() []Route {
 	r.table.mu.Lock()
@@ -152,6 +182,7 @@ func (r *Router) Routes() []Route {
 // ServeHTTP dispatches to the matching route. Unmatched paths and wrong methods
 // are rendered through WriteError so they get the JSON envelope or the HTML error page.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	req = req.WithContext(context.WithValue(req.Context(), routerKey{}, r))
 	h, pattern := r.table.mux.Handler(req)
 	if pattern != "" {
 		r.table.mux.ServeHTTP(w, req)

@@ -262,6 +262,37 @@ func (d *DB) WithTx(ctx context.Context, fn func(tx *Tx) error) (err error) {
 	return fn(tx)
 }
 
+// WithReadTx runs fn in a read-only transaction whose statements all see one
+// consistent snapshot, so a multi-statement read cannot observe a concurrent
+// commit half-way through. On SQLite it is a deferred WAL read transaction: it
+// takes no write lock and does not wait for writers. On Postgres it is
+// REPEATABLE READ READ ONLY. fn must not write.
+func (d *DB) WithReadTx(ctx context.Context, fn func(tx *Tx) error) (err error) {
+	opts := &sql.TxOptions{ReadOnly: true}
+	if d.dialect == Postgres {
+		opts.Isolation = sql.LevelRepeatableRead
+	}
+	sqltx, err := d.X.BeginTxx(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("db: begin read: %w", err)
+	}
+	tx := &Tx{X: sqltx, dialect: d.dialect}
+	defer func() {
+		if p := recover(); p != nil {
+			_ = sqltx.Rollback()
+			panic(p)
+		}
+		if err != nil {
+			_ = sqltx.Rollback()
+			return
+		}
+		if cerr := sqltx.Commit(); cerr != nil {
+			err = fmt.Errorf("db: commit read: %w", cerr)
+		}
+	}()
+	return fn(tx)
+}
+
 // IsNotFound reports whether err means "no row".
 func IsNotFound(err error) bool { return errors.Is(err, sql.ErrNoRows) }
 
@@ -274,6 +305,19 @@ func IsUniqueViolation(err error) bool {
 	return strings.Contains(msg, "UNIQUE constraint failed") || // SQLite
 		strings.Contains(msg, "SQLSTATE 23505") || // Postgres unique_violation
 		strings.Contains(msg, "duplicate key value")
+}
+
+// IsTransient reports whether err is a deadlock or serialization failure
+// (PostgreSQL 40P01 / 40001) or a busy SQLite database: the transaction did
+// nothing and may be retried.
+func IsTransient(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "SQLSTATE 40P01") || strings.Contains(msg, "SQLSTATE 40001") ||
+		strings.Contains(msg, "deadlock detected") || strings.Contains(msg, "could not serialize access") ||
+		strings.Contains(msg, "database is locked") || strings.Contains(msg, "SQLITE_BUSY")
 }
 
 // IsForeignKeyViolation reports whether err is a foreign key violation on either dialect.

@@ -6,6 +6,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/ai"
 	"github.com/MaramHarsha/MangaVeyra/internal/analytics"
 	"github.com/MaramHarsha/MangaVeyra/internal/animate"
+	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/authui"
 	"github.com/MaramHarsha/MangaVeyra/internal/backup"
@@ -19,6 +20,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/lettering"
 	"github.com/MaramHarsha/MangaVeyra/internal/mcp"
 	"github.com/MaramHarsha/MangaVeyra/internal/packs"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagestore"
 	"github.com/MaramHarsha/MangaVeyra/internal/plugins"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 	"github.com/MaramHarsha/MangaVeyra/internal/reader"
@@ -26,6 +28,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/setup"
 	"github.com/MaramHarsha/MangaVeyra/internal/social"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
+	"github.com/MaramHarsha/MangaVeyra/internal/studioui"
 	"github.com/MaramHarsha/MangaVeyra/internal/translate"
 	"github.com/MaramHarsha/MangaVeyra/internal/update"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
@@ -57,17 +60,21 @@ func FeatureModules(d *core.Deps) []core.Module {
 	return []core.Module{
 		// Web layer first: it provides *web.UI and installs the render hooks.
 		web.New(d),
+		// Shared file storage (provides *assets.Service).
+		assets.NewModule(d),
 		// Setup and accounts.
 		setup.New(d),
 		account.New(d),
 		authui.New(d),
 		// Studio core and AI.
 		studio.New(d),
+		pagestore.New(d),
 		ai.New(d),
 		compose.New(d),
 		lettering.New(d),
 		editor.New(d),
 		gen.New(d),
+		studioui.New(d),
 		translate.New(d),
 		animate.New(d),
 		// Publishing, reading and community.

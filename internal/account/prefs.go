@@ -252,14 +252,17 @@ type notifyGroup struct {
 	Admin bool
 }
 
+// notifyGroups follows the designed notification matrix (G1 · Notifications)
+// row for row.
 var notifyGroups = []notifyGroup{
 	{"generation", []string{notify.KindJobDone, notify.KindJobFailed}, false},
+	{"lock", []string{notify.KindLockTraining}, false},
 	{"comments", []string{notify.KindComment, notify.KindMention}, false},
 	{"review", []string{notify.KindReview}, false},
 	{"chapter", []string{notify.KindChapter}, false},
-	{"follow", []string{notify.KindFollow}, false},
-	{"system", []string{notify.KindSystem}, false},
+	{"world", []string{notify.KindWorldReview}, false},
 	{"update", []string{notify.KindUpdate}, true},
+	{"spend", []string{notify.KindSpendLimit}, false},
 }
 
 type notificationsView struct {

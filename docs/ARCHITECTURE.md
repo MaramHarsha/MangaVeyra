@@ -119,13 +119,16 @@ type Module interface {
     Name() string
     Routes(r *Router)            // register HTTP routes
 }
+type Initer interface { Init(context.Context) error } // cross-module lookup after construction
 type Starter interface { Start(ctx context.Context) error } // optional background loops
 type JobHandlers interface { JobHandlers() map[string]jobs.Handler } // optional Go-executor job handlers
 ```
 Each feature package exposes `func New(d *core.Deps) *Module`. `internal/app/modules.go` lists every module once.
-Feature packages never import `internal/app`. Cross-module calls go through small exported service types on
-`core.Deps` (e.g. `d.Studio`, `d.AI`, `d.Jobs`, `d.Notify`) that are set during wiring — keep them as interfaces
-declared in the consumer or in `core` to avoid import cycles.
+Feature packages never import `internal/app`. Shared foundation services such as `d.Jobs` and `d.Notify` are fields;
+feature services use the type-keyed registry. Providers call `core.Provide[studio.Service](d, service)` in `New`, and
+consumers call `core.MustUse[studio.Service](d)` in `Init` or a handler. Register and request the interface itself,
+never a pointer to an interface. All modules are constructed before any `Init` runs, avoiding dependency-order
+lookups while keeping imports acyclic.
 
 ### Router and handlers
 * `core.Router` wraps `http.ServeMux`: `r.Handle("GET /studio/projects", h, core.RequireUser)`.
@@ -154,8 +157,14 @@ declared in the consumer or in `core` to avoid import cycles.
   `state` (`queued|running|done|failed|canceled`), `progress` 0–1, `step/steps`, `executor` (`go|worker`), `model_id`,
   `provider_id`, `decision` (router explanation JSON), `input`, `output`, `error`, `estimate` and `actual`
   (`{gpu_seconds, usd}`), `attempts`, `parent_id`, `priority`, timestamps.
+  Scope fields are a strict per-kind allow-list, not caller-trusted ancestry. In particular, region scope contains a
+  project ID, unique layer ID and non-null region object; Studio resolves layer → panel → page → chapter → project,
+  verifies the project and every lock at enqueue and persistence.
 * Enqueue validates scope + locks first. Fair share: per-user running limit (admin setting, default 2); night mode
   can defer batch jobs.
+* Browser Studio pages and manual retry require a signed-in session. Bearer job reads require `projects:read`,
+  bearer cancellation requires `projects:write` plus `generate`, and both per-job access and lists enforce the
+  token's project allow-list. Aggregate job stats and manual retry are not bearer-token operations.
 * Go executor: `jobs.Handler func(ctx, *jobs.Run) error` registered by job type (remote APIs, text LLM, exports,
   compositing). Worker executor: Python workers call `/api/worker/v1` (`register`, `claim`, `progress`, `upload`,
   `complete`, `fail`, `heartbeat`) with a worker token. Progress is broadcast on WS topics `job:{id}`, `user:{id}`,

@@ -159,8 +159,11 @@ func (c *conn) close(code websocket.StatusCode, reason string) {
 	}
 	c.closed = true
 	c.mu.Unlock()
-	c.cancel()
+	// Send the close frame before cancelling the context: the read loop reads
+	// with c.ctx, and a cancelled read makes the library drop the TCP
+	// connection at once, so the client would see EOF instead of the code.
 	_ = c.ws.Close(code, reason)
+	c.cancel()
 }
 
 func (c *conn) writeLoop() {

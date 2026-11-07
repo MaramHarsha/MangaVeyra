@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
-	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/setup"
@@ -84,12 +83,17 @@ func testWizard(t *testing.T, dialect string) {
 	}
 
 	models := c.Get("/setup/models")
-	contains(t, models, "Connect at least one image model", "No GPU worker connected yet", "OpenRouter", "/models/providers/new?kind=fal",
-		"Ollama · local text model", "Custom connection", `name="local_only"`)
+	contains(t, models, "Connect at least one image model", "No GPU worker connected yet", "OpenRouter",
+		"One key for 30+ image models and text models", `name="local_only"`)
 	location(t, post(c, "/setup/models", url.Values{"local_only": {"on"}}), "/setup/finish")
 	inst = ta.Deps.Settings.MustInstance(ctx)
 	if !inst.LocalOnly || inst.RoutingMode != settings.RoutingLocalOnly {
 		t.Fatalf("local only: %+v", inst)
+	}
+	localModels := c.Get("/setup/models")
+	contains(t, localModels, "OpenRouter", "Connect", "disabled")
+	if strings.Contains(string(localModels.Body), `href="/models/providers/new?kind=openrouter`) {
+		t.Fatal("local-only provider control remains navigable")
 	}
 	// HTMX auto-save of the toggle.
 	c.Header.Set("HX-Request", "true")
@@ -133,24 +137,12 @@ func TestModelsStepDetectsGPUAndUsesHook(t *testing.T) {
 	}
 	c := ta.Login(t, "admin")
 	r := c.Get("/setup/models")
-	contains(t, r, "NVIDIA RTX 4090 · 24 GB detected", "Qwen-Image Edit, FLUX.2 [klein], Illustrious XL · 41 GB download", "Install recommended")
-
-	core.Provide[setup.ModelStep](ta.Deps, fakeStep{})
+	contains(t, r, "NVIDIA RTX 4090 · 24 GB detected", "Qwen-Image Edit, FLUX.2 [klein], Illustrious XL · 41 GB download",
+		"Install recommended", "OpenRouter", "Connect")
+	location(t, post(c, "/models/providers", url.Values{"name": {"Setup OpenRouter"}, "key": {"sk-or-v1-setup-test"},
+		"scope": {"server"}}), "/models")
 	r = c.Get("/setup/models")
-	contains(t, r, "Local ComfyUI", "Connected", "Testing…", "Tiny model")
-}
-
-type fakeStep struct{}
-
-func (fakeStep) Providers(context.Context) ([]setup.ProviderCard, error) {
-	return []setup.ProviderCard{
-		{Kind: "comfyui", Name: "Local ComfyUI", Desc: "Workflow on this machine", Icon: "server", Status: setup.ProviderConnected},
-		{Kind: "ollama", NameKey: "setup.provider.ollama.name", DescKey: "setup.provider.ollama.desc", Icon: "server-2", Status: setup.ProviderTesting},
-	}, nil
-}
-
-func (fakeStep) Recommend(context.Context, []jobs.GPU) (*setup.Recommendation, error) {
-	return &setup.Recommendation{Models: []string{"Tiny model"}, DownloadGB: 2.5, InstallHref: "/models/local?set=tiny"}, nil
+	contains(t, r, "OpenRouter", "Connected")
 }
 
 func TestRecommendForAndURLValidation(t *testing.T) {

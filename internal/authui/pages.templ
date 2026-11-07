@@ -39,6 +39,9 @@ templ LoginPage(f loginForm) {
 		@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Full: true}) {
 			{ i18n.T(ctx, "auth.login.submit") }
 		}
+		@ui.LinkButton("/login/passkey", ui.ButtonProps{Variant: ui.Secondary, Size: ui.LG, Full: true, Icon: "fingerprint"}) {
+			{ i18n.T(ctx, "auth.page.login.passkey") }
+		}
 		<p class="mv-auth__foot">
 			{ f.Footer }
 			if f.FooterLink != "" {
@@ -74,7 +77,7 @@ templ SignupPage(f signupForm) {
 		<div class="mv-auth__form">
 			@brandMark()
 			<div class="mv-stack mv-stack--sm">
-				<h1 class="mv-auth__title mv-auth__title--m">{ i18n.T(ctx, "auth.page.signup.closed_heading") }</h1>
+				<h1 class="mv-auth__title mv-auth__title--m">{ i18n.T(ctx, "auth.page.signup.heading", "host", f.Host) }</h1>
 				<span class="mv-auth__sub">{ f.Host } · { f.Line }</span>
 			</div>
 			@formError(f.Errors.Form())
@@ -103,10 +106,8 @@ templ SignupPage(f signupForm) {
 			@ui.Field(ui.FieldProps{ID: "display_name", Label: i18n.T(ctx, "auth.page.signup.display_name"), Error: f.Errors["display_name"]}) {
 				@ui.Input(ui.InputProps{ID: "display_name", Name: "display_name", Value: f.DisplayName, Autocomplete: "name", MaxLength: 64, Autofocus: true, Invalid: f.Errors["display_name"] != "", Class: "mv-input--lg"})
 			}
-			@ui.Field(ui.FieldProps{ID: "username", Label: i18n.T(ctx, "auth.page.signup.username"), Hint: i18n.T(ctx, "auth.page.signup.username_hint"), Error: f.Errors["username"]}) {
-				@ui.InputGroup("@", f.Errors["username"] != "") {
-					@ui.Input(ui.InputProps{ID: "username", Name: "username", Value: f.Username, Autocomplete: "username", Required: true, MaxLength: 32, Invalid: f.Errors["username"] != "", Described: true, Attrs: templ.Attributes{"autocapitalize": "none", "spellcheck": "false"}})
-				}
+			if f.Errors["username"] != "" {
+				@formError(f.Errors["username"])
 			}
 			@ui.Field(ui.FieldProps{ID: "email", Label: i18n.T(ctx, "auth.page.email"), Error: f.Errors["email"]}) {
 				@ui.Input(ui.InputProps{ID: "email", Name: "email", Type: "email", Value: f.Email, Autocomplete: "email", Required: true, ReadOnly: f.InviteEmail != "", Invalid: f.Errors["email"] != "", Class: "mv-input--lg"})
@@ -150,32 +151,25 @@ templ ForgotPage(f forgotForm) {
 	<form class="mv-auth__form" method="post" action="/forgot" novalidate>
 		@ui.SFX("HMMM…", "lg", "", false)
 		<h1 class="mv-state__title mv-state__title--lg mv-auth__h1">{ i18n.T(ctx, "auth.page.forgot.heading") }</h1>
+		<p class="mv-auth__sub">{ i18n.T(ctx, "auth.page.forgot.lead") }</p>
+		@formError(f.Errors.Form())
+		@ui.Field(ui.FieldProps{ID: "email", Label: i18n.T(ctx, "auth.page.email"), Error: f.Errors["email"]}) {
+			@ui.Input(ui.InputProps{ID: "email", Name: "email", Type: "email", Value: f.Email, Autocomplete: "email", Required: true, Autofocus: !f.Sent, Invalid: f.Errors["email"] != "", Class: "mv-input--lg"})
+		}
+		@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Full: true}) {
+			{ i18n.T(ctx, "auth.page.forgot.submit") }
+		}
+		if f.Sent {
+			@ui.Notice(ui.ToneSuccess, "mail-check") {
+				{ i18n.T(ctx, "auth.page.forgot.sent", "minutes", f.TTL) }
+			}
+		}
 		if f.NoEmail {
-			<p class="mv-auth__sub">{ i18n.T(ctx, "auth.page.forgot.lead_no_email") }</p>
 			@ui.Notice(ui.ToneWarning, "server") {
-				<strong>{ i18n.T(ctx, "auth.page.forgot.no_email_title") }</strong>
-				<br/>
 				{ i18n.T(ctx, "auth.reset.no_email") }
 			}
-			@ui.LinkButton("/login", ui.ButtonProps{Variant: ui.Secondary, Size: ui.LG, Full: true}) {
-				{ i18n.T(ctx, "auth.page.forgot.back") }
-			}
-		} else {
-			<p class="mv-auth__sub">{ i18n.T(ctx, "auth.page.forgot.lead") }</p>
-			@formError(f.Errors.Form())
-			@ui.Field(ui.FieldProps{ID: "email", Label: i18n.T(ctx, "auth.page.email"), Error: f.Errors["email"]}) {
-				@ui.Input(ui.InputProps{ID: "email", Name: "email", Type: "email", Value: f.Email, Autocomplete: "email", Required: true, Autofocus: !f.Sent, Invalid: f.Errors["email"] != "", Class: "mv-input--lg"})
-			}
-			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Type: "submit", Full: true}) {
-				{ i18n.T(ctx, "auth.page.forgot.submit") }
-			}
-			if f.Sent {
-				@ui.Notice(ui.ToneSuccess, "mail-check") {
-					{ i18n.T(ctx, "auth.page.forgot.sent", "minutes", f.TTL) }
-				}
-			}
-			<p class="mv-auth__foot"><a href="/login">{ i18n.T(ctx, "auth.page.forgot.back") }</a></p>
 		}
+		<p class="mv-auth__foot"><a href="/login">{ i18n.T(ctx, "auth.page.forgot.back") }</a></p>
 	</form>
 }
 

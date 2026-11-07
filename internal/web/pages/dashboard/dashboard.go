@@ -157,6 +157,6 @@ type Idea struct {
 // Ideas are the template, sketch and translate starting points.
 var Ideas = []Idea{
 	{"/studio/templates", "layout-grid", "dash.idea.template.title", "dash.idea.template.desc"},
-	{"/studio/new?from=sketch", "scribble", "dash.idea.sketch.title", "dash.idea.sketch.desc"},
+	{"/studio/sketch", "scribble", "dash.idea.sketch.title", "dash.idea.sketch.desc"},
 	{"/studio/projects?action=translate", "language", "dash.idea.translate.title", "dash.idea.translate.desc"},
 }

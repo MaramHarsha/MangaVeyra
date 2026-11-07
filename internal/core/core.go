@@ -19,8 +19,8 @@
 //	}
 //
 // Modules find each other's services through the registry instead of app
-// wiring edits: studio calls core.Provide(d, studio.Service(...)) in New and
-// the editor calls core.MustUse[*studio.Service](d) in Init.
+// wiring edits: studio calls core.Provide[studio.Service](d, service) in New and
+// the editor calls core.MustUse[studio.Service](d) in Init.
 package core
 
 import (

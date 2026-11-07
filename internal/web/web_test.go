@@ -11,9 +11,9 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
+	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
-	"github.com/MaramHarsha/MangaVeyra/internal/web/pages/dashboard"
 )
 
 func body(r *testutil.Response) string { return string(r.Body) }
@@ -55,7 +55,16 @@ func TestRootRedirects(t *testing.T) {
 
 func TestDashboardEmptyStateAndSource(t *testing.T) {
 	ta := testutil.NewTestApp(t)
-	_, c := ta.UserClient(t, auth.RoleCreator)
+	creator, c := ta.UserClient(t, auth.RoleCreator)
+	rawToken, _, err := ta.Deps.Auth.CreateToken(context.Background(), auth.TokenInput{
+		UserID: creator.ID, Kind: auth.TokenAPI, Name: "dashboard-session-boundary",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bearer := ta.BearerClient(rawToken).Get("/studio"); bearer.StatusCode != http.StatusForbidden {
+		t.Fatalf("bearer GET /studio = %d, want 403", bearer.StatusCode)
+	}
 	r := c.Get("/studio")
 	if r.StatusCode != http.StatusOK {
 		t.Fatalf("GET /studio: %d", r.StatusCode)
@@ -66,17 +75,25 @@ func TestDashboardEmptyStateAndSource(t *testing.T) {
 		t.Fatal("pages must not use inline style attributes (CSP)")
 	}
 
-	core.Provide[dashboard.Source](ta.Deps, fakeSource{})
+	svc := core.MustUse[studio.Service](ta.Deps)
+	actor, err := svc.ActorFromUser(context.Background(), creator.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	project, err := svc.CreateProject(context.Background(), actor, studio.NewProject{
+		Title: "Glass Orchard", Premise: "An orchard remembers every promise made beneath its branches.",
+		Logline: "A gardener must harvest one impossible memory.", Style: "bw_screentone", Format: "manga_rtl",
+		PageSize: "b5", Language: "en", Genres: []string{"fantasy"}, Tags: []string{"original"},
+		PageWidth: 1600, PageHeight: 2400,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CreateChapter(context.Background(), actor, project.ID, "First Bloom"); err != nil {
+		t.Fatal(err)
+	}
 	r = c.Get("/studio")
-	mustContain(t, r, "Glass Orchard", "Recent projects", "Open editor")
-}
-
-type fakeSource struct{}
-
-func (fakeSource) RecentProjects(ctx context.Context, userID string, n int) ([]dashboard.Project, error) {
-	return []dashboard.Project{{ID: "p1", Title: "Glass Orchard", Href: "/studio/p/glass-orchard", Meta: "Ch. 3 · published",
-		ThumbLabel: "PAGE THUMBNAIL", ChapterLine: "Ch. 3 · 12 of 30 pages", Progress: .4, EditorHref: "/studio/p/glass-orchard/chapters/3/edit",
-		EditorLabel: "Open editor", PageLabel: "CH. 3 · PAGE 12"}}, nil
+	mustContain(t, r, "Glass Orchard", "Recent projects", "Open manuscript")
 }
 
 func TestComputeMeterShowsWorkerGPU(t *testing.T) {

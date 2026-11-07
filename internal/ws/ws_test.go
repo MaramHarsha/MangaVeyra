@@ -361,3 +361,53 @@ func TestRevalidationRevokesAccess(t *testing.T) {
 		}
 	}
 }
+
+func dialBearer(t *testing.T, ta *testutil.TestApp, token string) *client {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	h := http.Header{"Authorization": {"Bearer " + token}}
+	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(ta.URL, "http")+"/ws", &websocket.DialOptions{HTTPHeader: h})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.SetReadLimit(16 << 20)
+	t.Cleanup(func() { conn.Close(websocket.StatusNormalClosure, "") })
+	return &client{t: t, conn: conn}
+}
+
+// The user topic carries job summaries from every project, so a bearer token
+// may follow it only with projects:read and no project allow-list; an admin
+// token needs the admin scope for admin topics.
+func TestBearerTokensFollowJobRulesOnUserAndAdminTopics(t *testing.T) {
+	ta := testutil.NewTestApp(t)
+	ctx := context.Background()
+	u := ta.CreateUser(t, "kite", auth.RoleAdmin)
+	mk := func(name string, scopes, projects []string) string {
+		raw, _, err := ta.Deps.Auth.CreateToken(ctx, auth.TokenInput{UserID: u.ID, Kind: auth.TokenAgent, Name: name,
+			Scopes: scopes, ProjectIDs: projects})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	cases := []struct {
+		name   string
+		token  string
+		topic  string
+		expect string
+	}{
+		{"no projects:read", mk("narrow", []string{"generate"}, nil), "user:" + u.ID, "error"},
+		{"project allow-list", mk("allowlist", []string{"projects:read"}, []string{db.NewID()}), "user:" + u.ID, "error"},
+		{"full read", mk("reader", []string{"projects:read"}, nil), "user:" + u.ID, "subscribed"},
+		{"admin topic without admin scope", mk("not-admin", []string{"projects:read"}, nil), "admin:queue", "error"},
+		{"admin topic with admin scope", mk("admin", []string{"projects:read", "admin"}, nil), "admin:queue", "subscribed"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			wc := dialBearer(t, ta, tc.token)
+			wc.send(map[string]string{"op": "sub", "topic": tc.topic})
+			wc.expect(tc.expect)
+		})
+	}
+}

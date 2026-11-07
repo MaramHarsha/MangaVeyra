@@ -1,0 +1,270 @@
+/* G2 Models & providers (design file 09 desktop, file 14 mobile) and the
+   single-page provider connection form. Tokens and kit classes only. */
+
+.mv-models {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+/* Summary tiles: a row of four on desktop, stacked rows on phones. */
+.mv-models__tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--mv-space-3);
+}
+
+.mv-models-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--mv-space-3);
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--mv-line);
+  background: var(--mv-surface);
+}
+
+.mv-models-tile > .ti {
+  flex: none;
+  color: var(--mv-text-2);
+}
+
+.mv-models-tile__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mv-models-tile__text strong {
+  font-size: var(--mv-fs-ui);
+  color: var(--mv-text);
+}
+
+.mv-models-tile__text span {
+  overflow: hidden;
+  color: var(--mv-text-2);
+  font-size: var(--mv-fs-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mv-models-tile.is-soon .mv-models-tile__text strong,
+.mv-models-tile.is-soon .mv-models-tile__text span,
+.mv-models-tile.is-soon > .ti {
+  color: var(--mv-text-3);
+}
+
+.mv-models-tile__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mv-text-3);
+}
+
+.mv-models-tile__dot--on { background: var(--mv-success); }
+.mv-models-tile__dot--error { background: var(--mv-error); }
+
+/* Capability tabs keep their content width (design: an inline segmented control). */
+.mv-models > .mv-seg { align-self: flex-start; flex-wrap: wrap; }
+
+/* Model table box. */
+.mv-models__box {
+  min-width: 0;
+  border: 1px solid var(--mv-line);
+  background: var(--mv-surface);
+}
+
+.mv-models__empty { padding-block: var(--mv-space-7); }
+
+.mv-models-table { table-layout: fixed; }
+.mv-models-table__col-model { width: 26%; }
+.mv-models-table__col-provider { width: 19%; }
+.mv-models-table__col-use { width: 24%; }
+.mv-models-table__col-status { width: 124px; }
+.mv-models-table__col-cost { width: 124px; }
+.mv-models-table__col-on { width: 104px; }
+
+.mv-models-table th { padding: 10px 16px; }
+
+.mv-models-table td {
+  padding: 12px 16px;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+/* Every connection is its own tbody (the HTMX swap target); keep the row
+   rules continuous across tbodies. */
+.mv-models-table__group:last-child tr:last-child td { border-bottom: 0; }
+.mv-models-table__group:not(:last-child) tr:last-child td { border-bottom: 1px solid var(--mv-line); }
+
+.mv-models-table__model strong { font-weight: 700; }
+
+.mv-models-table__muted { color: var(--mv-text-2); }
+
+.mv-models-table__provider { display: block; }
+
+.mv-models-table__meta {
+  display: block;
+  margin-top: 2px;
+  color: var(--mv-text-3);
+  font-size: var(--mv-fs-meta);
+}
+
+.mv-models-table__cost {
+  color: var(--mv-text-2);
+  font-family: var(--mv-font-mono);
+  font-size: var(--mv-fs-mono);
+}
+
+.mv-models-table__controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mv-space-2);
+}
+
+.mv-models-table__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--mv-space-2);
+  margin: 0;
+}
+
+.mv-models-table__menu .mv-menu { min-width: 200px; }
+
+.mv-models-table__menu .mv-menu__item:disabled {
+  cursor: default;
+  color: var(--mv-text-3);
+  background: none;
+  box-shadow: none;
+}
+
+.mv-models-table__notice td { padding-top: 0; }
+
+/* Replace-key dialog. Without JavaScript the menu link targets the dialog,
+   which then shows in place of the modal. */
+.mv-models-keydlg:target:not([open]) {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  height: fit-content;
+  margin: auto;
+}
+
+/* Provider connection form. */
+.mv-provider-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mv-space-5);
+  width: min(100%, 720px);
+  margin-inline: auto;
+}
+
+.mv-provider-form__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mv-space-5);
+  padding: var(--mv-space-5);
+  border: 1px solid var(--mv-line);
+  background: var(--mv-surface);
+}
+
+.mv-provider-form__actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--mv-space-3);
+  padding-top: var(--mv-space-2);
+  border-top: 1px solid var(--mv-line);
+}
+
+@media (max-width: 1180px) {
+  .mv-models__tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 768px) {
+  .mv-models { gap: 14px; }
+
+  /* The top bar carries the title on phones (G2 mobile); the heading stays
+     available to screen readers. */
+  .mv-models .mv-pagehead__text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .mv-models .mv-pagehead { justify-content: flex-end; }
+
+  /* G2 mobile has a single add action; the unbuilt custom wizard stays on
+     desktop. */
+  .mv-models .mv-pagehead__actions > .is-soon { display: none; }
+
+  .mv-models__tiles {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .mv-models-tile {
+    min-height: 60px;
+    padding: 0 var(--mv-space-3);
+  }
+
+  .mv-models-tile > .ti { font-size: 22px; }
+
+  /* The table becomes one stacked block per model, each cell labelled. */
+  .mv-models-table,
+  .mv-models-table tbody,
+  .mv-models-table tr,
+  .mv-models-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .mv-models-table colgroup,
+  .mv-models-table thead { display: none; }
+
+  .mv-models-table .mv-models-table__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--mv-space-2) var(--mv-space-4);
+    padding: var(--mv-space-4);
+  }
+
+  .mv-models-table .mv-models-table__row td {
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .mv-models-table__row td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    color: var(--mv-text-3);
+    font-family: var(--mv-font-mono);
+    font-size: var(--mv-fs-micro);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .mv-models-table__group:not(:last-child) tr:last-child td { border-bottom: 0; }
+  .mv-models-table__group:not(:last-child) { border-bottom: 1px solid var(--mv-line); }
+
+  .mv-models-table__notice td { padding: 0 var(--mv-space-4) var(--mv-space-4); }
+
+  .mv-models-table__controls { justify-content: flex-start; }
+
+  .mv-provider-form__body { padding: var(--mv-space-4); }
+
+  .mv-provider-form__actions { flex-direction: column-reverse; }
+
+  .mv-provider-form__actions .mv-btn { width: 100%; }
+}

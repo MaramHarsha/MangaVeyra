@@ -49,12 +49,12 @@ func (a *API) Routes(r *httpx.Router) {
 	w.API("POST /jobs/{id}/fail", a.fail)
 
 	j := r.Group("/api/v1", httpx.RequireUser)
-	j.API("GET /jobs", a.list)
-	j.API("GET /jobs/stats", a.stats)
-	j.API("GET /jobs/{id}", a.get)
-	j.API("GET /jobs/{id}/events", a.events)
-	j.API("POST /jobs/{id}/cancel", a.cancel)
-	j.API("POST /jobs/{id}/retry", a.retry, httpx.RequireHuman)
+	j.API("GET /jobs", a.list, httpx.RequireScope("projects:read"))
+	j.API("GET /jobs/stats", a.stats, httpx.RequireSession)
+	j.API("GET /jobs/{id}", a.get, httpx.RequireScope("projects:read"))
+	j.API("GET /jobs/{id}/events", a.events, httpx.RequireScope("projects:read"))
+	j.API("POST /jobs/{id}/cancel", a.cancel, httpx.RequireScope("projects:write"), httpx.RequireScope("generate"))
+	j.API("POST /jobs/{id}/retry", a.retry, httpx.RequireSession)
 	r.API("GET /api/v1/workers", a.listWorkers, httpx.RequireRole(httpx.RoleAdmin))
 	adm := r.Group("/api/v1/workers", httpx.RequireRole(httpx.RoleAdmin))
 	adm.API("POST /{id}/drain", a.drainWorker)
@@ -427,19 +427,27 @@ func (a *API) list(w http.ResponseWriter, r *http.Request) error {
 	u := httpx.UserFrom(r.Context())
 	q := r.URL.Query()
 	p := httpx.ParsePage(r, 50, 200)
-	f := Filter{UserID: u.ID, ProjectID: q.Get("project"), PageID: q.Get("page"), Executor: q.Get("executor"), Before: p.Cursor, Limit: p.Limit + 1}
+	f := Filter{UserID: u.ID, ProjectID: q.Get("project"), ChapterID: q.Get("chapter"), PageID: q.Get("page"),
+		Executor: q.Get("executor"), Before: p.Cursor, Limit: p.Limit + 1}
+	if token := httpx.TokenFrom(r.Context()); token != nil && len(token.ProjectIDs) != 0 {
+		f.ProjectIDs = append([]string(nil), token.ProjectIDs...)
+	}
 	if s := q.Get("state"); s != "" {
 		f.States = strings.Split(s, ",")
 	}
 	if t := q.Get("type"); t != "" {
 		f.Types = strings.Split(t, ",")
 	}
-	if q.Get("all") == "1" && u.IsAdmin() {
+	if token := httpx.TokenFrom(r.Context()); q.Get("all") == "1" && u.IsAdmin() &&
+		(token == nil || token.HasScope("admin")) {
 		f.UserID = ""
 	}
 	list, err := a.Q.List(r.Context(), f)
 	if err != nil {
 		return err
+	}
+	for i := range list {
+		list[i] = a.Q.PublicView(list[i])
 	}
 	httpx.JSON(w, http.StatusOK, httpx.Paginate(list, p.Limit, func(j *Job) string { return j.ID }))
 	return nil
@@ -468,7 +476,7 @@ func (a *API) get(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"job": j, "position": pos})
+	httpx.JSON(w, http.StatusOK, map[string]any{"job": a.Q.PublicView(j), "position": pos})
 	return nil
 }
 
@@ -497,7 +505,7 @@ func (a *API) cancel(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"job": j})
+	httpx.JSON(w, http.StatusOK, map[string]any{"job": a.Q.PublicView(j)})
 	return nil
 }
 
@@ -510,7 +518,7 @@ func (a *API) retry(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"job": j})
+	httpx.JSON(w, http.StatusOK, map[string]any{"job": a.Q.PublicView(j)})
 	return nil
 }
 
@@ -554,6 +562,9 @@ func (a *API) deleteWorker(w http.ResponseWriter, r *http.Request) error {
 func (q *Queue) Authorizer() func(ctx context.Context, id httpx.Identity, topic string, write bool) error {
 	return func(ctx context.Context, id httpx.Identity, topic string, write bool) error {
 		if write {
+			return httpx.ErrForbidden("")
+		}
+		if id.Token != nil && !id.Token.HasScope("projects:read") {
 			return httpx.ErrForbidden("")
 		}
 		j, err := q.Get(ctx, strings.TrimPrefix(topic, "job:"))

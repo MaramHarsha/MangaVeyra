@@ -54,7 +54,8 @@ type Scope struct {
 	PageID    string `json:"page_id,omitempty"`
 	PanelID   string `json:"panel_id,omitempty"`
 	LayerID   string `json:"layer_id,omitempty"`
-	// Region is the edit region (mask key, polygon or box) for region scope.
+	// Region is the edit region (mask asset, polygon or box) for region scope.
+	// A region targets LayerID; its page/panel ancestry is resolved server-side.
 	Region json.RawMessage `json:"region,omitempty"`
 }
 
@@ -77,6 +78,9 @@ func (s Scope) Validate() error {
 	needRegion := func() error {
 		if !regionSet || bytes.Equal(region, []byte("null")) {
 			return errors.New("jobs: region scope needs region")
+		}
+		if !json.Valid(region) || region[0] != '{' {
+			return errors.New("jobs: region scope needs a JSON object")
 		}
 		return nil
 	}
@@ -120,11 +124,11 @@ func (s Scope) Validate() error {
 	case ScopeRegion:
 		return errors.Join(
 			need(s.ProjectID, "project_id"),
-			need(s.PanelID, "panel_id"),
+			need(s.LayerID, "layer_id"),
 			needRegion(),
 			forbid(s.ChapterID != "", "chapter_id"),
 			forbid(s.PageID != "", "page_id"),
-			forbid(s.LayerID != "", "layer_id"),
+			forbid(s.PanelID != "", "panel_id"),
 		)
 	case ScopeProject:
 		return errors.Join(
@@ -193,39 +197,47 @@ func Permanent(code string, err error) *JobError {
 
 // Job is one queued unit of work.
 type Job struct {
-	ID              string            `json:"id"`
-	Type            string            `json:"type"`
-	Scope           Scope             `json:"scope"`
-	UserID          string            `json:"user_id,omitempty"`
-	State           string            `json:"state"`
-	Progress        float64           `json:"progress"`
-	Step            int               `json:"step"`
-	Steps           int               `json:"steps"`
-	Message         string            `json:"message,omitempty"`
-	Executor        string            `json:"executor"`
-	ModelID         string            `json:"model_id,omitempty"`
-	ProviderID      string            `json:"provider_id,omitempty"`
-	Decision        json.RawMessage   `json:"decision,omitempty"`
-	Input           json.RawMessage   `json:"input,omitempty"`
-	Files           map[string]string `json:"files,omitempty"`
-	Output          json.RawMessage   `json:"output,omitempty"`
-	Error           *JobError         `json:"error,omitempty"`
-	Estimate        Cost              `json:"estimate"`
-	Actual          Cost              `json:"actual"`
-	Attempts        int               `json:"attempts"`
-	MaxAttempts     int               `json:"max_attempts"`
-	ParentID        string            `json:"parent_id,omitempty"`
-	Priority        int               `json:"priority"`
-	Batch           bool              `json:"batch"`
-	WorkerID        string            `json:"worker_id,omitempty"`
-	LeaseExpiresAt  *time.Time        `json:"lease_expires_at,omitempty"`
-	RunAfter        *time.Time        `json:"run_after,omitempty"`
-	CancelRequested bool              `json:"cancel_requested"`
-	CreatedAt       time.Time         `json:"created_at"`
-	UpdatedAt       time.Time         `json:"updated_at"`
-	StartedAt       *time.Time        `json:"started_at,omitempty"`
-	FinishedAt      *time.Time        `json:"finished_at,omitempty"`
+	ID          string            `json:"id"`
+	Type        string            `json:"type"`
+	Scope       Scope             `json:"scope"`
+	UserID      string            `json:"user_id,omitempty"`
+	State       string            `json:"state"`
+	Progress    float64           `json:"progress"`
+	Step        int               `json:"step"`
+	Steps       int               `json:"steps"`
+	Message     string            `json:"message,omitempty"`
+	Executor    string            `json:"executor"`
+	ModelID     string            `json:"model_id,omitempty"`
+	ProviderID  string            `json:"provider_id,omitempty"`
+	Decision    json.RawMessage   `json:"decision,omitempty"`
+	Input       json.RawMessage   `json:"input,omitempty"`
+	Files       map[string]string `json:"files,omitempty"`
+	Output      json.RawMessage   `json:"output,omitempty"`
+	Error       *JobError         `json:"error,omitempty"`
+	Estimate    Cost              `json:"estimate"`
+	Actual      Cost              `json:"actual"`
+	Attempts    int               `json:"attempts"`
+	MaxAttempts int               `json:"max_attempts"`
+	// AttemptBase is the value of Attempts when the current round began (a
+	// manual retry starts a new round without reusing attempt numbers).
+	AttemptBase     int        `json:"attempt_base"`
+	ParentID        string     `json:"parent_id,omitempty"`
+	Priority        int        `json:"priority"`
+	Batch           bool       `json:"batch"`
+	WorkerID        string     `json:"worker_id,omitempty"`
+	LeaseExpiresAt  *time.Time `json:"lease_expires_at,omitempty"`
+	RunAfter        *time.Time `json:"run_after,omitempty"`
+	CancelRequested bool       `json:"cancel_requested"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	StartedAt       *time.Time `json:"started_at,omitempty"`
+	FinishedAt      *time.Time `json:"finished_at,omitempty"`
 }
+
+// RoundAttempt is the attempt number within the current round (1 for the
+// first claim after enqueue or a manual retry). Attempts itself never resets,
+// so it stays a unique lease identity across retries.
+func (j *Job) RoundAttempt() int { return j.Attempts - j.AttemptBase }
 
 // Finished reports whether the job reached a terminal state.
 func (j *Job) Finished() bool {
@@ -249,7 +261,7 @@ func (j *Job) DecodeOutput(v any) error {
 }
 
 const jobCols = `id, type, scope, user_id, state, progress, step, steps, message, executor, model_id, provider_id,
-	decision, input, files, output, error, estimate, actual, attempts, max_attempts, parent_id, priority, batch,
+	decision, input, files, output, error, estimate, actual, attempts, max_attempts, attempt_base, parent_id, priority, batch,
 	worker_id, lease_expires_at, run_after, cancel_requested, created_at, updated_at, started_at, finished_at`
 
 type jobRow struct {
@@ -274,6 +286,7 @@ type jobRow struct {
 	Actual          db.JSON[Cost]              `db:"actual"`
 	Attempts        int                        `db:"attempts"`
 	MaxAttempts     int                        `db:"max_attempts"`
+	AttemptBase     int                        `db:"attempt_base"`
 	ParentID        sql.NullString             `db:"parent_id"`
 	Priority        int                        `db:"priority"`
 	Batch           bool                       `db:"batch"`
@@ -307,7 +320,7 @@ func (r *jobRow) job() *Job {
 		ID: r.ID, Type: r.Type, Scope: r.Scope.V, UserID: r.UserID.String, State: r.State, Progress: r.Progress,
 		Step: r.Step, Steps: r.Steps, Message: r.Message, Executor: r.Executor, ModelID: r.ModelID, ProviderID: r.ProviderID,
 		Decision: rawOrNil(r.Decision), Input: rawOrNil(r.Input), Files: r.Files.V, Output: rawOrNil(r.Output),
-		Estimate: r.Estimate.V, Actual: r.Actual.V, Attempts: r.Attempts, MaxAttempts: r.MaxAttempts, ParentID: r.ParentID.String,
+		Estimate: r.Estimate.V, Actual: r.Actual.V, Attempts: r.Attempts, MaxAttempts: r.MaxAttempts, AttemptBase: r.AttemptBase, ParentID: r.ParentID.String,
 		Priority: r.Priority, Batch: r.Batch, WorkerID: r.WorkerID.String, LeaseExpiresAt: timePtr(r.LeaseExpiresAt),
 		RunAfter: timePtr(r.RunAfter), CancelRequested: r.CancelRequested, CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(),
 		StartedAt: timePtr(r.StartedAt), FinishedAt: timePtr(r.FinishedAt),

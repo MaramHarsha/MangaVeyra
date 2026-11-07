@@ -10,8 +10,8 @@
 
 <p align="center">
   MangaVeyra is being built as an open-source, self-hosted AI manga studio, reader and community.<br>
-  The current repository contains a tested server foundation, UI kit and AI worker,<br>
-  but it does not yet provide an end-to-end story, editor, publishing or reading workflow.
+  The current repository includes a tested premise-to-editable-script vertical slice,<br>
+  but it does not yet provide page art, chapter export, publishing or reading workflows.
 </p>
 
 <p align="center">
@@ -34,9 +34,9 @@
 
 ## Current status
 
-> **MangaVeyra is pre-alpha development software.** You can build and run the foundation, complete first-run setup,
-> manage accounts and settings, and exercise the worker and SDK independently. You cannot yet turn a premise into an
-> editable, publishable manga chapter through the application.
+> **MangaVeyra is pre-alpha development software.** You can connect OpenRouter or OpenAI, or use the offline placeholder,
+> create a project and chapter from a premise or private text source, generate a structured script, and edit the
+> persisted manuscript. You cannot yet turn it into illustrated pages or an exported, publishable chapter.
 
 ### Implemented and tested
 
@@ -44,8 +44,10 @@
   storage, encrypted secrets, security middleware and signed media URLs.
 - **Runtime services:** database-backed jobs, worker protocol, WebSockets, notifications, English/Japanese i18n and
   the PWA/static-asset shell.
-- **Working screens:** first-run setup, login, signup, password reset, onboarding, account/settings pages, error pages,
-  the design-system guide and an empty dashboard.
+- **Working screens:** first-run setup, provider connections, login/signup/onboarding, account/settings, project
+  creation/adaptation, the real Studio dashboard, generation state and the editable chapter manuscript.
+- **Gate A generation:** deterministic offline script generation and fixed-model OpenRouter or OpenAI structured
+  text, with hard spend reservations, project/token authorization, revision fencing and honest AI provenance.
 - **Python AI worker:** deterministic placeholder output, diffusers and ComfyUI adapters, LoRA training, panel and
   bubble detection, OCR, image helpers and Character Lock scoring. The real GPU path still needs hardware validation.
 - **Frontend foundation:** design tokens, responsive components, themes, motion, HTMX integration and the Svelte
@@ -55,16 +57,17 @@
 
 ### Not yet an end product
 
-The server-side AI catalogue, cloud-provider adapters, routing UI, Studio data services, script generation, visual
-editor, lettering, compositing, publishing, reader, export, application MCP server, backup/update flows, admin UI and
-World link are incomplete or intentional stubs. Database tables or designs for a feature do not mean that feature is
-available at runtime.
+Image-provider expansion, character-sheet generation, page persistence, the visual editor, lettering, compositing,
+publishing, reader, export, application MCP server, backup/update flows, admin UI and World link are incomplete or
+intentional stubs. Database tables or designs for a feature do not mean that feature is available at runtime.
 
-The active first milestone is deliberately smaller: connect OpenRouter for text or use the deterministic offline
-placeholder, create a project and chapter, generate a structured script, then edit and persist it atomically. See the
+The completed first milestone deliberately stops at an editable script: connect OpenRouter for text or use the
+deterministic offline placeholder, create a project and chapter, generate a structured script, then edit and persist
+it atomically. Gate B of Phase 1 now moves into characters and the page pipeline. See the
 [accepted MVP decision](docs/decisions/0001-mvp-scope.md), the
 [hard remote-spend decision](docs/decisions/0003-hard-remote-spend-reservations.md),
-and the [active execution plan](docs/plans/0001-script-vertical-slice.md).
+the [completed script plan](docs/plans/0001-script-vertical-slice.md), and the
+[active Phase 1 plan](docs/plans/0002-phase-1-first-playable.md).
 
 ## Why MangaVeyra
 
@@ -75,8 +78,8 @@ rerolling everything else.
 
 The deployment target is one Go binary and a database, with optional Python workers for local AI. The open-source
 application is designed to accept the operator's own models and keys, send no telemetry, and keep the complete
-studio, reader and community self-hostable. These are repository invariants; the creation workflow is still being
-implemented.
+studio, reader and community self-hostable. These are repository invariants; the first script workflow is implemented
+and the page-production workflow is still being built.
 
 ## Product direction
 
@@ -110,8 +113,8 @@ not a list of shipped behavior.
 
 ## Quick start
 
-These commands start the current pre-alpha foundation for development and evaluation. Expect setup, authentication,
-settings and an empty dashboard, not the planned creation workflow.
+These commands start the current pre-alpha for development and evaluation. The premise/adaptation → editable-script
+workflow works; page art, lettering and export remain planned Phase 1 work.
 
 ### Docker Compose (PostgreSQL)
 
@@ -124,11 +127,11 @@ cp .env.example .env
 docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 ```
 
-Open <http://localhost:8080> and follow first-run setup. The provider connection controls shown during setup are not
-implemented yet.
+Open <http://localhost:8080>, follow first-run setup, and either keep the offline placeholder or connect OpenRouter or
+OpenAI.
 
-The Python worker can be started and exercised independently through its protocol and local CLI. The application does
-not yet route Studio creation flows to it:
+The Python worker can be started and exercised independently through its protocol and local CLI. Gate A script jobs
+run in the Go process; Studio image-generation flows do not route to the worker yet:
 
 ```sh
 # NVIDIA GPU worker
@@ -191,9 +194,10 @@ The **worker side** is implemented: its local catalogue includes supported diffu
 diffusers, ComfyUI, mock and vision backends. It can register, claim jobs, report progress and upload results through
 the worker protocol.
 
-The **server side** is not implemented yet: there is no working model catalogue, cloud-provider registry, routing
-engine or provider-management UI in the application. The active milestone starts with deterministic structured text
-and OpenRouter text generation before expanding to image providers and automatic routing.
+The **Gate A server-side text path is implemented**: it includes an encrypted OpenRouter/OpenAI provider registry and
+management UI, deterministic offline placeholder generation, a fixed structured-output text model, explicit routing,
+durable spend reservations and persisted script jobs. Image-provider catalogues, capability-based automatic routing
+and visual generation remain Gate B work.
 
 ## Agents (MCP, planned)
 
@@ -212,14 +216,14 @@ World remains off by default, and this open-source repository never contains pay
 
 | Part | Technology | Current state |
 |---|---|---|
-| Server | Go `net/http`, embedded assets | Foundation implemented |
-| Pages | templ + HTMX | Setup, auth, settings and UI kit implemented |
+| Server | Go `net/http`, embedded assets | Foundation and Phase 1 Gate A implemented |
+| Pages | templ + HTMX | Setup, auth, settings, provider management, project wizard and manuscript UI implemented |
 | Rich UI | TypeScript, Svelte 5, PixiJS | Build foundation and demo island only |
 | AI workers | Python, PyTorch/diffusers, ComfyUI adapter | Implemented; GPU path needs hardware validation |
 | Data | PostgreSQL or SQLite | Schema and migration runner implemented |
 | Files | Local disk or S3-compatible storage | Implemented |
 | Realtime | WebSockets and Yjs relay | Foundation implemented |
-| Product modules | Studio, editor, publishing, reader, export, MCP | Mostly stubs |
+| Product modules | Studio, editor, publishing, reader, export, MCP | Studio project/chapter/script slice implemented; visual editor, publishing, reader, export and MCP remain planned |
 
 ```text
 cmd/mangaveyra     server and CLI           internal/   core and feature packages

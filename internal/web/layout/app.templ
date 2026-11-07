@@ -104,13 +104,20 @@ templ TopBar(c *Chrome) {
 		<span class="mv-topbar__title" aria-hidden="true">{ c.mobileTitle() }</span>
 		<nav class="mv-topnav" aria-label={ i18n.T(ctx, "nav.main") }>
 			for _, n := range topNav(ctx) {
-				<a
-					class="mv-topnav__item"
-					href={ templ.URL(n.Href) }
-					if n.Key == c.Section {
-						aria-current="page"
-					}
-				>{ n.Label }</a>
+				if ui.Ready(ctx, n.Href) {
+					<a
+						class="mv-topnav__item"
+						href={ templ.URL(n.Href) }
+						if n.Key == c.Section {
+							aria-current="page"
+						}
+					>{ n.Label }</a>
+				} else {
+					<a class="mv-topnav__item is-soon" aria-disabled="true" title={ i18n.T(ctx, "ui.soon_hint") }>
+						{ n.Label }
+						@ui.SoonTag()
+					</a>
+				}
 			}
 		</nav>
 		@ui.SearchBox("mv-search", "q", c.SearchQuery, i18n.T(ctx, "nav.search_placeholder"), "/search")
@@ -119,13 +126,19 @@ templ TopBar(c *Chrome) {
 				if c.Meter != nil {
 					@ui.ComputeMeter(*c.Meter)
 				}
-				<a class="mv-iconlink mv-bell" href="/notifications" aria-label={ i18n.T(ctx, "nav.notifications") }>
-					@ui.Icon("bell", 20)
-					<span class="mv-iconlink__dot" data-unread-dot hidden?={ c.Unread == 0 }></span>
-					if c.Unread > 0 {
-						<span class="mv-sr-only">{ i18n.T(ctx, "nav.unread", "count", c.Unread) }</span>
-					}
-				</a>
+				if ui.Ready(ctx, "/notifications") {
+					<a class="mv-iconlink mv-bell" href="/notifications" aria-label={ i18n.T(ctx, "nav.notifications") }>
+						@ui.Icon("bell", 20)
+						<span class="mv-iconlink__dot" data-unread-dot hidden?={ c.Unread == 0 }></span>
+						if c.Unread > 0 {
+							<span class="mv-sr-only">{ i18n.T(ctx, "nav.unread", "count", c.Unread) }</span>
+						}
+					</a>
+				} else {
+					<span class="mv-iconlink mv-bell is-soon" role="img" aria-label={ i18n.T(ctx, "nav.notifications") + " · " + i18n.T(ctx, "ui.soon_hint") } title={ i18n.T(ctx, "ui.soon_hint") }>
+						@ui.Icon("bell", 20)
+					</span>
+				}
 				@ui.Dropdown("mv-usermenu", "end", false, userTrigger(c), c.userMenu(ctx))
 			} else {
 				@ui.LinkButton("/login", ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM}) {
@@ -176,6 +189,18 @@ templ Sidebar(c *Chrome) {
 }
 
 templ sideItem(c *Chrome, n navLink) {
+	if !ui.Ready(ctx, n.Href) {
+		<a class="mv-sidenav__item is-soon" aria-disabled="true" data-tip={ n.Label + " · " + i18n.T(ctx, "ui.soon_hint") }>
+			@ui.Icon(n.Icon, 18)
+			<span class="mv-sidebar__label">{ n.Label }</span>
+			@ui.SoonTag()
+		</a>
+	} else {
+		@sideLink(c, n)
+	}
+}
+
+templ sideLink(c *Chrome, n navLink) {
 	<a
 		class="mv-sidenav__item"
 		href={ templ.URL(n.Href) }
@@ -199,6 +224,11 @@ templ BottomNav(c *Chrome) {
 						@ui.Icon(n.Icon, 24)
 					</a>
 				</div>
+			} else if !ui.Ready(ctx, n.Href) {
+				<a class="mv-bottomnav__item is-soon" aria-disabled="true" title={ i18n.T(ctx, "ui.soon_hint") }>
+					@ui.Icon(n.Icon, 22)
+					{ n.Label }
+				</a>
 			} else {
 				<a
 					class="mv-bottomnav__item"

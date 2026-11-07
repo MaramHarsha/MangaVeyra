@@ -42,8 +42,11 @@ func TestLoginPage(t *testing.T) {
 	}
 	contains(t, r, "Welcome back", `name="identifier"`, `autocomplete="current-password"`, "Stay signed in", "/forgot",
 		`value="/settings/reading"`, "Ask your admin for an invite", `lang="en"`)
-	if strings.Contains(string(r.Body), "passkey") {
-		t.Fatal("passkeys are not implemented and must not be offered")
+	// The designed "Use a passkey" action is shown, but passkeys are not
+	// implemented, so it must be the disabled Soon control, never a link.
+	contains(t, r, "Use a passkey", `class="mv-soon"`)
+	if strings.Contains(string(r.Body), `href="/login/passkey"`) {
+		t.Fatal("passkeys are not implemented and must not be offered as a working link")
 	}
 	if !strings.Contains(r.Header.Get("Content-Security-Policy"), "default-src 'self'") {
 		t.Fatal("CSP header missing")
@@ -153,7 +156,10 @@ func TestSignupWithInvite(t *testing.T) {
 
 	c := ta.NewClient()
 	closed := c.Get("/signup")
-	contains(t, closed, "Sign-up is closed", "You need an invite to join this server.")
+	contains(t, closed, "Join ", "You need an invite to join this server.")
+	if strings.Contains(string(closed.Body), `action="/signup"`) {
+		t.Fatal("closed sign-up must not render the sign-up form")
+	}
 	if r := post(c, "/signup", url.Values{"username": {"sora"}}); r.StatusCode != http.StatusForbidden {
 		t.Fatalf("sign-up without invite: %d", r.StatusCode)
 	}
@@ -226,12 +232,15 @@ func TestForgotAndReset(t *testing.T) {
 	u := ta.CreateUser(t, "wren", auth.RoleCreator)
 	c := ta.NewClient()
 
-	// No SMTP on this server: the self-host note replaces the form.
+	// No SMTP on this server: the designed form and lead still show (the lead
+	// names the admin route); submitting confirms that email is unavailable.
 	f := c.Get("/forgot")
-	contains(t, f, "HMMM…", "Self-hosted server without email", "Ask an admin to reset your password.")
-	if r := post(c, "/forgot", url.Values{"email": {"wren@example.org"}}); r.StatusCode != http.StatusConflict {
+	contains(t, f, "HMMM…", `action="/forgot"`, "your admin can reset it from Admin → Users.")
+	r := post(c, "/forgot", url.Values{"email": {"wren@example.org"}})
+	if r.StatusCode != http.StatusConflict {
 		t.Fatalf("forgot without email: %d", r.StatusCode)
 	}
+	contains(t, r, "Ask an admin to reset your password.")
 
 	link, err := ta.Deps.Auth.CreateResetLink(ctx, ta.Admin.ID, u.ID)
 	if err != nil {
@@ -304,5 +313,33 @@ func TestShelfFor(t *testing.T) {
 	items := authui.ShelfFor([]string{"romance", "slice_of_life", "comedy"})
 	if len(items) != 6 || items[0].Matches < items[5].Matches || items[0].Title != "Low Tide Radio" {
 		t.Fatalf("ShelfFor: %+v", items)
+	}
+}
+
+func TestSignupDerivesUsernameFromEmail(t *testing.T) {
+	ta := testutil.NewTestApp(t)
+	ctx := context.Background()
+	setInstance(t, ta, func(i *settings.Instance) { i.SignUp = settings.SignUpInvite })
+	inv, err := ta.Deps.Auth.CreateInvite(ctx, ta.Admin.ID, auth.InviteInput{Role: auth.RoleCreator, MaxUses: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ta.CreateUser(t, "pip.vell", auth.RoleCreator)
+	c := ta.NewClient()
+	page := c.Get("/signup?invite=" + inv.Code)
+	if strings.Contains(string(page.Body), `name="username"`) {
+		t.Fatal("the designed sign-up form has no username field")
+	}
+	r := post(c, "/signup", url.Values{"invite": {inv.Code}, "display_name": {"Pip Vell"}, "email": {"Pip.Vell@studio.example"},
+		"password": {"paper-crows-ninth-bell"}, "agree": {"on"}})
+	if r.StatusCode != http.StatusSeeOther {
+		t.Fatalf("sign-up without username = %d: %.1500s", r.StatusCode, r.Body)
+	}
+	var username string
+	if err := ta.Deps.DB.Get(ctx, &username, `SELECT username FROM users WHERE email = ?`, "pip.vell@studio.example"); err != nil {
+		t.Fatal(err)
+	}
+	if username != "pip.vell2" {
+		t.Fatalf("derived username = %q, want pip.vell2 (pip.vell was taken)", username)
 	}
 }

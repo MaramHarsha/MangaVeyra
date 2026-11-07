@@ -72,18 +72,18 @@ templ Continue(p Project) {
 			<a class="mv-continue__title mv-link--plain" href={ templ.URL(p.Href) }>{ p.Title }</a>
 			<span class="mv-small mv-muted">{ p.ChapterLine }</span>
 			@ui.Bar(p.Progress, "", true, p.ChapterLine)
-			<div class="mv-row mv-row--wrap mv-row--sm">
-				if p.EditorHref != "" {
-					@ui.LinkButton(p.EditorHref, ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Icon: "pencil"}) {
-						{ p.EditorLabel }
-					}
+		</div>
+		<div class="mv-row mv-row--wrap mv-row--sm mv-continue__actions">
+			if p.EditorHref != "" {
+				@ui.LinkButton(p.EditorHref, ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Icon: "pencil"}) {
+					{ p.EditorLabel }
 				}
-				if p.IssuesHref != "" {
-					@ui.LinkButton(p.IssuesHref, ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "alert-triangle"}) {
-						{ p.IssuesLabel }
-					}
+			}
+			if p.IssuesHref != "" {
+				@ui.LinkButton(p.IssuesHref, ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "alert-triangle"}) {
+					{ p.IssuesLabel }
 				}
-			</div>
+			}
 		</div>
 	</section>
 }
@@ -103,16 +103,25 @@ templ ComputeCard(c ComputeView) {
 		@ui.KV(i18n.T(ctx, "dash.compute.queue"), c.Queue)
 		@ui.KV(i18n.T(ctx, "dash.compute.workers"), c.Workers)
 		@ui.KV(i18n.T(ctx, "dash.compute.remote"), c.Remote)
-		<a class="mv-small mv-link--plain mv-mt-auto" href={ templ.URL(c.QueueURL) }>{ i18n.T(ctx, "dash.compute.open_queue") }</a>
+		if ui.Ready(ctx, c.QueueURL) {
+			<a class="mv-small mv-link--plain mv-mt-auto" href={ templ.URL(c.QueueURL) }>{ i18n.T(ctx, "dash.compute.open_queue") }</a>
+		}
 	</section>
 }
 
 // ComputeLine is the one-line compute summary on phones.
 templ ComputeLine(c ComputeView) {
-	<a class="mv-compute-line mv-show-mobile mv-link--plain" href={ templ.URL(c.QueueURL) }>
-		@ui.Icon("cpu", 16)
-		<span>{ c.Line }</span>
-	</a>
+	if ui.Ready(ctx, c.QueueURL) {
+		<a class="mv-compute-line mv-show-mobile mv-link--plain" href={ templ.URL(c.QueueURL) }>
+			@ui.Icon("cpu", 16)
+			<span>{ c.Line }</span>
+		</a>
+	} else {
+		<div class="mv-compute-line mv-show-mobile">
+			@ui.Icon("cpu", 16)
+			<span>{ c.Line }</span>
+		</div>
+	}
 }
 
 // Empty is the "No projects yet" state with シーン… and the two ways to start.
@@ -146,7 +155,9 @@ templ Recent(ps []Project) {
 	<section class="mv-stack">
 		<div class="mv-section-head">
 			<h2 class="mv-section-head__title">{ i18n.T(ctx, "dash.recent") }</h2>
-			<a href="/studio/projects">{ i18n.T(ctx, "dash.all_projects") }</a>
+			if ui.Ready(ctx, "/studio/projects") {
+				<a href="/studio/projects">{ i18n.T(ctx, "dash.all_projects") }</a>
+			}
 		</div>
 		<div class="mv-grid-4">
 			for _, p := range ps {
@@ -160,13 +171,24 @@ templ Recent(ps []Project) {
 templ IdeasRow() {
 	<nav class="mv-ideas" aria-label={ i18n.T(ctx, "dash.ideas") }>
 		for _, it := range Ideas {
-			<a class="mv-idea" href={ templ.URL(it.Href) }>
-				@ui.Icon(it.Icon, 26)
-				<span class="mv-idea__text">
-					<strong>{ i18n.T(ctx, it.TitleKey) }</strong>
-					<span>{ i18n.T(ctx, it.DescKey) }</span>
-				</span>
-			</a>
+			if ui.Ready(ctx, it.Href) {
+				<a class="mv-idea" href={ templ.URL(it.Href) }>
+					@ui.Icon(it.Icon, 26)
+					<span class="mv-idea__text">
+						<strong>{ i18n.T(ctx, it.TitleKey) }</strong>
+						<span>{ i18n.T(ctx, it.DescKey) }</span>
+					</span>
+				</a>
+			} else {
+				<a class="mv-idea is-soon" aria-disabled="true" title={ i18n.T(ctx, "ui.soon_hint") }>
+					@ui.Icon(it.Icon, 26)
+					<span class="mv-idea__text">
+						<strong>{ i18n.T(ctx, it.TitleKey) }</strong>
+						<span>{ i18n.T(ctx, it.DescKey) }</span>
+					</span>
+					@ui.SoonTag()
+				</a>
+			}
 		}
 	</nav>
 }

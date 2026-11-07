@@ -103,7 +103,7 @@ func (m *Module) Routes(r *core.Router) {
 	r.Page("GET /offline", u.offline)
 	r.Page("GET /_design", u.styleGuide)
 	r.Page("GET /{$}", u.root)
-	u.Fallback("GET /studio", core.HandlerFunc(u.dashboard), core.RequireUser)
+	u.Fallback("GET /studio", core.HandlerFunc(u.dashboard), core.RequireSession)
 }
 
 // Fallback registers a handler that is mounted only if no other module

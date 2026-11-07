@@ -31,6 +31,11 @@ const (
 	KindChapter   = "chapter"
 	KindSystem    = "system"
 	KindUpdate    = "update"
+	// Kinds named by the designed notification settings (G1). Their senders
+	// arrive with Character Lock training, World and remote-spend alerts.
+	KindLockTraining = "lock_training"
+	KindWorldReview  = "world_review"
+	KindSpendLimit   = "spend_limit"
 )
 
 // Publisher pushes realtime messages (the ws hub implements it).

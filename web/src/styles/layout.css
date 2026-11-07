@@ -623,8 +623,9 @@ html[data-chrome="hidden"] .mv-reader__bar { transform: translateY(-100%); trans
 /* ---- dashboard (B1) building blocks --------------------------------------- */
 
 .mv-dash-top { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; }
-.mv-continue { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 20px; padding: 18px; }
-.mv-continue__art { height: 140px; }
+.mv-continue { display: grid; grid-template-columns: 180px minmax(0, 1fr); grid-template-rows: auto auto; gap: 10px 20px; padding: 18px; }
+.mv-continue__art { height: 140px; grid-row: span 2; }
+.mv-continue__actions { grid-column: 2; align-self: start; }
 .mv-continue__body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .mv-continue__title { font-family: var(--mv-font-display); font-size: 2.125rem; line-height: 1; text-transform: uppercase; }
 .mv-greeting__meta { display: flex; align-items: center; gap: 12px; margin-top: 4px; flex-wrap: wrap; }
