@@ -37,7 +37,7 @@ var _ ImageService = (*imageService)(nil)
 type imageCandidate struct {
 	Model                      ModelManifest
 	ProviderID, Kind, Executor string
-	Remote                     bool
+	Remote, Preferred          bool
 	Cost                       jobs.Cost
 	Score                      float64
 }
@@ -48,6 +48,17 @@ type imageDecision struct {
 	Alternatives []string `json:"alternatives"`
 	Skipped      []string `json:"skipped"`
 	Reason       string   `json:"reason"`
+	// Route names the chosen provider kind and model ("OpenAI · GPT Image 2.5
+	// Sunburst") and EstimateUSD is its per-call reservation (ADR 0009).
+	Route       string  `json:"route,omitempty"`
+	EstimateUSD float64 `json:"estimate_usd"`
+	// Fallbacks is the ordered automatic fallback chain ("kind:model"), one
+	// route per provider kind, within the approved attempt envelope.
+	Fallbacks []string `json:"fallbacks,omitempty"`
+	// SwitchedFrom and SwitchCode record an automatic fallback: the failed
+	// "kind:model" and its safe error code.
+	SwitchedFrom string `json:"switched_from,omitempty"`
+	SwitchCode   string `json:"switch_code,omitempty"`
 }
 
 func imageError(code string, retry bool, cost jobs.Cost) *GenerateError {
@@ -81,6 +92,9 @@ func imageTask(t string) bool {
 // quoteImage is the sole pricing authority. Unknown routes are unusable even
 // when a manifest advertises a cheap price or a supported provider kind.
 func quoteImage(kind, model string, n ImageNeeds) (jobs.Cost, bool) {
+	if r, ok := imageRouteFor(kind, model); ok {
+		return r.quote(n)
+	}
 	switch kind {
 	case PlaceholderID:
 		return jobs.Cost{}, model == PlaceholderArt
@@ -158,7 +172,7 @@ func (s *imageService) planImage(ctx context.Context, req ImagePlanRequest, excl
 			return zero, imageError(CodeLocalOnly, false, jobs.Cost{})
 		}
 		req.RoutingMode = ModeLocalOnly
-		return imagePlan(req, imageCandidate{Model: ModelManifest{ID: PlaceholderArt, Name: "Placeholder art"}, ProviderID: PlaceholderID, Kind: PlaceholderID, Executor: jobs.ExecutorGo}, nil, nil), nil
+		return imagePlan(req, imageCandidate{Model: ModelManifest{ID: PlaceholderArt, Name: "Placeholder art"}, ProviderID: PlaceholderID, Kind: PlaceholderID, Executor: jobs.ExecutorGo}, nil, nil, nil), nil
 	}
 	models, err := s.catalog.list(ctx)
 	if err != nil {
@@ -194,7 +208,7 @@ func (s *imageService) planImage(ctx context.Context, req ImagePlanRequest, excl
 			continue
 		}
 		add := func(c imageCandidate) {
-			if req.PinProviderID != "" && req.PinProviderID != c.ProviderID || exclude[c.ProviderID+"\x00"+m.ID] {
+			if req.PinProviderID != "" && req.PinProviderID != c.ProviderID || exclude[c.ProviderID+"\x00"+m.ID] || exclude["kind:"+c.Kind] {
 				return
 			}
 			c.Model = m
@@ -209,12 +223,17 @@ func (s *imageService) planImage(ctx context.Context, req ImagePlanRequest, excl
 			if !hasProvider(m, p.Kind) || p.Kind == providerKindLocalText || mode == ModeFreeOnly {
 				continue
 			}
+			route, frozen := imageRouteFor(p.Kind, m.ID)
+			if frozen && route.PinOnly && req.PinModelID != m.ID {
+				skipped = append(skipped, m.ID+": pin only")
+				continue
+			}
 			cost, ok := quoteImage(p.Kind, m.ID, n)
 			if !ok {
 				skipped = append(skipped, m.ID+": unbounded route")
 				continue
 			}
-			add(imageCandidate{ProviderID: p.ID, Kind: p.Kind, Executor: jobs.ExecutorGo, Remote: true, Cost: cost})
+			add(imageCandidate{ProviderID: p.ID, Kind: p.Kind, Executor: jobs.ExecutorGo, Remote: true, Preferred: frozen && route.Preferred, Cost: cost})
 		}
 		if hasProvider(m, providerKindWorker) {
 			available := false
@@ -275,6 +294,10 @@ func (s *imageService) planImage(ctx context.Context, req ImagePlanRequest, excl
 		if candidates[j].Model.ID == PlaceholderArt {
 			return true
 		}
+		// ADR 0009: Auto picks a connected direct OpenAI image route first.
+		if candidates[i].Preferred != candidates[j].Preferred {
+			return candidates[i].Preferred
+		}
 		if candidates[i].Score != candidates[j].Score {
 			return candidates[i].Score > candidates[j].Score
 		}
@@ -283,19 +306,45 @@ func (s *imageService) planImage(ctx context.Context, req ImagePlanRequest, excl
 		}
 		return candidates[i].Model.ID < candidates[j].Model.ID
 	})
-	// One attempt may be rerouted later by the parent handler. Advertise the
-	// maximum eligible per-attempt cost now; Gen scales by its bounded attempt
-	// count before approval. Free/local plans never acquire paid fallbacks.
+	// One attempt may be rerouted later by the parent handler. A fallback
+	// excludes the failed provider kind, so the attempts can only walk the
+	// chain below: the best candidate of each further kind, at most one per
+	// approved attempt. Advertise the most expensive route of that chain; Gen
+	// scales it by its bounded attempt count before approval. Free/local plans
+	// never acquire paid fallbacks.
+	chain := fallbackChain(candidates)
 	ceiling := candidates[0].Cost
-	for _, c := range candidates {
+	for _, c := range chain {
 		if candidates[0].Remote {
 			ceiling.USD = math.Max(ceiling.USD, c.Cost.USD)
 		}
 		ceiling.GPUSeconds = math.Max(ceiling.GPUSeconds, c.Cost.GPUSeconds)
 	}
-	p := imagePlan(req, candidates[0], candidates, skipped)
+	p := imagePlan(req, candidates[0], candidates, skipped, chain)
 	p.Estimate = ceiling
 	return p, nil
+}
+
+// maxImageAttempts is the parent attempt envelope ADR 0007 approves.
+const maxImageAttempts = 3
+
+// fallbackChain is the ordered route list automatic fallback can reach: the
+// first candidate, then the best candidate of each provider kind not yet
+// used, up to the approved attempt count.
+func fallbackChain(sorted []imageCandidate) []imageCandidate {
+	chain := []imageCandidate{}
+	used := map[string]bool{}
+	for _, c := range sorted {
+		if used[c.Kind] {
+			continue
+		}
+		used[c.Kind] = true
+		chain = append(chain, c)
+		if len(chain) == maxImageAttempts {
+			break
+		}
+	}
+	return chain
 }
 
 func modelScore(mode string, m ModelManifest, c jobs.Cost) float64 {
@@ -308,13 +357,25 @@ func modelScore(mode string, m ModelManifest, c jobs.Cost) float64 {
 		return m.Quality*.65 + m.Speed*.35 - c.USD*100
 	}
 }
-func imagePlan(req ImagePlanRequest, c imageCandidate, alternatives []imageCandidate, skipped []string) ImagePlan {
+func imagePlan(req ImagePlanRequest, c imageCandidate, alternatives []imageCandidate, skipped []string, chain []imageCandidate) ImagePlan {
 	ids := []string{}
 	for _, a := range alternatives {
 		ids = append(ids, a.Model.ID)
 	}
-	decision, _ := json.Marshal(imageDecision{Mode: req.RoutingMode, Chosen: c.Model.ID, Provider: c.ProviderID, Alternatives: ids, Skipped: skipped, Reason: "eligible capabilities, licence and mode"})
-	explain := "Auto → " + c.Model.Name + " · " + c.Kind
+	fallbacks := []string{}
+	for _, f := range chain {
+		fallbacks = append(fallbacks, f.Kind+":"+f.Model.ID)
+	}
+	reason := "eligible capabilities, licence and mode"
+	if c.Preferred {
+		reason = "direct OpenAI image route preferred while connected; " + reason
+	}
+	if req.PinProviderID != "" || req.PinModelID != "" {
+		reason = "pinned; " + reason
+	}
+	route := providerKindName(c.Kind) + " · " + c.Model.Name
+	decision, _ := json.Marshal(imageDecision{Mode: req.RoutingMode, Chosen: c.Model.ID, Provider: c.ProviderID, Alternatives: ids, Skipped: skipped, Reason: reason, Route: route, EstimateUSD: c.Cost.USD, Fallbacks: fallbacks})
+	explain := "Auto → " + c.Model.Name + " · " + providerKindName(c.Kind)
 	if c.Remote {
 		explain += fmt.Sprintf(" · ≤$%.3f", c.Cost.USD)
 	}
@@ -397,7 +458,7 @@ func (s *imageService) dispatchGuard(ctx context.Context, req ImageGenerateReque
 func (s *imageService) GenerateImage(ctx context.Context, req ImageGenerateRequest) (ImageResult, error) {
 	var zero ImageResult
 	n, err := normalizeNeeds(req.Plan.Needs)
-	if err != nil || req.CallSlot < 0 || req.CallSlot >= 16 || !imageTask(req.Plan.Task) || !validRoutingMode(req.Plan.RoutingMode) || !db.ValidID(req.ActorID) || !db.ValidID(req.ProjectID) || req.Width != n.Width || req.Height != n.Height || req.Count != n.Count || len(req.References) != n.References || len(req.Prompt) > 64<<10 || strings.TrimSpace(req.Prompt) == "" || !utf8.ValidString(req.Prompt) || len(req.Negative) > 16<<10 || len(req.Style) > 256 || n.Edit != (req.Init != nil) || n.Mask != (req.Mask != nil) {
+	if err != nil || req.CallSlot < 0 || req.CallSlot >= 16 || !imageTask(req.Plan.Task) || !validRoutingMode(req.Plan.RoutingMode) || !db.ValidID(req.ActorID) || !db.ValidID(req.ProjectID) || req.Width != n.Width || req.Height != n.Height || req.Count != n.Count || len(req.References) > n.References || req.Background != "" && req.Background != "opaque" && req.Background != "transparent" || len(req.Prompt) > 64<<10 || strings.TrimSpace(req.Prompt) == "" || !utf8.ValidString(req.Prompt) || len(req.Negative) > 16<<10 || len(req.Style) > 256 || n.Edit != (req.Init != nil) || n.Mask != (req.Mask != nil) {
 		return zero, imageError(CodeBadInput, false, jobs.Cost{})
 	}
 	totalBytes := 0
@@ -511,7 +572,14 @@ func (s *imageService) fallback(ctx context.Context, j *jobs.Job, p ImagePlan, f
 	default:
 		return nil, nil
 	}
+	// ADR 0009: a fallback leaves the failed provider kind entirely (OpenAI →
+	// OpenRouter → placeholder), so an outage or rate limit is not retried on
+	// a sibling model of the same provider.
+	failedKind := s.providerKindOf(ctx, j.ProviderID)
 	exclude := map[string]bool{j.ProviderID + "\x00" + j.ModelID: true}
+	if failedKind != "" {
+		exclude["kind:"+failedKind] = true
+	}
 	var events []struct {
 		Data string `db:"data"`
 	}
@@ -525,23 +593,65 @@ func (s *imageService) fallback(ctx context.Context, j *jobs.Job, p ImagePlan, f
 		}
 		if json.Unmarshal([]byte(e.Data), &v) == nil {
 			exclude[v.FromProvider+"\x00"+v.FromModel] = true
+			if kind := s.providerKindOf(ctx, v.FromProvider); kind != "" {
+				exclude["kind:"+kind] = true
+			}
 		}
 	}
 	mode := p.RoutingMode
 	if !p.Remote && mode != ModeLocalOnly {
 		mode = ModeFreeOnly
 	}
-	next, err := s.planImage(ctx, ImagePlanRequest{Task: p.Task, ActorID: j.UserID, ProjectID: j.Scope.ProjectID, RoutingMode: mode, Needs: p.Needs, PublicSeries: p.PublicSeries}, exclude)
+	base := ImagePlanRequest{Task: p.Task, ActorID: j.UserID, ProjectID: j.Scope.ProjectID, RoutingMode: mode, Needs: p.Needs, PublicSeries: p.PublicSeries}
+	next, err := s.planImage(ctx, base, exclude)
 	if err != nil {
+		return nil, nil
+	}
+	// The envelope check uses the chosen route's own per-call cost (a pinned
+	// quote), not the ceiling of the replanned chain behind it.
+	pinned := base
+	pinned.PinProviderID, pinned.PinModelID = next.ProviderID, next.ModelID
+	own, err := s.planImage(ctx, pinned, nil)
+	if err != nil || own.ProviderID != next.ProviderID || own.ModelID != next.ModelID {
 		return nil, nil
 	}
 	maxUSD := j.Estimate.USD / float64(j.MaxAttempts)
 	maxGPU := j.Estimate.GPUSeconds / float64(j.MaxAttempts)
-	if next.Estimate.USD > maxUSD+0.0000001 || next.Estimate.GPUSeconds > maxGPU+0.0000001 || !p.Remote && next.Remote {
+	if own.Estimate.USD > maxUSD+0.0000001 || own.Estimate.GPUSeconds > maxGPU+0.0000001 || !p.Remote && next.Remote {
 		return nil, nil
 	}
+	from := failedKind
+	if from == "" {
+		from = j.ProviderID
+	}
+	from += ":" + j.ModelID
+	decision := next.Decision
+	var d imageDecision
+	if json.Unmarshal(next.Decision, &d) == nil {
+		d.SwitchedFrom, d.SwitchCode = from, failure.Code
+		if raw, err := json.Marshal(d); err == nil {
+			decision = raw
+		}
+	}
+	reason := fmt.Sprintf("Fallback after %s: %s → %s:%s", failure.Code, from, s.providerKindOf(ctx, next.ProviderID), next.ModelID)
 	// Parent image handlers always remain Go jobs, including worker routes.
-	return &jobs.Reroute{ModelID: next.ModelID, ProviderID: next.ProviderID, Executor: jobs.ExecutorGo, Decision: next.Decision, Reason: "Next eligible image model after a transient failure"}, nil
+	return &jobs.Reroute{ModelID: next.ModelID, ProviderID: next.ProviderID, Executor: jobs.ExecutorGo, Decision: decision, Reason: reason}, nil
+}
+
+// providerKindOf resolves a provider ID to its kind for fallback exclusion.
+// The built-in placeholder and the worker use their kind as their ID.
+func (s *imageService) providerKindOf(ctx context.Context, id string) string {
+	if id == PlaceholderID || id == providerKindWorker {
+		return id
+	}
+	if !db.ValidID(id) {
+		return ""
+	}
+	var kind string
+	if err := s.d.DB.Get(ctx, &kind, `SELECT kind FROM providers WHERE id = ?`, id); err != nil {
+		return ""
+	}
+	return kind
 }
 
 func workerTask(task string, n ImageNeeds) string {

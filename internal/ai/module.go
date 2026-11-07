@@ -51,7 +51,16 @@ func newModule(d *core.Deps, doer httpDoer, now func() time.Time) *Module {
 		directory = d.Cfg.ManifestDir()
 	}
 	catalog := &modelCatalog{db: d.DB, directory: directory}
-	images := &imageService{d: d, providers: providers, catalog: catalog, spend: text, doer: doer}
+	// Image calls may take minutes (OpenAI documents up to two for complex
+	// prompts); they get the same guarded transport with a longer client
+	// timeout than text, still bounded by postImage's per-call deadline.
+	imageDoer := doer
+	if c, ok := doer.(*http.Client); ok {
+		clone := *c
+		clone.Timeout = imageHTTPTimeout
+		imageDoer = &clone
+	}
+	images := &imageService{d: d, providers: providers, catalog: catalog, spend: text, doer: imageDoer}
 	m := &Module{d: d, image: images, catalog: catalog, providers: providers, providerAPI: &providerService{store: providers, settings: d.Settings, client: client,
 		testers: map[string]remoteKeyTester{providerKindOpenAI: openai, providerKindFal: falKeyTester{doer: doer}}, localDoer: text.localDoer},
 		text: text, spend: spend, private: private, now: now, repairEvery: time.Minute, repairBatch: 1000}

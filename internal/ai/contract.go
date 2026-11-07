@@ -198,8 +198,14 @@ type ImageGenerateRequest struct {
 	Width, Height int
 	Seed          int64
 	// Count is the number of images (variations), 1–4.
-	Count      int
-	Style      string
+	Count int
+	Style string
+	// Background is "transparent" for character and effects layers, "opaque"
+	// for backgrounds, sheets and covers, or "" to let the route decide. Only
+	// routes with alpha output honour "transparent" (ADR 0009).
+	Background string
+	// References may be fewer than Plan.Needs.References: the plan bounds the
+	// whole job, while each call carries only its own component's references.
 	References []ImageRef
 	Init       *ImageRef
 	Mask       *ImageRef

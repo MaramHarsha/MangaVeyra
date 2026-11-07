@@ -6,8 +6,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/png"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,6 +19,13 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/storage"
 	xdraw "golang.org/x/image/draw"
+)
+
+// imageCallTimeout bounds one image request end to end; the client timeout
+// is slightly longer so the per-call deadline decides.
+const (
+	imageCallTimeout = 3 * time.Minute
+	imageHTTPTimeout = imageCallTimeout + 30*time.Second
 )
 
 type imageCall struct {
@@ -41,6 +50,11 @@ func (s *imageService) remoteImage(ctx context.Context, req ImageGenerateRequest
 	quote, ok := quoteImage(provider.Kind, req.Plan.ModelID, req.Plan.Needs)
 	if !ok {
 		return result, imageError(CodeNoProvider, false, jobs.Cost{})
+	}
+	// Route-specific request ceilings are checked before anything is reserved
+	// or sent (ADR 0009: composed prompt bytes bound the text-token charge).
+	if err := validateRouteRequest(provider.Kind, req); err != nil {
+		return result, err
 	}
 	purpose, err := s.spend.initialSpendPurpose(ctx, req.JobID, req.Attempt)
 	if err != nil {
@@ -93,7 +107,11 @@ func (s *imageService) remoteImage(ctx context.Context, req ImageGenerateRequest
 	if err != nil || provider.Kind != expectedKind || !hasProvider(m, provider.Kind) {
 		return closeReservation(imageCall{}, imageError(CodeNoProvider, false, jobs.Cost{}))
 	}
-	if provider.Kind == providerKindOpenRouter {
+	switch provider.Kind {
+	case providerKindOpenAI:
+		call, err := s.openAIImage(ctx, provider.Key, req)
+		return closeReservation(call, err)
+	case providerKindOpenRouter:
 		call, err := s.openRouterImage(ctx, provider.Key, req)
 		return closeReservation(call, err)
 	}
@@ -101,12 +119,24 @@ func (s *imageService) remoteImage(ctx context.Context, req ImageGenerateRequest
 	return closeReservation(call, err)
 }
 
-func (s *imageService) postImage(ctx context.Context, endpoint, authorization string, payload any) ([]byte, int, bool, error) {
+// validateRouteRequest applies the ADR 0009 per-call ceilings. ADR 0007
+// routes keep their own checks inside their adapters.
+func validateRouteRequest(kind string, req ImageGenerateRequest) error {
+	route, ok := imageRouteFor(kind, req.Plan.ModelID)
+	if !ok {
+		return nil
+	}
+	return validateGPTImageRequest(req, kind == providerKindOpenAI, route.MaxRefs)
+}
+
+var falHeaders = map[string]string{"X-Fal-Store-IO": "0", "x-app-fal-disable-fallback": "true"}
+
+func (s *imageService) postImage(ctx context.Context, endpoint, authorization string, payload any, headers map[string]string) ([]byte, int, bool, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return nil, 0, false, badInputAdapterError()
 	}
-	callCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	callCtx, cancel := context.WithTimeout(ctx, imageCallTimeout)
 	defer cancel()
 	r, err := http.NewRequestWithContext(callCtx, http.MethodPost, endpoint, bytes.NewReader(data))
 	if err != nil {
@@ -114,8 +144,10 @@ func (s *imageService) postImage(ctx context.Context, endpoint, authorization st
 	}
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("Authorization", authorization)
-	r.Header.Set("X-Fal-Store-IO", "0")
-	r.Header.Set("x-app-fal-disable-fallback", "true")
+	r.Header.Set("Accept", "application/json")
+	for k, v := range headers {
+		r.Header.Set(k, v)
+	}
 	if s.doer == nil {
 		return nil, 0, false, upstreamAdapterError(false)
 	}
@@ -139,36 +171,11 @@ func (s *imageService) postImage(ctx context.Context, endpoint, authorization st
 
 func (s *imageService) openRouterImage(ctx context.Context, key string, req ImageGenerateRequest) (imageCall, error) {
 	var out imageCall
-	references := []map[string]any{}
-	for _, r := range req.References {
-		references = append(references, map[string]any{"type": "image_url", "image_url": map[string]string{"url": imageDataURL(r)}})
+	payload, err := openRouterImagePayload(req)
+	if err != nil {
+		return out, err
 	}
-	if req.Init != nil {
-		references = append([]map[string]any{{"type": "image_url", "image_url": map[string]string{"url": imageDataURL(*req.Init)}}}, references...)
-	}
-	prompt := req.Prompt
-	if req.Negative != "" {
-		prompt += "\nAvoid: " + req.Negative
-	}
-	if req.Style != "" {
-		prompt += "\nStyle: " + req.Style
-	}
-	if req.Mask != nil {
-		references = append(references, map[string]any{"type": "image_url", "image_url": map[string]string{"url": imageDataURL(*req.Mask)}})
-		prompt += "\nThe final reference is an edit mask: change only its white area in the first image; preserve its black area. Return the full image."
-	}
-	if len(references) > 14 {
-		return out, badInputAdapterError()
-	}
-	resolution := "1K"
-	if req.Width > 2048 || req.Height > 2048 {
-		resolution = "4K"
-	} else if req.Width > 1024 || req.Height > 1024 {
-		resolution = "2K"
-	}
-	ratio := nearestAspect(req.Width, req.Height)
-	payload := map[string]any{"model": seedreamModel, "prompt": prompt, "n": req.Count, "resolution": resolution, "aspect_ratio": ratio, "output_format": "png", "stream": false, "input_references": references, "provider": map[string]any{"allow_fallbacks": false}}
-	body, status, sent, err := s.postImage(ctx, "https://openrouter.ai/api/v1/images", "Bearer "+key, payload)
+	body, status, sent, err := s.postImage(ctx, "https://openrouter.ai/api/v1/images", "Bearer "+key, payload, nil)
 	out.Sent = sent
 	if err != nil {
 		if status >= 400 {
@@ -193,18 +200,120 @@ func (s *imageService) openRouterImage(ctx context.Context, key string, req Imag
 	if len(decoded.Data) != req.Count {
 		return out, badOutputAdapterError(false)
 	}
+	// Seedream keeps ADR 0007's stretch fit. ADR 0009 routes centre-crop a
+	// generated image and stretch a reference-guided edit back to the init.
+	_, route := imageRouteFor(providerKindOpenRouter, req.Plan.ModelID)
 	for _, item := range decoded.Data {
-		data, err := base64.StdEncoding.DecodeString(item.B64)
+		data, err := decodeBase64Image(item.B64)
 		if err != nil {
 			return out, badOutputAdapterError(false)
 		}
-		g, err := decodeGeneratedImage(data, req.Width, req.Height, 0)
+		g, err := fitGeneratedImage(data, req.Width, req.Height, 0, route && req.Init == nil)
 		if err != nil {
 			return out, err
 		}
 		out.Images = append(out.Images, g)
 	}
 	return out, nil
+}
+
+func openRouterReference(data string) map[string]any {
+	return map[string]any{"type": "image_url", "image_url": map[string]string{"url": data}}
+}
+
+// openRouterImagePayload builds the documented Image API body for one frozen
+// OpenRouter route. Seedream's body is unchanged from ADR 0007.
+func openRouterImagePayload(req ImageGenerateRequest) (map[string]any, error) {
+	if req.Plan.ModelID == seedreamModel {
+		return seedreamPayload(req)
+	}
+	route, ok := imageRouteFor(providerKindOpenRouter, req.Plan.ModelID)
+	if !ok {
+		return nil, badInputAdapterError()
+	}
+	refs := min(len(req.References), route.MaxRefs)
+	references := []map[string]any{}
+	if req.Init != nil {
+		references = append(references, openRouterReference(imageDataURL(*req.Init)))
+	}
+	for _, r := range req.References[:refs] {
+		data, err := downscaleReference(r.Data, gptImageRefEdge)
+		if err != nil {
+			return nil, badInputAdapterError()
+		}
+		references = append(references, openRouterReference(pngDataURL(data)))
+	}
+	if req.Mask != nil {
+		references = append(references, openRouterReference(imageDataURL(*req.Mask)))
+	}
+	prompt := gptImagePrompt(req, refs, false)
+	if len(prompt) > imagePromptBytes {
+		return nil, badInputAdapterError()
+	}
+	payload := map[string]any{"model": route.Model, "prompt": prompt, "n": req.Count, "stream": false, "input_references": references, "provider": map[string]any{"allow_fallbacks": false}}
+	if route.Model == openRouterGPTImageSunburst {
+		payload["aspect_ratio"] = nearestAspectFrom(req.Width, req.Height, gptImageAspects)
+		payload["quality"] = gptImageQuality
+		payload["background"] = gptImageBackground(req.Background)
+		payload["output_format"] = "png"
+	} else {
+		payload["aspect_ratio"] = nearestAspectFrom(req.Width, req.Height, nanoBananaAspects)
+		payload["resolution"] = "1K"
+	}
+	return payload, nil
+}
+
+func seedreamPayload(req ImageGenerateRequest) (map[string]any, error) {
+	references := []map[string]any{}
+	for _, r := range req.References {
+		references = append(references, openRouterReference(imageDataURL(r)))
+	}
+	if req.Init != nil {
+		references = append([]map[string]any{openRouterReference(imageDataURL(*req.Init))}, references...)
+	}
+	prompt := req.Prompt
+	if req.Negative != "" {
+		prompt += "\nAvoid: " + req.Negative
+	}
+	if req.Style != "" {
+		prompt += "\nStyle: " + req.Style
+	}
+	if req.Mask != nil {
+		references = append(references, openRouterReference(imageDataURL(*req.Mask)))
+		prompt += "\nThe final reference is an edit mask: change only its white area in the first image; preserve its black area. Return the full image."
+	}
+	if len(references) > 14 {
+		return nil, badInputAdapterError()
+	}
+	resolution := "1K"
+	if req.Width > 2048 || req.Height > 2048 {
+		resolution = "4K"
+	} else if req.Width > 1024 || req.Height > 1024 {
+		resolution = "2K"
+	}
+	ratio := nearestAspect(req.Width, req.Height)
+	return map[string]any{"model": seedreamModel, "prompt": prompt, "n": req.Count, "resolution": resolution, "aspect_ratio": ratio, "output_format": "png", "stream": false, "input_references": references, "provider": map[string]any{"allow_fallbacks": false}}, nil
+}
+
+// Aspect ratios each OpenRouter route documents (GET /api/v1/images/models).
+var (
+	gptImageAspects   = []string{"1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9"}
+	nanoBananaAspects = []string{"1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9"}
+)
+
+func nearestAspectFrom(w, h int, ratios []string) string {
+	chosen, best := ratios[0], math.Inf(1)
+	target := math.Log(float64(w) / float64(h))
+	for _, r := range ratios {
+		var a, b float64
+		if _, err := fmt.Sscanf(r, "%g:%g", &a, &b); err != nil || a <= 0 || b <= 0 {
+			continue
+		}
+		if d := math.Abs(math.Log(a/b) - target); d < best-1e-12 {
+			chosen, best = r, d
+		}
+	}
+	return chosen
 }
 
 func nearestAspect(w, h int) string {
@@ -238,7 +347,7 @@ func (s *imageService) falImage(ctx context.Context, key string, req ImageGenera
 		payload["num_inference_steps"] = 28
 		payload["loras"] = []any{}
 	}
-	body, status, sent, err := s.postImage(ctx, "https://fal.run/"+req.Plan.ModelID, "Key "+key, payload)
+	body, status, sent, err := s.postImage(ctx, "https://fal.run/"+req.Plan.ModelID, "Key "+key, payload, falHeaders)
 	out.Sent = sent
 	if err != nil {
 		if status >= 500 || status == 400 || status == 401 || status == 403 || status == 422 || status == 429 {

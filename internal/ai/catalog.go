@@ -74,7 +74,7 @@ func validateManifest(m ModelManifest) error {
 		}
 	}
 	for _, p := range m.Providers {
-		if p != PlaceholderID && p != providerKindOpenRouter && p != providerKindFal && p != providerKindWorker {
+		if p != PlaceholderID && p != providerKindOpenRouter && p != providerKindOpenAI && p != providerKindFal && p != providerKindWorker {
 			return errors.New("ai: unsupported model adapter")
 		}
 	}
