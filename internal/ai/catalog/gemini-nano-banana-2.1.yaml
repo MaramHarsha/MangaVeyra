@@ -1,0 +1,20 @@
+# Google Nano Banana 2.1 through OpenRouter (ADR 0009). Pin-only backup; one
+# image per call at the 1K tier. Masked edits are server-constrained.
+id: google/gemini-nano-banana-2.1
+name: Nano Banana 2.1
+maker: Google
+kind: image
+licence: provider-commercial
+commercial: true
+providers: [openrouter]
+references: 32
+text_in_art: false
+bw: true
+edit: true
+mask: true
+max_width: 4096
+max_height: 4096
+max_count: 1
+quality: 88
+speed: 75
+gpu_seconds: 0

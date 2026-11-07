@@ -1,0 +1,21 @@
+# Google Nano Banana Pro (Gemini 3 Pro Image) through OpenRouter (ADR 0009).
+# Pin-only backup; one image per call at the 1K tier. Masked edits are
+# server-constrained.
+id: google/gemini-3-pro-image
+name: Nano Banana Pro
+maker: Google
+kind: image
+licence: provider-commercial
+commercial: true
+providers: [openrouter]
+references: 32
+text_in_art: false
+bw: true
+edit: true
+mask: true
+max_width: 4096
+max_height: 4096
+max_count: 1
+quality: 93
+speed: 45
+gpu_seconds: 0
