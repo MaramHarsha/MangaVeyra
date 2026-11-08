@@ -35,12 +35,15 @@ type publishView struct {
 	Errors     fieldErrors
 	// Switched is set when the creator picked another language: E1 shows
 	// that language's alt-text drafts instead of publishing.
-	Switched  bool
-	Pages     []altPage
-	CoverURL  string
-	CoverJob  *coverJobState
-	CanCover  bool
-	Job       *jobs.Job
+	Switched bool
+	Pages    []altPage
+	CoverURL string
+	CoverJob *coverJobState
+	CanCover bool
+	Job      *jobs.Job
+	// Running is set when a publish of this chapter and language was already
+	// running, so the creator's new decision was not applied.
+	Running   bool
 	Base      string
 	BackURL   string
 	TZ        string

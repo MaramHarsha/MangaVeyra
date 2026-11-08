@@ -3,13 +3,17 @@ package publish_test
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"regexp"
 	"testing"
+	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish/publishtest"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
+	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 )
 
@@ -114,6 +118,55 @@ func TestPublishIsBoundToTheRevisionE1Showed(t *testing.T) {
 		// The re-rendered E1 carries the new revision: publishing it now freezes what it shows.
 		if j := f.publish(t, f.publishForm("en")); j.State != jobs.StateDone {
 			t.Fatalf("publish after review: %+v", j.Error)
+		}
+	})
+}
+
+func TestSecondPublishWhileOneRunsChangesNothing(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, pf *publishtest.Fixture) {
+		ctx := context.Background()
+		pf.SetMode(settings.ModePublic)
+		f := newChapter(t, ta, false)
+		resp := postForm(f.client, f.base+"/publish", f.publishForm("en", "age_rating", publish.RatingTeen))
+		loc, _ := url.Parse(resp.Header.Get("Location"))
+		first := loc.Query().Get("job")
+		if resp.StatusCode != http.StatusSeeOther || first == "" {
+			t.Fatalf("first publish = %d", resp.StatusCode)
+		}
+
+		// The creator changes their mind while it runs: private, scheduled, mature.
+		second := postForm(f.client, f.base+"/publish", f.publishForm("en", "visibility", publish.VisibilityPrivate,
+			"age_rating", publish.RatingMature, "when", "schedule", "date", time.Now().AddDate(0, 1, 0).Format("2006-01-02"), "time", "10:00"))
+		if second.StatusCode != http.StatusConflict || !contains(second.Body, "already being published") {
+			t.Fatalf("second publish = %d, lacks the running notice", second.StatusCode)
+		}
+		// Their own job is linked so they can follow it.
+		if !contains(second.Body, "/publish/jobs/"+first) {
+			t.Fatal("the owner's running job is not linked")
+		}
+		if rating, _ := seriesRating(t, ta, f.project.ID); rating != publish.RatingTeen {
+			t.Fatalf("second decision changed the series rating to %s", rating)
+		}
+
+		// Another editor gets the notice without a link to someone else's job.
+		editor := ta.CreateUser(t, "", auth.RoleCreator)
+		pf.AddMember(f.project.ID, editor.ID, studio.RoleEditor)
+		ec := ta.Login(t, editor.Username)
+		third := postForm(ec, f.base+"/publish", f.formFor(ec, "en", "visibility", publish.VisibilityMembers))
+		if third.StatusCode != http.StatusConflict || !contains(third.Body, "already being published") || contains(third.Body, first) {
+			t.Fatalf("editor publish = %d (links the owner's job: %v)", third.StatusCode, contains(third.Body, first))
+		}
+		if n := count(t, ta, `SELECT COUNT(*) FROM jobs WHERE type = ?`, publish.JobType); n != 1 {
+			t.Fatalf("publish jobs = %d, want 1", n)
+		}
+
+		// The first decision is what goes live.
+		if j := runJob(t, ta, first); j.State != jobs.StateDone {
+			t.Fatalf("first job: %+v", j.Error)
+		}
+		pub, _, err := pf.Service().Publication(ctx, publish.Viewer{}, seriesID(t, ta, f.project.ID), 1, "en")
+		if err != nil || pub.Visibility != publish.VisibilityPublic || pub.Status != publish.PublicationPublished {
+			t.Fatalf("published = %+v %v", pub, err)
 		}
 	})
 }

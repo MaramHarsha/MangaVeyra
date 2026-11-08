@@ -67,6 +67,7 @@
   "publish.first_chapter": "最初の公開です。シリーズはプロジェクトから作成されます。シリーズ設定で編集できます。",
   "publish.series_stricter": "シリーズが「{visibility}」のため、この話もシリーズの範囲内でのみ表示されます。",
   "publish.switched": "{language}を表示しています。代替テキストを確認してから公開してください。",
+  "publish.running": "この話は{language}で公開処理中です。変更は加えていません。完了してからもう一度公開してください。",
   "publish.job.running": "ページを固定中 · {steps}中{step}",
   "publish.job.progress": "公開の進行状況",
   "publish.job.refresh": "更新",

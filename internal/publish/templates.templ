@@ -173,6 +173,11 @@ templ publishNotices(v publishView) {
 			<p>{ i18n.T(ctx, "publish.switched", "language", langName(ctx, v.Lang)) }</p>
 		}
 	}
+	if v.Running {
+		@ui.Notice(ui.ToneWarning, "alert-triangle") {
+			<p>{ i18n.T(ctx, "publish.running", "language", langName(ctx, v.Lang)) }</p>
+		}
+	}
 	if v.Job != nil {
 		@jobNotice(v)
 	}

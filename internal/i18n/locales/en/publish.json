@@ -69,6 +69,7 @@
   "publish.first_chapter": "This is the first published chapter: the series is created from the project. You can edit it in series settings.",
   "publish.series_stricter": "The series is {visibility}, so readers see this chapter only as far as the series allows.",
   "publish.switched": "Showing {language}. Review the alt-text, then publish.",
+  "publish.running": "This chapter is already being published in {language}. Nothing was changed: publish again once it finishes.",
   "publish.job.running": "Freezing pages · step {step} of {steps}",
   "publish.job.progress": "Publishing progress",
   "publish.job.refresh": "Refresh",

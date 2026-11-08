@@ -82,9 +82,13 @@ func decodeFlags(raw string) pubFlags {
 // errActive means a publish job for this chapter and language is running.
 var errActive = fmt.Errorf("%w: a publish job is already running", ErrConflict)
 
-// enqueuePublish validates the human decision and queues the freeze. The
+// enqueuePublishTx validates the human decision and queues the freeze in tx,
+// with the series changes the same decision makes, so a caller can roll both
+// back. The executor claims the job once tx commits (it polls every second).
+// While a publish of the same chapter and language is queued or running, the
+// active job is returned with Deduplicated set and nothing is inserted. The
 // job uses a project scope: a locked (finished) chapter stays publishable.
-func (s *service) enqueuePublish(ctx context.Context, actor studio.Actor, in publishInput) (*jobs.Job, error) {
+func (s *service) enqueuePublishTx(ctx context.Context, tx *db.Tx, actor studio.Actor, in publishInput) (*jobs.Job, error) {
 	if actor.TokenID != "" {
 		return nil, errForbidden
 	}
@@ -92,7 +96,7 @@ func (s *service) enqueuePublish(ctx context.Context, actor studio.Actor, in pub
 		!slices.Contains(Visibilities, in.Visibility) {
 		return nil, ErrInvalid
 	}
-	return s.jobs.Enqueue(ctx, jobs.EnqueueParams{
+	return s.jobs.EnqueueTx(ctx, tx, jobs.EnqueueParams{
 		Type: JobType, Scope: jobs.Scope{Kind: jobs.ScopeProject, ProjectID: in.ProjectID}, UserID: actor.UserID,
 		Executor: jobs.ExecutorGo, Input: in, MaxAttempts: 2, Priority: 5,
 		DedupeKey: "publish:" + in.ChapterID + ":" + in.Lang,

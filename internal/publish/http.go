@@ -245,8 +245,9 @@ func (m *Module) publishPost(w http.ResponseWriter, r *http.Request) error {
 		at := f.ScheduledAt
 		in.ScheduledAt = &at
 	}
-	// The series changes apply only to the series E1 showed.
-	var series Series
+	// The series changes and the job are one decision: they commit together,
+	// or not at all when the series moved on or a publish is already running.
+	var j *jobs.Job
 	err = m.svc.db.WithTx(ctx, func(tx *db.Tx) error {
 		if err := m.svc.authorizePublish(ctx, tx, t.actor, t.project.ID); err != nil {
 			return err
@@ -258,10 +259,21 @@ func (m *Module) publishPost(w http.ResponseWriter, r *http.Request) error {
 		if seriesRevision(cur, exists) != v.SeriesRevision {
 			return errReviewAgain
 		}
-		if series, err = m.svc.ensureSeriesTx(ctx, tx, t.actor, t.project, f.Visibility); err != nil {
+		series, err := m.svc.ensureSeriesTx(ctx, tx, t.actor, t.project, f.Visibility)
+		if err != nil {
 			return err
 		}
-		return m.svc.setSeriesRulesTx(ctx, tx, series.ID, f.AgeRating, f.Licence)
+		if err := m.svc.setSeriesRulesTx(ctx, tx, series.ID, f.AgeRating, f.Licence); err != nil {
+			return err
+		}
+		in.SeriesID = series.ID
+		if j, err = m.svc.enqueuePublishTx(ctx, tx, t.actor, in); err != nil {
+			return err
+		}
+		if j.Deduplicated {
+			return errActive
+		}
+		return nil
 	})
 	switch {
 	case errors.Is(err, errReviewAgain):
@@ -269,12 +281,16 @@ func (m *Module) publishPost(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		return m.reviewAgain(w, r, v, f, errs, false, true)
+	case errors.Is(err, errActive):
+		// Nothing of this decision was applied. Only the viewer's own job is
+		// shown (with its progress); another editor's job stays private.
+		v.Running = true
+		if j.UserID == t.actor.UserID {
+			v.Job = j
+		}
+		v.applyFormAlt(r)
+		return m.renderPublish(w, r, http.StatusConflict, v)
 	case err != nil:
-		return httpError(err)
-	}
-	in.SeriesID = series.ID
-	j, err := m.svc.enqueuePublish(ctx, t.actor, in)
-	if err != nil {
 		return httpError(err)
 	}
 	core.Redirect(w, r, t.publishURL(v.Lang, "job", j.ID))
