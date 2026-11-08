@@ -81,17 +81,21 @@ templ queueActions(v queueView) {
 	@workerControls(v)
 }
 
+// workerTipEnd anchors the worker button's tooltip to its end: the button is the
+// last header action, so a start-anchored tooltip would run past the page edge.
+var workerTipEnd = templ.Attributes{"data-tip-pos": "end"}
+
 templ workerControls(v queueView) {
 	if len(v.WorkerActions) == 1 {
 		<form method="post" action={ templ.URL(v.WorkerActions[0].URL) } novalidate>
-			@ui.Button(ui.ButtonProps{Type: "submit", Icon: v.WorkerIcon, Tip: v.WorkerHint}) {
+			@ui.Button(ui.ButtonProps{Type: "submit", Icon: v.WorkerIcon, Tip: v.WorkerHint, Attrs: workerTipEnd}) {
 				{ v.WorkerLabel }
 			}
 		</form>
 	} else if len(v.WorkerActions) > 1 {
 		@ui.Dropdown("", "end", false, workerTrigger(v.WorkerLabel, v.WorkerIcon), workerMenu(v.WorkerActions))
 	} else {
-		@ui.Button(ui.ButtonProps{Icon: v.WorkerIcon, Disabled: true, Tip: v.WorkerHint}) {
+		@ui.Button(ui.ButtonProps{Icon: v.WorkerIcon, Disabled: true, Tip: v.WorkerHint, Attrs: workerTipEnd}) {
 			{ v.WorkerLabel }
 		}
 	}
