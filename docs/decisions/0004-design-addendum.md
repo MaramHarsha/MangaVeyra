@@ -581,3 +581,17 @@ The approved desktop artboards are followed at 1440 × 900; the mobile artboards
 - **G5 Admin · Server.** The Instance card adds Description; Services adds Job queue and Uptime; Database reads "{name}
   {version} · OK · {size}". Maintenance mode opens a dialog (message, Turn on / Save message / Turn off) and the card
   shows a warning notice while it is on. View logs is Soon.
+- **G2 Models (Phase 4 providers).** Google and xAI keep their designed Add provider places and open the one-page key
+  form. Replicate, Together and Runware, which have no designed place, follow fal among the hosted aggregators
+  (OpenRouter, fal, Replicate, Together, Runware, OpenAI, Google, xAI, Ollama). Rows of fake-transport-tested routes carry
+  the meta line "Fake-transport tested · not live-verified". A Hugging Face dedicated endpoint's cost reads "Billed per
+  endpoint hour", and a serverless connection not yet tested reads "Listed rate at the test". G12 image connections
+  appear in the Image tab with the connection's name and "GPU time".
+- **G12 (Phase 4 connection types).** On step 1 of a new connection the four designed types are segmented links
+  (OpenAI-compatible, ComfyUI workflow, Hugging Face, HTTP); once a draft exists the designed switch shows the type
+  without links. ComfyUI step 1 takes the server and the workflow exported with "Export (API)"; step 2 shows "Map
+  inputs" as designed, with each row as a select after Back. The ComfyUI test checks the server and the workflow's nodes
+  without generating, so the result reads "NODE CHECK · N nodes on the server" instead of the sample test image, and Cost
+  reads "Local GPU". Hugging Face and HTTP step 1 (no artboard) use the existing fields, segmented controls and textarea.
+  Step 3 for image types (no artboard) asks for the largest width and height, images per run, and "Its model licence
+  allows commercial use" (off by default). Free only is disabled for Hugging Face in step 4.

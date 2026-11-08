@@ -75,3 +75,19 @@ every module's data or act on the server itself, so the rules are fixed before t
 The admin panel, backups and updates make a private group server practical without shell access. The dialect-free
 archive costs time on very large servers but makes moves and restores predictable. Opt-in update checks mean a new
 server will not hear about updates until the admin turns checks on; the Server tab says so.
+
+## Implementation notes (2026-11-09)
+
+- **Providers (§9).** Built as frozen routes in `internal/ai/routes.go` and `image_routes.go`, with tariffs, endpoints
+  and documentation URLs in each adapter and the table in `internal/ai/REMOTE_IMAGE_BOUNDARY.md`. Imagen is replaced by
+  Nano Banana 2.1 because Imagen is shut down on the Gemini API. Runware's quote and the Replicate SDXL quote are
+  application bounds, so SDXL is pinned to one version. Hugging Face serverless reserves the tariff the router listed at
+  the passed test; dedicated endpoints reserve zero per call because they bill per hour (the UI says so). ComfyUI and
+  generic HTTP connections follow ADR 0007's custom-provider rules: local only mode blocks them even on a private
+  network, because they are other machines and some ComfyUI nodes call external services. Every route is marked
+  "Fake-transport tested · not live-verified" until the owner approves a live check.
+- **Content rule defaults (§2).** New servers allow mature series (behind the reader's age confirmation, ADR 0012 §1)
+  and keep adult series off until an admin allows them. Ratings read Teen 13+, Mature 17+ and Adult 18+ everywhere.
+- **Takedowns (§1)** are stored as module keys in `instance_settings` and enforced by `publish.Service`; `Series` and
+  `Publication` carry `TakenDown` so project members see a notice. Collaboration approvals are internal comments with
+  status `approved` and the approved page version in their anchor.
