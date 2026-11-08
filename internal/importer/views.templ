@@ -28,18 +28,17 @@ templ Card(v cardView) {
 		<strong class="mv-g10__card-title" id="g10-import-title">{ i18n.T(ctx, "importer.title") }</strong>
 		<form class="mv-import__form" method="post" action={ templ.URL(v.Action) } enctype="multipart/form-data">
 			@ui.FileDrop(ui.FileDropProps{ID: "import-files", Name: "files", Accept: accept(v.PDF), Prompt: prompt(ctx, v.PDF), Class: "mv-import__drop",
-				Required: true, DescribedBy: "import-files-hint", Attrs: templ.Attributes{"multiple": true}})
+				Required: true, Attrs: templ.Attributes{"multiple": true}})
 			<div class="mv-import__foot">
-				<p class="mv-small mv-muted" id="import-files-hint">
-					{ i18n.T(ctx, "importer.hint") }
-					if !v.PDF {
-						<span class="mv-import__soon">
-							{ i18n.T(ctx, "importer.pdf") }
-							@ui.SoonTag()
-						</span>
-					}
-				</p>
-				@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Type: "submit", Icon: "upload"}) {
+				if !v.PDF {
+					<span class="mv-import__soon mv-small" title={ i18n.T(ctx, "importer.error.pdf_unavailable") }>
+						{ i18n.T(ctx, "importer.pdf") }
+						@ui.SoonTag()
+					</span>
+				} else {
+					<span></span>
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit", Icon: "upload"}) {
 					{ i18n.T(ctx, "importer.submit") }
 				}
 			</div>

@@ -2,7 +2,6 @@
   "importer.title": "マンガをインポート",
   "importer.drop": "CBZ、CBR、PDF、画像フォルダーをドロップ",
   "importer.drop_no_pdf": "CBZ、CBR、画像フォルダーをドロップ",
-  "importer.hint": "ファイルごとに非公開のプロジェクトになり、画像はファイル名の順にページになります。",
   "importer.pdf": "PDF",
   "importer.submit": "インポート",
   "importer.queue": "インポート",

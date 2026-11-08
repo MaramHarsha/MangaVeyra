@@ -64,22 +64,20 @@ templ noticeBlock(n noticeView) {
 templ backupsCard(v pageView) {
 	<section class="mv-g10__card" aria-labelledby="g10-backups-title">
 		<strong class="mv-g10__card-title" id="g10-backups-title">{ i18n.T(ctx, "backup.card.backups") }</strong>
-		<div>
-			@ui.KV(i18n.T(ctx, "backup.last"), v.LastBackup)
-			@ui.KVC(i18n.T(ctx, "backup.schedule")) {
-				@editValue(v.ScheduleText, i18n.T(ctx, "backup.schedule.change"))
-			}
-			@ui.KVC(i18n.T(ctx, "backup.destination")) {
-				@editValue(v.Destination, i18n.T(ctx, "backup.destination.change"))
-			}
-		</div>
+		@ui.KV(i18n.T(ctx, "backup.last"), v.LastBackup)
+		@ui.KVC(i18n.T(ctx, "backup.schedule")) {
+			@editValue(v.ScheduleText, i18n.T(ctx, "backup.schedule.change"))
+		}
+		@ui.KVC(i18n.T(ctx, "backup.destination")) {
+			@editValue(v.Destination, i18n.T(ctx, "backup.destination.change"))
+		}
 		<div class="mv-g10__actions">
 			<form method="post" action="/admin/backup/now">
 				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "database-export", Disabled: v.Busy}) {
 					{ i18n.T(ctx, "backup.now") }
 				}
 			</form>
-			@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Icon: "database-import", Disabled: v.Busy, Class: "mv-js-only", Attrs: templ.Attributes{"data-dialog-open": "backup-restore"}}) {
+			@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Icon: "database-import", Disabled: v.Busy, Class: "mv-js-only", Attrs: templ.Attributes{"data-dialog-open": "backup-restore"}}) {
 				{ i18n.T(ctx, "backup.restore") }
 			}
 		</div>
@@ -222,7 +220,7 @@ templ restoreForms(v pageView, prefix string, static bool) {
 				@ui.FileDrop(ui.FileDropProps{ID: prefix + "-archive", Name: "archive", Accept: ".mvbackup,.zip", Prompt: i18n.T(ctx, "backup.upload.prompt"), Required: true, Invalid: v.UploadError != ""})
 			}
 			<div>
-				@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Type: "submit", Icon: "upload"}) {
+				@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit", Icon: "upload"}) {
 					{ i18n.T(ctx, "backup.upload.submit") }
 				}
 			</div>

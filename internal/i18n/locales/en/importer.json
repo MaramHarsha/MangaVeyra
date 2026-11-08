@@ -2,7 +2,6 @@
   "importer.title": "Import comics",
   "importer.drop": "Drop CBZ, CBR, PDF or image folders",
   "importer.drop_no_pdf": "Drop CBZ, CBR or image folders",
-  "importer.hint": "Each file becomes a private project; images become pages in file-name order.",
   "importer.pdf": "PDF",
   "importer.submit": "Import",
   "importer.queue": "Imports",

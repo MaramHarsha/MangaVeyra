@@ -36,8 +36,7 @@
 .mv-import__drop{min-height:150px;gap:8px;font-size:var(--mv-fs-ui)}
 .mv-import__drop>.ti{font-size:30px}
 .mv-import__foot{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.mv-import__foot>p{margin:0}
-.mv-import__soon{display:inline-flex;align-items:center;gap:6px;margin-left:6px;color:var(--mv-text-3)}
+.mv-import__soon{display:inline-flex;align-items:center;gap:6px;color:var(--mv-text-3)}
 .mv-import__queue:empty{display:none}
 .mv-import__list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
 .mv-import__row{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:var(--mv-fs-small)}
