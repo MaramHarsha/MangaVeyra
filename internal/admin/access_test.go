@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
@@ -121,7 +122,11 @@ func TestHeaderAndStats(t *testing.T) {
 		r := e.admin.Get("/admin")
 		wantStatus(t, "reports tab", r, http.StatusOK)
 		// 3 active members: the admin, the reader and nobody else.
-		wantBody(t, "stats", r, "Public · 2 members · v", ">Reports 2<", "Open reports", "2.5 GB", "Invite only", "Updates", "mv-soon")
+		wantBody(t, "stats", r, "Public · 2 members · v", ">Reports 2<", "Open reports", "2.5 GB", "Invite only")
+		// Up to date: with the update module providing adminapi.UpdateNotice, the header offers no update.
+		if strings.Contains(string(r.Body), "Update to ") {
+			t.Fatal("an up-to-date server must not offer an update in the G5 header")
+		}
 		wantNoBody(t, "stats", r, "AI-label disputes 1")
 	})
 }
