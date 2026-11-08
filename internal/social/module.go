@@ -63,6 +63,16 @@ func (m *Module) Init(context.Context) error {
 // open (publish.Service decides what each viewer sees); writes need a
 // signed-in browser session and are rate limited.
 func (m *Module) Routes(r *core.Router) {
+	// E5 series page and its forms.
+	r.Page("GET /s/{series}", m.seriesPage)
+	r.Page("POST /s/{series}/follow", m.followSeriesForm, core.RequireSession)
+	r.Page("POST /s/{series}/unfollow", m.unfollowSeriesForm, core.RequireSession)
+	r.Page("POST /s/{series}/comments", m.postSeriesComment, core.RequireSession)
+	r.Page("POST /s/{series}/comments/{id}/edit", m.editSeriesComment, core.RequireSession)
+	r.Page("POST /s/{series}/comments/{id}/delete", m.deleteSeriesComment, core.RequireSession)
+	r.Page("POST /s/{series}/comments/{id}/hide", m.hideSeriesComment, core.RequireSession)
+	r.Page("POST /s/{series}/comments/{id}/unhide", m.unhideSeriesComment, core.RequireSession)
+	r.Page("POST /s/{series}/comments/{id}/report", m.reportSeriesComment, core.RequireSession)
 
 	api := r.Group("/api/v1/social")
 	api.API("GET /comments", m.apiListComments)
