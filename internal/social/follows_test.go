@@ -302,3 +302,26 @@ func TestFollowWritesAreRateLimited(t *testing.T) {
 		t.Fatal("40 follow toggles were never rate limited")
 	}
 }
+
+// Deleting an account removes its follows (ON DELETE CASCADE); the series'
+// follower_count must drop with them instead of drifting upward.
+func TestDeletedAccountsLeaveFollowerCount(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, e *env) {
+		s := e.f.Series(publishtest.SeriesSpec{})
+		e.f.Publish(s, publishtest.PublicationSpec{})
+		gone, goneClient := e.user(auth.RoleReader)
+		_, stays := e.user(auth.RoleReader)
+		for _, c := range []*testutil.Client{goneClient, stays} {
+			wantStatus(t, "follow", c.SendJSON(http.MethodPut, "/api/v1/social/series/"+s.ID+"/follow", nil), http.StatusOK)
+		}
+		if got := e.followerCount(s.ID); got != 2 {
+			t.Fatalf("follower_count = %d, want 2", got)
+		}
+		if err := e.ta.Deps.Auth.DeleteUser(context.Background(), gone.ID); err != nil {
+			t.Fatal(err)
+		}
+		if got := e.followerCount(s.ID); got != 1 {
+			t.Fatalf("follower_count after deleting a follower = %d, want 1", got)
+		}
+	})
+}
