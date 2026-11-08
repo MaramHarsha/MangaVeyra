@@ -18,6 +18,7 @@ import './lib/export';
 import { installForms } from './lib/forms';
 import { installCounters } from './lib/counter';
 import { installAutoSubmit } from './lib/filters';
+import { installCopyLinks } from './lib/copylink';
 import { installPageTurns } from './lib/transitions';
 import { installQueueRefresh } from './lib/queue';
 import { updateUnread } from './lib/unread';
@@ -43,6 +44,7 @@ root.classList.add('js');
 installForms();
 installCounters();
 installAutoSubmit();
+installCopyLinks();
 
 // ---- HTMX -------------------------------------------------------------------
 
