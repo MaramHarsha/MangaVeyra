@@ -1,4 +1,3 @@
--- Proposed migration 0403 (root-owned); the same portable SQL for SQLite and PostgreSQL.
 -- Random salts for anonymous reading-session hashes, one per UTC day (ADR 0012 §8).
 -- The first server process to hash a session on a day inserts the day's salt
 -- (INSERT … ON CONFLICT (day) DO NOTHING) and every process reads it back, so

@@ -342,7 +342,6 @@ func TestRecordConcurrentOpensStaySane(t *testing.T) {
 // every server process, and a restarted one, uses the same salt.
 func TestSessionSaltIsRandomPerDayAndForgotten(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, f *publishtest.Fixture) {
-		createDaySalts(t, ta)
 		ctx := context.Background()
 		rec := recorderOf(ta)
 		day1 := time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC)
