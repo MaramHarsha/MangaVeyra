@@ -17,7 +17,8 @@ import (
 
 const seriesCols = `s.id, s.project_id, s.owner_id, s.slug, s.title, s.synopsis, s.genres, s.tags, s.format,
 	s.age_rating, s.licence, s.visibility, s.cover_asset_id, s.banner_asset_id, s.support_links, s.ai_label,
-	s.original_lang, s.languages, s.status, s.schedule, s.follower_count, s.view_count, s.published_at, s.updated_at`
+	s.original_lang, s.languages, s.status, s.schedule, s.follower_count, s.view_count, s.published_at, s.updated_at,
+	` + seriesTakedownSQL + ` AS taken_down`
 
 type seriesRow struct {
 	ID            string         `db:"id"`
@@ -44,6 +45,7 @@ type seriesRow struct {
 	ViewCount     int64          `db:"view_count"`
 	PublishedAt   sql.NullTime   `db:"published_at"`
 	UpdatedAt     time.Time      `db:"updated_at"`
+	TakenDown     bool           `db:"taken_down"`
 }
 
 func (r seriesRow) series() Series {
@@ -73,11 +75,12 @@ func (r seriesRow) series() Series {
 		ViewCount:     r.ViewCount,
 		PublishedAt:   timePtr(r.PublishedAt),
 		UpdatedAt:     r.UpdatedAt.UTC(),
+		TakenDown:     r.TakenDown,
 	}
 }
 
 const publicationCols = `p.id, p.series_id, p.chapter_id, p.lang, p.number, p.title, p.visibility, p.ai_label,
-	p.status, p.page_count, p.scheduled_at, p.published_at, p.unpublished_at`
+	p.status, p.page_count, p.scheduled_at, p.published_at, p.unpublished_at, ` + chapterTakedownSQL + ` AS taken_down`
 
 type publicationRow struct {
 	ID            string         `db:"id"`
@@ -93,6 +96,7 @@ type publicationRow struct {
 	ScheduledAt   sql.NullTime   `db:"scheduled_at"`
 	PublishedAt   sql.NullTime   `db:"published_at"`
 	UnpublishedAt sql.NullTime   `db:"unpublished_at"`
+	TakenDown     bool           `db:"taken_down"`
 }
 
 func (r publicationRow) publication() Publication {
@@ -110,6 +114,7 @@ func (r publicationRow) publication() Publication {
 		ScheduledAt:   timePtr(r.ScheduledAt),
 		PublishedAt:   timePtr(r.PublishedAt),
 		UnpublishedAt: timePtr(r.UnpublishedAt),
+		TakenDown:     r.TakenDown,
 	}
 }
 

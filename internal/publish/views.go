@@ -12,10 +12,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/admin/adminapi"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/gen"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
 )
@@ -56,7 +58,22 @@ type publishView struct {
 	// posted back so a publish applies only what the creator reviewed.
 	Revision       string
 	SeriesRevision string
+	// Rules are the instance content rules (allowed ratings, blocked words).
+	Rules settings.Content
+	// ChapterTakenDown is set while an admin has taken this chapter down;
+	// Series.TakenDown covers the whole series (ADR 0013 §1).
+	ChapterTakenDown bool
 }
+
+// takenDown reports whether readers outside the project cannot see this
+// chapter because an admin took it or its series down.
+func (v publishView) takenDown() bool {
+	return v.ChapterTakenDown || (v.HasSeries && v.Series.TakenDown)
+}
+
+// ratingHidden reports whether readers outside the project cannot see the
+// series because the content rules no longer allow its rating.
+func (v publishView) ratingHidden() bool { return v.HasSeries && ratingHidden(v.Rules, v.Series) }
 
 // seriesRevision is the series state E1 shows: its last update, or "" before
 // the series exists.
@@ -129,8 +146,14 @@ func (m *Module) buildView(r *http.Request, t target, lang string) (publishView,
 	ctx := r.Context()
 	s := m.svc
 	v := publishView{Project: t.project, Chapter: t.chapter, Errors: fieldErrors{}, Base: t.base, Now: s.now().UTC(),
-		BackURL: t.base + "/edit", CanCover: s.cover != nil, Recorded: map[string]string{}}
+		BackURL: t.base + "/edit", CanCover: s.cover != nil, Recorded: map[string]string{}, Rules: s.contentRules(ctx)}
 	var err error
+	var takedowns int
+	if err := s.db.Get(ctx, &takedowns, `SELECT COUNT(*) FROM instance_settings WHERE key = ?`,
+		adminapi.TakedownKey(adminapi.TakedownChapter, t.chapter.ID)); err != nil {
+		return v, err
+	}
+	v.ChapterTakenDown = takedowns > 0
 	if v.Series, v.HasSeries, err = seriesForProject(ctx, s.db, t.project.ID); err != nil {
 		return v, err
 	}
@@ -171,7 +194,7 @@ func (m *Module) buildView(r *http.Request, t target, lang string) (publishView,
 		}
 	}
 	v.Form = publishForm{Title: t.chapter.Title, Synopsis: t.chapter.Summary, Visibility: VisibilityPublic, When: "now",
-		Notify: true, AgeRating: RatingAll, Licence: "all_rights", AILabel: map[string]string{}, AltText: map[string]string{}}
+		Notify: true, AgeRating: adminapi.DefaultRating(v.Rules), Licence: "all_rights", AILabel: map[string]string{}, AltText: map[string]string{}}
 	if v.HasSeries {
 		v.Form.AgeRating, v.Form.Licence, v.Form.Visibility = v.Series.AgeRating, v.Series.Licence, v.Series.Visibility
 		v.SeriesURL = "/s/" + url.PathEscape(v.Series.Slug)
@@ -315,9 +338,28 @@ func (m *Module) readPublishForm(r *http.Request, v *publishView) (publishForm, 
 	}
 	if !slices.Contains(Ratings, f.AgeRating) {
 		errs["age_rating"] = "publish.error.choice"
+	} else if !adminapi.RatingAllowed(v.Rules, f.AgeRating) {
+		errs["age_rating"] = "publish.error.rating_off"
 	}
 	if !slices.Contains(Licences, f.Licence) {
 		errs["licence"] = "publish.error.choice"
+	}
+	// Blocked words (ADR 0013 §2): the chapter's public title and synopsis,
+	// and the series the first chapter creates from the project.
+	if _, bad := errs["title"]; !bad {
+		if _, ok := adminapi.Blocked(v.Rules.BlockedWords, f.Title); ok {
+			errs["title"] = "publish.error.blocked"
+		}
+	}
+	if _, bad := errs["synopsis"]; !bad {
+		if _, ok := adminapi.Blocked(v.Rules.BlockedWords, f.Synopsis); ok {
+			errs["synopsis"] = "publish.error.blocked"
+		}
+	}
+	if !v.HasSeries {
+		if _, ok := adminapi.BlockedAny(v.Rules.BlockedWords, v.Project.Title, v.Project.Logline, v.Project.Premise); ok {
+			errs[""] = "publish.error.blocked_series"
+		}
 	}
 	switch {
 	case v.live():
@@ -374,6 +416,8 @@ type seriesView struct {
 	Action    string
 	// Members are the project members who can be credited, the owner first.
 	Members []member
+	// Rules are the instance content rules (allowed ratings, blocked words).
+	Rules settings.Content
 }
 
 // credit returns the credited role and name of a member in the form.
@@ -388,7 +432,8 @@ func (v seriesView) credit(userID string) Creator {
 
 func (m *Module) seriesView(r *http.Request, t target) (seriesView, error) {
 	ctx := r.Context()
-	v := seriesView{Project: t.project, Errors: fieldErrors{}, Action: "/studio/p/" + url.PathEscape(t.project.ID) + "/series"}
+	v := seriesView{Project: t.project, Errors: fieldErrors{}, Action: "/studio/p/" + url.PathEscape(t.project.ID) + "/series",
+		Rules: m.svc.contentRules(ctx)}
 	var err error
 	if v.Series, v.Exists, err = seriesForProject(ctx, m.svc.db, t.project.ID); err != nil {
 		return v, err
@@ -404,7 +449,7 @@ func (m *Module) seriesView(r *http.Request, t target) (seriesView, error) {
 		v.Revision = s.UpdatedAt.UTC().Format(time.RFC3339Nano)
 		v.SeriesURL = "/s/" + url.PathEscape(s.Slug)
 		v.CoverURL = m.svc.assets.URLFor(ctx, s.CoverAssetID, 15*time.Minute)
-	} else if v.Form, err = seriesDefaults(ctx, m.svc.db, t.project); err != nil {
+	} else if v.Form, err = seriesDefaults(ctx, m.svc.db, t.project, adminapi.DefaultRating(v.Rules)); err != nil {
 		return v, err
 	}
 	if v.Members, err = projectMembers(ctx, m.svc.db, t.project.ID, t.project.OwnerID); err != nil {

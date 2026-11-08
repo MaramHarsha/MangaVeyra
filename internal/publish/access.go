@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/admin/adminapi"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 )
 
@@ -45,6 +47,8 @@ type access struct {
 	anonOK bool
 	// now is the moment schedules are compared against.
 	now time.Time
+	// content holds the instance content rules (allowed age ratings).
+	content settings.Content
 }
 
 func (s *service) resolve(ctx context.Context, v Viewer) (access, error) {
@@ -52,7 +56,7 @@ func (s *service) resolve(ctx context.Context, v Viewer) (access, error) {
 	if err != nil {
 		return access{}, fmt.Errorf("publish: instance settings: %w", err)
 	}
-	a := access{anonOK: inst.ExplorePublic(), now: s.now().UTC()}
+	a := access{anonOK: inst.ExplorePublic(), now: s.now().UTC(), content: inst.Content}
 	id := strings.TrimSpace(v.UserID)
 	if id == "" {
 		return a, nil
@@ -181,11 +185,29 @@ func (a access) hasChapter(listed bool) clause {
 	return clause{sql: "EXISTS (SELECT 1 FROM chapter_publications p WHERE p.series_id = s.id AND " + pub.sql + ")", args: pub.args}
 }
 
+// Takedowns are module keys in instance_settings (adminapi.TakedownKey); the
+// prefixes are constants, so they are written into the SQL as literals.
+const (
+	seriesTakedownSQL  = "EXISTS (SELECT 1 FROM instance_settings tk WHERE tk.key = '" + adminapi.SeriesTakedownPrefix + "' || s.id)"
+	chapterTakedownSQL = "EXISTS (SELECT 1 FROM instance_settings tk WHERE tk.key = '" + adminapi.ChapterTakedownPrefix + "' || p.chapter_id)"
+)
+
+// moderated keeps series an admin took down and series whose age rating the
+// content rules do not allow (alias s) away from lists and from viewers
+// outside the project (seriesReadable lets project members through).
+func (a access) moderated() clause {
+	parts := []clause{{sql: "NOT " + seriesTakedownSQL}}
+	if off := adminapi.DisallowedRatings(a.content); len(off) > 0 {
+		parts = append(parts, clause{sql: "NOT (" + inStrings("s.age_rating", off).sql + ")", args: inStrings("s.age_rating", off).args})
+	}
+	return and(parts...)
+}
+
 // seriesListed is the predicate for lists: published series the viewer may
 // read with at least one chapter the viewer may read. Project members also
 // see their own published series without one (preview).
 func (a access) seriesListed(listed bool) clause {
-	return and(a.seriesPublished(), a.visibility("s.visibility", listed), a.rating(), or(a.member(), a.hasChapter(listed)))
+	return and(a.seriesPublished(), a.visibility("s.visibility", listed), a.rating(), a.moderated(), or(a.member(), a.hasChapter(listed)))
 }
 
 // seriesReadable is the predicate for one series (alias s): a published series
@@ -202,6 +224,8 @@ func (a access) publicationReadable() clause {
 		clause{sql: "p.status = ? AND p.published_at IS NOT NULL AND p.published_at <= ?",
 			args: []any{PublicationPublished, a.now}},
 		a.visibility("p.visibility", false),
+		// A chapter an admin took down stays readable inside its project only.
+		or(a.member(), clause{sql: "NOT " + chapterTakedownSQL}),
 	)
 }
 

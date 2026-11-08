@@ -81,7 +81,7 @@ templ publishScreen(v publishView) {
 						@ui.Select(ui.SelectProps{ID: "pub-lang", Name: "lang", Value: v.Lang, Options: langOptions(ctx, v), Invalid: v.err("lang") != ""})
 					}
 					@ui.Field(ui.FieldProps{ID: "pub-rating", Label: i18n.T(ctx, "publish.field.rating"), Error: errText(ctx, v.err("age_rating"))}) {
-						@ui.Select(ui.SelectProps{ID: "pub-rating", Name: "age_rating", Value: v.Form.AgeRating, Options: choiceOptions(ctx, "publish.rating.", Ratings)})
+						@ui.Select(ui.SelectProps{ID: "pub-rating", Name: "age_rating", Value: v.Form.AgeRating, Options: ratingOptions(ctx, v.Rules, v.Form.AgeRating), Invalid: v.err("age_rating") != ""})
 					}
 				</div>
 				@ui.Field(ui.FieldProps{ID: "pub-licence", Label: i18n.T(ctx, "publish.field.licence"), Error: errText(ctx, v.err("licence"))}) {
@@ -166,6 +166,15 @@ templ publishNotices(v publishView) {
 	} else if len(v.Errors) > 0 {
 		@ui.Notice(ui.ToneError, "alert-triangle") {
 			<p>{ i18n.T(ctx, "publish.error.form") }</p>
+		}
+	}
+	if v.takenDown() {
+		@ui.Notice(ui.ToneWarning, "eye-off") {
+			<p>{ i18n.T(ctx, "publish.taken_down") }</p>
+		}
+	} else if v.ratingHidden() {
+		@ui.Notice(ui.ToneWarning, "eye-off") {
+			<p>{ i18n.T(ctx, "publish.rating_hidden", "rating", i18n.T(ctx, "publish.rating."+v.Series.AgeRating)) }</p>
 		}
 	}
 	if v.Switched {
@@ -463,7 +472,7 @@ templ seriesScreen(v seriesView) {
 				}
 				<div class="mv-publish__pair">
 					@ui.Field(ui.FieldProps{ID: "series-rating", Label: i18n.T(ctx, "publish.field.rating"), Error: errText(ctx, v.Errors["age_rating"])}) {
-						@ui.Select(ui.SelectProps{ID: "series-rating", Name: "age_rating", Value: v.Form.AgeRating, Options: choiceOptions(ctx, "publish.rating.", Ratings)})
+						@ui.Select(ui.SelectProps{ID: "series-rating", Name: "age_rating", Value: v.Form.AgeRating, Options: ratingOptions(ctx, v.Rules, v.Form.AgeRating), Invalid: v.Errors["age_rating"] != ""})
 					}
 					@ui.Field(ui.FieldProps{ID: "series-status", Label: i18n.T(ctx, "publish.series.field.status"), Error: errText(ctx, v.Errors["status"])}) {
 						@ui.Select(ui.SelectProps{ID: "series-status", Name: "status", Value: v.Form.Status, Options: choiceOptions(ctx, "publish.series.status.", Statuses)})

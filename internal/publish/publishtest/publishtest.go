@@ -59,10 +59,25 @@ type Fixture struct {
 	seq atomic.Int64
 }
 
-// New returns a fixture builder for ta.
+// New returns a fixture builder for ta. The fixture's server allows mature and
+// adult series (content rules, ADR 0013 §2), so tests of the reading rules
+// exercise every rating; SetContent changes the rules.
 func New(t testing.TB, ta *testutil.TestApp) *Fixture {
 	t.Helper()
-	return &Fixture{t: t, ta: ta}
+	f := &Fixture{t: t, ta: ta}
+	f.SetContent(func(c *settings.Content) { c.AllowMature, c.AllowAdult = true, true })
+	return f
+}
+
+// SetContent changes the instance content rules.
+func (f *Fixture) SetContent(fn func(*settings.Content)) {
+	f.t.Helper()
+	if _, err := f.ta.Deps.Settings.UpdateInstance(context.Background(), "", func(i *settings.Instance) error {
+		fn(&i.Content)
+		return nil
+	}); err != nil {
+		f.t.Fatalf("publishtest: set content rules: %v", err)
+	}
 }
 
 // Service returns the app's publish.Service.
