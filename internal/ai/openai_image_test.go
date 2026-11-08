@@ -278,7 +278,8 @@ func TestOpenAIImageCharacterLayerIsTransparentWithReferences(t *testing.T) {
 		if ref := decodeDataURLImage(t, body.Images[0].ImageURL); ref.Bounds().Dx() != 1024 || ref.Bounds().Dy() != 1024 {
 			t.Fatalf("reference not downscaled: %v", ref.Bounds())
 		}
-		if !strings.Contains(body.Prompt, "reference sheets") || !strings.Contains(body.Prompt, "transparent") {
+		if !strings.Contains(body.Prompt, "Attached images, in order: 1. an approved reference image of this character; 2. an approved reference image of this character.") ||
+			!strings.Contains(body.Prompt, "transparent") || strings.Contains(body.Prompt, "contact sheet") {
 			t.Fatalf("prompt = %q", body.Prompt)
 		}
 	})

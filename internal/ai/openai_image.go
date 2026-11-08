@@ -107,58 +107,166 @@ func controlReference(r ImageRef) bool {
 	return r.Role == "pose" || r.Label == neighbourReferenceLabel
 }
 
+// routeRef is one reference image a call sends: a single reference, or a
+// contact sheet that packs several identity references into one image.
+type routeRef struct {
+	Ref   ImageRef
+	Sheet []ImageRef
+}
+
+func (r routeRef) control() bool { return len(r.Sheet) == 0 && controlReference(r.Ref) }
+
+// encode re-encodes the image as a PNG whose longest edge is at most edge.
+func (r routeRef) encode(edge int) ([]byte, error) {
+	if len(r.Sheet) > 0 {
+		return contactSheet(r.Sheet, edge)
+	}
+	return downscaleReference(r.Ref.Data, edge)
+}
+
+// contactSheetMaxRefs bounds a contact sheet to a 2 × 2 grid, the most kept
+// references a character layer carries.
+const contactSheetMaxRefs = 4
+
 // routeReferences is the bounded reference list one call sends. Identity
 // references keep their order and are never displaced by a control image (a
-// pose skeleton or a neighbouring page): controls only fill the slots the
-// identity references leave free, so a pose never silently replaces a kept
-// character reference on a route limited to its first limit references.
-func routeReferences(refs []ImageRef, limit int) []ImageRef {
-	out := make([]ImageRef, 0, max(0, min(len(refs), limit)))
-	for _, controls := range []bool{false, true} {
-		for _, r := range refs {
+// pose skeleton or a neighbouring page). When identity references and
+// controls together exceed the route's slots, the identity references are
+// packed into one contact sheet first, so a two-slot route carries
+// [identity sheet, pose] instead of dropping the pose. Without a control the
+// first limit identity references are sent as before.
+func routeReferences(refs []ImageRef, limit int) []routeRef {
+	if limit <= 0 {
+		return nil
+	}
+	var identity, controls []ImageRef
+	for _, r := range refs {
+		if controlReference(r) {
+			controls = append(controls, r)
+		} else {
+			identity = append(identity, r)
+		}
+	}
+	out := make([]routeRef, 0, min(len(refs), limit))
+	if len(identity)+len(controls) > limit && len(controls) > 0 && len(identity) > 1 && limit > 1 {
+		out = append(out, routeRef{Sheet: identity[:min(len(identity), contactSheetMaxRefs)]})
+		for _, c := range controls[:min(len(controls), limit-1)] {
+			out = append(out, routeRef{Ref: c})
+		}
+		return out
+	}
+	for _, group := range [][]ImageRef{identity, controls} {
+		for _, r := range group {
 			if len(out) >= limit {
 				return out
 			}
-			if controlReference(r) == controls {
-				out = append(out, r)
-			}
+			out = append(out, routeRef{Ref: r})
 		}
 	}
 	return out
 }
 
+// contactSheetGutter separates the cells so each reference reads as its own
+// image; nothing else (no label, number or border) is drawn.
+const contactSheetGutter = 16
+
+// contactSheet packs identity references into one image whose longest edge
+// is at most edge: a deterministic grid of ceil(√n) columns in reading order
+// (left to right, then top to bottom), each reference scaled to fit its square
+// cell without distortion, centred, and flattened onto white, as the worker's
+// IP-Adapter guide does. Two references make a 2:1 sheet, three or four a
+// square one, so the input stays inside the per-image token allowance.
+func contactSheet(refs []ImageRef, edge int) ([]byte, error) {
+	n := len(refs)
+	if n < 2 || n > contactSheetMaxRefs {
+		return nil, errors.New("ai: contact sheet needs 2–4 references")
+	}
+	cols := int(math.Ceil(math.Sqrt(float64(n))))
+	rows := (n + cols - 1) / cols
+	cell := (edge - contactSheetGutter*(cols-1)) / cols
+	if cell < 16 {
+		return nil, errors.New("ai: contact sheet too small")
+	}
+	stride := cell + contactSheetGutter
+	sheet := image.NewNRGBA(image.Rect(0, 0, cols*cell+(cols-1)*contactSheetGutter, rows*cell+(rows-1)*contactSheetGutter))
+	draw.Draw(sheet, sheet.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+	for i, r := range refs {
+		im, err := decodeBounded(r.Data)
+		if err != nil {
+			return nil, err
+		}
+		w, h := im.Bounds().Dx(), im.Bounds().Dy()
+		if w < 1 || h < 1 {
+			return nil, errors.New("ai: empty reference")
+		}
+		scale := math.Min(float64(cell)/float64(w), float64(cell)/float64(h))
+		dw, dh := max(1, int(math.Round(float64(w)*scale))), max(1, int(math.Round(float64(h)*scale)))
+		x0, y0 := (i%cols)*stride+(cell-dw)/2, (i/cols)*stride+(cell-dh)/2
+		xdraw.CatmullRom.Scale(sheet, image.Rect(x0, y0, x0+dw, y0+dh), im, im.Bounds(), xdraw.Over, nil)
+	}
+	return encodePNG(sheet)
+}
+
 // gptImagePrompt is the exact text a GPT Image call sends, so the byte bound
-// can be checked before any reservation. refs are the references actually
-// sent (routeReferences); the prompt never describes a control that was not.
-func gptImagePrompt(req ImageGenerateRequest, refs []ImageRef, maskParam bool) string {
+// can be checked before any reservation. It lists the attached images in the
+// order they are sent (the image to edit, the references routeReferences
+// chose, and the edit mask when it travels as an image) and gives guidance
+// only for what was sent: it never describes an image that was not.
+func gptImagePrompt(req ImageGenerateRequest, refs []routeRef, maskParam bool) string {
 	var b strings.Builder
 	b.WriteString(req.Prompt)
 	if req.Negative != "" {
 		b.WriteString("\nAvoid: ")
 		b.WriteString(req.Negative)
 	}
-	if len(refs) > 0 {
-		first := "The attached images are"
-		if req.Init != nil {
-			first = "After the first image, the attached images are"
+	items := []string{}
+	if req.Init != nil {
+		items = append(items, "the image to edit")
+	}
+	identity, pose, neighbour := false, false, false
+	for _, r := range refs {
+		switch {
+		case len(r.Sheet) > 0:
+			identity = true
+			items = append(items, fmt.Sprintf("a contact sheet of %d approved reference images of this character, in reading order (left to right, then top to bottom)", len(r.Sheet)))
+		case r.Ref.Role == "pose":
+			pose = true
+			items = append(items, "a pose skeleton")
+		case r.Ref.Label == neighbourReferenceLabel:
+			neighbour = true
+			items = append(items, "a neighbouring page of this chapter")
+		default:
+			identity = true
+			items = append(items, "an approved reference image of this character")
 		}
-		hasControls := false
-		for _, ref := range refs {
-			if controlReference(ref) {
-				hasControls = true
+	}
+	if req.Mask != nil && !maskParam {
+		items = append(items, "the edit mask")
+	}
+	if len(items) > 0 {
+		b.WriteString("\nAttached images, in order: ")
+		for i, item := range items {
+			if i > 0 {
+				b.WriteString("; ")
 			}
+			fmt.Fprintf(&b, "%d. %s", i+1, item)
 		}
-		if hasControls {
-			b.WriteString("\n" + first + " labelled controls: pose skeletons control body pose only; neighbouring pages control setting and lighting only; character reference sheets control face, hair and costume. Do not borrow another character's identity or copy a reference sheet layout.")
-		} else {
-			b.WriteString("\n" + first + " this character's approved reference sheets: keep the face, hairstyle, costume and proportions consistent with them. Do not copy their layout or poses.")
-		}
+		b.WriteString(".")
+	}
+	if identity {
+		b.WriteString("\nKeep this character's face, hairstyle, costume and proportions consistent with the reference images; do not copy their layout, framing or poses.")
+	}
+	if pose {
+		b.WriteString("\nFollow the pose skeleton for body pose only; it is a control image, not part of the art.")
+	}
+	if neighbour {
+		b.WriteString("\nUse the neighbouring pages for setting and lighting only; do not copy their characters or panels.")
 	}
 	if req.Mask != nil {
 		if maskParam {
 			b.WriteString("\nChange only the area marked by the mask on the first image and keep everything else unchanged. Return the full image.")
 		} else {
-			b.WriteString("\nThe final attached image is an edit mask: change only its white area in the first image and keep its black area unchanged. Return the full image.")
+			b.WriteString("\nChange only the white area of the edit mask in the first image and keep its black area unchanged. Return the full image.")
 		}
 	}
 	if gptImageBackground(req.Background) == "transparent" {
@@ -206,7 +314,7 @@ func (s *imageService) openAIImage(ctx context.Context, key string, req ImageGen
 		}
 	}
 	for _, r := range refs {
-		data, err := downscaleReference(r.Data, gptImageRefEdge)
+		data, err := r.encode(gptImageRefEdge)
 		if err != nil {
 			return out, badInputAdapterError()
 		}

@@ -269,9 +269,11 @@ func openRouterImagePayload(req ImageGenerateRequest) (map[string]any, error) {
 		}
 	}
 	for _, r := range refs {
-		if err := add(r.Data, gptImageRefEdge); err != nil {
-			return nil, err
+		data, err := r.encode(gptImageRefEdge)
+		if err != nil {
+			return nil, badInputAdapterError()
 		}
+		references = append(references, openRouterReference(pngDataURL(data)))
 	}
 	if req.Mask != nil {
 		if err := add(req.Mask.Data, gptImageEditEdge); err != nil {
@@ -309,6 +311,18 @@ func seedreamPayload(req ImageGenerateRequest) (map[string]any, error) {
 	}
 	if req.Style != "" {
 		prompt += "\nStyle: " + req.Style
+	}
+	// Seedream receives every reference; name the pose guide by its position
+	// so it controls pose only (the adapter describes what it sends).
+	for i, r := range req.References {
+		if r.Role == "pose" {
+			position := i + 1
+			if req.Init != nil {
+				position++
+			}
+			prompt += fmt.Sprintf("\nReference image %d is a pose skeleton: follow it for body pose only; the character reference images define identity and outfit.", position)
+			break
+		}
 	}
 	if req.Mask != nil {
 		references = append(references, openRouterReference(imageDataURL(*req.Mask)))

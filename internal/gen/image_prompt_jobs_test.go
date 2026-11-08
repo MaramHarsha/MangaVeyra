@@ -3,6 +3,7 @@ package gen_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"image"
 	"image/color"
 	"image/png"
@@ -10,10 +11,12 @@ import (
 	"testing"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
+	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/gen"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagestore"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 )
 
@@ -85,6 +88,72 @@ func TestPanelLayersCarryTheirOwnPromptAlphaAndReferences(t *testing.T) {
 			if l.Kind == pagedoc.LayerBackground && !strings.Contains(l.Prompt, "background plate") {
 				t.Fatalf("background layer prompt = %q", l.Prompt)
 			}
+		}
+	})
+}
+
+// A posed character call carries the pose guide after its identity
+// references, but its prompt names no reference image: each route adapter
+// describes exactly the images it sends (a two-slot GPT Image route packs the
+// identity references into a contact sheet; fal sends none).
+func TestPosedCharacterPromptLeavesReferenceWordingToTheRoute(t *testing.T) {
+	forEachGenDialect(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		f, ps, pages := controlPages(t, ta, 1)
+		for _, kind := range []string{"sheet", "front"} {
+			ref, err := assets.From(ta.Deps).Save(ctx, assets.SaveParams{OwnerID: f.actor.UserID, ProjectID: f.project.ID, Kind: "reference", Source: assets.SourceUpload, Data: imagePNG(t, 96, 96)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = ta.Deps.DB.WithTx(ctx, func(tx *db.Tx) error {
+				_, err := f.studio.AddCharacterRefTx(ctx, tx, f.characters[0].ID, ref.ID, kind, "Kept "+kind)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		target := pages[0]
+		poseBytes, _ := json.Marshal(pagedoc.PosePresets()["crouch"])
+		if err := json.Unmarshal(poseBytes, &target.Panels[0].Pose); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ps.SavePage(ctx, target, target.Version, pagestore.Change{ActorKind: "user", ActorID: f.actor.UserID, Action: "save"}); err != nil {
+			t.Fatal(err)
+		}
+		target, err := ps.GetPage(ctx, target.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fake := &fakeImages{}
+		gen.SetImageServiceForTest(f.gen, fake)
+		j, err := core.MustUse[gen.ControlService](ta.Deps).EnqueuePage(ctx, f.actor, gen.PageRequest{ProjectID: f.project.ID, PageID: target.ID, ExpectedVersion: target.Version})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if done := runArtJob(t, ta, j.ID); done.State != jobs.StateDone {
+			t.Fatalf("pose generation: %+v", done.Error)
+		}
+		posed := 0
+		for _, call := range fake.requests {
+			refs := call.References
+			if len(refs) == 0 || refs[len(refs)-1].Role != "pose" {
+				continue
+			}
+			posed++
+			if len(refs) < 3 {
+				t.Fatalf("posed call carries %d references, want the kept identity references and the pose", len(refs))
+			}
+			for i, r := range refs[:len(refs)-1] {
+				if r.Role != "reference" {
+					t.Fatalf("reference %d has role %q before the pose", i, r.Role)
+				}
+			}
+			if strings.Contains(call.Prompt, "skeleton") || strings.Contains(call.Prompt, "references define") {
+				t.Fatalf("component prompt describes reference images: %q", call.Prompt)
+			}
+		}
+		if posed == 0 {
+			t.Fatal("no posed character call")
 		}
 	})
 }

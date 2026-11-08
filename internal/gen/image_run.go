@@ -301,9 +301,11 @@ func (s *service) renderImage(ctx context.Context, run *jobs.Run, p imagePayload
 		if c.Kind == pagedoc.LayerCharacter && pose != nil {
 			// Identity references stay first and the pose guide last, so a route
 			// that sends only its first N references never trades an identity
-			// reference for the skeleton (ADR 0009/0010).
+			// reference for the skeleton (ADR 0009/0010); a two-slot GPT Image
+			// route packs the identity references into one contact sheet so the
+			// pose still travels. Each adapter describes exactly the images it
+			// sends, so the prompt here names no reference.
 			callRefs = append(append([]ai.ImageRef(nil), callRefs...), *pose)
-			prompt += " Follow the supplied skeleton for pose only; kept character references define identity and outfit. "
 		}
 		loraID := ""
 		if c.Kind == pagedoc.LayerCharacter && plan.ProviderID == "local-worker" {
