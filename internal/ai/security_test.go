@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 )
 
 func TestRemoteTextFailuresAreSanitizedAndReconciled(t *testing.T) {
@@ -16,7 +17,7 @@ func TestRemoteTextFailuresAreSanitizedAndReconciled(t *testing.T) {
 		providers := fixture.providers(nil)
 		provider := fixture.createProvider(t, providers, providerScopeServer, "never-leak-key")
 		plan := TextPlan{Task: TaskScript, Schema: SchemaScriptV1, RoutingMode: ModeBalanced,
-			ProviderID: provider.ID, ModelID: openRouterModel, Remote: true}
+			ProviderID: provider.ID, ModelID: openRouterModel, Remote: true, Estimate: jobs.Cost{USD: openRouterPlanUSD}}
 		input := testScriptInputJSON(t)
 
 		cases := []struct {
@@ -73,7 +74,7 @@ func TestRemoteTextDispatchGuardsMakeZeroRequests(t *testing.T) {
 		input := testScriptInputJSON(t)
 		generate := func(providerID, jobID, mode string) error {
 			_, err := service.GenerateText(ctx, TextGenerateRequest{Plan: TextPlan{Task: TaskScript, Schema: SchemaScriptV1,
-				RoutingMode: mode, ProviderID: providerID, ModelID: openRouterModel, Remote: true}, ActorID: fixture.userID,
+				RoutingMode: mode, ProviderID: providerID, ModelID: openRouterModel, Remote: true, Estimate: jobs.Cost{USD: openRouterPlanUSD}}, ActorID: fixture.userID,
 				ProjectID: fixture.projectID, JobID: jobID, Attempt: 1, Input: input})
 			return err
 		}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 )
 
 type scriptedSpendStore struct {
@@ -59,7 +60,7 @@ func TestAmbiguousReservationRetriesSameIDBeforeOneHTTPCall(t *testing.T) {
 			reserveErrors: []error{errors.New("ambiguous database result"), nil}}
 		service := newTextService(d, fixture.settings, providers, newOpenRouterClient(doer), spend, nil)
 		plan := TextPlan{Task: TaskScript, Schema: SchemaScriptV1, RoutingMode: ModeBalanced,
-			ProviderID: provider.ID, ModelID: openRouterModel, Remote: true}
+			ProviderID: provider.ID, ModelID: openRouterModel, Remote: true, Estimate: jobs.Cost{USD: openRouterPlanUSD}}
 		if _, err := service.GenerateText(context.Background(), TextGenerateRequest{Plan: plan, ActorID: fixture.userID,
 			ProjectID: fixture.projectID, JobID: jobID, Attempt: 1, Input: testScriptInputJSON(t)}); err != nil {
 			t.Fatal(err)
@@ -82,7 +83,7 @@ func TestDefinitiveReservationErrorsAreNotRetried(t *testing.T) {
 		provider := fixture.createProvider(t, providers, providerScopeServer, "definitive-key")
 		jobID := fixture.seedRunningJob(t, provider.ID, 1)
 		plan := TextPlan{Task: TaskScript, Schema: SchemaScriptV1, RoutingMode: ModeBalanced,
-			ProviderID: provider.ID, ModelID: openRouterModel, Remote: true}
+			ProviderID: provider.ID, ModelID: openRouterModel, Remote: true, Estimate: jobs.Cost{USD: openRouterPlanUSD}}
 		for _, tc := range []struct {
 			name string
 			err  error

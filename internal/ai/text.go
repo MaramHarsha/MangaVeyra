@@ -235,7 +235,6 @@ func (s *textService) GenerateText(ctx context.Context, req TextGenerateRequest)
 	if !route.fits(in) {
 		return zero, badInputError(errors.New("ai: script input exceeds remote context"))
 	}
-
 	purpose, err := s.initialSpendPurpose(ctx, req.JobID, req.Attempt)
 	if err != nil {
 		return zero, upstreamError(err, false, jobs.Cost{})
@@ -284,6 +283,14 @@ func (s *textService) remoteCall(ctx context.Context, req TextGenerateRequest, r
 	var out remoteCallResult
 	if err := s.remoteGuard(ctx, req, route); err != nil {
 		return out, err
+	}
+	// The plan's estimate is what was approved (by the token threshold or a
+	// person). A route now bounded above it (a Hugging Face tariff frozen by
+	// a later re-test, a frozen route changed by an update) needs approval
+	// again: it never silently reserves more.
+	if aboveEstimate(route.PlanUSD, req.Plan.Estimate.USD) {
+		return out, &GenerateError{Code: CodeApproval, Err: errAboveEstimate,
+			SafeMessage: "The provider's price rose after this was approved. Start it again to review and approve the new estimate."}
 	}
 	if route.Kind != providerKindHuggingFace && s.clients[route.Kind] == nil {
 		return out, badInputAdapterError()
@@ -467,24 +474,34 @@ func (s *textService) remoteGuard(ctx context.Context, req TextGenerateRequest, 
 	return nil
 }
 
-// planTextRoute is the route a remote plan names: a frozen route by model, or
-// a Hugging Face connection's own route rebuilt from its current config.
+var errAboveEstimate = errors.New("ai: route bound exceeds the approved plan estimate")
+
+// aboveEstimate reports a route bound above the approved estimate, compared
+// in whole microdollars (equal passes; an unreadable amount never passes).
+func aboveEstimate(bound, approved float64) bool {
+	b, err := usdToMicrodollars(bound)
+	if err != nil {
+		return true
+	}
+	a, err := usdToMicrodollars(approved)
+	return err != nil || b > a
+}
+
+// planTextRoute is the route a remote plan names: a Hugging Face
+// connection's own route rebuilt from its current config (its model may be
+// named like a built-in route), or a frozen route by model.
 func (s *textService) planTextRoute(ctx context.Context, req TextGenerateRequest) (remoteRoute, bool) {
-	if route, ok := routeForModel(req.Plan.ModelID); ok {
-		return route, true
+	if req.Plan.ProviderID != "" && req.Plan.ProviderID != PlaceholderID && s.providers != nil {
+		candidate, err := s.providers.Candidate(ctx, req.ActorID, req.Plan.ProviderID)
+		if err == nil && candidate.Kind == providerKindHuggingFace {
+			route, ok := candidateTextRoute(candidate, req.Plan.RoutingMode, true)
+			if !ok || route.Model != req.Plan.ModelID {
+				return remoteRoute{}, false
+			}
+			return route, true
+		}
 	}
-	if req.Plan.ProviderID == "" || req.Plan.ProviderID == PlaceholderID || s.providers == nil {
-		return remoteRoute{}, false
-	}
-	candidate, err := s.providers.Candidate(ctx, req.ActorID, req.Plan.ProviderID)
-	if err != nil || candidate.Kind != providerKindHuggingFace {
-		return remoteRoute{}, false
-	}
-	route, ok := candidateTextRoute(candidate, req.Plan.RoutingMode, true)
-	if !ok || route.Model != req.Plan.ModelID {
-		return remoteRoute{}, false
-	}
-	return route, true
+	return routeForModel(req.Plan.ModelID)
 }
 
 // clientFor is the transport for one resolved connection: the kind's shared
