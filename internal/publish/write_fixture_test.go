@@ -2,8 +2,10 @@ package publish_test
 
 import (
 	"context"
+	"html"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -137,17 +139,30 @@ func newChapter(t *testing.T, ta *testutil.TestApp, jaMissing bool) *chapterFix 
 	return f
 }
 
-// publishForm is the E1 form as a browser posts it.
+// publishForm is the E1 form as the owner's browser posts it: E1 is rendered
+// now and its hidden review fields are carried along.
 func (f *chapterFix) publishForm(lang string, extra ...string) url.Values {
+	return f.formFor(f.client, lang, extra...)
+}
+
+// formFor renders E1 in lang for c and returns the form c would post.
+func (f *chapterFix) formFor(c *testutil.Client, lang string, extra ...string) url.Values {
 	v := url.Values{"title": {"The Lighthouse Debt"}, "synopsis": {"Rin reaches the lighthouse at last."}, "tags": {"rooftops, salt city"},
 		"lang": {lang}, "page_lang": {lang}, "age_rating": {publish.RatingTeen}, "licence": {"all_rights"},
 		"visibility": {publish.VisibilityPublic}, "when": {"now"}, "notify": {"on"},
 		"ai_script": {"ai"}, "ai_art": {"human"}, "ai_lettering": {"human"}}
+	page := c.Get(f.base + "/publish?lang=" + url.QueryEscape(lang))
+	for _, m := range reviewField.FindAllSubmatch(page.Body, -1) {
+		v.Set(string(m[1]), html.UnescapeString(string(m[2])))
+	}
 	for i := 0; i+1 < len(extra); i += 2 {
 		v.Set(extra[i], extra[i+1])
 	}
 	return v
 }
+
+// reviewField matches the hidden fields that bind a publish to what E1 showed.
+var reviewField = regexp.MustCompile(`<input type="hidden" name="(revision|series_revision)" value="([^"]*)"`)
 
 func postForm(c *testutil.Client, path string, form url.Values) *testutil.Response {
 	return c.Do(http.MethodPost, path, strings.NewReader(form.Encode()), "application/x-www-form-urlencoded")

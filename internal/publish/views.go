@@ -49,6 +49,25 @@ type publishView struct {
 	SeriesURL string
 	ReaderURL string
 	Now       time.Time
+	// Revision and SeriesRevision are the chapter and series states E1 shows,
+	// posted back so a publish applies only what the creator reviewed.
+	Revision       string
+	SeriesRevision string
+}
+
+// seriesRevision is the series state E1 shows: its last update, or "" before
+// the series exists.
+func seriesRevision(s Series, ok bool) string {
+	if !ok {
+		return ""
+	}
+	return s.UpdatedAt.UTC().Format(time.RFC3339Nano)
+}
+
+// stale reports which of the states the form was rendered from have changed
+// since: the chapter (pages or chapter row) and the series.
+func (v publishView) stale(r *http.Request) (chapter, series bool) {
+	return web.FormValue(r, "revision") != v.Revision, web.FormValue(r, "series_revision") != v.SeriesRevision
 }
 
 type langOption struct {
@@ -119,7 +138,7 @@ func (m *Module) buildView(r *http.Request, t target, lang string) (publishView,
 	if err != nil {
 		return v, httpError(err)
 	}
-	v.rev = src.rev
+	v.rev, v.Revision, v.SeriesRevision = src.rev, src.rev.token(), seriesRevision(v.Series, v.HasSeries)
 	langs := chapterLanguages(t.project.Language, src.pages)
 	v.Lang = strings.TrimSpace(lang)
 	if !slices.Contains(langs, v.Lang) {

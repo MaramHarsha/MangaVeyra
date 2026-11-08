@@ -2,6 +2,9 @@ package publish
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
@@ -75,6 +78,14 @@ func readRevision(ctx context.Context, q db.Querier, projectID, chapterID string
 
 func (r revision) equal(o revision) bool {
 	return r.ChapterUpdatedAt.Equal(o.ChapterUpdatedAt) && slices.Equal(r.Pages, o.Pages)
+}
+
+// token is an opaque digest of the revision. E1 renders it as a hidden field
+// so a publish is bound to the chapter state the creator reviewed.
+func (r revision) token() string {
+	b, _ := json.Marshal(revision{ChapterUpdatedAt: r.ChapterUpdatedAt.UTC(), Pages: r.Pages})
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:16])
 }
 
 // loadChapter reads the project, chapter, page documents, script and cast

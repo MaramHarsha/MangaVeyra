@@ -3,6 +3,7 @@ package publish
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -218,7 +219,14 @@ func (m *Module) publishPost(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	f, errs := m.readPublishForm(r, &v)
-	if pageLang := web.FormValue(r, "page_lang"); pageLang != "" && pageLang != v.Lang {
+	switched := web.FormValue(r, "page_lang") != "" && web.FormValue(r, "page_lang") != v.Lang
+	// The publish applies only what E1 showed: if the chapter or the series
+	// changed since the form was rendered, nothing is applied and E1 shows
+	// the current state for another review.
+	if chapterStale, seriesStale := v.stale(r); chapterStale || seriesStale {
+		return m.reviewAgain(w, r, v, f, errs, switched, seriesStale)
+	}
+	if switched {
 		// Another language was picked: show its lettering and alt-text drafts
 		// for review instead of publishing edits made for the previous one.
 		f.AILabel, f.AltText, f.When = v.Form.AILabel, map[string]string{}, v.Form.When
@@ -230,32 +238,70 @@ func (m *Module) publishPost(w http.ResponseWriter, r *http.Request) error {
 		v.applyFormAlt(r)
 		return m.renderPublish(w, r, http.StatusUnprocessableEntity, v)
 	}
-	var series Series
-	err = m.svc.db.WithTx(ctx, func(tx *db.Tx) error {
-		if err := m.svc.authorizePublish(ctx, tx, t.actor, t.project.ID); err != nil {
-			return err
-		}
-		if series, err = m.svc.ensureSeriesTx(ctx, tx, t.actor, t.project, f.Visibility); err != nil {
-			return err
-		}
-		return m.svc.setSeriesRulesTx(ctx, tx, series.ID, f.AgeRating, f.Licence)
-	})
-	if err != nil {
-		return httpError(err)
-	}
-	in := publishInput{ProjectID: t.project.ID, ChapterID: t.chapter.ID, SeriesID: series.ID, Lang: v.Lang, Title: f.Title,
+	in := publishInput{ProjectID: t.project.ID, ChapterID: t.chapter.ID, Lang: v.Lang, Title: f.Title,
 		Synopsis: f.Synopsis, Tags: normalizeTags([]string{f.Tags}, false), Visibility: f.Visibility, Notify: f.Notify,
 		AILabel: f.AILabel, AltText: f.AltText, Revision: v.rev}
 	if f.When == "schedule" && v.Pub.Status != PublicationPublished {
 		at := f.ScheduledAt
 		in.ScheduledAt = &at
 	}
+	// The series changes apply only to the series E1 showed.
+	var series Series
+	err = m.svc.db.WithTx(ctx, func(tx *db.Tx) error {
+		if err := m.svc.authorizePublish(ctx, tx, t.actor, t.project.ID); err != nil {
+			return err
+		}
+		cur, exists, err := seriesForProject(ctx, tx, t.project.ID)
+		if err != nil {
+			return err
+		}
+		if seriesRevision(cur, exists) != v.SeriesRevision {
+			return errReviewAgain
+		}
+		if series, err = m.svc.ensureSeriesTx(ctx, tx, t.actor, t.project, f.Visibility); err != nil {
+			return err
+		}
+		return m.svc.setSeriesRulesTx(ctx, tx, series.ID, f.AgeRating, f.Licence)
+	})
+	switch {
+	case errors.Is(err, errReviewAgain):
+		if v, err = m.buildView(r, t, v.Lang); err != nil {
+			return err
+		}
+		return m.reviewAgain(w, r, v, f, errs, false, true)
+	case err != nil:
+		return httpError(err)
+	}
+	in.SeriesID = series.ID
 	j, err := m.svc.enqueuePublish(ctx, t.actor, in)
 	if err != nil {
 		return httpError(err)
 	}
 	core.Redirect(w, r, t.publishURL(v.Lang, "job", j.ID))
 	return nil
+}
+
+// errReviewAgain means the series changed after E1 was rendered.
+var errReviewAgain = fmt.Errorf("%w: the series changed after E1 was rendered", ErrConflict)
+
+// reviewAgain shows E1 as it is now after a stale publish was refused (409).
+// The creator's chapter fields and alt-text edits are kept; when the series
+// changed, its rating and licence show the current values, since those are
+// what changed under the creator.
+func (m *Module) reviewAgain(w http.ResponseWriter, r *http.Request, v publishView, f publishForm, errs fieldErrors, switched, seriesStale bool) error {
+	if seriesStale {
+		f.AgeRating, f.Licence = v.Form.AgeRating, v.Form.Licence
+		delete(errs, "age_rating")
+		delete(errs, "licence")
+	}
+	if switched {
+		f.AILabel, f.AltText, f.When = v.Form.AILabel, map[string]string{}, v.Form.When
+	} else {
+		v.applyFormAlt(r)
+	}
+	v.Form, v.Errors = f, errs
+	v.Errors[""] = "publish.error.review_again"
+	return m.renderPublish(w, r, http.StatusConflict, v)
 }
 
 func (m *Module) unpublishPost(w http.ResponseWriter, r *http.Request) error {

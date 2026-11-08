@@ -152,6 +152,7 @@
   "publish.error.slug_taken": "Another series already uses this address.",
   "publish.error.links": "Each link needs a label of up to 40 characters and an http or https address (at most 5).",
   "publish.error.stale": "Someone saved the series meanwhile. Reload and try again.",
+  "publish.error.review_again": "This chapter or its series changed after you opened this page. Nothing was published: review the details below, then publish again.",
   "publish.flash.unpublished": "Chapter {number} is unpublished",
   "publish.flash.cover": "Cover updated",
   "publish.flash.series": "Series saved",

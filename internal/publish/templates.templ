@@ -13,6 +13,8 @@ import (
 templ publishScreen(v publishView) {
 	<form class="mv-publish" method="post" action={ templ.URL(v.Base + "/publish") } novalidate hx-disabled-elt="find button[type='submit']">
 		<input type="hidden" name="page_lang" value={ v.Lang }/>
+		<input type="hidden" name="revision" value={ v.Revision }/>
+		<input type="hidden" name="series_revision" value={ v.SeriesRevision }/>
 		<header class="mv-publish__head">
 			<div class="mv-publish__heading">
 				<h1 class="mv-publish__title">{ i18n.T(ctx, "publish.title", "number", v.Chapter.Number) }</h1>

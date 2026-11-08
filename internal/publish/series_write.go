@@ -345,13 +345,15 @@ func (s *service) ensureSeriesTx(ctx context.Context, tx *db.Tx, actor studio.Ac
 	return s.saveSeriesTx(ctx, tx, actor, p, in, time.Time{})
 }
 
-// SeriesRules lets E1 change the series-level age rating and licence.
+// setSeriesRulesTx lets E1 change the series-level age rating and licence.
+// An unchanged choice leaves the series (and its revision) as it is, so other
+// open forms do not turn stale.
 func (s *service) setSeriesRulesTx(ctx context.Context, tx *db.Tx, seriesID, rating, licence string) error {
 	if !slices.Contains(Ratings, rating) || !slices.Contains(Licences, licence) {
 		return ErrInvalid
 	}
-	_, err := tx.Exec(ctx, `UPDATE series SET age_rating = ?, licence = ?, updated_at = ? WHERE id = ?`,
-		rating, licence, s.now().UTC(), seriesID)
+	_, err := tx.Exec(ctx, `UPDATE series SET age_rating = ?, licence = ?, updated_at = ? WHERE id = ? AND (age_rating <> ? OR licence <> ?)`,
+		rating, licence, s.now().UTC(), seriesID, rating, licence)
 	return err
 }
 

@@ -149,6 +149,7 @@
   "publish.error.slug_taken": "このアドレスは別のシリーズが使っています。",
   "publish.error.links": "各リンクには40文字以内の表示名とhttpまたはhttpsのアドレスが必要です（5件まで）。",
   "publish.error.stale": "その間に誰かがシリーズを保存しました。再読み込みしてからやり直してください。",
+  "publish.error.review_again": "このページを開いた後に、この話またはシリーズが変更されました。公開はされていません。下の内容を確認してから、もう一度公開してください。",
   "publish.flash.unpublished": "第{number}話の公開を取り下げました",
   "publish.flash.cover": "表紙を更新しました",
   "publish.flash.series": "シリーズを保存しました",
