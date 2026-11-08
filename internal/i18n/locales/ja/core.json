@@ -90,6 +90,6 @@
   "compute.gpu_time": "GPU 約 {seconds} 秒",
   "compute.remote_spend": "あなたのキーで約 {amount}",
   "compute.local": "ローカル",
-  "notify.kind.lock_ready": "Character Lockの学習が完了しました",
+  "notify.kind.lock_ready": "キャラクターロックの学習が完了しました",
   "notify.lock.ready_body": "学習済みキャラクターを利用できます。参照画像と評価済みコマを確認してください。"
 }

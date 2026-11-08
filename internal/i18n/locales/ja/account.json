@@ -175,7 +175,7 @@
   "settings.account.passkey": "パスキー",
   "settings.account.passkey_desc": "パスワードの代わりにこのデバイスでログイン",
   "settings.account.passkey_add": "パスキーを追加",
-  "settings.notifications.group.lock": "Character Lockの学習が完了",
+  "settings.notifications.group.lock": "キャラクターロックの学習が完了",
   "settings.notifications.group.world": "Worldへの投稿が審査された",
   "settings.notifications.group.spend": "リモート利用額が上限に近い"
 }
