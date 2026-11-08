@@ -1,0 +1,202 @@
+package reader
+
+import (
+	"strconv"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/layout"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// stageTheme renders the Paper background with the Paper theme tokens.
+func stageTheme(bg string) string {
+	if bg == BgPaper {
+		return "light"
+	}
+	return "dark"
+}
+
+// ReaderDocument is the E3/E4 reader. The server renders the complete chapter
+// as stacked page images with alt-text, so it is readable without JavaScript;
+// the reader island replaces it with the paged, spread, guided and webtoon views.
+templ ReaderDocument(c *layout.Chrome, v *readerView) {
+	@layout.Base(c) {
+		<a class="mv-skip-link" href="#main">{ i18n.T(ctx, "ui.skip_to_content") }</a>
+		<div
+			class={ "mv-rd", ui.If(v.webtoon(), "mv-rd--webtoon") }
+			data-island="reader"
+			data-props={ v.Props }
+			data-bg={ v.Prefs.Background }
+		>
+			@readerBar(v)
+			<main id="main" class="mv-rd__stage mv-rd__stage--stack" data-theme={ stageTheme(v.Prefs.Background) } data-bg={ v.Prefs.Background }>
+				<h1 class="mv-sr-only">{ v.Series.Title } · { v.Label }</h1>
+				<p class="mv-rd__nojs-note mv-sr-only">{ i18n.T(ctx, "reader.nojs", "count", len(v.Pages)) }</p>
+				<ol class="mv-rd__stack" aria-label={ i18n.T(ctx, "reader.pages", "count", len(v.Pages)) }>
+					for _, p := range v.Pages {
+						<li class="mv-rd__sheet" id={ "page-" + strconv.Itoa(p.Number) }>
+							<figure class="mv-rd__figure">
+								if p.Src != "" {
+									<img
+										class="mv-rd__img"
+										src={ p.Src }
+										alt={ pageAlt(ctx, p) }
+										width={ strconv.Itoa(p.Width) }
+										height={ strconv.Itoa(p.Height) }
+										if p.Number > 2 {
+											loading="lazy"
+										}
+										decoding="async"
+									/>
+								} else {
+									@ui.ToneBox(i18n.T(ctx, "reader.page.missing"), "page", "mv-rd__missing")
+								}
+								<figcaption class="mv-sr-only">
+									<span>{ i18n.T(ctx, "reader.page.of", "page", p.Number, "total", len(v.Pages)) }.</span>
+									for i, pn := range p.Panels {
+										<span>
+											{ i18n.T(ctx, "reader.panel.of", "panel", i+1, "total", len(p.Panels)) }:
+											if pn.AltText != "" {
+												{ " " + pn.AltText }
+											}
+											for _, b := range pn.Bubbles {
+												{ " " + bubbleLine(ctx, b) }
+											}
+										</span>
+									}
+								</figcaption>
+							</figure>
+						</li>
+					}
+				</ol>
+				@chapterEnd(v)
+			</main>
+			<footer class="mv-rd__progress" aria-hidden="true">
+				<span>{ i18n.T(ctx, "reader.pages", "count", len(v.Pages)) }</span>
+				<span class="mv-rd__track"><span class="mv-rd__fill mv-p-0"></span></span>
+				<span>{ i18n.T(ctx, "reader.dir." + v.Prefs.Direction) }</span>
+			</footer>
+		</div>
+	}
+}
+
+// readerBar is the 52 px reader bar of E3/E4: back, series and chapter,
+// mode switch, translation (Soon), bookmark, download and settings. Without
+// JavaScript only the controls that work without it are shown.
+templ readerBar(v *readerView) {
+	<header class="mv-rd__bar">
+		<a class="mv-iconlink mv-rd__back" href={ templ.URL(v.BackURL) } aria-label={ i18n.T(ctx, "reader.back") }>
+			@ui.Icon("arrow-left", 20)
+		</a>
+		<div class="mv-rd__titles">
+			<strong class="mv-rd__series mv-truncate">{ v.Series.Title }</strong>
+			<span class="mv-rd__chapter mv-truncate">{ v.Label }</span>
+		</div>
+		<div class="mv-rd__tools">
+			<div class="mv-seg mv-rd__modes mv-js-only" role="group" aria-label={ i18n.T(ctx, "reader.mode") }>
+				for _, mode := range modesFor(v.Series.Format) {
+					<span class="mv-seg__item" aria-current={ currentMode(v, mode) }>{ i18n.T(ctx, "reader.mode." + mode) }</span>
+				}
+			</div>
+			<span class="mv-btn mv-btn--bare mv-btn--sm is-soon mv-rd__tool" role="img" aria-label={ i18n.T(ctx, "reader.translate.soon") } title={ i18n.T(ctx, "reader.translate.soon") }>
+				@ui.Icon("language", 16)
+			</span>
+			<span class="mv-btn mv-btn--bare mv-btn--sm mv-rd__tool mv-js-only" aria-hidden="true">
+				@ui.Icon("bookmark", 16)
+			</span>
+			<span class="mv-btn mv-btn--bare mv-btn--sm mv-rd__tool mv-js-only" aria-hidden="true">
+				@ui.Icon("download", 16)
+			</span>
+			<span class="mv-btn mv-btn--bare mv-btn--sm mv-rd__tool mv-js-only" aria-hidden="true">
+				@ui.Icon("settings", 16)
+			</span>
+		</div>
+	</header>
+}
+
+func currentMode(v *readerView, mode string) string {
+	cur := v.Prefs.Mode
+	if cur == ModeAuto {
+		cur = ModeSpread
+	}
+	if cur == mode {
+		return "true"
+	}
+	return "false"
+}
+
+// chapterEnd is the chapter-end card: provenance per role, next chapter and the series.
+templ chapterEnd(v *readerView) {
+	<section class="mv-rd-end" aria-labelledby="mv-rd-end-title">
+		<span class="mv-label-mono mv-rd-end__kicker">{ v.Label }</span>
+		<h2 class="mv-rd-end__title" id="mv-rd-end-title">
+			if v.webtoon() {
+				{ i18n.T(ctx, "reader.end.title.episode") }
+			} else {
+				{ i18n.T(ctx, "reader.end.title") }
+			}
+		</h2>
+		if len(v.Labels) > 0 {
+			<div class="mv-rd-end__labels" aria-label={ i18n.T(ctx, "reader.end.provenance") }>
+				for _, l := range v.Labels {
+					@ui.ProvenanceBadge(l.Kind, l.Label)
+				}
+			</div>
+		}
+		<div class="mv-rd-end__actions">
+			if v.Prev != nil {
+				@ui.LinkButton(v.Prev.Href, ui.ButtonProps{Variant: ui.Ghost, Icon: "chevron-left"}) {
+					{ i18n.T(ctx, "reader.prev_chapter") }
+				}
+			}
+			if v.Next != nil {
+				@ui.LinkButton(v.Next.Href, ui.ButtonProps{Variant: ui.Primary, Icon: "arrow-right"}) {
+					{ i18n.T(ctx, "reader.end.next") }
+				}
+			} else {
+				<span class="mv-small mv-muted">{ i18n.T(ctx, "reader.end.last") }</span>
+			}
+			if v.SeriesURL != "" {
+				@ui.LinkButton(v.SeriesURL, ui.ButtonProps{Variant: ui.Quiet}) {
+					{ i18n.T(ctx, "reader.end.series") }
+				}
+			}
+		</div>
+	</section>
+}
+
+// AgeGateDocument is the once-per-series confirmation for mature and adult
+// series (ADR 0012 §1). It needs an explicit POST; nothing is stored by viewing it.
+templ AgeGateDocument(c *layout.Chrome, g ageGateView) {
+	@layout.Base(c) {
+		<a class="mv-skip-link" href="#main">{ i18n.T(ctx, "ui.skip_to_content") }</a>
+		<div class="mv-rd mv-rd--gate">
+			<header class="mv-rd__bar">
+				<a class="mv-iconlink mv-rd__back" href={ templ.URL(g.BackURL) } aria-label={ i18n.T(ctx, "reader.back") }>
+					@ui.Icon("arrow-left", 20)
+				</a>
+				<div class="mv-rd__titles">
+					<strong class="mv-rd__series mv-truncate">{ g.Series.Title }</strong>
+					<span class="mv-rd__chapter mv-truncate">{ g.Label }</span>
+				</div>
+			</header>
+			<main id="main" class="mv-rd__stage mv-rd__stage--center">
+				<section class="mv-box mv-box--pad-lg mv-stack mv-rd-gate" aria-labelledby="mv-rd-gate-title">
+					@ui.Badge(ui.ToneWarning, "alert-triangle", ratingLabel(ctx, g.Series.AgeRating))
+					<h1 class="mv-rd-gate__title" id="mv-rd-gate-title">{ i18n.T(ctx, "reader.gate.title." + g.Series.AgeRating) }</h1>
+					<p class="mv-rd-gate__body">{ i18n.T(ctx, "reader.gate.body", "title", g.Series.Title, "rating", ratingLabel(ctx, g.Series.AgeRating)) }</p>
+					<form method="post" action={ templ.SafeURL(g.Action) } class="mv-row mv-row--wrap mv-rd-gate__actions">
+						<input type="hidden" name="next" value={ g.Next }/>
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "check"}) {
+							{ i18n.T(ctx, "reader.gate.confirm") }
+						}
+						@ui.LinkButton(g.BackURL, ui.ButtonProps{Variant: ui.Ghost}) {
+							{ i18n.T(ctx, "reader.gate.back") }
+						}
+					</form>
+					<p class="mv-small mv-muted">{ i18n.T(ctx, "reader.gate.once") }</p>
+				</section>
+			</main>
+		</div>
+	}
+}

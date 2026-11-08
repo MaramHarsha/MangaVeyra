@@ -1,0 +1,234 @@
+package reader
+
+import (
+	"context"
+	"strconv"
+	"strings"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+func (v *libraryView) tabs(ctx context.Context) []ui.SegLink {
+	following := i18n.T(ctx, "reader.library.tab.following")
+	if v.FollowsReady {
+		following += " " + strconv.Itoa(v.FollowingCount)
+	}
+	downloads := i18n.T(ctx, "reader.library.tab.downloads")
+	if v.DownloadCount > 0 {
+		downloads += " " + strconv.Itoa(v.DownloadCount)
+	}
+	bookmarks := i18n.T(ctx, "reader.library.tab.bookmarks")
+	if v.BookmarkCount > 0 {
+		bookmarks += " " + strconv.Itoa(v.BookmarkCount)
+	}
+	return []ui.SegLink{
+		{Href: "/library/following", Label: following, Current: v.Tab == TabFollowing},
+		{Href: "/library/history", Label: i18n.T(ctx, "reader.library.tab.history"), Current: v.Tab == TabHistory},
+		{Href: "/library/downloads", Label: downloads, Current: v.Tab == TabDownloads},
+		{Href: "/library/bookmarks", Label: bookmarks, Current: v.Tab == TabBookmarks},
+	}
+}
+
+func sortOptions(ctx context.Context) []ui.Option {
+	return []ui.Option{
+		{Value: SortNew, Label: i18n.T(ctx, "reader.library.sort.new")},
+		{Value: SortRead, Label: i18n.T(ctx, "reader.library.sort.read")},
+		{Value: SortTitle, Label: i18n.T(ctx, "reader.library.sort.title")},
+	}
+}
+
+// LibraryPage is E7: Following, History, Downloads and Bookmarks.
+templ LibraryPage(v *libraryView) {
+	<div class="mv-lib" data-tab={ v.Tab }>
+		<div class="mv-lib__head">
+			<h1 class="mv-lib__title">{ i18n.T(ctx, "reader.library.title") }</h1>
+			@ui.SegmentedLinks(i18n.T(ctx, "reader.library.tabs"), v.tabs(ctx))
+		</div>
+		switch v.Tab {
+			case TabFollowing:
+				@libraryFollowing(v)
+			case TabHistory:
+				@libraryRows(v, v.Rows, "history")
+			case TabDownloads:
+				@libraryDownloads(v)
+			case TabBookmarks:
+				@libraryRows(v, v.Rows, "bookmarks")
+		}
+		if v.Props != "" {
+			<div class="mv-lib__island" data-island="reader" data-props={ v.Props } data-revoked={ joinIDs(v.revoked()) } hidden></div>
+		}
+	</div>
+}
+
+templ libraryFollowing(v *libraryView) {
+	<form class="mv-lib__filters" method="get" action="/library/following">
+		<span class="mv-lib__filter is-soon" title={ i18n.T(ctx, "ui.soon_hint") }>
+			@ui.Select(ui.SelectProps{ID: "lib-category", Name: "category", Value: "all", Disabled: true,
+				Options: []ui.Option{{Value: "all", Label: i18n.T(ctx, "reader.library.category.all")}},
+				Attrs: templ.Attributes{"aria-label": i18n.T(ctx, "reader.library.category")}})
+			@ui.SoonTag()
+		</span>
+		<span class="mv-lib__filter">
+			@ui.Select(ui.SelectProps{ID: "lib-sort", Name: "sort", Value: v.Sort, Options: sortOptions(ctx),
+				Attrs: templ.Attributes{"aria-label": i18n.T(ctx, "reader.library.sort"), "data-autosubmit": true}})
+		</span>
+		@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit", Class: "mv-nojs-only"}) {
+			{ i18n.T(ctx, "reader.library.apply") }
+		}
+		<span class="mv-lib__auto is-soon" title={ i18n.T(ctx, "ui.soon_hint") }>
+			@ui.Toggle(ui.ToggleProps{ID: "lib-auto", Name: "auto_download", Disabled: true, Checked: false,
+				Label: i18n.T(ctx, "reader.library.auto_download")})
+			@ui.SoonTag()
+		</span>
+	</form>
+	if !v.FollowsReady || len(v.Following) == 0 {
+		@ui.State(ui.StateProps{Title: i18n.T(ctx, "reader.library.following.empty.title"),
+			Body: i18n.T(ctx, "reader.library.following.empty.body"), Boxed: true, Class: "mv-lib__empty"}) {
+			@ui.LinkButton("/explore", ui.ButtonProps{Variant: ui.Primary, Icon: "compass"}) {
+				{ i18n.T(ctx, "reader.library.explore") }
+			}
+		}
+	} else {
+		<ul class="mv-lib__grid" aria-label={ i18n.T(ctx, "reader.library.tab.following") }>
+			for _, c := range v.Following {
+				<li>
+					@coverCardView(c)
+				</li>
+			}
+		</ul>
+	}
+	if len(v.Continue) > 0 {
+		<h2 class="mv-lib__subtitle">{ i18n.T(ctx, "reader.library.continue") }</h2>
+		<ul class="mv-lib__rows">
+			for _, c := range v.Continue {
+				<li>
+					@rowCardView(c, "")
+				</li>
+			}
+		</ul>
+	}
+}
+
+templ coverCardView(c coverCard) {
+	if c.Href != "" {
+		<a class="mv-scard mv-lib__card" href={ templ.URL(c.Href) }>
+			@coverCardBody(c)
+		</a>
+	} else {
+		<div class="mv-scard mv-lib__card">
+			@coverCardBody(c)
+		</div>
+	}
+}
+
+templ coverCardBody(c coverCard) {
+	<div class="mv-scard__cover">
+		@coverImage(c.CoverURL, c.Title, "3x4")
+		if c.New {
+			<span class="mv-scard__badge mv-lib__badge">
+				@ui.Badge(ui.ToneNew, "", i18n.T(ctx, "reader.library.new"))
+			</span>
+		}
+	</div>
+	<div class="mv-scard__body">
+		<strong class="mv-scard__title">{ c.Title }</strong>
+		if c.Meta != "" {
+			<span class="mv-scard__meta">{ c.Meta }</span>
+		}
+	</div>
+}
+
+templ coverImage(src, title, shape string) {
+	if src != "" {
+		<span class={ "mv-lib__cover mv-card-image", "mv-lib__cover--" + shape }>
+			<img src={ src } alt="" loading="lazy" decoding="async"/>
+		</span>
+	} else {
+		@ui.ToneBox(coverLabel(ctx, shape), shape, "mv-lib__cover mv-lib__cover--"+shape)
+	}
+}
+
+func joinIDs(ids []string) string { return strings.Join(ids, " ") }
+
+func coverLabel(ctx context.Context, shape string) string {
+	if shape == "3x4" {
+		return i18n.T(ctx, "reader.library.cover")
+	}
+	return ""
+}
+
+templ libraryRows(v *libraryView, rows []rowCard, kind string) {
+	if len(rows) == 0 {
+		@ui.State(ui.StateProps{Title: i18n.T(ctx, "reader.library."+kind+".empty.title"),
+			Body: i18n.T(ctx, "reader.library."+kind+".empty.body"), Boxed: true, Class: "mv-lib__empty"}) {
+			@ui.LinkButton("/explore", ui.ButtonProps{Variant: ui.Primary, Icon: "compass"}) {
+				{ i18n.T(ctx, "reader.library.explore") }
+			}
+		}
+	} else {
+		<ul class="mv-lib__rows">
+			for _, c := range rows {
+				<li>
+					@rowCardView(c, kind)
+				</li>
+			}
+		</ul>
+		if v.NextURL != "" {
+			<div class="mv-lib__more">
+				@ui.LinkButton(v.NextURL, ui.ButtonProps{Variant: ui.Quiet}) {
+					{ i18n.T(ctx, "reader.library.more") }
+				}
+			</div>
+		}
+	}
+}
+
+templ rowCardView(c rowCard, kind string) {
+	<article class={ "mv-lib-row", ui.If(kind != "", "mv-lib-row--"+kind) } data-publication={ c.PublicationID } data-id={ c.ID }>
+		<a class="mv-lib-row__cover" href={ templ.URL(c.Href) } tabindex="-1" aria-hidden="true">
+			@coverImage(c.CoverURL, c.Title, "row")
+		</a>
+		<div class="mv-lib-row__body">
+			<a class="mv-lib-row__title" href={ templ.URL(c.Href) }>{ c.Title }</a>
+			<span class="mv-lib-row__meta" data-meta>{ c.Meta }</span>
+			if c.ShowProgress {
+				@ui.Bar(c.Progress, "", false, c.Meta)
+			}
+		</div>
+		switch kind {
+			case "downloads":
+				<span class="mv-lib-row__status" data-status={ c.Status }>
+					@downloadStatus(c.Status)
+				</span>
+				<form method="post" action={ templ.SafeURL("/library/downloads/" + c.ID + "/delete") } class="mv-lib-row__remove" data-remove-download={ c.ID }>
+					@ui.Button(ui.ButtonProps{Variant: ui.Bare, Size: ui.SM, Type: "submit", Icon: "trash", Label: i18n.T(ctx, "reader.download.remove")})
+				</form>
+			case "bookmarks":
+				<form method="post" action={ templ.SafeURL("/library/bookmarks/" + c.ID + "/delete") } class="mv-lib-row__remove" data-remove-bookmark={ c.ID }>
+					@ui.Button(ui.ButtonProps{Variant: ui.Bare, Size: ui.SM, Type: "submit", Icon: "bookmark-off", Label: i18n.T(ctx, "reader.bookmark.remove")})
+				</form>
+		}
+	</article>
+}
+
+templ downloadStatus(status string) {
+	switch status {
+		case DownloadReady:
+			<i class="ti ti-circle-check mv-lib-row__ok" aria-hidden="true"></i>
+			<span class="mv-sr-only">{ i18n.T(ctx, "reader.library.status.ready") }</span>
+		case DownloadPending:
+			<i class="ti ti-loader-2 mv-lib-row__busy" aria-hidden="true"></i>
+			<span class="mv-sr-only">{ i18n.T(ctx, "reader.library.status.pending") }</span>
+		default:
+			@ui.Badge(ui.ToneMuted, "clock-off", i18n.T(ctx, "reader.library.status.expired"))
+	}
+}
+
+templ libraryDownloads(v *libraryView) {
+	<div class="mv-lib__summary">
+		<span data-download-summary>{ i18n.T(ctx, "reader.library.downloads.summary", "count", v.ReadyCount, "size", sizeLabel(v.TotalBytes)) }</span>
+		<span class="mv-small mv-muted">{ i18n.T(ctx, "reader.library.downloads.note") }</span>
+	</div>
+	@libraryRows(v, v.visibleRows(), "downloads")
+}
