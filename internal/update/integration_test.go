@@ -776,3 +776,39 @@ func TestSettingsForm(t *testing.T) {
 }
 
 func testBackupRequest() backup.Request { return backup.Request{Kind: backup.KindPreUpdate} }
+
+// The real backup module, not the test fake: a failed update takes a real
+// database-only pre-update archive, restores it in maintenance mode and leaves
+// the members' data and the old binary as they were.
+func TestFailedUpdateRestoresWithTheRealBackupService(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, dialect string) {
+		t.Setenv("MVFAKE_MODE", "migrate_fail")
+		e := newEnv(t, dialect, withHooks(func(h *update.TestHooks) { h.HealthTimeout = 3 * time.Second }))
+		e.hooks.Backups = core.MustUse[backup.Service](e.ta.Deps)
+		update.SetTestHooks(e.m, e.hooks)
+		member := e.ta.CreateUser(t, "", auth.RoleCreator)
+		e.enableChecks("")
+		e.publish(publishOpts{})
+		rec, err := e.m.Check(e.ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.m.Install(e.ctx, rec.ID, e.ta.Admin.ID, update.InstallOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		att := waitInstall(t, e)
+		if run := att.Run(); att.Status != update.StatusRolledBack || !run.Restored || att.BackupID == nil {
+			t.Fatalf("attempt = %s %+v\n%s", att.Status, run.Code, update.LogText(att))
+		}
+		b, err := e.hooks.Backups.Get(e.ctx, *att.BackupID)
+		if err != nil || b.Kind != backup.KindPreUpdate || b.Status != backup.StatusRestored {
+			t.Fatalf("pre-update backup = %+v, %v", b, err)
+		}
+		if _, err := e.ta.Deps.Auth.UserByID(e.ctx, member.ID); err != nil {
+			t.Fatalf("a member's account did not survive the restore: %v", err)
+		}
+		if readFile(t, e.exe) != "old binary 1.0.0" || e.maintenance() {
+			t.Fatal("the old binary must be kept and maintenance turned off")
+		}
+	})
+}
