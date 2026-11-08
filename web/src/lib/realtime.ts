@@ -67,6 +67,15 @@ export class Realtime {
     this.send({ op: 'unsub', topic });
   }
 
+  /**
+   * presence sends this tab's presence state on a subscribed topic. It is
+   * dropped while offline; callers send it again when the topic reports
+   * "subscribed" after a reconnect.
+   */
+  presence(topic: string, data: unknown): void {
+    if (this.topics.has(topic)) this.send({ op: 'presence', topic, data });
+  }
+
   /** on registers a handler for a message type ("*" for all); it returns an unsubscribe function. */
   on(type: string, fn: Handler): () => void {
     let set = this.handlers.get(type);
