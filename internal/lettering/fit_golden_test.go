@@ -1,6 +1,7 @@
 package lettering
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -18,11 +20,11 @@ import (
 // Fit golden corpus
 //
 // testdata/fit_golden.json holds the layouts the one-pixel-step auto-fit of
-// commit 3612a17 produced (recorded at c732f23, before fitting was made
-// fast). Every case stores the chosen size, overflow, line count and a hash
-// of the whole BubbleLayout JSON (lines, positions, TextPath, ShapePath), so
-// any change to a fitting decision or to a drawn outline fails the test.
-// Regenerate only for an intended behaviour change:
+// commit 3612a17 produced (the c732f23 engine, before fitting was made
+// fast). Every case stores the chosen size, overflow, line count and hashes
+// of the lines and of the whole BubbleLayout JSON (positions, TextPath,
+// ShapePath), so any change to a fitting decision or to a drawn outline
+// fails the test. Regenerate only for an intended behaviour change:
 //
 //	MV_LETTERING_GOLDEN=record go test -run TestFitMatchesGoldenCorpus ./internal/lettering/
 
@@ -40,9 +42,13 @@ type fitGolden struct {
 	// Text hashes the line texts and their positions rounded to 0.01 px:
 	// identical on every architecture.
 	Text string `json:"text"`
-	// Layout hashes the whole BubbleLayout JSON bit for bit. Fused
-	// multiply-add (arm64) can move a coordinate by one ulp, so it is only
-	// compared on goldenArch, where it was recorded.
+	// Layout hashes the whole BubbleLayout JSON with every number rounded to
+	// ten significant digits, and every number of TextPath and ShapePath
+	// (which keep eight) to six, so 0.01 px at typical page coordinates.
+	// Fused multiply-add can move a coordinate by one ulp between
+	// compilations of the same expression (arm64), which a rounding boundary
+	// can turn into a visible digit; the hash is compared on goldenArch only,
+	// where it was recorded.
 	Layout string `json:"layout"`
 }
 
@@ -179,41 +185,132 @@ func fitCorpus() []fitCase {
 	return out
 }
 
-func goldenOf(t *testing.T, c fitCase, l BubbleLayout) fitGolden {
+// roundPath rounds every number of an SVG path ([-]digits[.digits][e[-]digits]
+// or [-].digits) to six significant digits, each written after a space.
+func roundPath(d string) string {
+	digit := func(i int) bool { return i < len(d) && '0' <= d[i] && d[i] <= '9' }
+	var b strings.Builder
+	b.Grow(len(d))
+	for i := 0; i < len(d); {
+		j := i
+		if d[j] == '-' {
+			j++
+		}
+		start := j
+		for digit(j) {
+			j++
+		}
+		if j < len(d) && d[j] == '.' && (j > start || digit(j+1)) {
+			for j++; digit(j); j++ {
+			}
+		}
+		if j == start {
+			b.WriteByte(d[i])
+			i++
+			continue
+		}
+		if j < len(d) && d[j] == 'e' && (digit(j+1) || j+2 < len(d) && d[j+1] == '-' && digit(j+2)) {
+			for j += 2; digit(j); j++ {
+			}
+		}
+		f, err := strconv.ParseFloat(d[i:j], 64)
+		if err != nil {
+			b.WriteString(d[i:j])
+		} else {
+			b.WriteByte(' ')
+			b.WriteString(strconv.FormatFloat(f, 'g', 6, 64))
+		}
+		i = j
+	}
+	return b.String()
+}
+
+// roundNumbers replaces every JSON number in v with its value rounded to ten
+// significant digits, and every number in an SVG path with six.
+func roundNumbers(v any) any {
+	switch x := v.(type) {
+	case json.Number:
+		f, err := x.Float64()
+		if err != nil {
+			return x.String()
+		}
+		return strconv.FormatFloat(f, 'g', 10, 64)
+	case map[string]any:
+		for k, e := range x {
+			if s, ok := e.(string); ok && (k == "text_path" || k == "shape_path") {
+				x[k] = roundPath(s)
+				continue
+			}
+			x[k] = roundNumbers(e)
+		}
+	case []any:
+		for i, e := range x {
+			x[i] = roundNumbers(e)
+		}
+	}
+	return v
+}
+
+// goldenOf summarises one layout, given as BubbleLayout JSON.
+func goldenOf(t *testing.T, name string, raw []byte) fitGolden {
 	t.Helper()
-	raw, err := json.Marshal(l)
+	var l BubbleLayout
+	if err := json.Unmarshal(raw, &l); err != nil {
+		t.Fatal(err)
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.UseNumber()
+	var generic any
+	if err := d.Decode(&generic); err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := json.Marshal(roundNumbers(generic))
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256(raw)
+	sum := sha256.Sum256(canonical)
 	var text strings.Builder
 	fmt.Fprintf(&text, "%.6f %v\n", l.FontSize, l.Overflow)
 	for _, line := range l.Lines {
 		fmt.Fprintf(&text, "%q %v %v %.2f %.2f %.4f\n", line.Text, line.Ruby, line.Vertical, line.X, line.Y, line.FontSize)
 	}
 	textSum := sha256.Sum256([]byte(text.String()))
-	return fitGolden{Name: c.name, Size: l.FontSize, Overflow: l.Overflow, Lines: len(linesOf(l)),
+	return fitGolden{Name: name, Size: l.FontSize, Overflow: l.Overflow, Lines: len(linesOf(l)),
 		Text: hex.EncodeToString(textSum[:12]), Layout: hex.EncodeToString(sum[:12])}
 }
 
 const goldenPath = "testdata/fit_golden.json"
 
-// layoutCorpus lays out every case with workers engines in parallel (each
-// engine serialises its own work).
-func layoutCorpus(t *testing.T, cases []fitCase, workers int) []fitGolden {
+// layoutJSON lays out one bubble and returns the BubbleLayout as JSON.
+type layoutJSON func(b pagedoc.Bubble, lang string) ([]byte, error)
+
+func engineJSON(t *testing.T) layoutJSON {
+	e := testEngine(t)
+	return func(b pagedoc.Bubble, lang string) ([]byte, error) {
+		l, err := e.Layout(b, lang)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(l)
+	}
+}
+
+// layoutCorpus lays out every case with workers engines from newEngine in
+// parallel (each engine serialises its own shaping and drawing).
+func layoutCorpus(t *testing.T, cases []fitCase, workers int, newEngine func(*testing.T) layoutJSON) []fitGolden {
 	t.Helper()
 	out := make([]fitGolden, len(cases))
 	errs := make([]error, len(cases))
-	layouts := make([]BubbleLayout, len(cases))
+	layouts := make([][]byte, len(cases))
 	var wg sync.WaitGroup
 	next := make(chan int)
 	for w := 0; w < workers; w++ {
-		e := testEngine(t)
+		layout := newEngine(t)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for i := range next {
-				layouts[i], errs[i] = e.Layout(cases[i].b, cases[i].lang)
+				layouts[i], errs[i] = layout(cases[i].b, cases[i].lang)
 			}
 		}()
 	}
@@ -226,32 +323,32 @@ func layoutCorpus(t *testing.T, cases []fitCase, workers int) []fitGolden {
 		if errs[i] != nil {
 			t.Fatalf("%s: %v", c.name, errs[i])
 		}
-		out[i] = goldenOf(t, c, layouts[i])
+		out[i] = goldenOf(t, c.name, layouts[i])
 	}
 	return out
 }
 
-func TestFitMatchesGoldenCorpus(t *testing.T) {
-	cases := fitCorpus()
-	got := layoutCorpus(t, cases, 4)
-	if os.Getenv("MV_LETTERING_GOLDEN") == "record" {
-		rows := make([]string, len(got))
-		for i, g := range got {
-			raw, err := json.Marshal(g)
-			if err != nil {
-				t.Fatal(err)
-			}
-			rows[i] = string(raw)
-		}
-		if err := os.MkdirAll(filepath.Dir(goldenPath), 0o750); err != nil {
+func writeGolden(t *testing.T, got []fitGolden) {
+	t.Helper()
+	rows := make([]string, len(got))
+	for i, g := range got {
+		raw, err := json.Marshal(g)
+		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(goldenPath, []byte("[\n"+strings.Join(rows, ",\n")+"\n]\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		t.Logf("recorded %d cases", len(got))
-		return
+		rows[i] = string(raw)
 	}
+	if err := os.MkdirAll(filepath.Dir(goldenPath), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(goldenPath, []byte("[\n"+strings.Join(rows, ",\n")+"\n]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("recorded %d cases", len(got))
+}
+
+func readGolden(t *testing.T) []fitGolden {
+	t.Helper()
 	raw, err := os.ReadFile(goldenPath)
 	if err != nil {
 		t.Fatal(err)
@@ -260,6 +357,17 @@ func TestFitMatchesGoldenCorpus(t *testing.T) {
 	if err := json.Unmarshal(raw, &want); err != nil {
 		t.Fatal(err)
 	}
+	return want
+}
+
+func TestFitMatchesGoldenCorpus(t *testing.T) {
+	cases := fitCorpus()
+	got := layoutCorpus(t, cases, 4, engineJSON)
+	if os.Getenv("MV_LETTERING_GOLDEN") == "record" {
+		writeGolden(t, got)
+		return
+	}
+	want := readGolden(t)
 	if len(want) != len(got) {
 		t.Fatalf("corpus has %d cases, golden %d", len(got), len(want))
 	}

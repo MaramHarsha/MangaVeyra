@@ -167,10 +167,11 @@ type glyphRun struct {
 	font       *loadedFont
 	start, end int // rune range
 	glyphs     []text.Glyph
-	runeAt     []int  // rune offset of each glyph's cluster
-	upright    bool   // shaped top to bottom (vertical layout)
-	sideways   bool   // horizontal run turned 90° clockwise (vertical layout)
-	rotate     []bool // upright glyphs to turn 90° (no vert form)
+	runeAt     []int      // rune offset of each glyph's cluster
+	upright    bool       // shaped top to bottom (vertical layout)
+	sideways   bool       // horizontal run turned 90° clockwise (vertical layout)
+	rotate     []bool     // upright glyphs to turn 90° (no vert form)
+	ink        []glyphInk // each glyph's exact outline bounds (fitting)
 }
 
 type shapedText struct {
@@ -275,6 +276,17 @@ func (e *engine) shape(s, lang, primary string, vertical bool) (*shapedText, err
 			st.descent = run.font.descent
 		}
 		i = j
+	}
+	for ri := range st.runs {
+		run := &st.runs[ri]
+		run.ink = make([]glyphInk, len(run.glyphs))
+		for k, gl := range run.glyphs {
+			if st.invisible(run.runeAt[k], gl.ID) {
+				run.ink[k].empty = true
+			} else {
+				run.ink[k] = run.font.glyphInk(gl.ID)
+			}
+		}
 	}
 	clusterStart := make([]bool, len(rs)+1)
 	for _, run := range st.runs {
@@ -435,9 +447,19 @@ func (st *shapedText) wrap(limit float64) []textLine {
 // wrapLines is wrap with a limit per line index, so text follows a round
 // bubble's curve: lines near its top and bottom are shorter.
 func (st *shapedText) wrapLines(limitFor func(line int) float64) []textLine {
+	lines, _ := st.wrapCapped(limitFor, -1)
+	return lines
+}
+
+// wrapCapped is wrapLines that stops as soon as it has more than maxLines
+// lines when maxLines >= 0 (fitting only needs to know that the text does
+// not fit that block); the lines it returns up to then are identical. work
+// counts the graphemes visited.
+func (st *shapedText) wrapCapped(limitFor func(line int) float64, maxLines int) ([]textLine, int) {
 	gs := st.graphemes
 	n := len(gs)
 	var lines []textLine
+	work := 0
 	emit := func(a, b int) {
 		for b > a && (gs[b-1].space || gs[b-1].skip) {
 			b--
@@ -458,9 +480,13 @@ func (st *shapedText) wrapLines(limitFor func(line int) float64) []textLine {
 	}
 	start, soft := 0, false
 	for start < n {
+		if maxLines >= 0 && len(lines) > maxLines {
+			return lines, work
+		}
 		if soft {
 			for start < n && (gs[start].space || gs[start].skip) {
 				start++
+				work++
 			}
 			if start == n {
 				break
@@ -470,6 +496,7 @@ func (st *shapedText) wrapLines(limitFor func(line int) float64) []textLine {
 		limit := limitFor(len(lines))
 		done := true
 		for ; j < n; j++ {
+			work++
 			g := gs[j]
 			if g.hard {
 				emit(start, j)
@@ -482,7 +509,9 @@ func (st *shapedText) wrapLines(limitFor func(line int) float64) []textLine {
 			if !g.space && !g.skip && j > start && width+g.em > limit+1e-9 {
 				end := lastBreak
 				if end <= start {
-					end = st.emergencyBreak(start, j)
+					var w int
+					end, w = st.emergencyBreak(start, j)
+					work += w
 				}
 				emit(start, end)
 				start, soft, done = end, true, false
@@ -503,29 +532,30 @@ func (st *shapedText) wrapLines(limitFor func(line int) float64) []textLine {
 	if len(lines) == 0 {
 		lines = []textLine{{start: 0, end: 0}}
 	}
-	return lines
+	return lines, work
 }
 
 // emergencyBreak finds a break for text with no allowed break opportunity
 // before j: the latest cluster boundary that keeps kinsoku, else the next one
 // after j (the line overflows and auto-fit shrinks the text) rather than
-// starting a line with closing punctuation.
-func (st *shapedText) emergencyBreak(start, j int) int {
+// starting a line with closing punctuation. work counts the graphemes it
+// examined.
+func (st *shapedText) emergencyBreak(start, j int) (int, int) {
 	gs := st.graphemes
 	clean := func(k int) bool {
 		return gs[k].clusterOK && !noLineStart(st.runes[gs[k].start]) && !noLineEnd(st.runes[gs[k-1].end-1])
 	}
 	for k := j; k > start; k-- {
 		if clean(k) {
-			return k
+			return k, j - k + 1
 		}
 	}
 	for k := j + 1; k < len(gs); k++ {
 		if gs[k].hard || clean(k) {
-			return k
+			return k, k - start
 		}
 	}
-	return len(gs)
+	return len(gs), len(gs) - start
 }
 
 // measureInk records how far the shaped glyphs reach across a line, using
@@ -572,10 +602,18 @@ func (st *shapedText) advance(a, z int) float64 {
 	return w
 }
 
-// draw adds the glyph outlines of runes [start, end) at size (page pixels).
+// glyphSink receives every visible glyph draw places: font f's glyph id,
+// scaled by scale and moved by (x, y) in font orientation (y up), then
+// transformed by m into page space. pathCollector builds the outlines;
+// inkBox only measures them (fitting).
+type glyphSink interface {
+	glyph(f *loadedFont, id uint16, ink *glyphInk, x, y, scale float64, m canvas.Matrix)
+}
+
+// draw places the glyphs of runes [start, end) at size (page pixels).
 // Horizontal text starts at baseline origin (x, y); vertical text is a
 // column centred on x whose top is y.
-func (st *shapedText) draw(c *pathCollector, start, end int, x, y, size float64) {
+func (st *shapedText) draw(c glyphSink, start, end int, x, y, size float64) {
 	pen := 0.0
 	for ri := range st.runs {
 		run := &st.runs[ri]
@@ -585,7 +623,14 @@ func (st *shapedText) draw(c *pathCollector, start, end int, x, y, size float64)
 		scale := size / run.font.upem
 		switch {
 		case !st.vertical || run.sideways:
-			p := &canvas.Path{}
+			var m canvas.Matrix
+			if !st.vertical {
+				m = canvas.Identity.Translate(x+pen, y).Scale(1, -1)
+			} else {
+				// Sideways: centre the cap height on the column axis, turn 90° clockwise.
+				capHeight := run.font.capHeight * size
+				m = canvas.Identity.Translate(x-capHeight/2, y+pen).Rotate(90).Scale(1, -1)
+			}
 			w := 0.0
 			for k, g := range run.glyphs {
 				r := run.runeAt[k]
@@ -593,16 +638,9 @@ func (st *shapedText) draw(c *pathCollector, start, end int, x, y, size float64)
 					continue
 				}
 				if !st.invisible(r, g.ID) {
-					p = appendGlyph(p, run.font, g.ID, w+float64(g.XOffset)*scale, float64(g.YOffset)*scale, scale)
+					c.glyph(run.font, g.ID, &run.ink[k], w+float64(g.XOffset)*scale, float64(g.YOffset)*scale, scale, m)
 				}
 				w += float64(g.XAdvance) * scale
-			}
-			if !st.vertical {
-				c.add(p, canvas.Identity.Translate(x+pen, y).Scale(1, -1))
-			} else {
-				// Sideways: centre the cap height on the column axis, turn 90° clockwise.
-				capHeight := run.font.capHeight * size
-				c.add(p, canvas.Identity.Translate(x-capHeight/2, y+pen).Rotate(90).Scale(1, -1))
 			}
 			pen += w
 		default:
@@ -617,11 +655,9 @@ func (st *shapedText) draw(c *pathCollector, start, end int, x, y, size float64)
 						// Turn the horizontal glyph about the centre of its em box.
 						hadv := float64(run.font.font.GlyphAdvance(g.ID)) * scale
 						mid := (run.font.ascent - run.font.descent) / 2 * size
-						p := appendGlyph(&canvas.Path{}, run.font, g.ID, 0, 0, scale)
-						c.add(p, canvas.Identity.Translate(x, y+pen+adv/2).Rotate(90).Translate(-hadv/2, mid).Scale(1, -1))
+						c.glyph(run.font, g.ID, &run.ink[k], 0, 0, scale, canvas.Identity.Translate(x, y+pen+adv/2).Rotate(90).Translate(-hadv/2, mid).Scale(1, -1))
 					} else {
-						p := appendGlyph(&canvas.Path{}, run.font, g.ID, float64(g.XOffset)*scale, float64(g.YOffset)*scale, scale)
-						c.add(p, canvas.Identity.Translate(x, y+pen).Scale(1, -1))
+						c.glyph(run.font, g.ID, &run.ink[k], float64(g.XOffset)*scale, float64(g.YOffset)*scale, scale, canvas.Identity.Translate(x, y+pen).Scale(1, -1))
 					}
 				}
 				pen += adv
