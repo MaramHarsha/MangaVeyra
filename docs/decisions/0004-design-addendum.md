@@ -406,3 +406,36 @@ the mobile artboards stay deferred (ADR 0012 §11).
   follows the operating-system theme (Gate night by default, Paper when the system prefers light), keeps ink text on
   the Gate-blue band in both themes, and uses `--mv-acc-text` for large accent text on Paper. Fonts, the icon font and
   logos are self-hosted with their licences; the page makes no external requests and runs no JavaScript.
+- **E6 Explore.** The featured series is the listed series with the newest public chapter. Its eyebrow reads "New
+  chapter today" (as drawn), "New chapter" within seven days, "Latest chapter" otherwise, and "Featured series" when
+  no chapter is readable. Key art is the banner, else the cover, else the kit screentone labelled "Featured key art".
+  Anonymous visitors are sent to Log in to follow. Rankings use only activity recorded on this server: Rising is the
+  last seven days' growth in reads plus new followers against the seven days before (only growth above zero is
+  ranked), Week is reads in the last seven days and All time is the series view count; with nothing recorded the card
+  reads "No rankings yet". The genre chips and the "Art: any / Hand-drawn only" toggle filter the shelves below them,
+  while the featured series and rankings stay server-wide; hand-drawn means every AI label role is human, and without
+  JavaScript an Apply button submits the toggle. Members with reading history get "Because you read {series}"
+  (shared genres, then tags, then recent reads, without series they read); everyone else gets "New & updated",
+  newest public chapter first. More opens Search with the shelf's genre. "Rising creators · first series" ranks owners
+  with exactly one listed series by follows plus reads in the last 30 days, with an empty note when none qualify.
+  Cards show the cover image or the kit screentone labelled "Cover", and "New ch." marks a public chapter published in
+  the last seven days. A server with nothing listed shows "Nothing to read yet".
+- **E8 Search.** Tabs are Series N, Creators N (creators whose name contains every word, among owners of the
+  results), Chapters in the Soon state, and Tags (the results' tags with their counts, without a tab count as drawn).
+  Words match by prefix and any word may match, ranked so series matching more words come first; creator names and
+  CJK substrings also match. The snippet quotes the synopsis around the first match with matches marked. Filters
+  apply on change (Apply without JavaScript), Clear filters appears once a filter is set, and Has Japanese means a
+  Japanese original or edition. Results page by 20 with Previous/Next. Empty states read "Nothing matches
+  “{query}”", "No series match these filters" or "No published series yet". The search box is not auto-focused.
+- **E6/E8/E5/F1 access.** Anonymous visitors on personal and private servers are sent to Log in (ADR 0012 §1).
+- **F2 Analytics.** A series selector sits beside "All chapters" only when the member has more than one series; F2
+  opens on the most read one. Reads shows its change against the twelve weeks before only when that period had
+  reads; Followers shows followers gained in the window; Completion and "ch. N" describe the selected chapter, or with
+  All chapters the highest-numbered chapter read in the window; Avg. time / chapter is recorded page time per read;
+  missing values read "—". Weekly reads covers twelve Monday-based UTC weeks with an accessible list of the values,
+  and followers per week are given to screen readers on the Followers card, since the artboard draws no followers
+  chart. Drop-off rows fall every ⌈pages/7⌉ pages plus the last page (every page up to eight pages); the largest drop
+  uses the warning tone. The note reads "Biggest drop at p. A–B" without a cause, which the server cannot know, or
+  "No drop so far". Empty states cover no series, no reads and no published chapters. There is no revenue panel, and
+  real counts replace the sample numbers.
+- **Segmented controls** in E5, E6 and F2 use the kit's 13 px labels where the artboards draw 12 px.
