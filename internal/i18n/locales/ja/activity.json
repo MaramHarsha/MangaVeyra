@@ -116,5 +116,6 @@
   "activity.job.repair": "キャラクター修正",
   "activity.job.train": "Character Lockの学習",
   "activity.job.score": "キャラクター評価",
-  "activity.error.local_only": "ローカル専用モードのため、このジョブはサーバー外へ送信されませんでした。スタジオでローカルモデルを選んでください。"
+  "activity.error.local_only": "ローカル専用モードのため、このジョブはサーバー外へ送信されませんでした。スタジオでローカルモデルを選んでください。",
+  "activity.error.child_retry": "このジョブは別のジョブの一部です。元のジョブを再試行してください。"
 }

@@ -116,5 +116,6 @@
   "activity.job.repair": "Character repair",
   "activity.job.train": "Character Lock training",
   "activity.job.score": "Character assessment",
-  "activity.error.local_only": "Local only mode kept this job on the server. Choose a local model in Studio."
+  "activity.error.local_only": "Local only mode kept this job on the server. Choose a local model in Studio.",
+  "activity.error.child_retry": "This job is part of another job. Retry that job instead."
 }

@@ -1021,9 +1021,37 @@ func (q *Queue) Cancel(ctx context.Context, id string) (*Job, error) {
 		} else {
 			q.finished(ctx, j, "job.canceled")
 		}
+		q.cancelWorkerChildren(ctx, id)
 		return j, nil
 	}
 }
+
+// cancelWorkerChildren cancels the unfinished worker jobs a parent started
+// (a Go handler bridging to a Python worker). They are part of the parent:
+// the queue shows them as one job, so stopping the parent stops them too,
+// even when the parent's handler is no longer alive to do it.
+func (q *Queue) cancelWorkerChildren(ctx context.Context, parentID string) {
+	var ids []string
+	if err := q.db.Select(ctx, &ids, `SELECT id FROM jobs WHERE parent_id = ? AND executor = ? AND state IN ('queued', 'running')
+		AND cancel_requested = FALSE ORDER BY id LIMIT 1024`, parentID, ExecutorWorker); err != nil {
+		q.log.WarnContext(ctx, "jobs: list worker children", "job", parentID, "err", err)
+		return
+	}
+	for _, id := range ids {
+		if _, err := q.Cancel(ctx, id); err != nil && !errors.Is(err, ErrNotActive) {
+			q.log.WarnContext(ctx, "jobs: cancel worker child", "job", parentID, "child", id, "err", err)
+		}
+	}
+}
+
+// errChildJob rejects a manual retry of a job that runs inside another job;
+// its parent owns the scope, revision and spend checks and starts its own children.
+func errChildJob(parentID string) error {
+	e := httpx.KeyedError(409, "child_job", "activity.error.child_retry")
+	e.Fields = map[string]string{"parent_id": parentID}
+	return e
+}
+
 
 // errStateChanged means a job changed state between reading and writing it.
 var errStateChanged = errors.New("jobs: state changed concurrently")
@@ -1074,19 +1102,25 @@ func (q *Queue) cancelOnce(ctx context.Context, id string) (*Job, bool, error) {
 // attempt counter is not reset: a new round starts at attempt_base, so a
 // handler still running from an earlier round can never match the lease of
 // the next claim (heartbeat, spend reservation and completion all pin it).
+// A child job is never retried on its own (its parent may have finished, so
+// nothing would wait for or apply its result): retry the parent instead.
 func (q *Queue) Retry(ctx context.Context, id string) (*Job, error) {
 	var j *Job
 	err := q.db.WithTx(ctx, func(tx *db.Tx) error {
 		now := q.now()
 		res, err := tx.Exec(ctx, `UPDATE jobs SET state = 'queued', attempt_base = attempts, progress = 0, step = 0, message = '', error = '{}',
 			output = '{}', cancel_requested = FALSE, worker_id = NULL, lease_expires_at = NULL, run_after = NULL, finished_at = NULL, updated_at = ?
-			WHERE id = ? AND state IN ('failed', 'canceled')`, now, id)
+			WHERE id = ? AND state IN ('failed', 'canceled') AND parent_id IS NULL`, now, id)
 		if err != nil {
 			return err
 		}
 		if n, _ := res.RowsAffected(); n == 0 {
-			if _, err := q.get(ctx, tx, id); err != nil {
+			cur, err := q.get(ctx, tx, id)
+			if err != nil {
 				return err
+			}
+			if cur.ParentID != "" {
+				return errChildJob(cur.ParentID)
 			}
 			return ErrNotActive
 		}
