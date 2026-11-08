@@ -151,6 +151,10 @@ func DefaultInstance() Instance {
 			MaxProjectsPerUser:    0,
 		},
 		Content: Content{
+			// Mature series (17+) stay allowed behind the reader's age
+			// confirmation (ADR 0012 §1); adult series are off until an admin
+			// allows them (ADR 0013 §2).
+			AllowMature:      true,
 			DefaultAgeRating: "all",
 			RequireAILabels:  true,
 			NSFWFilter:       true,
