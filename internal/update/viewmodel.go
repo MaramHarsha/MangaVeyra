@@ -470,7 +470,7 @@ func (v view) lastChecked(ctx context.Context) string {
 }
 
 func (v view) attemptLine(ctx context.Context) string {
-	a := v.Attempt
+	a := v.Last
 	if a == nil || a.StartedAt == nil {
 		return ""
 	}

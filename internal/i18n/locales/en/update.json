@@ -52,7 +52,7 @@
   "update.available.start": "Back up and update",
 
   "update.running.title": "Updating to {version}",
-  "update.running.sub": "Don’t close this tab. The studio is paused; members see the maintenance page until the update finishes.",
+  "update.running.sub": "Don’t close this tab. The studio is paused; members see the maintenance page.",
   "update.running.progress": "Update progress",
   "update.running.started": "Started {time}",
   "update.running.log": "Show log",

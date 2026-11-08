@@ -418,9 +418,25 @@ func TestBackupFailureChangesNothing(t *testing.T) {
 		if e.maintenance() || readFile(t, e.exe) != "old binary 1.0.0" {
 			t.Fatal("a failed backup must leave the server as it was")
 		}
-		body := string(e.adminClient().Get("/admin/update").Body)
+		admin := e.adminClient()
+		body := string(admin.Get("/admin/update").Body)
 		if !strings.Contains(body, "Nothing was changed. Your server is still on 1.0.0.") {
 			t.Fatalf("failed view: %s", body)
+		}
+		// Closing the result shows the newest offer, not the failed attempt's version.
+		if r := post(admin, "/admin/update/ack", form("attempt", att.ID, "id", rec.ID)); r.StatusCode != http.StatusSeeOther {
+			t.Fatalf("ack = %d", r.StatusCode)
+		}
+		e.publish(publishOpts{version: "1.0.3"})
+		if _, err := e.m.Check(e.ctx); err != nil {
+			t.Fatal(err)
+		}
+		body = string(admin.Get("/admin/update").Body)
+		if !strings.Contains(body, "Update available · 1.0.3") || strings.Contains(body, "Update available · 1.0.2") {
+			t.Fatalf("available view after a failed attempt: %s", body)
+		}
+		if body := string(admin.Get("/admin/update/settings").Body); !strings.Contains(body, "Last update 1.0.0 → 1.0.2 · failed") {
+			t.Fatalf("settings last update line missing: %s", body)
 		}
 	})
 }

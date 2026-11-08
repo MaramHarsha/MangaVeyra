@@ -52,7 +52,7 @@
   "update.available.start": "バックアップして更新",
 
   "update.running.title": "{version} に更新中",
-  "update.running.sub": "このタブを閉じないでください。スタジオは一時停止中で、更新が終わるまでメンバーにはメンテナンス画面が表示されます。",
+  "update.running.sub": "このタブを閉じないでください。スタジオは一時停止中で、メンバーにはメンテナンス画面が表示されます。",
   "update.running.progress": "更新の進行状況",
   "update.running.started": "開始 {time}",
   "update.running.log": "ログを表示",

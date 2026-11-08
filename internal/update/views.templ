@@ -400,7 +400,7 @@ templ settingsWindow(v view) {
 			if line := v.attemptLine(ctx); line != "" {
 				<p class="mv-update__step-detail">
 					{ line } ·
-					<a href={ templ.URL("/admin/update/log?id=" + v.idOf(v.Attempt)) }>{ i18n.T(ctx, "update.running.log") }</a>
+					<a href={ templ.URL("/admin/update/log?id=" + v.idOf(v.Last)) }>{ i18n.T(ctx, "update.running.log") }</a>
 				</p>
 			}
 			@problem(v.Problem)

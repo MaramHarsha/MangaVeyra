@@ -71,10 +71,13 @@ type view struct {
 	// LastBackup is the size of the newest finished backup (0 when unknown).
 	LastBackup int64
 
-	Offer   *Record
-	O       Offer
+	Offer *Record
+	O     Offer
+	// Attempt and Run are the install the window shows (running, a result
+	// or the container commands); Last is the newest attempt for the settings.
 	Attempt *Record
 	Run     Run
+	Last    *Record
 
 	// Overlay renders the window over another page (admin login modal).
 	Overlay bool
@@ -143,13 +146,14 @@ func (m *Module) resolve(ctx context.Context, v *view) error {
 		v.O = offer.Offer()
 	}
 	if attempt != nil {
-		v.Attempt, v.Run = attempt, attempt.Run()
+		v.Last = attempt
+		run := attempt.Run()
 		switch {
 		case isActive(attempt.Status):
-			v.State = stateRunning
+			v.Attempt, v.Run, v.State = attempt, run, stateRunning
 			return nil
-		case attempt.Finished() && !v.Run.Ack:
-			v.State = stateFailed
+		case attempt.Finished() && !run.Ack:
+			v.Attempt, v.Run, v.State = attempt, run, stateFailed
 			if attempt.Status == StatusDone {
 				v.State = stateDone
 			}
@@ -189,7 +193,7 @@ func (m *Module) settingsPage(w http.ResponseWriter, r *http.Request) error {
 	if err := m.resolve(r.Context(), &v); err != nil {
 		return err
 	}
-	v.State = stateSettings
+	v.State, v.Attempt, v.Run = stateSettings, nil, Run{}
 	return m.render(w, r, http.StatusOK, v)
 }
 
@@ -310,7 +314,7 @@ func (m *Module) start(w http.ResponseWriter, r *http.Request) error {
 			status = http.StatusConflict
 		}
 		if v.State == stateFailed || v.State == stateDone {
-			v.State = stateAvailable
+			v.State, v.Attempt, v.Run = stateAvailable, nil, Run{}
 		}
 		v.Problem = installProblem(ctx, err)
 		m.d.Log.Warn("update: refused to start", "err", err)
