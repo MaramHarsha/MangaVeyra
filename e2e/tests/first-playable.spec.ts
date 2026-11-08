@@ -307,7 +307,8 @@ test('fresh install → script → characters → layered art → lettering → 
     await expect.poll(async () => (await (await page.request.get(api)).json()).current.page.version).toBe(oldVersion + 1);
     await expect.poll(async () => JSON.stringify((await (await page.request.get(api)).json()).current.page.bubbles)).toBe(bubbles);
     await page.goto(editor);
-    await page.getByRole('button', { name: 'Sketch to manga', exact: true }).click();
+    await page.getByRole('button', { name: 'Page actions', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Sketch to manga', exact: true }).click();
     current = (await (await page.request.get(api)).json()).current.page;
     const original = await page.request.get(current.panels[0].layers.find((l: { kind: string }) => l.kind === 'background').asset.url);
     await page.locator('.mv-control__inspector input[type=file]').setInputFiles({ name: 'original-sketch.png', mimeType: 'image/png', buffer: await original.body() });
