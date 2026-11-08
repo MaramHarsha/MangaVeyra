@@ -1,0 +1,52 @@
+/* G10 Backup & import (desktop artboard, file 09): page head, a two-column
+   grid with the Backups and Import comics cards, and the dashed Export
+   everything row. Additions the artboard does not draw (archive list,
+   progress, dialogs) use the kit's rows, bars and modals (ADR 0004 §12). */
+.mv-g10{display:flex;flex-direction:column;gap:22px;min-width:0}
+.mv-g10__grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+.mv-g10__card{display:flex;flex-direction:column;gap:12px;min-width:0;padding:18px;border:1px solid var(--mv-line);background:var(--mv-surface)}
+.mv-g10__card-title{font-size:var(--mv-fs-body);font-weight:700}
+.mv-g10__actions{display:flex;gap:10px;flex-wrap:wrap}
+.mv-g10__value{padding:0;border:0;background:none;color:inherit;font:inherit;text-align:right;cursor:pointer;overflow-wrap:anywhere}
+.mv-g10__value:hover{text-decoration:underline;text-underline-offset:3px}
+.mv-g10__value:focus-visible{outline:var(--mv-focus-width) solid var(--mv-focus);outline-offset:3px}
+.mv-g10__live:empty{display:none}
+.mv-g10__progress{display:flex;flex-direction:column;gap:6px}
+.mv-g10__line{display:flex;justify-content:space-between;gap:12px;font-size:var(--mv-fs-small)}
+.mv-g10__archives{display:flex;flex-direction:column;gap:6px;min-width:0}
+.mv-g10__label{font-family:var(--mv-font-mono);font-size:var(--mv-fs-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--mv-text-3)}
+.mv-g10__list{display:flex;flex-direction:column;margin:0;padding:0;list-style:none}
+.mv-g10__archive{display:flex;align-items:center;gap:8px;min-height:36px;border-bottom:1px solid var(--mv-line);font-size:var(--mv-fs-small)}
+.mv-g10__archive-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mv-g10__archive-size{flex:none;font-family:var(--mv-font-mono);font-size:var(--mv-fs-mono);color:var(--mv-text-2)}
+.mv-g10__archive details{flex-basis:100%}
+.mv-g10__nojs{font-size:var(--mv-fs-small)}
+.mv-g10__nojs>form{margin-top:8px;border:1px solid var(--mv-line)}
+.mv-g10__export{display:flex;align-items:center;gap:10px;padding:14px 16px;border:1px dashed var(--mv-line);font-size:var(--mv-fs-small);color:var(--mv-text-2)}
+.mv-g10__export>.ti{flex:none;font-size:18px}
+.mv-g10__export-text{flex:1;min-width:0}
+.mv-g10__export-actions{flex:none;display:flex;align-items:center;gap:8px;color:var(--mv-text)}
+.mv-g10__panel{max-width:640px}
+.mv-g10__choices{display:flex;flex-direction:column;gap:8px;min-width:0;margin:0;padding:0;border:0}
+.mv-g10__choices .mv-radio{font-size:var(--mv-fs-small)}
+.mv-g10__upload{border-top:1px solid var(--mv-line)}
+
+/* Import comics card. */
+.mv-import__form{display:flex;flex-direction:column;gap:10px}
+.mv-import__drop{min-height:150px;gap:8px;font-size:var(--mv-fs-ui)}
+.mv-import__drop>.ti{font-size:30px}
+.mv-import__foot{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.mv-import__foot>p{margin:0}
+.mv-import__soon{display:inline-flex;align-items:center;gap:6px;margin-left:6px;color:var(--mv-text-3)}
+.mv-import__queue:empty{display:none}
+.mv-import__list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.mv-import__row{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:var(--mv-fs-small)}
+.mv-import__name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mv-import__status{flex:none;display:flex;align-items:center;gap:8px;color:var(--mv-text-2);text-align:right}
+.mv-import__row form{flex:none}
+
+@media (max-width: 960px){
+  .mv-g10__grid{grid-template-columns:minmax(0,1fr)}
+  .mv-g10__export{flex-wrap:wrap}
+  .mv-g10__export-actions{flex-basis:100%;flex-wrap:wrap}
+}
