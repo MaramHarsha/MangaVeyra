@@ -62,7 +62,6 @@
   "agents.recent.undo_label": "Undo: {action}",
   "agents.recent.approve": "Approve",
   "agents.recent.approve_label": "Approve: {action}",
-  "agents.recent.review": "Review",
   "agents.recent.decline": "Decline",
   "agents.recent.decline_label": "Decline: {action}",
   "agents.client.title": "MCP client (v2)",

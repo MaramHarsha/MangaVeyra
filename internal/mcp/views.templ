@@ -126,7 +126,7 @@ templ actionItem(a actionView) {
 			<div class="mv-agents__decide">
 				if a.ApproveSoon {
 					@ui.Button(ui.ButtonProps{Size: ui.SM, Disabled: true, Class: "is-soon", Attrs: templ.Attributes{"title": i18n.T(ctx, "ui.soon_hint")}}) {
-						{ i18n.T(ctx, "agents.recent.review") }
+						{ i18n.T(ctx, "agents.recent.approve") }
 						@ui.SoonTag()
 					}
 				} else {

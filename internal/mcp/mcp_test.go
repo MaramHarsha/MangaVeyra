@@ -185,3 +185,38 @@ func TestMCPRefusesSessionsOtherTokensAndInvalidAgents(t *testing.T) {
 		}
 	})
 }
+
+// TestEachAgentTokenIsRateLimited: one token cannot flood /mcp; another
+// token of the same person is unaffected.
+func TestEachAgentTokenIsRateLimited(t *testing.T) {
+	f := newFixture(t, "sqlite")
+	initialize := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"x","version":"1"}}}`
+	send := func(raw string) int {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodPost, f.ta.URL+"/mcp", strings.NewReader(initialize))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		req.Header.Set("Authorization", "Bearer "+raw)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	busy, _ := f.token("busy", scopesRead, nil, nil)
+	limited := false
+	for range 80 {
+		if send(busy) == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Fatal("80 rapid requests from one token were never limited")
+	}
+	calm, _ := f.token("calm", scopesRead, nil, nil)
+	if got := send(calm); got != http.StatusOK {
+		t.Fatalf("another token limited too: %d", got)
+	}
+}

@@ -61,7 +61,6 @@
   "agents.recent.undo_label": "元に戻す：{action}",
   "agents.recent.approve": "承認",
   "agents.recent.approve_label": "承認：{action}",
-  "agents.recent.review": "確認する",
   "agents.recent.decline": "却下",
   "agents.recent.decline_label": "却下：{action}",
   "agents.client.title": "MCP クライアント（v2）",
