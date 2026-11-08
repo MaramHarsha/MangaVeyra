@@ -22,9 +22,14 @@ import (
 // maxCreatorSeries bounds the F2 series selector.
 const maxCreatorSeries = 100
 
+// creatorRoles are the project roles that make a member one of the series'
+// creators. A project viewer only previews the work and sees no analytics.
+const creatorRoles = `'owner', 'writer', 'artist', 'letterer', 'editor'`
+
 // CreatorSeries lists the series whose analytics userID may see: series they
-// own or whose project they belong to (ADR 0012 §8, "their own series only").
-// Site admins get nothing extra. Series come from publish.Service, which lets
+// own or whose project they belong to with a creator role (ADR 0012 §8,
+// "creators see aggregates for their own series"). Project viewers and site
+// admins get nothing extra. Series come from publish.Service, which lets
 // project members preview their series in any state.
 func CreatorSeries(ctx context.Context, d *db.DB, svc publish.Service, v publish.Viewer) ([]publish.Series, error) {
 	if strings.TrimSpace(v.UserID) == "" {
@@ -32,7 +37,8 @@ func CreatorSeries(ctx context.Context, d *db.DB, svc publish.Service, v publish
 	}
 	var ids []string
 	if err := d.Select(ctx, &ids, `SELECT s.id FROM series s WHERE s.owner_id = ?
-		OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = s.project_id AND pm.user_id = ?)
+		OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = s.project_id AND pm.user_id = ?
+			AND pm.role IN (`+creatorRoles+`))
 		ORDER BY s.created_at DESC, s.id DESC LIMIT ?`, v.UserID, v.UserID, maxCreatorSeries); err != nil {
 		return nil, fmt.Errorf("analytics: creator series: %w", err)
 	}

@@ -158,11 +158,29 @@ func TestAnalyticsPage(t *testing.T) {
 			t.Error("a series without reads shows the honest empty state")
 		}
 
-		// Project members see the series' analytics.
+		// Project members with a creator role see the series' analytics
+		// (ADR 0012 §8: creators, their own series).
+		for _, role := range []string{studio.RoleWriter, studio.RoleArtist, studio.RoleLetterer, studio.RoleEditor} {
+			m := f.User(auth.RoleCreator)
+			f.AddMember(s.ProjectID, m.ID, role)
+			mc := ta.Login(t, m.Username)
+			if resp := mc.Get("/studio/analytics?series=" + s.ID); resp.StatusCode != http.StatusOK {
+				t.Errorf("project %s: %d", role, resp.StatusCode)
+			}
+			if resp := mc.Get("/studio/analytics"); !strings.Contains(string(resp.Body), "Analytics · Tidebreak Courier") {
+				t.Errorf("project %s does not get the series by default", role)
+			}
+		}
+		// A project viewer only previews the work: like a stranger they get 404
+		// for the series and it is not offered to them.
 		viewer := f.User(auth.RoleReader)
 		f.AddMember(s.ProjectID, viewer.ID, studio.RoleViewer)
-		if resp := ta.Login(t, viewer.Username).Get("/studio/analytics?series=" + s.ID); resp.StatusCode != http.StatusOK {
-			t.Errorf("project member: %d", resp.StatusCode)
+		vc := ta.Login(t, viewer.Username)
+		if resp := vc.Get("/studio/analytics?series=" + s.ID); resp.StatusCode != http.StatusNotFound {
+			t.Errorf("project viewer: %d, want 404", resp.StatusCode)
+		}
+		if resp := vc.Get("/studio/analytics"); resp.StatusCode != http.StatusOK || strings.Contains(string(resp.Body), "Tidebreak") {
+			t.Errorf("project viewer is offered the series: %d", resp.StatusCode)
 		}
 		// Everyone else gets 404 for the series and no series of their own.
 		stranger := f.User(auth.RoleCreator)
