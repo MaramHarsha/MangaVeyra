@@ -19,8 +19,16 @@ templ publishScreen(v publishView) {
 				<span class="mv-publish__sub">{ i18n.T(ctx, "publish.sub", "project", v.Project.Title, "chapter", v.Chapter.Title, "count", v.pageCount()) }</span>
 			</div>
 			<div class="mv-publish__actions">
-				@ui.LinkButton(v.ReaderURL, ui.ButtonProps{Variant: ui.Quiet, Icon: "eye"}) {
-					{ i18n.T(ctx, "publish.preview") }
+				if v.ReaderURL != "" {
+					@ui.LinkButton(v.ReaderURL, ui.ButtonProps{Variant: ui.Quiet, Icon: "eye"}) {
+						{ i18n.T(ctx, "publish.preview") }
+					}
+				} else {
+					// The reader only opens published chapters; an unpublished preview is not built yet.
+					@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Icon: "eye", Disabled: true, Class: "is-soon", Attrs: templ.Attributes{"title": i18n.T(ctx, "ui.soon_hint")}}) {
+						{ i18n.T(ctx, "publish.preview") }
+						@ui.SoonTag()
+					}
 				}
 				if v.Pub.Status == PublicationPublished || v.Pub.Status == PublicationScheduled {
 					@ui.Button(ui.ButtonProps{Variant: ui.DangerOutline, Icon: "eye-off", Type: "submit",

@@ -133,6 +133,7 @@ func TestScreensAreCompleteInBothLanguages(t *testing.T) {
 				t.Fatalf("%s %s = %d", lang, path, resp.StatusCode)
 			}
 			checkPage(t, lang+" "+path, resp.Body)
+			checkLinks(t, ta, lang+" "+path, resp.Body)
 		}
 	}
 	f.client.Header.Set("Accept-Language", "en")
@@ -143,6 +144,8 @@ func TestScreensAreCompleteInBothLanguages(t *testing.T) {
 		f.client.Header.Set("Accept-Language", lang)
 		resp := f.client.Get(f.base + "/published?lang=en")
 		checkPage(t, lang+" published", resp.Body)
+		checkLinks(t, ta, lang+" published", resp.Body)
+		checkLinks(t, ta, lang+" live E1", f.client.Get(f.base+"/publish").Body)
 		if lang == "ja" && !contains(resp.Body, "第1話を公開しました") {
 			t.Fatal("ja published page not translated")
 		}
@@ -158,6 +161,36 @@ func TestScreensAreCompleteInBothLanguages(t *testing.T) {
 			t.Fatalf("%s control is not disabled", name)
 		}
 	}
+}
+
+var (
+	linkTarget = regexp.MustCompile(`\s(?:href|hx-get|src)="(/[^"]*)"`)
+	postTarget = regexp.MustCompile(`\s(?:action|formaction|hx-post)="(/[^"]*)"`)
+)
+
+// checkLinks fails for any link, form action or button formaction this
+// server does not serve (unbuilt destinations must be in the Soon state).
+func checkLinks(t *testing.T, ta *testutil.TestApp, name string, body []byte) {
+	t.Helper()
+	if bytes.Contains(body, []byte(`href=""`)) {
+		t.Fatalf("%s has an empty link", name)
+	}
+	check := func(method string, re *regexp.Regexp) {
+		for _, m := range re.FindAllSubmatch(body, -1) {
+			path := strings.ReplaceAll(string(m[1]), "&amp;", "&")
+			if i := strings.IndexAny(path, "?#"); i >= 0 {
+				path = path[:i]
+			}
+			if strings.HasPrefix(path, "/static/") || strings.HasPrefix(path, "/media/") {
+				continue
+			}
+			if !ta.Router.Serves(method, path) {
+				t.Errorf("%s links to %s %s, which this server does not serve", name, method, path)
+			}
+		}
+	}
+	check(http.MethodGet, linkTarget)
+	check(http.MethodPost, postTarget)
 }
 
 func checkPage(t *testing.T, name string, body []byte) {
