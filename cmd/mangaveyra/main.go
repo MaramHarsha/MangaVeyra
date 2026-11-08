@@ -48,7 +48,7 @@ Commands:
   user reset-password                Set a new password (--user <username|email> [--password])
   user set-role                      Change a site role (--user --role)
   seed [--demo]                      Create the demo content
-  mcp-stdio [--url --token mva_...]  Bridge MCP over stdin/stdout to a server
+  mcp-stdio [--url]                  Bridge MCP over stdin/stdout to a server (token in $MV_AGENT_TOKEN)
   backup <create|list|restore|delete> Manage backups (restore needs --yes)
   release <keygen|asset|sign|verify> Sign and verify update releases (project owner)
   version                            Print version information
@@ -311,7 +311,7 @@ func cmdSeed(ctx context.Context, args []string, stdout, stderr io.Writer) error
 
 func cmdMCPStdio(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	fs, cfgPath := newFlags("mcp-stdio", stderr)
-	token := fs.String("token", os.Getenv("MV_AGENT_TOKEN"), "agent token (mva_...), default $MV_AGENT_TOKEN")
+	token := fs.String("token", os.Getenv("MV_AGENT_TOKEN"), "agent token (mva_...); prefer $MV_AGENT_TOKEN, since command-line arguments are visible to other local users")
 	serverURL := fs.String("url", "", "server URL, default $MV_PUBLIC_URL (or public_url in --config)")
 	if err := fs.Parse(args); err != nil {
 		return err
