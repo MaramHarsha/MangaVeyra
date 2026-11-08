@@ -15,7 +15,7 @@
 .mv-queue__route { color: var(--mv-text-2); }
 .mv-queue__metric { color: var(--mv-text-2); font: .625rem/1.4 var(--mv-font-mono); }
 .mv-queue__metric .mv-bar { width: 120px; }
-.mv-queue__table td.mv-queue__actions { padding: 0; }
+.mv-queue__table td.mv-queue__actions { display: flex; align-items: center; padding: 0; }
 .mv-queue__table tr[data-job-state="running"] .mv-badge--info { --mv-badge: var(--mv-accent); }
 .mv-queue__menu-trigger { display: flex; align-items: center; justify-content: center; width: 40px; height: 20px; color: var(--mv-text-2); }
 .mv-queue__summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
