@@ -45,6 +45,7 @@ type publishView struct {
 	BackURL   string
 	TZ        string
 	Recorded  map[string]string
+	rev       revision
 	SeriesURL string
 	ReaderURL string
 	Now       time.Time
@@ -118,6 +119,7 @@ func (m *Module) buildView(r *http.Request, t target, lang string) (publishView,
 	if err != nil {
 		return v, httpError(err)
 	}
+	v.rev = src.rev
 	langs := chapterLanguages(t.project.Language, src.pages)
 	v.Lang = strings.TrimSpace(lang)
 	if !slices.Contains(langs, v.Lang) {

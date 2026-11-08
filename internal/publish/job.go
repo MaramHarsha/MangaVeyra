@@ -43,6 +43,9 @@ type publishInput struct {
 	Notify      bool              `json:"notify"`
 	AILabel     map[string]string `json:"ai_label"`
 	AltText     map[string]string `json:"alt_text"`
+	// Revision is the chapter state the creator reviewed on E1: a page saved
+	// after pressing publish fails the job instead of publishing unseen work.
+	Revision revision `json:"revision"`
 }
 
 // publishOutput is the job result.
@@ -115,6 +118,9 @@ func (s *service) handlePublish(ctx context.Context, run *jobs.Run) (err error) 
 	src, err := s.loadChapter(ctx, in.ProjectID, in.ChapterID)
 	if err != nil {
 		return publishJobError(ctx, err)
+	}
+	if !src.rev.equal(in.Revision) {
+		return publishJobError(ctx, fmt.Errorf("%w: chapter changed after publish was pressed", ErrConflict))
 	}
 	if len(src.pages) == 0 {
 		return jobs.Permanent(jobs.ErrCodeBadInput, errors.New("The chapter has no pages."))

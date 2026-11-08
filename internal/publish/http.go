@@ -245,7 +245,7 @@ func (m *Module) publishPost(w http.ResponseWriter, r *http.Request) error {
 	}
 	in := publishInput{ProjectID: t.project.ID, ChapterID: t.chapter.ID, SeriesID: series.ID, Lang: v.Lang, Title: f.Title,
 		Synopsis: f.Synopsis, Tags: normalizeTags([]string{f.Tags}, false), Visibility: f.Visibility, Notify: f.Notify,
-		AILabel: f.AILabel, AltText: f.AltText}
+		AILabel: f.AILabel, AltText: f.AltText, Revision: v.rev}
 	if f.When == "schedule" && v.Pub.Status != PublicationPublished {
 		at := f.ScheduledAt
 		in.ScheduledAt = &at
