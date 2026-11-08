@@ -10,6 +10,7 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/minio/minio-go/v7 v7.3.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
+	github.com/nwaples/rardecode/v2 v2.4.6
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/pquerna/otp v1.5.0
 	github.com/tdewolff/canvas v0.0.0-20260923214215-09804640d00c
