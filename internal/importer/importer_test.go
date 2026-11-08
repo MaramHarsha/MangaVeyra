@@ -737,6 +737,85 @@ func TestPDFNeedsPdftoppm(t *testing.T) {
 	}
 }
 
+// noisePNG is a PNG that does not compress (larger than its pixel count suggests).
+func noisePNG(t testing.TB, w, h int) []byte {
+	t.Helper()
+	img := image.NewNRGBA(image.Rect(0, 0, w, h))
+	seed := uint32(7)
+	for i := range img.Pix {
+		seed = seed*1664525 + 1013904223
+		img.Pix[i] = byte(seed >> 24)
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// One oversized image in a folder is skipped with a note; the rest of the
+// folder still becomes an import.
+func TestOversizedImageInAFolderIsSkipped(t *testing.T) {
+	ta := testutil.NewTestApp(t)
+	lim := importer.DefaultLimits
+	lim.MaxEntryBytes = 64 << 10
+	importer.SetLimits(ta.Deps, lim)
+	admin := ta.Login(t, "admin")
+	big := noisePNG(t, 200, 200)
+	if len(big) <= 64<<10 {
+		t.Fatalf("fixture is only %d bytes", len(big))
+	}
+	r := upload(t, admin, map[string][]byte{
+		"storm-diary/p1.png": pagePNG(t, 1, 20, 30),
+		"storm-diary/p2.png": big,
+		"storm-diary/p3.png": pagePNG(t, 3, 20, 30),
+	})
+	if r.StatusCode != http.StatusSeeOther {
+		t.Fatalf("upload %d %s", r.StatusCode, r.Body)
+	}
+	page := string(admin.Get("/admin/backup").Body)
+	if !strings.Contains(page, "Import started") || !strings.Contains(page, "p2.png: a file is larger than 64 MB") {
+		t.Fatalf("flash does not note the skipped image:\n%s", page)
+	}
+	runJobs(t, ta)
+	list := recent(t, ta, ta.Admin.ID)
+	if len(list) != 1 || list[0].Status != importer.StatusDone || list[0].Pages != 2 {
+		t.Fatalf("folder import %+v", list)
+	}
+}
+
+// Leftover upload batches and work directories older than a day are removed;
+// fresh ones and other programs' files are kept.
+func TestSweepTempRemovesOnlyOldImporterFiles(t *testing.T) {
+	dir := t.TempDir()
+	old := time.Now().Add(-25 * time.Hour)
+	mk := func(name string, isDir bool, at time.Time) string {
+		p := filepath.Join(dir, name)
+		if isDir {
+			_ = os.MkdirAll(filepath.Join(p, "pdf"), 0o700)
+		} else {
+			_ = os.WriteFile(p, []byte("x"), 0o600)
+		}
+		_ = os.Chtimes(p, at, at)
+		return p
+	}
+	gone := []string{mk("mv-import-upload-1.zip", false, old), mk("mv-import-upload-2.part", false, old), mk("mv-import-work-3", true, old)}
+	kept := []string{mk("mv-import-upload-4.zip", false, time.Now()), mk("other-app-5", false, old), mk("mv-importer-notes", false, old)}
+	if n := importer.SweepTemp(dir, time.Now().Add(-24*time.Hour)); n != 3 {
+		t.Fatalf("removed %d", n)
+	}
+	for _, p := range gone {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s was kept", p)
+		}
+	}
+	for _, p := range kept {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%s was removed", p)
+		}
+	}
+}
+
 // A long Japanese file name is cut at a character boundary: the stored name
 // stays valid UTF-8 (PostgreSQL refuses anything else) and the import starts.
 func TestLongMultibyteNameIsCutAtACharacter(t *testing.T) {

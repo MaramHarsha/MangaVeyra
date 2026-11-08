@@ -347,7 +347,7 @@ func (s *service) importPages(ctx context.Context, run *jobs.Run, imp *Import) e
 	if imp.Kind == KindPDF && !s.PDFAvailable() {
 		return refuse(CodePDFUnavailable, "pdftoppm is not installed")
 	}
-	work, err := os.MkdirTemp("", "mv-import-*")
+	work, err := os.MkdirTemp("", workTempPattern)
 	if err != nil {
 		return err
 	}

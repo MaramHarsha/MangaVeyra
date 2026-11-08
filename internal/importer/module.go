@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/a-h/templ"
 
@@ -57,6 +59,59 @@ func (m *Module) Init(context.Context) error {
 // JobHandlers implements core.JobHandlers.
 func (m *Module) JobHandlers() map[string]jobs.Handler {
 	return map[string]jobs.Handler{JobImport: m.svc.run}
+}
+
+// Temporary files the importer writes to the system temp directory: an
+// upload's image batch (and its staging file) and an import's work directory.
+// A crash can leave them behind; Start removes any older than tempMaxAge.
+const (
+	tempPrefix        = "mv-import-"
+	uploadTempPattern = tempPrefix + "upload-*"
+	workTempPattern   = tempPrefix + "work-*"
+	tempMaxAge        = 24 * time.Hour
+)
+
+// Start sweeps leftover temporary files once an hour (and at start).
+func (m *Module) Start(ctx context.Context) error {
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
+	for {
+		if n := SweepTemp(os.TempDir(), time.Now().Add(-tempMaxAge)); n > 0 {
+			m.svc.log.Info("importer: removed leftover temporary files", "count", n)
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+		}
+	}
+}
+
+// SweepTemp removes the importer's temporary files and directories in dir
+// last modified before cutoff and reports how many it removed. Nothing else
+// in dir is touched.
+func SweepTemp(dir string, cutoff time.Time) int {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), tempPrefix) {
+			continue
+		}
+		fi, err := e.Info()
+		if err != nil || !fi.ModTime().Before(cutoff) {
+			continue
+		}
+		if e.Type()&os.ModeSymlink != 0 || (!e.IsDir() && !e.Type().IsRegular()) {
+			continue
+		}
+		if os.RemoveAll(filepath.Join(dir, e.Name())) == nil {
+			n++
+		}
+	}
+	return n
 }
 
 // Routes implements core.Module. Importing creates a private project owned
@@ -214,12 +269,15 @@ func (m *Module) upload(w http.ResponseWriter, r *http.Request) error {
 		started++
 	}
 	switch {
-	case started > 0 && len(refused) == 0:
-		body := ""
+	case started > 0:
+		// Files left out (not comics or images, or over a limit) are noted
+		// under the confirmation; the rest was imported.
+		var notes []string
 		if skipped > 0 {
-			body = i18n.T(ctx, "importer.flash.skipped", "count", skipped)
+			notes = append(notes, i18n.T(ctx, "importer.flash.skipped", "count", skipped))
 		}
-		web.Flash(w, r, "success", i18n.T(ctx, "importer.flash.started", "count", started), body)
+		notes = append(notes, refused...)
+		web.Flash(w, r, "success", i18n.T(ctx, "importer.flash.started", "count", started), strings.Join(notes, " · "))
 	case len(refused) > 0:
 		web.Flash(w, r, "error", i18n.T(ctx, "importer.flash.refused"), strings.Join(refused, " · "))
 	default:
@@ -238,8 +296,11 @@ func codeOf(err error) string {
 }
 
 // imageBatch collects loose images into a zip (stored as the import source).
+// Each image is staged first, so one that breaks a limit is left out (and
+// reported) without a partial entry in the zip.
 type imageBatch struct {
 	f     *os.File
+	stage *os.File
 	zw    *zip.Writer
 	n     int
 	total int64
@@ -247,11 +308,17 @@ type imageBatch struct {
 }
 
 func newImageBatch() (*imageBatch, error) {
-	f, err := os.CreateTemp("", "mv-import-upload-*.zip")
+	f, err := os.CreateTemp("", uploadTempPattern+".zip")
 	if err != nil {
 		return nil, err
 	}
-	return &imageBatch{f: f, zw: zip.NewWriter(f)}, nil
+	stage, err := os.CreateTemp("", uploadTempPattern+".part")
+	if err != nil {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+		return nil, err
+	}
+	return &imageBatch{f: f, stage: stage, zw: zip.NewWriter(f)}, nil
 }
 
 func (b *imageBatch) add(name string, r io.Reader, lim Limits) error {
@@ -262,21 +329,33 @@ func (b *imageBatch) add(name string, r io.Reader, lim Limits) error {
 	if err != nil {
 		return err
 	}
-	w, err := b.zw.CreateHeader(&zip.FileHeader{Name: clean, Method: zip.Store})
-	if err != nil {
+	if err := b.stage.Truncate(0); err != nil {
 		return err
 	}
-	n, err := io.Copy(w, io.LimitReader(r, lim.MaxEntryBytes+1))
+	if _, err := b.stage.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	n, err := io.Copy(b.stage, io.LimitReader(r, lim.MaxEntryBytes+1))
 	if err != nil {
 		return err
 	}
 	if n > lim.MaxEntryBytes {
 		return refuse(CodeEntryTooLarge, "%q is larger than %d MB", name, lim.MaxEntryBytes>>20)
 	}
-	b.total += n
-	if b.total > lim.MaxTotalBytes {
+	if b.total+n > lim.MaxTotalBytes {
 		return refuse(CodeTooLarge, "more than %d MB", lim.MaxTotalBytes>>20)
 	}
+	if _, err := b.stage.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	w, err := b.zw.CreateHeader(&zip.FileHeader{Name: clean, Method: zip.Store})
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(w, io.LimitReader(b.stage, n)); err != nil {
+		return err
+	}
+	b.total += n
 	b.n++
 	b.names = append(b.names, clean)
 	return nil
@@ -309,8 +388,10 @@ func (b *imageBatch) store(ctx context.Context, st storage.Store, key string) er
 }
 
 func (b *imageBatch) discard() {
-	_ = b.f.Close()
-	_ = os.Remove(b.f.Name())
+	for _, f := range []*os.File{b.f, b.stage} {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+	}
 }
 
 func (m *Module) queue(w http.ResponseWriter, r *http.Request) error {
