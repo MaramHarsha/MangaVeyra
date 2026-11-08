@@ -37,6 +37,7 @@ const (
 	maxSupportLinks = 5
 	maxLinkLabel    = 40
 	maxLinkURL      = 500
+	maxReleaseNote  = 60
 )
 
 var slugRE = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -48,6 +49,12 @@ type seriesInput struct {
 	Format, AgeRating, Licence, Visibility, Status string
 	OriginalLang                                   string
 	SupportLinks                                   []SupportLink
+	// Schedule is the optional release note ("Weekly, Saturday").
+	Schedule string
+	// OwnerCredit is the owner's optional credit name; Credits are the other
+	// credited project members, in credit order.
+	OwnerCredit string
+	Credits     []Creator
 }
 
 // fieldErrors maps a form field to the catalogue key of its error message.
@@ -73,6 +80,9 @@ func (in *seriesInput) normalize() {
 		links = append(links, l)
 	}
 	in.SupportLinks = links
+	in.Schedule = strings.Join(strings.Fields(in.Schedule), " ")
+	in.OwnerCredit = strings.Join(strings.Fields(in.OwnerCredit), " ")
+	in.Credits = normalizeCredits(in.Credits)
 }
 
 func (in seriesInput) validate() fieldErrors {
@@ -118,6 +128,17 @@ func (in seriesInput) validate() fieldErrors {
 	}
 	if len(in.SupportLinks) > maxSupportLinks {
 		errs["support_links"] = "publish.error.links"
+	}
+	if utf8.RuneCountInString(in.Schedule) > maxReleaseNote || !utf8.ValidString(in.Schedule) {
+		errs["schedule"] = "publish.error.release_note"
+	}
+	if utf8.RuneCountInString(in.OwnerCredit) > maxCreditName || len(in.Credits) > maxCreators {
+		errs["creators"] = "publish.error.creators"
+	}
+	for _, c := range in.Credits {
+		if !validCredit(c) {
+			errs["creators"] = "publish.error.creators"
+		}
 	}
 	for _, l := range in.SupportLinks {
 		if !validLink(l) {
@@ -168,7 +189,11 @@ func seriesForProject(ctx context.Context, q db.Querier, projectID string) (Seri
 		}
 		return Series{}, false, fmt.Errorf("publish: project series: %w", err)
 	}
-	return row.series(), true, nil
+	list := []Series{row.series()}
+	if err := attachCreators(ctx, q, list); err != nil {
+		return Series{}, false, err
+	}
+	return list[0], true, nil
 }
 
 // seriesDefaults derives a new series from its project: title, synopsis,
@@ -266,19 +291,16 @@ func (s *service) saveSeriesTx(ctx context.Context, tx *db.Tx, actor studio.Acto
 		languages := []string{in.OriginalLang}
 		if _, err := tx.Exec(ctx, `INSERT INTO series (id, project_id, owner_id, slug, title, synopsis, genres, tags, format,
 			age_rating, licence, visibility, cover_asset_id, support_links, ai_label, original_lang, languages, status,
-			created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?, ?)`,
+			schedule, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?, ?, ?)`,
 			id, p.ID, p.OwnerID, in.Slug, in.Title, in.Synopsis, db.MustJSON(in.Genres), db.MustJSON(in.Tags), in.Format,
 			in.AgeRating, in.Licence, in.Visibility, db.NullString(p.CoverAssetID), db.MustJSON(in.SupportLinks),
-			in.OriginalLang, db.MustJSON(languages), in.Status, now, now); err != nil {
+			in.OriginalLang, db.MustJSON(languages), in.Status, in.Schedule, now, now); err != nil {
 			if db.IsUniqueViolation(err) {
 				return Series{}, errSlugTaken
 			}
 			return Series{}, fmt.Errorf("publish: create series: %w", err)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO series_creators (series_id, user_id, role, credit_name, order_idx, created_at)
-			VALUES (?, ?, 'owner', '', 0, ?) ON CONFLICT DO NOTHING`, id, p.OwnerID, now); err != nil {
-			return Series{}, fmt.Errorf("publish: series creator: %w", err)
-		}
+		cur.ID = id
 	} else {
 		// A series that has gone live never returns to draft by itself.
 		status := in.Status
@@ -286,14 +308,17 @@ func (s *service) saveSeriesTx(ctx context.Context, tx *db.Tx, actor studio.Acto
 			status = SeriesOngoing
 		}
 		if _, err := tx.Exec(ctx, `UPDATE series SET slug = ?, title = ?, synopsis = ?, genres = ?, tags = ?, format = ?,
-			age_rating = ?, licence = ?, visibility = ?, support_links = ?, original_lang = ?, status = ?, updated_at = ?
+			age_rating = ?, licence = ?, visibility = ?, support_links = ?, original_lang = ?, status = ?, schedule = ?, updated_at = ?
 			WHERE id = ?`, in.Slug, in.Title, in.Synopsis, db.MustJSON(in.Genres), db.MustJSON(in.Tags), in.Format,
-			in.AgeRating, in.Licence, in.Visibility, db.MustJSON(in.SupportLinks), in.OriginalLang, status, now, cur.ID); err != nil {
+			in.AgeRating, in.Licence, in.Visibility, db.MustJSON(in.SupportLinks), in.OriginalLang, status, in.Schedule, now, cur.ID); err != nil {
 			if db.IsUniqueViolation(err) {
 				return Series{}, errSlugTaken
 			}
 			return Series{}, fmt.Errorf("publish: update series: %w", err)
 		}
+	}
+	if err := writeCreditsTx(ctx, tx, cur.ID, p.ID, p.OwnerID, in.OwnerCredit, in.Credits, now); err != nil {
+		return Series{}, err
 	}
 	out, _, err := seriesForProject(ctx, tx, p.ID)
 	return out, err

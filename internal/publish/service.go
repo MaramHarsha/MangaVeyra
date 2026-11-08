@@ -85,7 +85,15 @@ func (s *service) seriesWhere(ctx context.Context, v Viewer, cond string, arg an
 	if err != nil {
 		return Series{}, err
 	}
-	return getSeries(ctx, s.db, a, cond, arg)
+	out, err := getSeries(ctx, s.db, a, cond, arg)
+	if err != nil {
+		return Series{}, err
+	}
+	list := []Series{out}
+	if err := attachCreators(ctx, s.db, list); err != nil {
+		return Series{}, err
+	}
+	return list[0], nil
 }
 
 func getSeries(ctx context.Context, q db.Querier, a access, cond string, arg any) (Series, error) {
@@ -154,6 +162,9 @@ func (s *service) ListSeries(ctx context.Context, v Viewer, f SeriesFilter) ([]S
 	out := make([]Series, len(rows))
 	for i, r := range rows {
 		out[i] = r.series()
+	}
+	if err := attachCreators(ctx, s.db, out); err != nil {
+		return nil, "", err
 	}
 	return out, next, nil
 }

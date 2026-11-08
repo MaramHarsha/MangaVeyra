@@ -17,7 +17,7 @@ import (
 
 const seriesCols = `s.id, s.project_id, s.owner_id, s.slug, s.title, s.synopsis, s.genres, s.tags, s.format,
 	s.age_rating, s.licence, s.visibility, s.cover_asset_id, s.banner_asset_id, s.support_links, s.ai_label,
-	s.original_lang, s.languages, s.status, s.follower_count, s.view_count, s.published_at, s.updated_at`
+	s.original_lang, s.languages, s.status, s.schedule, s.follower_count, s.view_count, s.published_at, s.updated_at`
 
 type seriesRow struct {
 	ID            string         `db:"id"`
@@ -39,6 +39,7 @@ type seriesRow struct {
 	OriginalLang  string         `db:"original_lang"`
 	Languages     sql.NullString `db:"languages"`
 	Status        string         `db:"status"`
+	Schedule      string         `db:"schedule"`
 	FollowerCount int64          `db:"follower_count"`
 	ViewCount     int64          `db:"view_count"`
 	PublishedAt   sql.NullTime   `db:"published_at"`
@@ -66,6 +67,8 @@ func (r seriesRow) series() Series {
 		OriginalLang:  r.OriginalLang,
 		Languages:     decodeStrings(r.Languages),
 		Status:        r.Status,
+		Schedule:      strings.TrimSpace(r.Schedule),
+		Creators:      []Creator{{UserID: r.OwnerID, Role: RoleOwner}},
 		FollowerCount: int(r.FollowerCount),
 		ViewCount:     r.ViewCount,
 		PublishedAt:   timePtr(r.PublishedAt),

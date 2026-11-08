@@ -26,14 +26,15 @@ func TestSeriesFieldsDecode(t *testing.T) {
 		s := f.Series(publishtest.SeriesSpec{Title: "Paper Crows", Synopsis: "Messenger crows carry secrets.",
 			Genres: []string{"fantasy", "mystery"}, Tags: []string{"crows"}, Format: "webtoon", AgeRating: publish.RatingTeen,
 			Licence: "cc-by", AILabel: label, SupportLinks: links, OriginalLang: "ja", Languages: []string{"ja", "en"},
-			Cover: true, FollowerCount: 12, ViewCount: 3400})
+			Cover: true, FollowerCount: 12, ViewCount: 3400, Schedule: "Weekly, Saturday", OwnerCredit: "J. Okafor"})
 		got, err := svc.SeriesBySlug(ctx, publish.Viewer{}, s.Slug)
 		mustOK(t, "SeriesBySlug", err)
 		want := publish.Series{ID: s.ID, ProjectID: s.ProjectID, OwnerID: s.Owner.ID, Slug: s.Slug, Title: "Paper Crows",
 			Synopsis: "Messenger crows carry secrets.", Genres: []string{"fantasy", "mystery"}, Tags: []string{"crows"},
 			Format: "webtoon", AgeRating: publish.RatingTeen, Licence: "cc-by", Visibility: publish.VisibilityPublic,
 			CoverAssetID: s.CoverAssetID, SupportLinks: links, AILabel: label, OriginalLang: "ja", Languages: []string{"ja", "en"},
-			Status: publish.SeriesOngoing, FollowerCount: 12, ViewCount: 3400}
+			Status: publish.SeriesOngoing, FollowerCount: 12, ViewCount: 3400, Schedule: "Weekly, Saturday",
+			Creators: []publish.Creator{{UserID: s.Owner.ID, Role: "owner", CreditName: "J. Okafor"}}}
 		if got.PublishedAt == nil || !got.PublishedAt.Equal(*s.PublishedAt) || got.UpdatedAt.IsZero() {
 			t.Fatalf("times: published %v (want %v), updated %v", got.PublishedAt, s.PublishedAt, got.UpdatedAt)
 		}

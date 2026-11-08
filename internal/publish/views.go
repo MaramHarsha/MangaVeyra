@@ -350,6 +350,18 @@ type seriesView struct {
 	CoverURL  string
 	SeriesURL string
 	Action    string
+	// Members are the project members who can be credited, the owner first.
+	Members []member
+}
+
+// credit returns the credited role and name of a member in the form.
+func (v seriesView) credit(userID string) Creator {
+	for _, c := range v.Form.Credits {
+		if c.UserID == userID {
+			return c
+		}
+	}
+	return Creator{UserID: userID}
 }
 
 func (m *Module) seriesView(r *http.Request, t target) (seriesView, error) {
@@ -363,11 +375,17 @@ func (m *Module) seriesView(r *http.Request, t target) (seriesView, error) {
 		s := v.Series
 		v.Form = seriesInput{Slug: s.Slug, Title: s.Title, Synopsis: s.Synopsis, Genres: s.Genres, Tags: s.Tags, Format: s.Format,
 			AgeRating: s.AgeRating, Licence: s.Licence, Visibility: s.Visibility, Status: s.Status, OriginalLang: s.OriginalLang,
-			SupportLinks: s.SupportLinks}
+			SupportLinks: s.SupportLinks, Schedule: s.Schedule}
+		if len(s.Creators) > 0 {
+			v.Form.OwnerCredit, v.Form.Credits = s.Creators[0].CreditName, s.Creators[1:]
+		}
 		v.Revision = s.UpdatedAt.UTC().Format(time.RFC3339Nano)
 		v.SeriesURL = "/s/" + url.PathEscape(s.Slug)
 		v.CoverURL = m.svc.assets.URLFor(ctx, s.CoverAssetID, 15*time.Minute)
 	} else if v.Form, err = seriesDefaults(ctx, m.svc.db, t.project); err != nil {
+		return v, err
+	}
+	if v.Members, err = projectMembers(ctx, m.svc.db, t.project.ID, t.project.OwnerID); err != nil {
 		return v, err
 	}
 	return v, nil

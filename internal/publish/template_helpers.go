@@ -145,3 +145,12 @@ func publishedMeta(ctx context.Context, v publishView) string {
 func joinList(v []string) string { return strings.Join(v, ", ") }
 
 func tagList(s string) []string { return normalizeTags([]string{s}, false) }
+
+// creditOptions lists "not credited" and the credit roles.
+func creditOptions(ctx context.Context) []ui.Option {
+	out := []ui.Option{{Value: "", Label: i18n.T(ctx, "publish.credit.none")}}
+	for _, r := range CreditRoles {
+		out = append(out, ui.Option{Value: r, Label: i18n.T(ctx, "publish.credit."+r)})
+	}
+	return out
+}

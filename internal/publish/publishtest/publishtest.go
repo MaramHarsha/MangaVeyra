@@ -130,6 +130,12 @@ type SeriesSpec struct {
 	Cover         bool
 	FollowerCount int
 	ViewCount     int64
+	// Schedule is the release note ("Weekly, Saturday").
+	Schedule string
+	// OwnerCredit is the owner's credit name; Creators are credited after the
+	// owner in this order (any existing users; they need not be project members).
+	OwnerCredit string
+	Creators    []publish.Creator
 }
 
 // Series is a created series.
@@ -203,17 +209,23 @@ func (f *Fixture) Series(spec SeriesSpec) Series {
 	now := db.Now()
 	if _, err := f.ta.Deps.DB.Exec(ctx, `INSERT INTO series (id, project_id, owner_id, slug, title, synopsis, genres, tags,
 		format, age_rating, licence, visibility, cover_asset_id, support_links, ai_label, original_lang, languages, status,
-		follower_count, view_count, published_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		follower_count, view_count, published_at, schedule, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		out.ID, project.ID, spec.Owner.ID, spec.Slug, spec.Title, spec.Synopsis, db.MustJSON(spec.Genres), db.MustJSON(spec.Tags),
 		spec.Format, spec.AgeRating, spec.Licence, spec.Visibility, db.NullString(out.CoverAssetID),
 		db.MustJSON(spec.SupportLinks), db.MustJSON(spec.AILabel), spec.OriginalLang, db.MustJSON(spec.Languages), spec.Status,
-		spec.FollowerCount, spec.ViewCount, timeArg(publishedAt), now, now); err != nil {
+		spec.FollowerCount, spec.ViewCount, timeArg(publishedAt), spec.Schedule, now, now); err != nil {
 		f.t.Fatalf("publishtest: insert series: %v", err)
 	}
 	if _, err := f.ta.Deps.DB.Exec(ctx, `INSERT INTO series_creators (series_id, user_id, role, credit_name, order_idx, created_at)
-		VALUES (?, ?, 'owner', ?, 0, ?)`, out.ID, spec.Owner.ID, spec.Owner.DisplayName, now); err != nil {
+		VALUES (?, ?, 'owner', ?, 0, ?)`, out.ID, spec.Owner.ID, spec.OwnerCredit, now); err != nil {
 		f.t.Fatalf("publishtest: insert series creator: %v", err)
+	}
+	for i, c := range spec.Creators {
+		if _, err := f.ta.Deps.DB.Exec(ctx, `INSERT INTO series_creators (series_id, user_id, role, credit_name, order_idx, created_at)
+			VALUES (?, ?, ?, ?, ?, ?)`, out.ID, c.UserID, c.Role, c.CreditName, i+1, now); err != nil {
+			f.t.Fatalf("publishtest: insert series creator: %v", err)
+		}
 	}
 	return out
 }

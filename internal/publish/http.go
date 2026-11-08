@@ -436,7 +436,14 @@ func (m *Module) seriesPost(w http.ResponseWriter, r *http.Request) error {
 	in := seriesInput{Slug: web.FormValue(r, "slug"), Title: web.FormValue(r, "title"), Synopsis: web.FormValue(r, "synopsis"),
 		Genres: []string{web.FormValue(r, "genres")}, Tags: []string{web.FormValue(r, "tags")}, Format: web.FormValue(r, "format"),
 		AgeRating: web.FormValue(r, "age_rating"), Licence: web.FormValue(r, "licence"), Visibility: web.FormValue(r, "visibility"),
-		Status: web.FormValue(r, "status"), OriginalLang: web.FormValue(r, "original_lang")}
+		Status: web.FormValue(r, "status"), OriginalLang: web.FormValue(r, "original_lang"), Schedule: web.FormValue(r, "schedule"),
+		OwnerCredit: web.FormValue(r, "owner_credit")}
+	for i := range len(v.Members) {
+		n := strconv.Itoa(i)
+		if id := web.FormValue(r, "credit_user_"+n); id != "" && id != t.project.OwnerID {
+			in.Credits = append(in.Credits, Creator{UserID: id, Role: web.FormValue(r, "credit_role_"+n), CreditName: web.FormValue(r, "credit_name_"+n)})
+		}
+	}
 	for i := range maxSupportLinks {
 		n := strconv.Itoa(i)
 		in.SupportLinks = append(in.SupportLinks, SupportLink{Label: web.FormValue(r, "link_label_"+n), URL: web.FormValue(r, "link_url_"+n)})
@@ -458,6 +465,8 @@ func (m *Module) seriesPost(w http.ResponseWriter, r *http.Request) error {
 			return err
 		})
 		switch {
+		case errors.Is(err, errBadCredit):
+			v.Errors["creators"] = "publish.error.creators"
 		case errors.Is(err, errSlugTaken):
 			v.Errors["slug"] = "publish.error.slug_taken"
 		case isConflict(err):

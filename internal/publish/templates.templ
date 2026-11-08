@@ -415,6 +415,9 @@ templ seriesScreen(v seriesView) {
 				@ui.Field(ui.FieldProps{ID: "series-synopsis", Label: i18n.T(ctx, "publish.field.synopsis"), Error: errText(ctx, v.Errors["synopsis"])}) {
 					@ui.Textarea(ui.TextareaProps{ID: "series-synopsis", Name: "synopsis", Value: v.Form.Synopsis, Rows: 4, MaxLength: maxSynopsis, Invalid: v.Errors["synopsis"] != ""})
 				}
+				@ui.Field(ui.FieldProps{ID: "series-schedule", Label: i18n.T(ctx, "publish.series.field.schedule"), Hint: i18n.T(ctx, "publish.series.field.schedule_hint"), Error: errText(ctx, v.Errors["schedule"])}) {
+					@ui.Input(ui.InputProps{ID: "series-schedule", Name: "schedule", Value: v.Form.Schedule, MaxLength: maxReleaseNote, Placeholder: i18n.T(ctx, "publish.series.field.schedule_placeholder"), Invalid: v.Errors["schedule"] != "", Described: true})
+				}
 				@ui.Field(ui.FieldProps{ID: "series-genres", Label: i18n.T(ctx, "publish.series.field.genres"), Hint: i18n.T(ctx, "publish.field.tags_hint"), Error: errText(ctx, v.Errors["genres"])}) {
 					@ui.Input(ui.InputProps{ID: "series-genres", Name: "genres", Value: joinList(v.Form.Genres), MaxLength: 400, Invalid: v.Errors["genres"] != "", Described: true})
 				}
@@ -459,6 +462,7 @@ templ seriesScreen(v seriesView) {
 				@ui.Field(ui.FieldProps{ID: "series-lang", Label: i18n.T(ctx, "publish.series.field.language"), Error: errText(ctx, v.Errors["original_lang"])}) {
 					@ui.Select(ui.SelectProps{ID: "series-lang", Name: "original_lang", Value: v.Form.OriginalLang, Options: contentLangOptions(ctx)})
 				}
+				@creditsFieldset(v)
 				if v.Exists {
 					<div class="mv-publish__group">
 						<span class="mv-publish__label">{ i18n.T(ctx, "publish.series.field.languages") }</span>
