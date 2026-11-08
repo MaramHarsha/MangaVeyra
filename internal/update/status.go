@@ -55,3 +55,14 @@ func (m *Module) UpdateStatus(ctx context.Context) Info {
 	}
 	return info
 }
+
+// AvailableUpdate implements adminapi.UpdateNotice for G5's "Update to {version}"
+// header button: the verified release on offer (or being installed), and
+// nothing when the server is up to date or checks found nothing.
+func (m *Module) AvailableUpdate(ctx context.Context) (string, bool) {
+	info := m.UpdateStatus(ctx)
+	if info.Available || info.Installing {
+		return info.Version, true
+	}
+	return "", false
+}

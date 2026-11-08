@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/admin/adminapi"
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/backup"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
@@ -39,6 +40,11 @@ func TestChecksAreOptIn(t *testing.T) {
 			t.Fatalf("check with checks off: %v", err)
 		}
 		update.Tick(e.m, e.ctx) // the daily loop does nothing either
+		if notice, _ := core.Use[adminapi.UpdateNotice](e.ta.Deps); notice != nil {
+			if v, ok := notice.AvailableUpdate(e.ctx); ok {
+				t.Fatalf("G5 offers %q with checks off", v)
+			}
+		}
 		admin := e.adminClient()
 		resp := admin.Get("/admin/update")
 		if resp.StatusCode != http.StatusOK || !strings.Contains(string(resp.Body), "Update checks are off") {
@@ -120,6 +126,16 @@ func TestCheckOffersOnlySignedReleases(t *testing.T) {
 		st, _ := core.Use[update.Status](e.ta.Deps)
 		if info := st.UpdateStatus(e.ctx); !info.Available || info.Version != "1.0.2" || info.Kind != update.KindPatch || !info.ChecksOn {
 			t.Fatalf("status = %+v", info)
+		}
+		notice, ok := core.Use[adminapi.UpdateNotice](e.ta.Deps)
+		if !ok {
+			t.Fatal("adminapi.UpdateNotice is not provided")
+		}
+		if v, ok := notice.AvailableUpdate(e.ctx); !ok || v != "1.0.2" {
+			t.Fatalf("AvailableUpdate = %q %v", v, ok)
+		}
+		if body := string(e.adminClient().Get("/admin").Body); !strings.Contains(body, "Update to 1.0.2") {
+			t.Fatal("the G5 header does not offer the update")
 		}
 
 		admin := e.adminClient()

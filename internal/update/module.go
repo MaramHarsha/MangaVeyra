@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/admin/adminapi"
 	"github.com/MaramHarsha/MangaVeyra/internal/backup"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
@@ -46,10 +47,12 @@ type hooks struct {
 	Restart       func(exe string)
 }
 
-// New creates the module and provides update.Status to other modules.
+// New creates the module and provides update.Status and the G5 header's
+// adminapi.UpdateNotice to other modules.
 func New(d *core.Deps) *Module {
 	m := &Module{d: d, owner: db.NewID(), children: map[*exec.Cmd]struct{}{}}
 	core.Provide[Status](d, m)
+	core.Provide[adminapi.UpdateNotice](d, m)
 	return m
 }
 
