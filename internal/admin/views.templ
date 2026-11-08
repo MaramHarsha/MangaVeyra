@@ -1,0 +1,767 @@
+package admin
+
+import (
+	"context"
+	"github.com/MaramHarsha/MangaVeyra/internal/auth"
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+	"net/url"
+)
+
+// Page is the G5 frame every tab shares (design 09 "G5 – Admin & moderation –
+// Desktop", design 13 "G5 – Admin · Users / Content rules / Server –
+// Desktop"): title, mode · members · version, the update action, the four
+// stat cards on the Reports tab, and the tab switch.
+templ Page(f frame, body templ.Component) {
+	<div class="mv-admin">
+		@ui.PageHead(f.Title, f.Sub, headActions(f))
+		if len(f.Stats) > 0 {
+			<div class="mv-admin__stats">
+				for _, s := range f.Stats {
+					<div class="mv-admin__stat">
+						<span class="mv-admin__stat-label">{ s.Label }</span>
+						<span class="mv-admin__stat-value">{ s.Value }</span>
+					</div>
+				}
+			</div>
+		}
+		<div class="mv-admin__nav">
+			@ui.SegmentedLinks(i18n.T(ctx, "admin.tabs"), tabs(ctx, f))
+		</div>
+		@body
+	</div>
+}
+
+templ headActions(f frame) {
+	if f.UpdateShow {
+		// The update module builds /admin/update (G14); until then this is Soon.
+		@ui.LinkButton("/admin/update", ui.ButtonProps{Variant: ui.Quiet, Icon: "download"}) {
+			{ f.UpdateLabel }
+		}
+	}
+}
+
+// ---- Reports and AI-label disputes ----------------------------------------
+
+// ReportsTab is the open report queue (G5 main artboard) with the review of
+// one report expanded under its row, and the takedowns that can be restored.
+templ ReportsTab(v reportsView) {
+	<section class="mv-admin__list" aria-label={ reportsLabel(ctx, v.Disputes) }>
+		if len(v.Items) == 0 {
+			@ui.State(ui.StateProps{SFX: i18n.T(ctx, "admin.reports.empty.sfx"), Title: emptyTitle(ctx, v.Disputes),
+				Body: i18n.T(ctx, "admin.reports.empty.body"), Art: "splash", Boxed: true, Class: "mv-admin__empty"})
+		}
+		for _, it := range v.Items {
+			<div class={ ui.Cls("mv-admin__row mv-admin__report", ui.If(it.Current, "is-current")) } id={ "report-" + it.ID }>
+				<strong class="mv-admin__title">{ it.Title }</strong>
+				<span class="mv-admin__muted">
+					{ it.Context }
+					if len(it.Labels) > 0 {
+						<span class="mv-admin__labels">
+							for _, l := range it.Labels {
+								<span>{ l.Role } · { l.Value }</span>
+							}
+						</span>
+					}
+				</span>
+				<span class="mv-admin__muted">{ it.Reporter }</span>
+				<span class="mv-admin__badge">
+					@ui.Badge(ui.ToneWarning, "", it.Reason)
+				</span>
+				<div class="mv-admin__actions">
+					<form method="post" action={ templ.URL("/admin/reports/" + url.PathEscape(it.ID) + "/resolve") }>
+						<input type="hidden" name="action" value={ actDismiss }/>
+						<input type="hidden" name="tab" value={ tabOf(v.Disputes) }/>
+						@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit", Label: i18n.T(ctx, "admin.action.dismiss_named", "title", it.Title)}) {
+							{ i18n.T(ctx, "admin.action.dismiss") }
+						}
+					</form>
+					@ui.LinkButton(it.Href+"#review", ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Label: i18n.T(ctx, "admin.action.review_named", "title", it.Title)}) {
+						{ i18n.T(ctx, "admin.action.review") }
+					}
+				</div>
+			</div>
+			if it.Current && v.Review != nil {
+				@reviewPanel(*v.Review)
+			}
+		}
+	</section>
+	if v.Review != nil && !reviewListed(v) {
+		<section class="mv-admin__list">
+			@reviewPanel(*v.Review)
+		</section>
+	}
+	if len(v.Takedowns) > 0 {
+		<section class="mv-admin__box" aria-labelledby="takedowns-title">
+			<strong class="mv-admin__boxtitle" id="takedowns-title">{ i18n.T(ctx, "admin.takedowns.title") }</strong>
+			<p class="mv-admin__hint">{ i18n.T(ctx, "admin.takedowns.hint") }</p>
+			for _, t := range v.Takedowns {
+				<div class="mv-admin__line">
+					<div class="mv-admin__linetext">
+						<strong>{ t.Title }</strong>
+						<span class="mv-admin__meta">{ t.Meta }</span>
+					</div>
+					<form method="post" action="/admin/takedowns/restore">
+						<input type="hidden" name="key" value={ t.Key }/>
+						@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Type: "submit", Icon: "eye", Label: i18n.T(ctx, "admin.takedowns.restore_named", "title", t.Title)}) {
+							{ i18n.T(ctx, "admin.takedowns.restore") }
+						}
+					</form>
+				</div>
+			}
+		</section>
+	}
+}
+
+// reviewPanel is the review of one report: its context, the reported
+// comment, the per-role AI labels and the actions that apply.
+templ reviewPanel(rv reviewView) {
+	<section class="mv-admin__review" id="review" aria-labelledby="review-title">
+		<div class="mv-admin__review-head">
+			<h2 class="mv-admin__h2" id="review-title">{ i18n.T(ctx, "admin.review.title", "title", rv.Item.Title) }</h2>
+			if rv.Reader != "" {
+				@ui.LinkButton(rv.Reader, ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "external-link"}) {
+					{ i18n.T(ctx, "admin.review.open") }
+				}
+			}
+		</div>
+		if rv.Error != "" {
+			@ui.Notice(ui.ToneError, "alert-triangle") {
+				<p>{ rv.Error }</p>
+			}
+		}
+		<div class="mv-admin__review-grid">
+			<div>
+				@ui.KV(i18n.T(ctx, "admin.review.target"), rv.Item.Context)
+				@ui.KV(i18n.T(ctx, "admin.review.reason"), rv.Item.Reason)
+				@ui.KV(i18n.T(ctx, "admin.review.reporter"), rv.Item.Reporter)
+				@ui.KV(i18n.T(ctx, "admin.review.when"), rv.When)
+				if rv.Responder != "" {
+					@ui.KV(i18n.T(ctx, "admin.review.account"), rv.Responder)
+				}
+				if len(rv.Item.Labels) > 0 {
+					@ui.KVC(i18n.T(ctx, "admin.review.labels")) {
+						<span class="mv-admin__badges">
+							for _, l := range rv.Item.Labels {
+								@ui.ProvenanceBadge(l.Kind, l.Role+" · "+l.Value)
+							}
+						</span>
+					}
+				}
+				for _, s := range rv.Status {
+					@ui.KVC(i18n.T(ctx, "admin.review.status")) {
+						@ui.Badge(ui.ToneWarning, "eye-off", s)
+					}
+				}
+			</div>
+			<div class="mv-admin__quotes">
+				if rv.Details != "" {
+					<span class="mv-admin__label">{ i18n.T(ctx, "admin.review.details") }</span>
+					<p class="mv-admin__quote">{ rv.Details }</p>
+				}
+				if rv.Comment != "" {
+					<span class="mv-admin__label">{ i18n.T(ctx, "admin.review.comment") }</span>
+					<blockquote class="mv-admin__quote">{ rv.Comment }</blockquote>
+				}
+			</div>
+		</div>
+		if len(rv.Actions) > 0 {
+			<form class="mv-admin__resolve" method="post" action={ templ.URL("/admin/reports/" + url.PathEscape(rv.ID) + "/resolve") } novalidate>
+				<input type="hidden" name="tab" value={ rv.Tab }/>
+				@ui.Field(ui.FieldProps{ID: "review-note", Label: i18n.T(ctx, "admin.review.note"), Hint: i18n.T(ctx, "admin.review.note_hint")}) {
+					@ui.Textarea(ui.TextareaProps{ID: "review-note", Name: "note", Value: rv.Note, Rows: 2, MaxLength: maxNote})
+				}
+				<div class="mv-admin__actions mv-admin__actions--start">
+					for _, a := range rv.Actions {
+						@ui.Button(ui.ButtonProps{Variant: a.Variant, Size: ui.SM, Type: "submit", Icon: a.Icon,
+							Attrs: templ.Attributes{"name": "action", "value": a.Value}}) {
+							{ a.Label }
+						}
+					}
+				</div>
+			</form>
+		}
+	</section>
+}
+
+// ---- Users ---------------------------------------------------------------------
+
+// UsersTab is "G5 – Admin · Users – Desktop": search, invite, sign-up mode,
+// the members list, then the limits and roles cards. Pending approvals and
+// invites follow the members list (ADR 0004).
+templ UsersTab(v usersView) {
+	if v.Error != "" {
+		@ui.Notice(ui.ToneError, "alert-triangle") {
+			<p>{ v.Error }</p>
+		}
+	}
+	@usersDialogs(v)
+	<div class="mv-admin__toolbar">
+		<form class="mv-search mv-admin__search" role="search" method="get" action="/admin/users">
+			@ui.Icon("search", 16)
+			<label class="mv-sr-only" for="admin-user-search">{ i18n.T(ctx, "admin.users.search") }</label>
+			<input class="mv-search__input" id="admin-user-search" type="search" name="q" value={ v.Query } placeholder={ i18n.T(ctx, "admin.users.search") } autocomplete="off"/>
+		</form>
+		@ui.LinkButton("/admin/users?dialog=invite#invite-dialog", ui.ButtonProps{Variant: ui.Primary, Icon: "user-plus", Attrs: templ.Attributes{"data-dialog-open": "invite-dialog"}}) {
+			{ i18n.T(ctx, "admin.users.invite") }
+		}
+		<form class="mv-admin__signup" method="post" action="/admin/signup" data-autosave data-saved-label={ i18n.T(ctx, "admin.saved") } data-error-label={ i18n.T(ctx, "admin.save_failed") }>
+			<span class="mv-admin__signup-label" id="signup-label">{ i18n.T(ctx, "admin.users.signup") }</span>
+			@ui.Segmented(ui.SegmentedProps{Name: "sign_up", Value: v.SignUp, Label: i18n.T(ctx, "admin.users.signup_mode"), Options: signupOptions(ctx)})
+			@ui.Toggle(ui.ToggleProps{ID: "require-approval", Name: "require_approval", Checked: v.Approval, Label: i18n.T(ctx, "admin.users.approval")})
+			@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit", Class: "mv-nojs-only"}) {
+				{ i18n.T(ctx, "admin.save") }
+			}
+		</form>
+	</div>
+	<section class="mv-admin__list" aria-label={ i18n.T(ctx, "admin.users.members", "count", v.Total) }>
+		if len(v.Members) == 0 {
+			<p class="mv-admin__none">{ i18n.T(ctx, "admin.users.none") }</p>
+		}
+		for _, mbr := range v.Members {
+			@memberLine(mbr)
+		}
+		if v.More != "" {
+			<div class="mv-admin__more">
+				@ui.LinkButton(v.More, ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM}) {
+					{ i18n.T(ctx, "admin.users.more") }
+				}
+			</div>
+		}
+	</section>
+	if len(v.Pending) > 0 {
+		<section class="mv-admin__box" aria-labelledby="pending-title">
+			<strong class="mv-admin__boxtitle" id="pending-title">{ i18n.T(ctx, "admin.users.pending", "count", len(v.Pending)) }</strong>
+			for _, p := range v.Pending {
+				<div class="mv-admin__line">
+					<div class="mv-admin__who">
+						@ui.Avatar(ui.AvatarProps{Name: p.Name, Key: p.ID, Size: "sm"})
+						<div class="mv-admin__linetext">
+							<strong>{ p.Name }</strong>
+							<span class="mv-admin__meta">{ "@" + p.Username }</span>
+						</div>
+					</div>
+					<div class="mv-admin__actions">
+						<form method="post" action={ templ.URL("/admin/users/" + url.PathEscape(p.ID) + "/decline") }>
+							@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit", Label: i18n.T(ctx, "admin.users.decline_named", "name", p.Name)}) {
+								{ i18n.T(ctx, "admin.users.decline") }
+							}
+						</form>
+						<form method="post" action={ templ.URL("/admin/users/" + url.PathEscape(p.ID) + "/approve") }>
+							@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Type: "submit", Icon: "user-check", Label: i18n.T(ctx, "admin.users.approve_named", "name", p.Name)}) {
+								{ i18n.T(ctx, "admin.users.approve") }
+							}
+						</form>
+					</div>
+				</div>
+			}
+		</section>
+	}
+	<section class="mv-admin__box" id="invites" aria-labelledby="invites-title">
+		<strong class="mv-admin__boxtitle" id="invites-title">{ i18n.T(ctx, "admin.invites.title") }</strong>
+		if len(v.Invites) == 0 {
+			<p class="mv-admin__hint">{ i18n.T(ctx, "admin.invites.none") }</p>
+		}
+		for _, inv := range v.Invites {
+			<div class={ ui.Cls("mv-admin__invite", ui.If(inv.Highlight, "is-current")) }>
+				<div class="mv-admin__copy">
+					<label class="mv-sr-only" for={ "invite-" + inv.ID }>{ i18n.T(ctx, "admin.invites.link") }</label>
+					@ui.Input(ui.InputProps{ID: "invite-" + inv.ID, Value: inv.URL, ReadOnly: true, Class: "mv-admin__mono"})
+					@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "copy", Class: "mv-js-only",
+						Attrs: templ.Attributes{"data-copy": "invite-" + inv.ID, "data-copied-label": i18n.T(ctx, "admin.copied")}}) {
+						{ i18n.T(ctx, "admin.invites.copy") }
+					}
+				</div>
+				<span class="mv-admin__muted">{ inv.Role }</span>
+				<span class="mv-admin__muted">
+					if inv.Email != "" {
+						{ inv.Email }
+					} else {
+						{ i18n.T(ctx, "admin.invites.anyone") }
+					}
+				</span>
+				<span class="mv-admin__meta">{ inv.Uses } · { inv.Expires }</span>
+				<form method="post" action={ templ.URL("/admin/invites/" + url.PathEscape(inv.ID) + "/revoke") }>
+					@ui.Button(ui.ButtonProps{Variant: ui.DangerOutline, Size: ui.SM, Type: "submit", Label: i18n.T(ctx, "admin.invites.revoke_named", "link", inv.URL)}) {
+						{ i18n.T(ctx, "admin.invites.revoke") }
+					}
+				</form>
+			</div>
+		}
+	</section>
+	<div class="mv-admin__grid">
+		@limitsCard(v.Limits)
+		<div class="mv-admin__box">
+			<strong class="mv-admin__boxtitle">{ i18n.T(ctx, "admin.roles.title") }</strong>
+			@ui.KV(i18n.T(ctx, "admin.role.admin"), i18n.T(ctx, "admin.roles.admin"))
+			@ui.KV(i18n.T(ctx, "admin.role.creator"), i18n.T(ctx, "admin.roles.creator"))
+			@ui.KV(i18n.T(ctx, "admin.role.reader"), i18n.T(ctx, "admin.roles.reader"))
+		</div>
+	</div>
+}
+
+templ memberLine(mbr memberItem) {
+	<div class="mv-admin__row mv-admin__member">
+		@ui.Avatar(ui.AvatarProps{Name: mbr.Name, Key: mbr.ID, Size: "sm"})
+		<strong class="mv-admin__title" title={ "@" + mbr.Username }>{ mbr.Name }</strong>
+		<form class="mv-admin__roleform" method="post" action={ templ.URL("/admin/users/" + url.PathEscape(mbr.ID) + "/role") }>
+			<label class="mv-sr-only" for={ "role-" + mbr.ID }>{ i18n.T(ctx, "admin.users.role_for", "name", mbr.Name) }</label>
+			@ui.Select(ui.SelectProps{ID: "role-" + mbr.ID, Name: "role", Value: mbr.Role, Options: roleOptions(ctx), Attrs: templ.Attributes{"data-autosubmit": true}})
+			@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit", Icon: "check", Class: "mv-nojs-only mv-btn--icon", Label: i18n.T(ctx, "admin.users.save_role", "name", mbr.Name)})
+		</form>
+		<span class="mv-admin__linetext">
+			<span class="mv-admin__muted">{ mbr.Usage }</span>
+			<span class="mv-admin__meta">{ mbr.Meta }</span>
+		</span>
+		<span class="mv-admin__badge">
+			@ui.Badge(mbr.StatusTone, "", mbr.StatusText)
+		</span>
+		@ui.Dropdown("mv-admin__menu", "end", false, menuTrigger(mbr.Name), mbr.Menu)
+	</div>
+}
+
+templ menuTrigger(name string) {
+	<span class="mv-admin__dots" title={ i18n.T(ctx, "admin.users.actions", "name", name) }>
+		@ui.Icon("dots", 16)
+		<span class="mv-sr-only">{ i18n.T(ctx, "admin.users.actions", "name", name) }</span>
+	</span>
+}
+
+// limitsCard is "Limits per member": the limits the server enforces are
+// editable; storage quota and projects per member show their value in the
+// Soon state until uploads and Studio enforce them; the upload size comes
+// from MV_MAX_UPLOAD_MB.
+templ limitsCard(l limitsView) {
+	<form class="mv-admin__box" method="post" action="/admin/limits" novalidate data-autosave data-saved-label={ i18n.T(ctx, "admin.saved") } data-error-label={ i18n.T(ctx, "admin.save_failed") }>
+		<strong class="mv-admin__boxtitle">{ i18n.T(ctx, "admin.limits.title") }</strong>
+		@limitInput("limit-gpu", "running_gpu_jobs", i18n.T(ctx, "admin.limits.gpu"), l.GPUJobs, "", l.Errors["running_gpu_jobs"])
+		@limitInput("limit-jobs", "running_jobs", i18n.T(ctx, "admin.limits.jobs"), l.Jobs, "", l.Errors["running_jobs"])
+		@limitSoon(i18n.T(ctx, "admin.limits.storage"), l.StorageMB)
+		@limitInput("limit-spend", "monthly_spend", i18n.T(ctx, "admin.limits.spend"), l.Spend, i18n.T(ctx, "admin.limits.per_month"), l.Errors["monthly_spend"])
+		@ui.KV(i18n.T(ctx, "admin.limits.upload"), l.UploadMB)
+		@limitSoon(i18n.T(ctx, "admin.limits.projects"), projectsLimit(ctx, l.ProjectsN))
+		@limitInput("limit-server", "server_spend", i18n.T(ctx, "admin.limits.server_spend"), l.ServerSpend, i18n.T(ctx, "admin.limits.per_month"), l.Errors["server_spend"])
+		<p class="mv-admin__hint">{ i18n.T(ctx, "admin.limits.hint") }</p>
+		<div class="mv-nojs-only">
+			@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit"}) {
+				{ i18n.T(ctx, "admin.save") }
+			}
+		</div>
+	</form>
+}
+
+templ limitInput(id, name, label, value, suffix, problem string) {
+	<div class={ ui.Cls("mv-kv mv-admin__limit", ui.If(problem != "", "is-invalid")) }>
+		<label class="mv-kv__key" for={ id }>{ label }</label>
+		<span class="mv-kv__value mv-admin__limitvalue">
+			if suffix != "" {
+				<span aria-hidden="true">$</span>
+			}
+			@ui.Input(ui.InputProps{ID: id, Name: name, Type: "number", Value: value, Inputmode: "decimal", Class: "mv-admin__num", Invalid: problem != "",
+				Attrs: templ.Attributes{"min": "0", "step": stepFor(name)}})
+			if suffix != "" {
+				<span>{ suffix }</span>
+			}
+		</span>
+	</div>
+	if problem != "" {
+		<span class="mv-field__error" id={ id + "-error" } role="alert">
+			@ui.Icon("alert-triangle", 14)
+			<span>{ problem }</span>
+		</span>
+	}
+}
+
+templ limitSoon(label, value string) {
+	<div class="mv-kv is-soon" title={ i18n.T(ctx, "ui.soon_hint") }>
+		<span class="mv-kv__key">{ label }</span>
+		<span class="mv-kv__value">
+			{ value }
+			@ui.SoonTag()
+		</span>
+	</div>
+}
+
+// usersDialogs are the invite, reset-link and delete dialogs. Without
+// JavaScript they are rendered open in the page (?dialog=invite, after a
+// reset-link request, ?delete=id).
+templ usersDialogs(v usersView) {
+	@ui.Modal(ui.ModalProps{ID: "invite-dialog", Title: i18n.T(ctx, "admin.invites.new"), Static: v.Dialog == "invite"}) {
+		<form method="post" action="/admin/invites" novalidate>
+			@ui.ModalBody() {
+				@ui.Field(ui.FieldProps{ID: "invite-role", Label: i18n.T(ctx, "admin.invites.role"), Error: v.Invite.Errors["role"]}) {
+					@ui.Select(ui.SelectProps{ID: "invite-role", Name: "role", Value: v.Invite.Role, Options: roleOptions(ctx), Invalid: v.Invite.Errors["role"] != ""})
+				}
+				@ui.Field(ui.FieldProps{ID: "invite-expires", Label: i18n.T(ctx, "admin.invites.expiry"), Error: v.Invite.Errors["expires"]}) {
+					@ui.Select(ui.SelectProps{ID: "invite-expires", Name: "expires", Value: v.Invite.Expires, Options: expiryOptions(ctx), Invalid: v.Invite.Errors["expires"] != ""})
+				}
+				@ui.Field(ui.FieldProps{ID: "invite-uses", Label: i18n.T(ctx, "admin.invites.max_uses"), Error: v.Invite.Errors["uses"]}) {
+					@ui.Input(ui.InputProps{ID: "invite-uses", Name: "uses", Type: "number", Value: v.Invite.Uses, Inputmode: "numeric", Invalid: v.Invite.Errors["uses"] != "",
+						Attrs: templ.Attributes{"min": "1", "max": "100"}})
+				}
+				@ui.Field(ui.FieldProps{ID: "invite-email", Label: i18n.T(ctx, "admin.invites.email"), Hint: emailHint(ctx, v.Email), Error: v.Invite.Errors["email"]}) {
+					@ui.Input(ui.InputProps{ID: "invite-email", Name: "email", Type: "email", Value: v.Invite.Email, Autocomplete: "off", Invalid: v.Invite.Errors["email"] != "", Described: true})
+				}
+			}
+			@ui.ModalFoot() {
+				@dialogCancel(v.Dialog == "invite")
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "user-plus"}) {
+					{ i18n.T(ctx, "admin.invites.create") }
+				}
+			}
+		</form>
+	}
+	if v.Dialog == "reset" {
+		@ui.Modal(ui.ModalProps{ID: "reset-dialog", Title: i18n.T(ctx, "admin.reset.title", "name", v.ResetFor), Static: true}) {
+			@ui.ModalBody() {
+				<p>{ i18n.T(ctx, "admin.reset.body") }</p>
+				<div class="mv-admin__copy">
+					<label class="mv-sr-only" for="reset-link">{ i18n.T(ctx, "admin.reset.link") }</label>
+					@ui.Input(ui.InputProps{ID: "reset-link", Value: v.ResetLink, ReadOnly: true, Class: "mv-admin__mono"})
+					@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "copy", Class: "mv-js-only",
+						Attrs: templ.Attributes{"data-copy": "reset-link", "data-copied-label": i18n.T(ctx, "admin.copied")}}) {
+						{ i18n.T(ctx, "admin.invites.copy") }
+					}
+				</div>
+			}
+			@ui.ModalFoot() {
+				@ui.LinkButton("/admin/users", ui.ButtonProps{Variant: ui.Secondary}) {
+					{ i18n.T(ctx, "admin.done") }
+				}
+			}
+		}
+	}
+	if v.Delete != nil {
+		@ui.Modal(ui.ModalProps{ID: "delete-dialog", Title: i18n.T(ctx, "admin.delete.title", "name", v.Delete.Name), Static: true}) {
+			<form method="post" action={ templ.URL("/admin/users/" + url.PathEscape(v.Delete.ID) + "/delete") } novalidate>
+				@ui.ModalBody() {
+					<p>{ i18n.T(ctx, "admin.delete.body") }</p>
+					@ui.Field(ui.FieldProps{ID: "delete-confirm", Label: i18n.T(ctx, "admin.delete.confirm", "username", "@"+v.Delete.Username), Error: v.DeleteError}) {
+						@ui.Input(ui.InputProps{ID: "delete-confirm", Name: "confirm", Autocomplete: "off", Required: true, Invalid: v.DeleteError != ""})
+					}
+				}
+				@ui.ModalFoot() {
+					@ui.LinkButton("/admin/users", ui.ButtonProps{Variant: ui.Quiet}) {
+						{ i18n.T(ctx, "admin.cancel") }
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit", Icon: "trash"}) {
+						{ i18n.T(ctx, "admin.delete.submit") }
+					}
+				}
+			</form>
+		}
+	}
+}
+
+templ dialogCancel(static bool) {
+	if static {
+		@ui.LinkButton("/admin/users", ui.ButtonProps{Variant: ui.Quiet}) {
+			{ i18n.T(ctx, "admin.cancel") }
+		}
+	} else {
+		@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Attrs: templ.Attributes{"data-dialog-close": true}}) {
+			{ i18n.T(ctx, "admin.cancel") }
+		}
+	}
+}
+
+// ---- Content rules -------------------------------------------------------------
+
+// RulesTab is "G5 – Admin · Content rules – Desktop". Switches whose feature
+// does not exist yet show the real current state in the Soon state.
+templ RulesTab(v rulesView) {
+	<div class="mv-admin__grid">
+		<form class="mv-admin__box" method="post" action="/admin/rules" novalidate data-autosave data-saved-label={ i18n.T(ctx, "admin.saved") } data-error-label={ i18n.T(ctx, "admin.save_failed") }>
+			<input type="hidden" name="part" value="content"/>
+			<strong class="mv-admin__boxtitle">{ i18n.T(ctx, "admin.rules.content") }</strong>
+			@soonToggle("rule-nsfw", i18n.T(ctx, "admin.rules.nsfw"), i18n.T(ctx, "admin.rules.nsfw_desc"), false)
+			@ui.ToggleRow("rule-mature", "allow_mature", i18n.T(ctx, "admin.rules.mature"), i18n.T(ctx, "admin.rules.age_desc"), v.Content.AllowMature, nil)
+			@ui.ToggleRow("rule-adult", "allow_adult", i18n.T(ctx, "admin.rules.adult"), i18n.T(ctx, "admin.rules.age_desc"), v.Content.AllowAdult, nil)
+			<div class="mv-setrow">
+				<label class="mv-setrow__text" for="rule-default-rating">
+					<span class="mv-setrow__title">{ i18n.T(ctx, "admin.rules.default_rating") }</span>
+				</label>
+				<div class="mv-setrow__control">
+					@ui.Select(ui.SelectProps{ID: "rule-default-rating", Name: "default_age_rating", Value: v.Content.DefaultAgeRating, Options: v.Ratings})
+				</div>
+			</div>
+			<div class="mv-setrow">
+				<label class="mv-setrow__text" for="rule-ai-labels">
+					<span class="mv-setrow__title">{ i18n.T(ctx, "admin.rules.ai_labels") }</span>
+					<span class="mv-setrow__desc">{ i18n.T(ctx, "admin.rules.ai_labels_desc") }</span>
+				</label>
+				<div class="mv-setrow__control">
+					@ui.Toggle(ui.ToggleProps{ID: "rule-ai-labels", Checked: true, Disabled: true})
+				</div>
+			</div>
+			@ui.ToggleRow("rule-licence", "licence_guard", i18n.T(ctx, "admin.rules.licence"), i18n.T(ctx, "admin.rules.licence_desc"), v.Content.LicenceGuard, nil)
+			@soonToggle("rule-autohold", i18n.T(ctx, "admin.rules.autohold"), "", false)
+			<div class="mv-nojs-only">
+				@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit"}) {
+					{ i18n.T(ctx, "admin.save") }
+				}
+			</div>
+		</form>
+		<div class="mv-admin__box">
+			<strong class="mv-admin__boxtitle">{ i18n.T(ctx, "admin.rules.community") }</strong>
+			@soonToggle("rule-comments", i18n.T(ctx, "admin.rules.comments"), "", true)
+			@soonToggle("rule-panel-comments", i18n.T(ctx, "admin.rules.panel_comments"), "", true)
+			@soonToggle("rule-new-members", i18n.T(ctx, "admin.rules.new_members"), "", false)
+			<div class="mv-field">
+				<span class="mv-field__label" id="words-label">{ i18n.T(ctx, "admin.rules.words") }</span>
+				<details class="mv-admin__words" open?={ v.WordsOpen }>
+					<summary class="mv-admin__wordsummary" aria-describedby="words-label">
+						<span>{ i18n.T(ctx, "admin.rules.words_count", "count", v.WordCount) }</span>
+						@ui.Icon("chevron-down", 16)
+					</summary>
+					<form class="mv-admin__wordsform" method="post" action="/admin/rules/words" novalidate>
+						@ui.Field(ui.FieldProps{ID: "rule-words", Label: i18n.T(ctx, "admin.rules.words_edit"), Hint: i18n.T(ctx, "admin.rules.words_hint"), Error: v.WordsError}) {
+							@ui.Textarea(ui.TextareaProps{ID: "rule-words", Name: "words", Value: v.Words, Rows: 6, Invalid: v.WordsError != ""})
+						}
+						@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit"}) {
+							{ i18n.T(ctx, "admin.rules.words_save") }
+						}
+					</form>
+				</details>
+			</div>
+		</div>
+	</div>
+	<form class="mv-admin__box" method="post" action="/admin/rules" novalidate>
+			<input type="hidden" name="part" value="server_rules"/>
+			<label class="mv-admin__boxtitle" for="server-rules">{ i18n.T(ctx, "admin.rules.signup_rules") }</label>
+			@ui.Textarea(ui.TextareaProps{ID: "server-rules", Name: "rules", Value: v.ServerText, Rows: 3, MaxLength: maxServerRules, Invalid: v.RulesError != ""})
+			if v.RulesError != "" {
+				<span class="mv-field__error" id="server-rules-error" role="alert">
+					@ui.Icon("alert-triangle", 14)
+					<span>{ v.RulesError }</span>
+				</span>
+			}
+			<div class="mv-admin__boxfoot">
+				@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit"}) {
+					{ i18n.T(ctx, "admin.save") }
+				}
+			</div>
+	</form>
+}
+
+// soonToggle is a designed switch whose feature is not built yet: it shows
+// the real state (on for what always happens, off for what does not happen
+// yet), cannot be changed and carries the Soon tag.
+templ soonToggle(id, title, desc string, on bool) {
+	<div class="mv-setrow is-soon" title={ i18n.T(ctx, "ui.soon_hint") }>
+		<span class="mv-setrow__text" id={ id + "-label" }>
+			<span class="mv-setrow__title">{ title }</span>
+			if desc != "" {
+				<span class="mv-setrow__desc">{ desc }</span>
+			}
+		</span>
+		<div class="mv-setrow__control">
+			@ui.SoonTag()
+			@ui.Toggle(ui.ToggleProps{ID: id, Checked: on, Disabled: true, Attrs: templ.Attributes{"aria-labelledby": id + "-label"}})
+		</div>
+	</div>
+}
+
+// ---- Server --------------------------------------------------------------------
+
+// ServerTab is "G5 – Admin · Server – Desktop".
+templ ServerTab(v serverView) {
+	@maintenanceDialog(v)
+	<div class="mv-admin__grid">
+		<form class="mv-admin__box" method="post" action="/admin/server" novalidate data-autosave data-saved-label={ i18n.T(ctx, "admin.saved") } data-error-label={ i18n.T(ctx, "admin.save_failed") }>
+			<strong class="mv-admin__boxtitle">{ i18n.T(ctx, "admin.server.instance") }</strong>
+			@ui.Field(ui.FieldProps{ID: "server-name", Label: i18n.T(ctx, "admin.server.name"), Error: v.Errors["name"]}) {
+				@ui.Input(ui.InputProps{ID: "server-name", Name: "name", Value: v.Name, MaxLength: 80, Required: true, Invalid: v.Errors["name"] != ""})
+			}
+			@ui.Field(ui.FieldProps{ID: "server-description", Label: i18n.T(ctx, "admin.server.description"), Error: v.Errors["description"]}) {
+				@ui.Textarea(ui.TextareaProps{ID: "server-description", Name: "description", Value: v.Description, Rows: 2, MaxLength: maxDescription, Invalid: v.Errors["description"] != ""})
+			}
+			@ui.Field(ui.FieldProps{ID: "server-url", Label: i18n.T(ctx, "admin.server.public_url"), Error: v.Errors["public_url"]}) {
+				@ui.Input(ui.InputProps{ID: "server-url", Name: "public_url", Type: "url", Value: v.PublicURL, Placeholder: "https://", MaxLength: maxPublicURLLen, Invalid: v.Errors["public_url"] != ""})
+			}
+			<div class="mv-admin__group">
+				<span class="mv-field__label" aria-hidden="true">{ i18n.T(ctx, "admin.server.mode") }</span>
+				@ui.Segmented(ui.SegmentedProps{Name: "mode", Value: v.Mode, Label: i18n.T(ctx, "admin.server.mode"), Full: true, Options: modeOptions(ctx)})
+				if v.Errors["mode"] != "" {
+					<span class="mv-field__error" role="alert">
+						@ui.Icon("alert-triangle", 14)
+						<span>{ v.Errors["mode"] }</span>
+					</span>
+				}
+			</div>
+			<div class="mv-nojs-only">
+				@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit"}) {
+					{ i18n.T(ctx, "admin.save") }
+				}
+			</div>
+		</form>
+		<div class="mv-admin__box">
+			<strong class="mv-admin__boxtitle">{ i18n.T(ctx, "admin.server.services") }</strong>
+			for _, s := range v.Services {
+				@ui.KV(s.Label, s.Value)
+			}
+			<div class="mv-setrow mv-admin__telemetry">
+				<span class="mv-setrow__text" id="telemetry-label">
+					<span class="mv-setrow__title">{ i18n.T(ctx, "admin.server.telemetry") }</span>
+					<span class="mv-setrow__desc">{ i18n.T(ctx, "admin.server.telemetry_desc") }</span>
+				</span>
+				<div class="mv-setrow__control">
+					// This build has no telemetry endpoint: the switch stays off.
+					@ui.Toggle(ui.ToggleProps{ID: "telemetry", Checked: false, Disabled: true, Attrs: templ.Attributes{"aria-labelledby": "telemetry-label"}})
+				</div>
+			</div>
+		</div>
+	</div>
+	<section class="mv-admin__box" aria-labelledby="maintenance-title">
+		<strong class="mv-admin__boxtitle" id="maintenance-title">{ i18n.T(ctx, "admin.maintenance.title") }</strong>
+		if v.Maintenance.Enabled {
+			@ui.Notice(ui.ToneWarning, "tool") {
+				<p>{ i18n.T(ctx, "admin.maintenance.on_notice") }</p>
+			}
+		}
+		<div class="mv-admin__actions mv-admin__actions--start">
+			@ui.LinkButton("/admin/server?dialog=maintenance#maintenance-dialog", ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "tool", Attrs: templ.Attributes{"data-dialog-open": "maintenance-dialog"}}) {
+				{ i18n.T(ctx, "admin.maintenance.mode") }
+				if v.Maintenance.Enabled {
+					@ui.Badge(ui.ToneWarning, "", i18n.T(ctx, "admin.maintenance.on"))
+				}
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "terminal-2", Disabled: true, Class: "is-soon", Tip: i18n.T(ctx, "ui.soon_hint")}) {
+				{ i18n.T(ctx, "admin.maintenance.logs") }
+				@ui.SoonTag()
+			}
+			@ui.LinkButton("/admin/backup", ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "database"}) {
+				{ i18n.T(ctx, "admin.maintenance.backups") }
+			}
+			@ui.LinkButton("/admin/update", ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "download"}) {
+				{ i18n.T(ctx, "admin.maintenance.updates") }
+			}
+		</div>
+	</section>
+}
+
+// maintenanceDialog turns maintenance mode on or off with the message G6
+// shows. Without JavaScript it is rendered open (?dialog=maintenance).
+templ maintenanceDialog(v serverView) {
+	@ui.Modal(ui.ModalProps{ID: "maintenance-dialog", Title: i18n.T(ctx, "admin.maintenance.mode"), Static: v.Dialog}) {
+		<form method="post" action="/admin/maintenance" novalidate>
+			@ui.ModalBody() {
+				<p>{ i18n.T(ctx, "admin.maintenance.body") }</p>
+				@ui.Field(ui.FieldProps{ID: "maintenance-message", Label: i18n.T(ctx, "admin.maintenance.message"), Hint: i18n.T(ctx, "admin.maintenance.message_hint"), Error: v.MaintError}) {
+					@ui.Textarea(ui.TextareaProps{ID: "maintenance-message", Name: "message", Value: v.MaintDraft, Rows: 3, MaxLength: maxMaintenance, Invalid: v.MaintError != ""})
+				}
+			}
+			@ui.ModalFoot() {
+				if v.Dialog {
+					@ui.LinkButton("/admin/server", ui.ButtonProps{Variant: ui.Quiet}) {
+						{ i18n.T(ctx, "admin.cancel") }
+					}
+				} else {
+					@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Attrs: templ.Attributes{"data-dialog-close": true}}) {
+						{ i18n.T(ctx, "admin.cancel") }
+					}
+				}
+				if v.Maintenance.Enabled {
+					@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Type: "submit", Attrs: templ.Attributes{"name": "enabled", "value": "1"}}) {
+						{ i18n.T(ctx, "admin.maintenance.save_message") }
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "player-play", Attrs: templ.Attributes{"name": "enabled", "value": "0"}}) {
+						{ i18n.T(ctx, "admin.maintenance.turn_off") }
+					}
+				} else {
+					@ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit", Icon: "tool", Attrs: templ.Attributes{"name": "enabled", "value": "1"}}) {
+						{ i18n.T(ctx, "admin.maintenance.turn_on") }
+					}
+				}
+			}
+		</form>
+	}
+}
+
+// ---- options -------------------------------------------------------------------
+
+func roleOptions(ctx context.Context) []ui.Option {
+	out := []ui.Option{}
+	for _, r := range []string{auth.RoleAdmin, auth.RoleCreator, auth.RoleReader} {
+		out = append(out, ui.Option{Value: r, Label: i18n.T(ctx, "admin.role."+r)})
+	}
+	return out
+}
+
+func signupOptions(ctx context.Context) []ui.Option {
+	out := []ui.Option{}
+	for _, m := range []string{settings.SignUpClosed, settings.SignUpInvite, settings.SignUpOpen} {
+		out = append(out, ui.Option{Value: m, Label: i18n.T(ctx, "admin.signup."+m)})
+	}
+	return out
+}
+
+func modeOptions(ctx context.Context) []ui.Option {
+	out := []ui.Option{}
+	for _, m := range []string{settings.ModePersonal, settings.ModePrivate, settings.ModePublic} {
+		out = append(out, ui.Option{Value: m, Label: i18n.T(ctx, "admin.mode."+m)})
+	}
+	return out
+}
+
+func expiryOptions(ctx context.Context) []ui.Option {
+	out := []ui.Option{}
+	for _, e := range inviteExpiries {
+		out = append(out, ui.Option{Value: e.Value, Label: i18n.T(ctx, "admin.invites.expiry."+e.Value)})
+	}
+	return out
+}
+
+func emailHint(ctx context.Context, email bool) string {
+	if email {
+		return i18n.T(ctx, "admin.invites.email_hint")
+	}
+	return i18n.T(ctx, "admin.invites.email_hint_off")
+}
+
+func projectsLimit(ctx context.Context, n string) string {
+	if n == "0" {
+		return i18n.T(ctx, "admin.limits.unlimited")
+	}
+	return n
+}
+
+func stepFor(name string) string {
+	if name == "monthly_spend" || name == "server_spend" {
+		return "0.01"
+	}
+	return "1"
+}
+
+func reportsLabel(ctx context.Context, disputes bool) string {
+	if disputes {
+		return i18n.T(ctx, "admin.tab.disputes")
+	}
+	return i18n.T(ctx, "admin.tab.reports")
+}
+
+func emptyTitle(ctx context.Context, disputes bool) string {
+	if disputes {
+		return i18n.T(ctx, "admin.disputes.empty.title")
+	}
+	return i18n.T(ctx, "admin.reports.empty.title")
+}
+
+func tabOf(disputes bool) string {
+	if disputes {
+		return tabDisputes
+	}
+	return tabReports
+}
+
+// reviewListed reports whether the reviewed report is one of the listed rows
+// (an older or resolved report is reviewed below the list instead).
+func reviewListed(v reportsView) bool {
+	for _, it := range v.Items {
+		if it.Current {
+			return true
+		}
+	}
+	return false
+}

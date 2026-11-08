@@ -1,0 +1,201 @@
+/*
+ * G5 Admin (design 09 "G5 – Admin & moderation – Desktop"; design 13 "G5 –
+ * Admin · Users / Content rules / Server – Desktop"): stat cards, the tab
+ * switch, report and member rows, cards of settings rows. Tokens and the UI
+ * kit only; the page frame is the app shell.
+ */
+.mv-admin { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+
+.mv-admin__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.mv-admin__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px;
+  background: var(--mv-surface);
+  border: 1px solid var(--mv-line);
+}
+.mv-admin__stat-label { font-size: .75rem; line-height: 1.25; color: var(--mv-text-2); }
+.mv-admin__stat-value {
+  font-family: var(--mv-font-display);
+  font-size: 1.875rem;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mv-admin__nav { display: flex; gap: 8px; }
+.mv-admin__nav .mv-seg__item,
+.mv-admin__signup .mv-seg__item,
+.mv-admin__group .mv-seg__item { padding: 6px 10px; font-size: .75rem; }
+
+/* Lists: report queue, members. */
+.mv-admin__list { background: var(--mv-surface); border: 1px solid var(--mv-line); min-width: 0; }
+.mv-admin__row {
+  display: grid;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--mv-line);
+  font-size: .8125rem;
+}
+.mv-admin__row:last-child { border-bottom: 0; }
+.mv-admin__row.is-current { background: var(--mv-surface-2); box-shadow: inset 3px 0 0 var(--mv-accent); }
+.mv-admin__report { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) 110px 220px; }
+.mv-admin__member { grid-template-columns: 36px minmax(0, 1.3fr) 140px minmax(0, 1.3fr) 110px 30px; min-height: 69px; }
+.mv-admin__title { min-width: 0; overflow-wrap: anywhere; }
+.mv-admin__muted { min-width: 0; color: var(--mv-text-2); overflow-wrap: anywhere; }
+.mv-admin__meta { color: var(--mv-text-3); font-family: var(--mv-font-mono); font-size: .6875rem; letter-spacing: .02em; }
+.mv-admin__labels { display: flex; flex-wrap: wrap; gap: 2px 8px; margin-top: 2px; color: var(--mv-text-3); font-family: var(--mv-font-mono); font-size: .6875rem; }
+/* Reason and status badges fill their column, as in the design. */
+.mv-admin__badge { display: flex; min-width: 0; }
+.mv-admin__badge .mv-badge { flex: 1 1 auto; max-width: 100%; overflow: hidden; }
+.mv-admin__actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; min-width: 0; }
+.mv-admin__actions--start { justify-content: flex-start; }
+.mv-admin__actions form { display: contents; }
+.mv-admin__linetext { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.mv-admin__empty { border: 0; }
+.mv-admin__none { margin: 0; padding: 16px; color: var(--mv-text-2); font-size: .8125rem; }
+.mv-admin__more { display: flex; justify-content: center; padding: 12px; border-top: 1px solid var(--mv-line); }
+
+/* The review of one report, under its row. */
+.mv-admin__review {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-bottom: 1px solid var(--mv-line);
+  background: var(--mv-bg);
+}
+.mv-admin__list > .mv-admin__review:last-child { border-bottom: 0; }
+.mv-admin__review-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.mv-admin__h2 { margin: 0; font-size: 1rem; font-weight: 700; }
+.mv-admin__review-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+.mv-admin__quotes { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mv-admin__label { font-size: .75rem; font-weight: 600; color: var(--mv-text-2); }
+.mv-admin__quote {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--mv-line);
+  background: var(--mv-surface);
+  font-size: .875rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mv-admin__badges { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.mv-admin__resolve { display: flex; flex-direction: column; gap: 12px; max-width: 760px; }
+
+/* Cards. */
+.mv-admin__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.mv-admin__box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  background: var(--mv-surface);
+  border: 1px solid var(--mv-line);
+}
+.mv-admin__boxtitle { font-size: .875rem; font-weight: 700; }
+.mv-admin__boxfoot { display: flex; justify-content: flex-end; }
+.mv-admin__hint { margin: 0; color: var(--mv-text-2); font-size: .75rem; line-height: 1.5; }
+.mv-admin__box .mv-setrow { min-height: 0; padding: 11px 0; line-height: 1.25; }
+.mv-admin__box .mv-kv { line-height: 1.25; }
+.mv-admin__box .mv-textarea { min-height: 64px; }
+.mv-admin__box .mv-setrow.is-soon .mv-setrow__title { color: var(--mv-text-2); }
+.mv-admin__box .mv-setrow.is-soon .mv-soon { margin-inline-start: 0; }
+.mv-admin__box .mv-select-wrap { min-width: 160px; }
+.mv-admin__group { display: flex; flex-direction: column; gap: 8px; }
+.mv-admin__line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--mv-line);
+  font-size: .8125rem;
+}
+.mv-admin__line:last-child { border-bottom: 0; }
+.mv-admin__who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+/* Users: toolbar, role select, menus, invites, limits. */
+.mv-admin__toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.mv-admin__search { flex: 0 1 320px; max-width: 320px; height: 38px; margin-left: 0; }
+.mv-admin__signup { display: flex; align-items: center; gap: 10px; margin-left: auto; color: var(--mv-text-2); font-size: .8125rem; flex-wrap: wrap; }
+.mv-admin__signup .mv-toggle { font-size: .8125rem; }
+.mv-admin__roleform { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.mv-admin__roleform .mv-select-wrap { flex: 1 1 auto; min-width: 0; }
+.mv-admin__menu .mv-dropdown__panel { min-width: 220px; }
+.mv-admin__dots { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; color: var(--mv-text-2); }
+.mv-admin__dots:hover { color: var(--mv-text); }
+.mv-admin__invite {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) 90px minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--mv-line);
+  font-size: .8125rem;
+}
+.mv-admin__invite:last-child { border-bottom: 0; }
+.mv-admin__invite.is-current { box-shadow: inset 3px 0 0 var(--mv-accent); padding-left: 10px; }
+.mv-admin__copy { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.mv-admin__copy .mv-input { flex: 1 1 auto; min-width: 0; }
+.mv-admin__mono { font-family: var(--mv-font-mono); font-size: .75rem; }
+.mv-admin__limit { align-items: center; padding: 5px 0; }
+.mv-admin__limit.is-invalid .mv-input { border-color: var(--mv-error); }
+.mv-admin__limitvalue { display: inline-flex; align-items: center; gap: 6px; }
+.mv-admin__num { width: 88px; min-height: 30px; padding: 0 8px; text-align: right; }
+.mv-admin__box .mv-kv.is-soon .mv-kv__value { display: inline-flex; align-items: center; gap: 8px; }
+.mv-admin__box .mv-kv.is-soon .mv-soon { margin-inline-start: 0; }
+
+/* Content rules: the blocked words list opens in place. */
+.mv-admin__words > summary { list-style: none; }
+.mv-admin__words > summary::-webkit-details-marker { display: none; }
+.mv-admin__wordsummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 11px;
+  background: var(--mv-surface);
+  border: 1px solid var(--mv-line);
+  border-radius: var(--mv-radius-control);
+  color: var(--mv-text);
+  font-size: .875rem;
+  cursor: pointer;
+}
+.mv-admin__wordsummary .ti { color: var(--mv-text-2); }
+.mv-admin__words[open] .mv-admin__wordsummary .ti { transform: rotate(180deg); }
+.mv-admin__wordsummary:focus-visible { outline: var(--mv-focus-width) solid var(--mv-focus); outline-offset: 2px; }
+.mv-admin__wordsform { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding-top: 12px; }
+.mv-admin__wordsform .mv-field { width: 100%; }
+.mv-admin__telemetry { border-bottom: 1px solid var(--mv-line); }
+
+/* Static dialogs (no JavaScript) sit at the top of the tab. */
+.mv-admin .mv-modal--static { max-width: 520px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mv-admin__words[open] .mv-admin__wordsummary .ti { transition: none; }
+}
+
+@media (max-width: 1100px) {
+  .mv-admin__report { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .mv-admin__report .mv-admin__actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .mv-admin__member { grid-template-columns: 36px minmax(0, 1fr) 140px 30px; }
+  .mv-admin__member > .mv-admin__linetext:nth-of-type(2), .mv-admin__member > .mv-admin__badge { grid-column: 2 / -1; }
+}
+
+@media (max-width: 760px) {
+  .mv-admin__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mv-admin__nav { overflow-x: auto; }
+  .mv-admin__grid, .mv-admin__review-grid { grid-template-columns: minmax(0, 1fr); }
+  .mv-admin__report { grid-template-columns: minmax(0, 1fr); }
+  .mv-admin__invite { grid-template-columns: minmax(0, 1fr); }
+  .mv-admin__search { flex: 1 1 100%; max-width: none; }
+  .mv-admin__signup { margin-left: 0; }
+}
