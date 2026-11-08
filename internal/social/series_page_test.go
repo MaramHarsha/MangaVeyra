@@ -98,13 +98,13 @@ func TestSeriesPageAccess(t *testing.T) {
 		owner, ownerClient := e.user(auth.RoleCreator)
 		_, member := e.user(auth.RoleReader)
 		anon := e.ta.NewClient()
-		pub := e.f.Series(publishtest.SeriesSpec{Owner: owner})
-		unlisted := e.f.Series(publishtest.SeriesSpec{Owner: owner, Visibility: publish.VisibilityUnlisted})
-		members := e.f.Series(publishtest.SeriesSpec{Owner: owner, Visibility: publish.VisibilityMembers})
-		private := e.f.Series(publishtest.SeriesSpec{Owner: owner, Visibility: publish.VisibilityPrivate})
-		mature := e.f.Series(publishtest.SeriesSpec{Owner: owner, AgeRating: publish.RatingMature})
-		adult := e.f.Series(publishtest.SeriesSpec{Owner: owner, AgeRating: publish.RatingAdult})
-		draft := e.f.Series(publishtest.SeriesSpec{Owner: owner, NeverPublished: true, Status: publish.SeriesDraft})
+		pub := e.f.ReadableSeries(publishtest.SeriesSpec{Owner: owner})
+		unlisted := e.f.ReadableSeries(publishtest.SeriesSpec{Owner: owner, Visibility: publish.VisibilityUnlisted})
+		members := e.f.ReadableSeries(publishtest.SeriesSpec{Owner: owner, Visibility: publish.VisibilityMembers})
+		private := e.f.ReadableSeries(publishtest.SeriesSpec{Owner: owner, Visibility: publish.VisibilityPrivate})
+		mature := e.f.ReadableSeries(publishtest.SeriesSpec{Owner: owner, AgeRating: publish.RatingMature})
+		adult := e.f.ReadableSeries(publishtest.SeriesSpec{Owner: owner, AgeRating: publish.RatingAdult})
+		draft := e.f.ReadableSeries(publishtest.SeriesSpec{Owner: owner, NeverPublished: true, Status: publish.SeriesDraft})
 
 		for _, tc := range []struct {
 			name   string
@@ -228,8 +228,8 @@ func TestSeriesPageFollowAndCommentForms(t *testing.T) {
 
 func TestSeriesFormsNeedAccessSignInAndBudget(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, e *env) {
-		private := e.f.Series(publishtest.SeriesSpec{Visibility: publish.VisibilityPrivate})
-		public := e.f.Series(publishtest.SeriesSpec{})
+		private := e.f.ReadableSeries(publishtest.SeriesSpec{Visibility: publish.VisibilityPrivate})
+		public := e.f.ReadableSeries(publishtest.SeriesSpec{})
 		_, c := e.user(auth.RoleReader)
 		for _, slug := range []string{private.Slug, "no-such-series"} {
 			wantStatus(t, "follow form unreadable", postForm(c, "/s/"+slug+"/follow", url.Values{}), http.StatusNotFound)
@@ -254,7 +254,7 @@ func TestSeriesFormsNeedAccessSignInAndBudget(t *testing.T) {
 
 func TestCommentBodiesArePlainText(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, e *env) {
-		s := e.f.Series(publishtest.SeriesSpec{})
+		s := e.f.ReadableSeries(publishtest.SeriesSpec{})
 		_, c := e.user(auth.RoleReader)
 		evil := `<script>alert("x")</script><img src=x onerror=alert(1)> & "quotes"` + "\x00\x07"
 		got := postComment(t, c, seriesComment(s, evil), http.StatusCreated)

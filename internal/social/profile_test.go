@@ -27,9 +27,9 @@ func TestProfilePage(t *testing.T) {
 		e.f.Publish(listed, publishtest.PublicationSpec{Title: "Orchard Two"})
 		unlisted := e.f.Series(publishtest.SeriesSpec{Owner: creator, Title: "Secret Unlisted", Visibility: publish.VisibilityUnlisted})
 		e.f.Publish(unlisted, publishtest.PublicationSpec{})
-		e.f.Series(publishtest.SeriesSpec{Owner: creator, Title: "Members Shelf", Visibility: publish.VisibilityMembers})
-		e.f.Series(publishtest.SeriesSpec{Owner: creator, Title: "Private Draft", Visibility: publish.VisibilityPrivate})
-		e.f.Series(publishtest.SeriesSpec{Owner: creator, Title: "Mature Tale", AgeRating: publish.RatingMature})
+		e.f.ReadableSeries(publishtest.SeriesSpec{Owner: creator, Title: "Members Shelf", Visibility: publish.VisibilityMembers})
+		e.f.ReadableSeries(publishtest.SeriesSpec{Owner: creator, Title: "Private Draft", Visibility: publish.VisibilityPrivate})
+		e.f.ReadableSeries(publishtest.SeriesSpec{Owner: creator, Title: "Mature Tale", AgeRating: publish.RatingMature})
 
 		anon := e.ta.NewClient()
 		r := anon.Get("/u/" + creator.Username)

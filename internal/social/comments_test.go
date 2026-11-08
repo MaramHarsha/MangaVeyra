@@ -63,7 +63,7 @@ func TestCommentTargetsAndAnchors(t *testing.T) {
 			wantStatus(t, "bad comment "+string(rune('a'+i)), r, http.StatusUnprocessableEntity)
 		}
 		// A target from another series is not found.
-		other := e.f.Series(publishtest.SeriesSpec{})
+		other := e.f.ReadableSeries(publishtest.SeriesSpec{})
 		_, c2 := e.user(auth.RoleReader)
 		wantStatus(t, "cross-series target", c2.PostJSON("/api/v1/social/comments", map[string]any{"series_id": other.ID,
 			"target_kind": "chapter", "target_id": ch.ID, "body": "x"}), http.StatusNotFound)
@@ -108,7 +108,7 @@ func TestCommentTargetsAndAnchors(t *testing.T) {
 
 func TestCommentsNewestFirstInBoundedPages(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, e *env) {
-		s := e.f.Series(publishtest.SeriesSpec{})
+		s := e.f.ReadableSeries(publishtest.SeriesSpec{})
 		u := e.f.User(auth.RoleReader)
 		base := time.Now().UTC().Add(-time.Hour)
 		for i := range 7 {
@@ -222,7 +222,7 @@ func TestCommentAccessFollowsPublish(t *testing.T) {
 func TestCommentModeration(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, e *env) {
 		owner, ownerClient := e.user(auth.RoleCreator)
-		s := e.f.Series(publishtest.SeriesSpec{Owner: owner})
+		s := e.f.ReadableSeries(publishtest.SeriesSpec{Owner: owner})
 		_, authorClient := e.user(auth.RoleReader)
 		_, otherClient := e.user(auth.RoleReader)
 		anon := e.ta.NewClient()
@@ -288,7 +288,7 @@ func TestReports(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, e *env) {
 		s := e.f.Series(publishtest.SeriesSpec{})
 		ch := e.f.Publish(s, publishtest.PublicationSpec{})
-		private := e.f.Series(publishtest.SeriesSpec{Visibility: publish.VisibilityPrivate})
+		private := e.f.ReadableSeries(publishtest.SeriesSpec{Visibility: publish.VisibilityPrivate})
 		author, authorClient := e.user(auth.RoleReader)
 		reporter, reporterClient := e.user(auth.RoleReader)
 		c := postComment(t, authorClient, seriesComment(s, "buy followers at example.com"), http.StatusCreated)
@@ -334,7 +334,7 @@ func TestReports(t *testing.T) {
 func TestCommentAndReportWritesAreRateLimited(t *testing.T) {
 	ta := testutil.NewTestApp(t)
 	e := &env{t: t, ta: ta, f: publishtest.New(t, ta)}
-	s := e.f.Series(publishtest.SeriesSpec{})
+	s := e.f.ReadableSeries(publishtest.SeriesSpec{})
 	_, c := e.user(auth.RoleReader)
 	for i := range 5 {
 		postComment(t, c, seriesComment(s, "comment "+string(rune('a'+i))), http.StatusCreated)
@@ -347,7 +347,7 @@ func TestCommentAndReportWritesAreRateLimited(t *testing.T) {
 	// Reports: five, then limited.
 	limited := false
 	for i := range 8 {
-		target := e.f.Series(publishtest.SeriesSpec{})
+		target := e.f.ReadableSeries(publishtest.SeriesSpec{})
 		r := c.PostJSON("/api/v1/social/reports", map[string]any{"target_kind": "series", "target_id": target.ID, "reason": "spam"})
 		if r.StatusCode == http.StatusTooManyRequests {
 			limited = i >= 5

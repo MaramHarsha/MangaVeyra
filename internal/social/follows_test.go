@@ -103,7 +103,7 @@ func TestFollowUnfollowIsIdempotentAndKeepsFollowerCount(t *testing.T) {
 
 func TestConcurrentFollowsCountOnce(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, e *env) {
-		s := e.f.Series(publishtest.SeriesSpec{})
+		s := e.f.ReadableSeries(publishtest.SeriesSpec{})
 		var clients []*testutil.Client
 		for range 4 {
 			_, c := e.user(auth.RoleReader)
@@ -128,9 +128,9 @@ func TestConcurrentFollowsCountOnce(t *testing.T) {
 
 func TestFollowNeedsAccessAndSignIn(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, e *env) {
-		private := e.f.Series(publishtest.SeriesSpec{Visibility: publish.VisibilityPrivate})
-		draft := e.f.Series(publishtest.SeriesSpec{NeverPublished: true, Status: publish.SeriesDraft})
-		public := e.f.Series(publishtest.SeriesSpec{})
+		private := e.f.ReadableSeries(publishtest.SeriesSpec{Visibility: publish.VisibilityPrivate})
+		draft := e.f.ReadableSeries(publishtest.SeriesSpec{NeverPublished: true, Status: publish.SeriesDraft})
+		public := e.f.ReadableSeries(publishtest.SeriesSpec{})
 		_, c := e.user(auth.RoleReader)
 		for _, id := range []string{private.ID, draft.ID, "01nosuchseries0000000000000"} {
 			r := c.SendJSON(http.MethodPut, "/api/v1/social/series/"+id+"/follow", nil)
@@ -159,7 +159,7 @@ func TestFollowedSeriesIDsPaging(t *testing.T) {
 		base := db.Now().Add(-time.Hour)
 		var want []string
 		for i := range 7 {
-			s := e.f.Series(publishtest.SeriesSpec{})
+			s := e.f.ReadableSeries(publishtest.SeriesSpec{})
 			// Two follows share a timestamp so the ID tie-break is exercised.
 			at := base.Add(time.Duration(i/2) * time.Minute)
 			e.exec(`INSERT INTO follows (user_id, series_id, notify, created_at) VALUES (?, ?, ?, ?)`, u.ID, s.ID, true, at)
@@ -218,7 +218,7 @@ func TestFollowedSeriesIDsPaging(t *testing.T) {
 func TestFollowersPagingSkipsMuted(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, e *env) {
 		ctx := context.Background()
-		s := e.f.Series(publishtest.SeriesSpec{})
+		s := e.f.ReadableSeries(publishtest.SeriesSpec{})
 		var want []string
 		for i := range 6 {
 			u := e.f.User(auth.RoleReader)
@@ -288,7 +288,7 @@ func TestUserFollows(t *testing.T) {
 func TestFollowWritesAreRateLimited(t *testing.T) {
 	ta := testutil.NewTestApp(t)
 	e := &env{t: t, ta: ta, f: publishtest.New(t, ta)}
-	s := e.f.Series(publishtest.SeriesSpec{})
+	s := e.f.ReadableSeries(publishtest.SeriesSpec{})
 	_, c := e.user(auth.RoleReader)
 	limited := false
 	for range 40 {
