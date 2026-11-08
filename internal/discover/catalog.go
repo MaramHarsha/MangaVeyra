@@ -189,8 +189,11 @@ func genreLabel(ctx context.Context, slug string) string {
 	if slug == "" {
 		return ""
 	}
-	if v := i18n.T(ctx, "genre."+slug); v != "genre."+slug {
-		return v
+	// The onboarding genre catalogue, then genres only discover names.
+	for _, key := range []string{"genre." + slug, "discover.genre." + slug} {
+		if v := i18n.T(ctx, key); v != key {
+			return v
+		}
 	}
 	words := strings.Fields(strings.NewReplacer("_", " ", "-", " ").Replace(slug))
 	for i, w := range words {

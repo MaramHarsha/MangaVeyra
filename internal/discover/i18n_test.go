@@ -54,6 +54,7 @@ func TestTranslations(t *testing.T) {
 	for _, g := range searchGenres {
 		keys["genre."+g] = true
 	}
+	keys["discover.genre.adventure"] = true
 	b := i18n.Default()
 	jaMissing := map[string]bool{}
 	for _, k := range b.Missing("ja") {
