@@ -127,7 +127,9 @@ func (s *service) enqueueLock(ctx context.Context, actor studio.Actor, projectID
 	}})
 	var existing existingLockJob
 	if errors.As(err, &existing) {
-		return s.queue.Get(ctx, existing.ID)
+		// The guard above runs under the character row lock (BEGIN IMMEDIATE
+		// on SQLite), so this reuse holds across processes.
+		return dedupedJob(ctx, s.queue, existing.ID)
 	}
 	return j, err
 }

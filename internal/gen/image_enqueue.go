@@ -112,7 +112,7 @@ func (s *service) EnqueuePanel(ctx context.Context, actor studio.Actor, req Pane
 	if err != nil {
 		return nil, err
 	}
-	return s.enqueueImage(ctx, p)
+	return s.enqueueImageOnce(ctx, p, panelDedupeKey(p))
 }
 func (s *service) preparePanel(ctx context.Context, actor studio.Actor, req PanelRequest, page pagedoc.Page, batchID string) (imagePayload, error) {
 	return s.preparePanelControls(ctx, actor, req, page, batchID, false)
@@ -343,5 +343,5 @@ func (s *service) EnqueueRegionEdit(ctx context.Context, actor studio.Actor, req
 	if err = s.plan(ctx, &p, req.RoutingMode, "", w, h, n); err != nil {
 		return nil, err
 	}
-	return s.enqueueImage(ctx, p)
+	return s.enqueueImageOnce(ctx, p, regionDedupeKey(p, maskAsset.SHA256))
 }

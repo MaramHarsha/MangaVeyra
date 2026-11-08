@@ -313,6 +313,12 @@ func (s *service) checkImageTx(ctx context.Context, tx *db.Tx, p imagePayload, a
 	return nil
 }
 func (s *service) enqueueImage(ctx context.Context, p imagePayload) (*jobs.Job, error) {
+	return s.enqueueImageOnce(ctx, p, "")
+}
+
+// enqueueImageOnce enqueues p; a non-empty dedupeKey returns the user's
+// identical active job instead (see dedupe.go).
+func (s *service) enqueueImageOnce(ctx context.Context, p imagePayload, dedupeKey string) (*jobs.Job, error) {
 	cost, err := scaleCost(p.Plan.Estimate, imageAttempts*len(p.Components))
 	if err != nil {
 		return nil, studio.ErrInvalid
@@ -321,7 +327,9 @@ func (s *service) enqueueImage(ctx context.Context, p imagePayload) (*jobs.Job, 
 	if err != nil {
 		return nil, err
 	}
-	return s.queue.Enqueue(ctx, s.imageParams(p, actor, cost))
+	params := s.imageParams(p, actor, cost)
+	params.DedupeKey = dedupeKey
+	return s.queue.Enqueue(ctx, params)
 }
 func (s *service) imageParams(p imagePayload, actor studio.Actor, cost jobs.Cost) jobs.EnqueueParams {
 	priority := 10

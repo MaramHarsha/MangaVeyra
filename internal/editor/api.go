@@ -655,24 +655,10 @@ func (m *Module) generate(w http.ResponseWriter, r *http.Request) error {
 	default:
 		return mapped(r, studio.ErrInvalid)
 	}
-	want := generation{Kind: in.Kind, UserID: res.Actor.UserID, PageID: res.Page.ID, PanelID: in.PanelID, LayerID: in.LayerID, Prompt: in.Prompt, Routing: in.RoutingMode}
-	if in.Kind == "region" {
-		if mask, err := m.assets.Get(r.Context(), in.MaskID); err == nil && mask.ProjectID != nil && *mask.ProjectID == res.Project.ID {
-			want.MaskSHA = mask.SHA256
-		}
-	}
-	// One user's generation requests for a page run one at a time, so a
-	// double click or a retried request finds the job the first one queued.
-	release := m.generating.lock(res.Actor.UserID + "/" + res.Page.ID)
-	defer release()
-	existing, err := m.activeGeneration(r.Context(), res.Project.ID, want)
-	if err != nil {
-		return mapped(r, err)
-	}
-	if existing != nil {
-		core.JSON(w, 200, map[string]any{"job": m.jobSummary(r.Context(), existing), "existing": true})
-		return nil
-	}
+	// A double click, a retried request or the same request sent to another
+	// server process receives the user's identical active job: Gen keys the
+	// enqueue (user, page, panel/layer, mask content, prompt, routing mode)
+	// and the database stores at most one active job per key.
 	var j *jobs.Job
 	if in.Kind == "region" {
 		j, err = m.gen.EnqueueRegionEdit(r.Context(), res.Actor, gen.RegionEditRequest{ProjectID: res.Project.ID, LayerID: in.LayerID, MaskAssetID: in.MaskID, Prompt: in.Prompt, Variations: 4, RoutingMode: in.RoutingMode, ExpectedVersion: in.BaseVersion})
@@ -681,6 +667,10 @@ func (m *Module) generate(w http.ResponseWriter, r *http.Request) error {
 	}
 	if err != nil {
 		return mapped(r, err)
+	}
+	if j.Deduplicated {
+		core.JSON(w, 200, map[string]any{"job": m.jobSummary(r.Context(), j), "existing": true})
+		return nil
 	}
 	core.JSON(w, 202, map[string]any{"job": m.jobSummary(r.Context(), j)})
 	return nil

@@ -244,9 +244,21 @@ func (s *service) enqueueControlArt(ctx context.Context, actor studio.Actor, kin
 	}})
 	var existing existingControlJob
 	if errors.As(err, &existing) {
-		return s.queue.Get(ctx, existing.ID)
+		// The guard above runs under the target page and chapter row locks
+		// (BEGIN IMMEDIATE on SQLite), so this reuse holds across processes.
+		return dedupedJob(ctx, s.queue, existing.ID)
 	}
 	return j, err
+}
+
+// dedupedJob returns the active job a guard matched, marked as reused.
+func dedupedJob(ctx context.Context, q *jobs.Queue, id string) (*jobs.Job, error) {
+	j, err := q.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	j.Deduplicated = true
+	return j, nil
 }
 
 type existingControlJob struct{ ID string }

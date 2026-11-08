@@ -292,3 +292,102 @@ func TestEditorGenerationRefusalIsAClientError(t *testing.T) {
 		}
 	})
 }
+
+// sharedApp starts a second server process on ta's database, as a
+// multi-process deployment runs it (separate memory, connection pool and data
+// directory).
+func sharedApp(t *testing.T, ta *testutil.TestApp) *testutil.TestApp {
+	t.Helper()
+	dialect, dsn, err := ta.Deps.Cfg.Database()
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := dsn
+	if dialect == "sqlite" {
+		url = "sqlite://" + dsn
+	}
+	return testutil.NewTestApp(t, testutil.WithEnv("MV_DB", url), testutil.WithoutAdmin())
+}
+
+// concurrentPosts sends body to path from every client at once and returns
+// each response's status and job.
+func concurrentPosts(t *testing.T, clients []*testutil.Client, path string, body any) ([]int, []generated) {
+	t.Helper()
+	statuses, out := make([]int, len(clients)), make([]generated, len(clients))
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i, c := range clients {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			r := c.PostJSON(path, body)
+			statuses[i] = r.StatusCode
+			_ = json.Unmarshal(r.Body, &out[i])
+		}()
+	}
+	close(start)
+	wg.Wait()
+	return statuses, out
+}
+
+// oneJob checks that concurrent identical requests produced one job: one
+// 202, every other response 200 with existing:true, all naming the same job.
+func oneJob(t *testing.T, what string, statuses []int, out []generated) string {
+	t.Helper()
+	accepted := 0
+	for i := range statuses {
+		switch {
+		case statuses[i] == http.StatusAccepted && !out[i].Existing:
+			accepted++
+		case statuses[i] == http.StatusOK && out[i].Existing:
+		default:
+			t.Fatalf("%s %d: status %d %#v", what, i, statuses[i], out[i])
+		}
+		if out[i].Job.ID == "" || out[i].Job.ID != out[0].Job.ID {
+			t.Fatalf("%s: requests received different jobs %#v", what, out)
+		}
+	}
+	if accepted != 1 {
+		t.Fatalf("%s: %d requests queued new work", what, accepted)
+	}
+	return out[0].Job.ID
+}
+
+func TestEditorGenerationDeduplicatesAcrossServerProcesses(t *testing.T) {
+	each(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		u, c, p, _, base := fixture(t, ta)
+		page := doc(t, c.PostJSON(base+"/pages", map[string]string{"layout_id": "reveal-5"}), 201).Page
+		other := sharedApp(t, ta)
+		clients := []*testutil.Client{c, other.Login(t, u.Username), ta.Login(t, u.Username), other.Login(t, u.Username)}
+		path := base + "/pages/" + page.ID
+		request := map[string]any{"kind": "panel", "panel_id": page.Panels[0].ID, "prompt": "Rin vaults the railing.", "base_version": page.Version, "routing_mode": "balanced"}
+
+		statuses, out := concurrentPosts(t, clients, path+"/generate", request)
+		first := oneJob(t, "panel", statuses, out)
+		if got := countJobs(t, ta, p.ID, gen.JobPanel); got != 1 {
+			t.Fatalf("panel jobs=%d want 1", got)
+		}
+		// Either process may answer a later repeat; both return the active job.
+		for _, client := range clients[:2] {
+			if status, again := generate(t, client, path, request); status != http.StatusOK || !again.Existing || again.Job.ID != first {
+				t.Fatalf("repeat=%d %#v", status, again)
+			}
+		}
+		// A finished job no longer absorbs the request, in either process.
+		if _, err := ta.Deps.DB.Exec(ctx, `UPDATE jobs SET state = 'done', finished_at = ? WHERE id = ?`, db.Now(), first); err != nil {
+			t.Fatal(err)
+		}
+		if status, fresh := generate(t, clients[1], path, request); status != http.StatusAccepted || fresh.Existing || fresh.Job.ID == first {
+			t.Fatalf("finished job was reused: %d %#v", status, fresh)
+		}
+
+		// Page regeneration holds across processes through its row-locked guard.
+		statuses, out = concurrentPosts(t, clients, path+"/regenerate", map[string]any{"base_version": page.Version})
+		oneJob(t, "page", statuses, out)
+		if got := countJobs(t, ta, p.ID, gen.JobPage); got != 1 {
+			t.Fatalf("page jobs=%d want 1", got)
+		}
+	})
+}

@@ -98,10 +98,10 @@ func (m *Module) generatePage(w http.ResponseWriter, r *http.Request) error {
 	if in.SketchAssetID != "" && !db.ValidID(in.SketchAssetID) {
 		return sketchInvalid(r)
 	}
-	// Serialize interactive generation per page and reuse the exact active
-	// coordinator. The service still fences every target inside its transaction.
-	release := m.generating.lock(res.Actor.UserID + "/" + res.Page.ID)
-	defer release()
+	// Reuse the user's active coordinator for this page, or refuse a different
+	// one. This read is only a shortcut: Gen repeats the check under the page
+	// and chapter row locks (BEGIN IMMEDIATE on SQLite) inside the enqueue
+	// transaction, which holds across server processes.
 	existing, err := m.d.Jobs.List(r.Context(), jobs.Filter{ProjectID: res.Project.ID, UserID: res.Actor.UserID, Types: []string{gen.JobPage}, States: []string{jobs.StateQueued, jobs.StateRunning}, Limit: 100})
 	if err != nil {
 		return err
@@ -132,6 +132,10 @@ func (m *Module) generatePage(w http.ResponseWriter, r *http.Request) error {
 	}
 	if err != nil {
 		return mapped(r, err)
+	}
+	if j.Deduplicated {
+		core.JSON(w, 200, map[string]any{"job": m.jobSummary(r.Context(), j), "existing": true})
+		return nil
 	}
 	core.JSON(w, 202, map[string]any{"job": m.jobSummary(r.Context(), j)})
 	return nil
@@ -268,6 +272,10 @@ func (m *Module) repairCharacter(w http.ResponseWriter, r *http.Request) error {
 	j, err := m.control.EnqueueRepair(r.Context(), res.Actor, gen.RepairRequest{ProjectID: res.Project.ID, ChapterID: res.Chapter.ID, CharacterID: in.CharacterID, Targets: in.Targets})
 	if err != nil {
 		return mapped(r, err)
+	}
+	if j.Deduplicated {
+		core.JSON(w, 200, map[string]any{"job": m.jobSummary(r.Context(), j), "existing": true})
+		return nil
 	}
 	core.JSON(w, 202, map[string]any{"job": m.jobSummary(r.Context(), j)})
 	return nil

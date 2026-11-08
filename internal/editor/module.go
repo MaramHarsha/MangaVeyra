@@ -21,9 +21,6 @@ type Module struct {
 	control gen.ControlService
 	assets  *assets.Service
 	ui      *web.UI
-	// generating serialises one user's generation requests per page so a
-	// repeated submission reuses the active job (see activeGeneration).
-	generating keyedMutex
 }
 
 // New creates the module.
