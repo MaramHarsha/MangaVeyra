@@ -701,6 +701,77 @@ func TestFailedImportResumes(t *testing.T) {
 	}
 }
 
+// fakePdftoppm puts a stand-in pdftoppm first on PATH for a PDF of pages
+// pages, each rendered as png. It follows pdftoppm's -f, -l and -singlefile
+// options and its page-range error, and logs every page it renders; the
+// returned function reads that log.
+func fakePdftoppm(t *testing.T, png []byte, pages int) (rendered func() int) {
+	t.Helper()
+	bin := t.TempDir()
+	fixture := filepath.Join(bin, "page.png")
+	if err := os.WriteFile(fixture, png, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(bin, "rendered.log")
+	script := `#!/bin/sh
+first=1; lastp=""; single=""; prev=""
+for a; do
+  case "$prev" in -f) first=$a;; -l) lastp=$a;; esac
+  [ "$a" = "-singlefile" ] && single=1
+  prev=$a; root=$a
+done
+pages=$MV_TEST_PAGES
+[ -z "$lastp" ] && lastp=$pages
+[ "$lastp" -gt "$pages" ] && lastp=$pages
+if [ "$first" -gt "$pages" ]; then
+  echo "Wrong page range given: the first page ($first) can not be after the last page ($pages)." >&2
+  exit 99
+fi
+i=$first
+while [ "$i" -le "$lastp" ]; do
+  echo "$i" >> "$MV_TEST_LOG"
+  if [ -n "$single" ]; then cp "$MV_TEST_PNG" "$root.png"; else cp "$MV_TEST_PNG" "$root-$i.png"; fi
+  i=$((i+1))
+done
+`
+	if err := os.WriteFile(filepath.Join(bin, "pdftoppm"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":/bin:/usr/bin")
+	t.Setenv("MV_TEST_PNG", fixture)
+	t.Setenv("MV_TEST_PAGES", fmt.Sprint(pages))
+	t.Setenv("MV_TEST_LOG", logPath)
+	return func() int {
+		b, _ := os.ReadFile(logPath)
+		return strings.Count(string(b), "\n")
+	}
+}
+
+// PDF pages are rendered one at a time and checked as they come: an oversized
+// page or one page too many stops the rendering there.
+func TestPDFIsRenderedPageByPage(t *testing.T) {
+	ctx := context.Background()
+	lim := importer.DefaultLimits
+	lim.MaxPages, lim.MaxEntryBytes = 6, 64<<10
+	pdf := writeFile(t, []byte("%PDF-1.7\n%%EOF\n"))
+
+	rendered := fakePdftoppm(t, pagePNG(t, 4, 30, 40), 3)
+	names, _, _, err := importer.Extract(ctx, importer.KindPDF, pdf, t.TempDir(), lim)
+	if err != nil || len(names) != 3 || rendered() != 3 {
+		t.Fatalf("three pages: %v %v (rendered %d)", names, err, rendered())
+	}
+
+	rendered = fakePdftoppm(t, pagePNG(t, 4, 30, 40), 400)
+	if _, _, code, _ := importer.Extract(ctx, importer.KindPDF, pdf, t.TempDir(), lim); code != importer.CodeTooManyPages || rendered() > lim.MaxPages+1 {
+		t.Fatalf("400 pages: code %q after rendering %d", code, rendered())
+	}
+
+	rendered = fakePdftoppm(t, noisePNG(t, 200, 200), 50)
+	if _, _, code, _ := importer.Extract(ctx, importer.KindPDF, pdf, t.TempDir(), lim); code != importer.CodeEntryTooLarge || rendered() != 1 {
+		t.Fatalf("oversized pages: code %q after rendering %d", code, rendered())
+	}
+}
+
 func TestPDFNeedsPdftoppm(t *testing.T) {
 	ta := testutil.NewTestApp(t)
 	admin := ta.Login(t, "admin")
@@ -714,18 +785,8 @@ func TestPDFNeedsPdftoppm(t *testing.T) {
 	if len(recent(t, ta, ta.Admin.ID)) != 0 {
 		t.Fatal("PDF accepted without pdftoppm")
 	}
-	// A pdftoppm on PATH renders pages (a stand-in script writing two PNGs).
-	bin := t.TempDir()
-	fixture := filepath.Join(bin, "page.png")
-	if err := os.WriteFile(fixture, pagePNG(t, 9, 50, 70), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	script := "#!/bin/sh\nfor a; do last=$a; done\ncp \"$MV_TEST_PNG\" \"$last-01.png\"\ncp \"$MV_TEST_PNG\" \"$last-02.png\"\n"
-	if err := os.WriteFile(filepath.Join(bin, "pdftoppm"), []byte(script), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+":/bin:/usr/bin")
-	t.Setenv("MV_TEST_PNG", fixture)
+	// A pdftoppm on PATH renders pages (a stand-in script for a two-page PDF).
+	fakePdftoppm(t, pagePNG(t, 9, 50, 70), 2)
 	if body := string(admin.Get("/admin/backup").Body); !strings.Contains(body, "Drop CBZ, CBR, PDF or image folders") {
 		t.Fatal("PDF option missing with pdftoppm")
 	}

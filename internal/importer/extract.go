@@ -384,7 +384,10 @@ func PDFTool() string {
 	return p
 }
 
-// extractPDF renders pages with pdftoppm (scaled so the long side is 3000 px).
+// extractPDF renders pages with pdftoppm (scaled so the long side is 3000
+// px) one page at a time, checking each page as it is rendered: an oversized
+// page, the total size or one page more than the limit stop the rendering
+// there instead of after the whole document was rendered to disk.
 func extractPDF(ctx context.Context, src, dir string, lim Limits) (*extraction, error) {
 	tool := PDFTool()
 	if tool == "" {
@@ -396,44 +399,38 @@ func extractPDF(ctx context.Context, src, dir string, lim Limits) (*extraction, 
 	}
 	cctx, cancel := context.WithTimeout(ctx, lim.PDFTimeout)
 	defer cancel()
-	var stderr bytes.Buffer
-	cmd := exec.CommandContext(cctx, tool, "-png", "-scale-to", "3000", "-l", strconv.Itoa(lim.MaxPages+1), src, filepath.Join(out, "page"))
-	cmd.Stderr = &stderr
-	cmd.Stdout = io.Discard
-	if err := cmd.Run(); err != nil {
-		if cctx.Err() != nil && ctx.Err() == nil {
-			return nil, refuse(CodeDamaged, "rendering the PDF took too long")
-		}
-		msg := strings.TrimSpace(stderr.String())
-		if len(msg) > 200 {
-			msg = msg[:200]
-		}
-		return nil, refuse(CodeDamaged, "the PDF cannot be rendered (%s)", msg)
-	}
-	files, err := os.ReadDir(out)
-	if err != nil {
-		return nil, err
-	}
-	var names []string
-	for _, f := range files {
-		if f.Type().IsRegular() {
-			names = append(names, f.Name())
-		}
-	}
-	if len(names) > lim.MaxPages {
-		return nil, refuse(CodeTooManyPages, "more than %d pages", lim.MaxPages)
-	}
-	sort.SliceStable(names, func(i, j int) bool { return naturalLess(names[i], names[j]) })
 	x := &extraction{}
 	var total int64
-	for _, n := range names {
-		p := filepath.Join(out, n)
-		fi, err := os.Stat(p)
-		if err != nil {
-			return nil, err
+	for page := 1; page <= lim.MaxPages+1; page++ {
+		root := filepath.Join(out, fmt.Sprintf("page-%05d", page))
+		var stderr bytes.Buffer
+		cmd := exec.CommandContext(cctx, tool, "-png", "-scale-to", "3000", "-singlefile", "-f", strconv.Itoa(page), "-l", strconv.Itoa(page), src, root)
+		cmd.Stderr = &stderr
+		cmd.Stdout = io.Discard
+		err := cmd.Run()
+		p := root + ".png"
+		fi, serr := os.Stat(p)
+		if err != nil || serr != nil {
+			switch {
+			case cctx.Err() != nil && ctx.Err() == nil:
+				return nil, refuse(CodeDamaged, "rendering the PDF took too long")
+			case ctx.Err() != nil:
+				return nil, ctx.Err()
+			case page > 1 && serr != nil && strings.Contains(stderr.String(), "Wrong page range"):
+				return x, nil // past the last page
+			}
+			msg := strings.TrimSpace(stderr.String())
+			if len(msg) > 200 {
+				msg = msg[:200]
+			}
+			return nil, refuse(CodeDamaged, "the PDF cannot be rendered (%s)", msg)
+		}
+		if page > lim.MaxPages {
+			_ = os.Remove(p)
+			return nil, refuse(CodeTooManyPages, "more than %d pages", lim.MaxPages)
 		}
 		if fi.Size() > lim.MaxEntryBytes {
-			return nil, refuse(CodeEntryTooLarge, "page %s is larger than %d MB", n, lim.MaxEntryBytes>>20)
+			return nil, refuse(CodeEntryTooLarge, "page %d is larger than %d MB", page, lim.MaxEntryBytes>>20)
 		}
 		total += fi.Size()
 		if total > lim.MaxTotalBytes {
@@ -444,7 +441,7 @@ func extractPDF(ctx context.Context, src, dir string, lim Limits) (*extraction, 
 			return nil, err
 		}
 		_ = os.Remove(p)
-		if err := x.accept(n, data, dir, lim); err != nil {
+		if err := x.accept(fmt.Sprintf("page-%05d.png", page), data, dir, lim); err != nil {
 			return nil, err
 		}
 	}
