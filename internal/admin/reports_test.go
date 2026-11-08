@@ -152,6 +152,10 @@ func TestTakedownChapter(t *testing.T) {
 		if n := e.count(`SELECT COUNT(*) FROM chapter_publications WHERE chapter_id = ?`, p.ChapterID); n != 2 {
 			t.Fatalf("a takedown deleted publications: %d left", n)
 		}
+		// E1 tells the creator why readers cannot open the chapter.
+		e1 := e.ta.Login(t, s.Owner.Username).Get("/studio/p/" + s.ProjectID + "/chapters/" + strconv.FormatFloat(p.Number, 'f', -1, 64) + "/publish")
+		wantStatus(t, "E1", e1, http.StatusOK)
+		wantBody(t, "E1 notice", e1, "An admin took this down")
 		// E5 tells the project; readers outside it see the series without the chapter.
 		seriesPage := e.ta.Login(t, projectMember.Username).Get("/s/" + s.Slug)
 		wantBody(t, "E5 for the project", seriesPage, "An admin took a chapter of this series down")
