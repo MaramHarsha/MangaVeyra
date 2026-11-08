@@ -45,7 +45,7 @@ Agents work in separate worktrees from the commit that adds this plan, edit only
 and return changed files, tests and ADR 0004 text. Root alone edits `docs/**`, `README.md`, migrations,
 `internal/core/**`, `internal/app/**`, `internal/web/layout/**`, `go.mod`/`go.sum`, `web/package*.json` and `e2e/**`.
 
-1. [ ] **P — Publish.** `internal/publish/**` (service implementation, E1 flow and Published, series create/edit
+1. [x] **P — Publish.** `internal/publish/**` (service implementation, E1 flow and Published, series create/edit
    from a project, freezing pages through compose/lettering, alt-text drafting, cover choose/generate through the
    existing `cover.generate` API, scheduler loop, unpublish/update, follower notifications via `social.Follows`
    and `notify`), publish locales and styles.
@@ -53,9 +53,9 @@ and return changed files, tests and ADR 0004 text. Root alone edits `docs/**`, `
    chapter cache, reader locales and styles. E3 paged/spread/guided with tap zones and RTL/LTR, E4 webtoon, reading
    settings per series, progress/history, bookmarks, local-voice read-aloud, offline downloads, E7 library, event
    recording through `analytics.Recorder`.
-3. [ ] **S — Series page and community.** `internal/social/**`: E5 series page, follows (`social.Follows`), user
+3. [x] **S — Series page and community.** `internal/social/**`: E5 series page, follows (`social.Follows`), user
    follows, chapter and panel comments, reports, F1 creator profile; social locales and styles.
-4. [ ] **D — Discover and analytics.** `internal/discover/**` (E6 Explore with rising creators, genres and the
+4. [x] **D — Discover and analytics.** `internal/discover/**` (E6 Explore with rising creators, genres and the
    hand-drawn filter; E8 search over the existing full-text index) and `internal/analytics/**` (`Recorder`, daily
    session hashing, 90-day aggregation, F2); their locales and styles.
 5. [x] **W — Landing and install docs.** `site/**` (A1, static, no external requests) and `docs/install/**`.
