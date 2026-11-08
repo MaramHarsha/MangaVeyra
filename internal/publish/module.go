@@ -30,6 +30,10 @@ func New(d *core.Deps) *Module {
 	if d.Jobs != nil {
 		// Publish input carries synopsis and alt-text drafts: never echo it in job views.
 		d.Jobs.MarkPrivateInput(JobType)
+		// A publish job carries out one human decision as its user: a retry by
+		// anyone else (a site admin) or by an agent token would publish without
+		// that person acting, so it is never retried; E1 publishes again.
+		d.Jobs.MarkNoRetry(JobType)
 	}
 	return &Module{d: d, svc: svc}
 }

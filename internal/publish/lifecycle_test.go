@@ -366,6 +366,52 @@ func TestSeriesVisibleOnlyWithAReadableChapter(t *testing.T) {
 	})
 }
 
+// Publishing is the creator's own decision: a canceled or failed publish job
+// cannot be retried through the jobs API, by a site admin or by its owner, so
+// nobody can publish a chapter on the creator's behalf (ADR 0012 §3).
+func TestPublishJobsCannotBeRetried(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, pf *publishtest.Fixture) {
+		ctx := context.Background()
+		pf.SetMode(settings.ModePublic)
+		f := newChapter(t, ta, false)
+		admin := ta.Login(t, ta.Admin.Username)
+		queue := func() string {
+			t.Helper()
+			resp := postForm(f.client, f.base+"/publish", f.publishForm("en"))
+			loc, err := url.Parse(resp.Header.Get("Location"))
+			if resp.StatusCode != http.StatusSeeOther || err != nil || loc.Query().Get("job") == "" {
+				t.Fatalf("publish POST = %d %q", resp.StatusCode, resp.Header.Get("Location"))
+			}
+			return loc.Query().Get("job")
+		}
+
+		// The creator cancels before it runs; an admin retry must not publish it.
+		canceled := queue()
+		if _, err := ta.Deps.Jobs.Cancel(ctx, canceled); err != nil {
+			t.Fatal(err)
+		}
+		// A failed one (the chapter changed) is refused the same way.
+		failed := queue()
+		exec(t, ta, `UPDATE pages SET version = version + 1 WHERE id = ?`, f.pages[0].ID)
+		if j := runJob(t, ta, failed); j.State != jobs.StateFailed {
+			t.Fatalf("changed chapter job = %s", j.State)
+		}
+		for _, id := range []string{canceled, failed} {
+			for name, c := range map[string]*testutil.Client{"admin": admin, "owner": f.client} {
+				if got := c.PostJSON("/api/v1/jobs/"+id+"/retry", nil); got.StatusCode != http.StatusConflict {
+					t.Fatalf("%s retry of a publish job = %d %s", name, got.StatusCode, got.Body)
+				}
+			}
+		}
+		if ran, err := ta.Deps.Executor.RunOnce(ctx); err != nil || ran {
+			t.Fatalf("a refused retry queued work: ran=%v %v", ran, err)
+		}
+		if n := count(t, ta, `SELECT COUNT(*) FROM chapter_publications`); n != 0 {
+			t.Fatalf("publications after refused retries = %d", n)
+		}
+	})
+}
+
 // An unlisted chapter is shared by link only: going live never notifies
 // followers, though they may open it (ADR 0012 §1, §10).
 func TestUnlistedChapterNotifiesNobody(t *testing.T) {

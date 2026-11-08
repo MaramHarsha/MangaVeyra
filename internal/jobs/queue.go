@@ -140,6 +140,8 @@ type Queue struct {
 	// privateInput lists job types whose input never leaves the server
 	// through the jobs API (it may carry private project material).
 	privateInput map[string]bool
+	// noRetry lists job types that Retry refuses (MarkNoRetry).
+	noRetry map[string]bool
 
 	wakeMu sync.Mutex
 	wake   chan struct{}
@@ -176,6 +178,24 @@ func (q *Queue) MarkPrivateInput(types ...string) {
 	}
 	for _, t := range types {
 		q.privateInput[t] = true
+	}
+}
+
+// ErrNoRetry rejects a manual retry of a job type marked with MarkNoRetry.
+var ErrNoRetry = httpx.ErrConflict("this job cannot be retried; start it again where it was requested")
+
+// MarkNoRetry makes Retry refuse these job types for everyone, owners and
+// admins alike. Use it for jobs that carry out one human decision (such as
+// publishing): the person makes it again on its own screen instead. A
+// handler's own retryable failures still run their remaining attempts.
+func (q *Queue) MarkNoRetry(types ...string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.noRetry == nil {
+		q.noRetry = map[string]bool{}
+	}
+	for _, t := range types {
+		q.noRetry[t] = true
 	}
 }
 
@@ -1205,10 +1225,20 @@ func (q *Queue) Retry(ctx context.Context, id string) (*Job, error) {
 		// A retried job takes its de-duplication key back. While another active
 		// job holds that key, the same work is already queued: refuse instead of
 		// spending twice (the unique index also refuses a concurrent insert).
-		var key string
-		if err := tx.Get(ctx, &key, `SELECT COALESCE(dedupe_key, '') FROM jobs WHERE id = ? AND state IN ('failed', 'canceled') AND parent_id IS NULL`, id); err != nil && !db.IsNotFound(err) {
+		var row struct {
+			Key  string `db:"dedupe_key"`
+			Type string `db:"type"`
+		}
+		if err := tx.Get(ctx, &row, `SELECT COALESCE(dedupe_key, '') AS dedupe_key, type FROM jobs WHERE id = ? AND state IN ('failed', 'canceled') AND parent_id IS NULL`, id); err != nil && !db.IsNotFound(err) {
 			return err
 		}
+		q.mu.RLock()
+		refused := q.noRetry[row.Type]
+		q.mu.RUnlock()
+		if refused {
+			return ErrNoRetry
+		}
+		key := row.Key
 		if key != "" {
 			var holders int
 			if err := tx.Get(ctx, &holders, `SELECT COUNT(*) FROM jobs WHERE dedupe_key = ? AND id <> ? AND `+activeDedupe, key, id); err != nil {
