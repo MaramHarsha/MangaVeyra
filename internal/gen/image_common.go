@@ -141,7 +141,7 @@ func validateImagePlan(p ai.ImagePlan) error {
 	if !boundedIdentifier(p.PinProviderID) || !boundedIdentifier(p.PinModelID) || p.PinProviderID != "" && p.PinProviderID != p.ProviderID || p.PinModelID != "" && p.PinModelID != p.ModelID || p.RoutingMode == ai.ModeLocalOnly && p.ProviderID != ai.PlaceholderID || p.RoutingMode == ai.ModeFreeOnly && p.Remote {
 		return studio.ErrInvalid
 	}
-	if p.Task != ai.TaskPanel && p.Task != ai.TaskCharacterSheet && p.Task != ai.TaskRegionEdit {
+	if p.Task != ai.TaskPanel && p.Task != ai.TaskCharacterSheet && p.Task != ai.TaskRegionEdit && p.Task != ai.TaskCover {
 		return studio.ErrInvalid
 	}
 	if !validRoutingMode(p.RoutingMode) || p.ProviderID == "" || p.ModelID == "" || !boundedIdentifier(p.ProviderID) || !boundedIdentifier(p.ModelID) || !validCost(p.Estimate) || p.Estimate.USD > maxPlanUSD || p.Estimate.GPUSeconds > maxPlanGPUSeconds || n.Width < 64 || n.Height < 64 || n.Width > 4096 || n.Height > 4096 || n.Count < 1 || n.Count > 4 || n.References < 0 || n.References > 32 || n.Mask && !n.Edit || len(p.Decision) == 0 || len(p.Decision) > maxDecisionBytes || !json.Valid(p.Decision) {
@@ -173,8 +173,11 @@ func decodeImagePayload(raw json.RawMessage) (imagePayload, error) {
 	}
 	return p, nil
 }
-func currentImagePlan(p imagePayload, j *jobs.Job) ai.ImagePlan {
-	plan := p.Plan
+func currentImagePlan(p imagePayload, j *jobs.Job) ai.ImagePlan { return routePlan(p.Plan, j) }
+
+// routePlan is the approved plan on the job's current route (a fallback may
+// have moved the job to another provider and model).
+func routePlan(plan ai.ImagePlan, j *jobs.Job) ai.ImagePlan {
 	plan.ProviderID = j.ProviderID
 	plan.ModelID = j.ModelID
 	plan.Decision = j.Decision
@@ -186,17 +189,28 @@ func currentImagePlan(p imagePayload, j *jobs.Job) ai.ImagePlan {
 	return plan
 }
 func (s *service) failoverImage(ctx context.Context, j *jobs.Job, failure jobs.JobError) (*jobs.Reroute, error) {
-	if s.fallback == nil || j == nil || j.MaxAttempts != imageAttempts || j.RoundAttempt() >= imageAttempts || j.Type != JobPanel && j.Type != JobRegionEdit && j.Type != JobCharacterSheet {
+	if s.fallback == nil || j == nil || j.MaxAttempts != imageAttempts || j.RoundAttempt() >= imageAttempts {
 		return nil, nil
 	}
-	p, err := decodeImagePayload(j.Input)
-	if err != nil {
+	// approved is the plan the job was queued (and its spend approved) with.
+	var approved ai.ImagePlan
+	switch j.Type {
+	case JobPanel, JobRegionEdit, JobCharacterSheet:
+		p, err := decodeImagePayload(j.Input)
+		if err != nil || p.BatchID != j.ParentID || stringJSON(p.Scope) != stringJSON(j.Scope) {
+			return nil, nil
+		}
+		approved = p.Plan
+	case JobCover:
+		p, err := decodeCoverPayload(j.Input)
+		if err != nil || j.ParentID != "" || stringJSON(p.Scope) != stringJSON(j.Scope) {
+			return nil, nil
+		}
+		approved = p.Plan
+	default:
 		return nil, nil
 	}
-	if p.BatchID != j.ParentID || stringJSON(p.Scope) != stringJSON(j.Scope) {
-		return nil, nil
-	}
-	plan := currentImagePlan(p, j)
+	plan := routePlan(approved, j)
 	if validateImagePlan(plan) != nil {
 		return nil, nil
 	}
@@ -205,11 +219,11 @@ func (s *service) failoverImage(ctx context.Context, j *jobs.Job, failure jobs.J
 		return rr, err
 	}
 	remote := rr.ProviderID != ai.PlaceholderID && rr.ProviderID != "local-worker"
-	if !p.Plan.Remote && remote || rr.Executor != "" && rr.Executor != jobs.ExecutorGo {
+	if !approved.Remote && remote || rr.Executor != "" && rr.Executor != jobs.ExecutorGo {
 		return nil, nil
 	}
-	quoted, err := s.images.PlanImage(ctx, ai.ImagePlanRequest{Task: p.Plan.Task, ActorID: j.UserID, ProjectID: j.Scope.ProjectID, RoutingMode: p.Plan.RoutingMode, Needs: p.Plan.Needs, PublicSeries: p.Plan.PublicSeries, PinProviderID: rr.ProviderID, PinModelID: rr.ModelID})
-	if err != nil || validateImagePlan(quoted) != nil || quoted.ProviderID != rr.ProviderID || quoted.ModelID != rr.ModelID || quoted.Needs != p.Plan.Needs || quoted.Estimate.USD > p.Plan.Estimate.USD+.0000001 || quoted.Estimate.GPUSeconds > p.Plan.Estimate.GPUSeconds+.0000001 {
+	quoted, err := s.images.PlanImage(ctx, ai.ImagePlanRequest{Task: approved.Task, ActorID: j.UserID, ProjectID: j.Scope.ProjectID, RoutingMode: approved.RoutingMode, Needs: approved.Needs, PublicSeries: approved.PublicSeries, PinProviderID: rr.ProviderID, PinModelID: rr.ModelID})
+	if err != nil || validateImagePlan(quoted) != nil || quoted.ProviderID != rr.ProviderID || quoted.ModelID != rr.ModelID || quoted.Needs != approved.Needs || quoted.Estimate.USD > approved.Estimate.USD+.0000001 || quoted.Estimate.GPUSeconds > approved.Estimate.GPUSeconds+.0000001 {
 		return nil, nil
 	}
 	return rr, nil

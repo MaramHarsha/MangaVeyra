@@ -18,11 +18,11 @@ func TestModuleRegistersGateAServiceAndGenerationHandlers(t *testing.T) {
 	if !ok || registered == nil {
 		t.Fatal("New did not provide the concrete gen.Service")
 	}
-	if got := d.Services(); len(got) != 2 || got[0] != "gen.ControlService" || got[1] != "gen.Service" {
-		t.Fatalf("New provided services %v, want gen.Service and gen.ControlService", got)
+	if got := d.Services(); len(got) != 3 || got[0] != "gen.ControlService" || got[1] != "gen.CoverService" || got[2] != "gen.Service" {
+		t.Fatalf("New provided services %v, want gen.Service, gen.ControlService and gen.CoverService", got)
 	}
 	handlers := module.JobHandlers()
-	if len(handlers) != 9 || handlers[gen.JobScript] == nil {
+	if len(handlers) != 10 || handlers[gen.JobScript] == nil || handlers[gen.JobCover] == nil {
 		t.Fatalf("JobHandlers = %v, want the script and image/page handlers including %q", handlers, gen.JobScript)
 	}
 }
