@@ -43,6 +43,7 @@ func (m *Module) Routes(r *core.Router) {}
 func (m *Module) Init(context.Context) error {
 	m.svc.text = core.MustUse[ai.TextService](m.d)
 	m.svc.studio = core.MustUse[studio.Service](m.d)
+	m.svc.targets = core.MustUse[studio.TargetAuthorizer](m.d)
 	m.svc.images = core.MustUse[ai.ImageService](m.d)
 	m.svc.pages = core.MustUse[pagestore.Service](m.d)
 	m.svc.assets = core.MustUse[*assets.Service](m.d)

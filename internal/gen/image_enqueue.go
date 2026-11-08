@@ -64,7 +64,7 @@ func (s *service) EnqueueCharacterSheet(ctx context.Context, actor studio.Actor,
 		return nil, err
 	}
 	req.Count = n
-	if _, err = s.resolveImageActor(ctx, actor, req.ProjectID, jobs.Cost{}, false); err != nil {
+	if _, err = s.resolveImageActor(ctx, actor, projectTarget(req.ProjectID), jobs.Cost{}, false); err != nil {
 		return nil, err
 	}
 	c, err := s.studio.GetCharacter(ctx, req.CharacterID)
@@ -101,7 +101,10 @@ func (s *service) EnqueueCharacterSheet(ctx context.Context, actor studio.Actor,
 	return s.enqueueImage(ctx, p)
 }
 func (s *service) EnqueuePanel(ctx context.Context, actor studio.Actor, req PanelRequest) (*jobs.Job, error) {
-	if _, err := s.resolveImageActor(ctx, actor, req.ProjectID, jobs.Cost{}, false); err != nil {
+	if !db.ValidID(req.ProjectID) || !db.ValidID(req.PageID) {
+		return nil, studio.ErrInvalid
+	}
+	if _, err := s.resolveImageActor(ctx, actor, jobs.Scope{Kind: jobs.ScopePage, ProjectID: req.ProjectID, PageID: req.PageID}, jobs.Cost{}, false); err != nil {
 		return nil, err
 	}
 	page, err := s.pages.GetPage(ctx, req.PageID)
@@ -275,7 +278,7 @@ func (s *service) EnqueueRegionEdit(ctx context.Context, actor studio.Actor, req
 		return nil, err
 	}
 	req.Variations = n
-	if _, err = s.resolveImageActor(ctx, actor, req.ProjectID, jobs.Cost{}, false); err != nil {
+	if _, err = s.resolveImageActor(ctx, actor, jobs.Scope{Kind: jobs.ScopeRegion, ProjectID: req.ProjectID, LayerID: req.LayerID, Region: json.RawMessage(`{}`)}, jobs.Cost{}, false); err != nil {
 		return nil, err
 	}
 	var row struct {

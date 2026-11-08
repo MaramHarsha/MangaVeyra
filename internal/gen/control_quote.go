@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/ai"
+	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 )
@@ -18,7 +19,10 @@ type ControlQuote struct {
 
 func (s *service) QuotePage(ctx context.Context, actor studio.Actor, req PageRequest, sketch bool) (ControlQuote, error) {
 	var out ControlQuote
-	if _, err := s.resolveImageActor(ctx, actor, req.ProjectID, jobs.Cost{}, false); err != nil {
+	if !db.ValidID(req.ProjectID) || !db.ValidID(req.PageID) {
+		return out, studio.ErrInvalid
+	}
+	if _, err := s.resolveImageActor(ctx, actor, jobs.Scope{Kind: jobs.ScopePage, ProjectID: req.ProjectID, PageID: req.PageID}, jobs.Cost{}, false); err != nil {
 		return out, err
 	}
 	page, err := s.pages.GetPage(ctx, req.PageID)
@@ -75,7 +79,7 @@ func (s *service) QuotePage(ctx context.Context, actor studio.Actor, req PageReq
 }
 func (s *service) QuoteRepair(ctx context.Context, actor studio.Actor, req RepairRequest) (ControlQuote, error) {
 	var out ControlQuote
-	if _, err := s.resolveImageActor(ctx, actor, req.ProjectID, jobs.Cost{}, false); err != nil {
+	if _, err := s.resolveImageActor(ctx, actor, projectTarget(req.ProjectID), jobs.Cost{}, false); err != nil {
 		return out, err
 	}
 	if len(req.Targets) == 0 || len(req.Targets) > 24 {

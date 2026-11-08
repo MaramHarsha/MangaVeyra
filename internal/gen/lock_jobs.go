@@ -48,7 +48,7 @@ func (s *service) enqueueLock(ctx context.Context, actor studio.Actor, projectID
 	if actor.TokenID != "" || !db.ValidID(projectID) || !db.ValidID(characterID) || rev.IsZero() {
 		return nil, studio.ErrInvalid
 	}
-	if _, err := s.resolveImageActor(ctx, actor, projectID, jobs.Cost{}, false); err != nil {
+	if _, err := s.resolveImageActor(ctx, actor, projectTarget(projectID), jobs.Cost{}, false); err != nil {
 		return nil, err
 	}
 	c, err := s.studio.GetCharacter(ctx, characterID)
@@ -136,7 +136,7 @@ func (s *service) enqueueLock(ctx context.Context, actor studio.Actor, projectID
 func (s *service) checkLockTx(ctx context.Context, tx *db.Tx, p lockPayload) (studio.Character, error) {
 	c := studio.Character{}
 	actor := studio.Actor{UserID: p.Actor.UserID, TokenID: p.Actor.TokenID}
-	if err := s.authorizeImageTx(ctx, tx, actor, p.ProjectID); err != nil {
+	if err := s.authorizeImageTx(ctx, tx, actor, projectTarget(p.ProjectID)); err != nil {
 		return c, err
 	}
 	inst, err := s.settings.InstanceTx(ctx, tx)

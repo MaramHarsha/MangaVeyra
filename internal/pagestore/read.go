@@ -17,7 +17,9 @@ import (
 type store struct {
 	db     *db.DB
 	studio studio.Service
-	assets *assets.Service
+	// targets applies member scopes (page ranges, lettering only) to page writes.
+	targets studio.TargetAuthorizer
+	assets  *assets.Service
 }
 
 var _ Service = (*store)(nil)
