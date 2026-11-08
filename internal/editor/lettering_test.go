@@ -113,6 +113,10 @@ func TestLetteringPreviewStopsWhenAbandoned(t *testing.T) {
 	ta := testutil.NewTestApp(t)
 	_, c, _, _, base := fixture(t, ta)
 	page := doc(t, c.PostJSON(base+"/pages", map[string]string{"layout_id": "splash"}), 201).Page
+	// Load the Japanese font first: decoding it is not interruptible.
+	if r := c.PostJSON(base+"/pages/"+page.ID+"/lettering", map[string]any{"page": previewDraft(page), "reflow": false}); r.StatusCode != 200 {
+		t.Fatalf("warm-up preview: HTTP %d", r.StatusCode)
+	}
 	body, err := json.Marshal(map[string]any{"page": heavyDraft(page, pagedoc.MaxBubbles), "reflow": false})
 	if err != nil {
 		t.Fatal(err)
@@ -132,10 +136,11 @@ func TestLetteringPreviewStopsWhenAbandoned(t *testing.T) {
 	start := time.Now()
 	ta.Handler.ServeHTTP(w, req)
 	took := time.Since(start)
-	// 64 such bubbles take over a second to lay out and encode; the handler
-	// returns soon after the context ends, without a body.
+	// 64 such bubbles take almost two seconds to lay out and encode (ten
+	// times that under the race detector); the handler returns soon after
+	// the context ends, without a body.
 	t.Logf("abandoned after %v: HTTP %d, %d bytes", took, w.Code, w.Body.Len())
-	if took > 750*time.Millisecond || w.Body.Len() != 0 {
+	if took > raceSlowdown*750*time.Millisecond || w.Body.Len() != 0 {
 		t.Fatalf("abandoned preview ran for %v and wrote %d bytes", took, w.Body.Len())
 	}
 	// The editor keeps working.
