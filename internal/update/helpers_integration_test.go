@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -74,7 +75,9 @@ type releaseServer struct {
 	files    map[string][]byte
 	truncate bool
 	tamper   bool
-	hits     atomic.Int64
+	// stall sends part of an asset, then nothing until the client gives up.
+	stall bool
+	hits  atomic.Int64
 }
 
 func newReleaseServer(t *testing.T) *releaseServer {
@@ -84,6 +87,7 @@ func newReleaseServer(t *testing.T) *releaseServer {
 		rs.mu.Lock()
 		b, ok := rs.files[r.URL.Path]
 		trunc := rs.truncate && strings.HasPrefix(r.URL.Path, "/assets/")
+		stall := rs.stall && strings.HasPrefix(r.URL.Path, "/assets/")
 		if rs.tamper && strings.HasPrefix(r.URL.Path, "/assets/") {
 			b = append([]byte{}, b...)
 			b[len(b)/2] ^= 0xff
@@ -91,6 +95,13 @@ func newReleaseServer(t *testing.T) *releaseServer {
 		rs.mu.Unlock()
 		if !ok {
 			http.NotFound(w, r)
+			return
+		}
+		if stall {
+			w.Header().Set("Content-Length", strconv.Itoa(len(b)))
+			_, _ = w.Write(b[:len(b)/2])
+			w.(http.Flusher).Flush()
+			<-r.Context().Done()
 			return
 		}
 		if trunc {

@@ -46,6 +46,8 @@ type hooks struct {
 	Container     *bool
 	HealthTimeout time.Duration
 	Restart       func(exe string)
+	// Download replaces the download timeouts (zero fields keep the defaults).
+	Download downloadLimits
 }
 
 // New creates the module and provides update.Status and the G5 header's

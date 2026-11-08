@@ -12,8 +12,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/config"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
@@ -77,6 +79,76 @@ func TestDownloadVerifiesSizeAndChecksum(t *testing.T) {
 	serve = func(w http.ResponseWriter) { _, _ = w.Write(tampered) }
 	if _, err := m.download(ctx, good, t.TempDir(), nil); !errors.Is(err, ErrChecksum) {
 		t.Fatalf("tampered download: %v", err)
+	}
+}
+
+// A release server that accepts the connection and then stalls must not keep
+// the update (and the maintenance page) waiting forever: no response
+// headers, a pause without bytes and a trickle that never finishes all end
+// the download with an error.
+func TestDownloadGivesUpOnStalledServers(t *testing.T) {
+	payload := bytes.Repeat([]byte("mangaveyra-binary "), 4096)
+	stop := make(chan struct{})
+	var serve func(w http.ResponseWriter, r *http.Request)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { serve(w, r) }))
+	defer srv.Close()
+	defer close(stop)
+	wait := func(r *http.Request, d time.Duration) bool {
+		select {
+		case <-stop:
+			return false
+		case <-r.Context().Done():
+			return false
+		case <-time.After(d):
+			return true
+		}
+	}
+	m := testModule(t, srv.Client())
+	m.hooks.Download = downloadLimits{Header: 300 * time.Millisecond, Idle: 300 * time.Millisecond, Base: 1500 * time.Millisecond, MinRate: 1 << 30}
+	a := Asset{URL: srv.URL + "/a", SHA256: sum(payload), Size: int64(len(payload)), Format: FormatBinary}
+	for _, c := range []struct {
+		name, want string
+		serve      func(w http.ResponseWriter, r *http.Request)
+	}{
+		{"no headers", "did not answer", func(w http.ResponseWriter, r *http.Request) { wait(r, time.Hour) }},
+		{"stalls mid-file", "stalled", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+			_, _ = w.Write(payload[:1000])
+			w.(http.Flusher).Flush()
+			wait(r, time.Hour)
+		}},
+		{"trickles forever", "took longer than", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+			for i := 0; i < len(payload); i++ {
+				if _, err := w.Write(payload[i : i+1]); err != nil {
+					return
+				}
+				w.(http.Flusher).Flush()
+				if !wait(r, 100*time.Millisecond) {
+					return
+				}
+			}
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			serve = c.serve
+			start := time.Now()
+			_, err := m.download(context.Background(), a, t.TempDir(), nil)
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("download = %v, want %q", err, c.want)
+			}
+			if d := time.Since(start); d > 5*time.Second {
+				t.Fatalf("gave up after %s", d)
+			}
+		})
+	}
+}
+
+func TestDownloadDeadlineScalesWithTheSignedSize(t *testing.T) {
+	l := defaultDownloadLimits()
+	small, large := l.overall(10<<20), l.overall(1<<30)
+	if small < l.Base || large <= small || large > 6*time.Hour {
+		t.Fatalf("overall deadlines = %s, %s", small, large)
 	}
 }
 

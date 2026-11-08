@@ -23,12 +23,15 @@ type TestHooks struct {
 	Container     *bool
 	HealthTimeout time.Duration
 	Restart       func(exe string)
+	// DownloadIdle replaces the longest pause a download may make.
+	DownloadIdle time.Duration
 }
 
 // SetTestHooks installs h on m.
 func SetTestHooks(m *Module, h TestHooks) {
 	m.hooks = hooks{Client: h.Client, Keys: h.Keys, Now: h.Now, Version: h.Version, Backups: h.Backups, NoBackups: h.NoBackups,
-		Executable: h.Executable, Container: h.Container, HealthTimeout: h.HealthTimeout, Restart: h.Restart}
+		Executable: h.Executable, Container: h.Container, HealthTimeout: h.HealthTimeout, Restart: h.Restart,
+		Download: downloadLimits{Idle: h.DownloadIdle}}
 }
 
 // SetVersion changes the version m believes it runs (a restarted process).

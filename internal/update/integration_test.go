@@ -333,11 +333,12 @@ func TestInstallHappyPath(t *testing.T) {
 func TestInstallFailuresRestoreTheBackup(t *testing.T) {
 	cases := []struct {
 		name, mode, code, detail string
-		truncate, tamper         bool
+		truncate, tamper, stall  bool
 	}{
 		{name: "migrate fails", mode: "migrate_fail", code: "UPD-MIGRATE-0602", detail: "Database change 0602 failed"},
 		{name: "health check fails", mode: "health_fail", code: "UPD-HEALTH", detail: "did not pass its health check"},
 		{name: "download truncated", truncate: true, code: "UPD-VERIFY", detail: "truncated"},
+		{name: "download stalls", stall: true, code: "UPD-DOWNLOAD", detail: "the download stalled"},
 		{name: "asset tampered", tamper: true, code: "UPD-VERIFY", detail: "does not match the signed checksum"},
 		{name: "wrong version", mode: "wrong_version", code: "UPD-VERIFY", detail: "reports"},
 	}
@@ -345,10 +346,12 @@ func TestInstallFailuresRestoreTheBackup(t *testing.T) {
 		for _, c := range cases {
 			t.Run(c.name, func(t *testing.T) {
 				t.Setenv("MVFAKE_MODE", c.mode)
-				e := newEnv(t, dialect, withHooks(func(h *update.TestHooks) { h.HealthTimeout = 3 * time.Second }))
+				e := newEnv(t, dialect, withHooks(func(h *update.TestHooks) {
+					h.HealthTimeout, h.DownloadIdle = 3*time.Second, 500*time.Millisecond
+				}))
 				e.enableChecks("")
 				e.publish(publishOpts{})
-				e.release.truncate, e.release.tamper = c.truncate, c.tamper
+				e.release.truncate, e.release.tamper, e.release.stall = c.truncate, c.tamper, c.stall
 				rec, err := e.m.Check(e.ctx)
 				if err != nil {
 					t.Fatal(err)

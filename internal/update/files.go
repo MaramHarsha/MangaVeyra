@@ -55,6 +55,44 @@ func checkReplaceable(exe string) error {
 
 type progressFunc func(done, total int64)
 
+// downloadLimits bound a release download, so a release server that accepts
+// the connection and then stalls cannot keep the update (and the maintenance
+// page) waiting: the response headers must arrive within Header, no pause
+// between bytes may last longer than Idle, and the whole download must finish
+// within Base plus the signed size at MinRate bytes per second.
+type downloadLimits struct {
+	Header  time.Duration
+	Idle    time.Duration
+	Base    time.Duration
+	MinRate int64
+}
+
+func defaultDownloadLimits() downloadLimits {
+	return downloadLimits{Header: 30 * time.Second, Idle: time.Minute, Base: 2 * time.Minute, MinRate: 64 << 10}
+}
+
+// overall is the deadline for a download of size bytes.
+func (l downloadLimits) overall(size int64) time.Duration {
+	return l.Base + time.Duration(size/max(1, l.MinRate)+1)*time.Second
+}
+
+func (m *Module) downloadLimits() downloadLimits {
+	l, h := defaultDownloadLimits(), m.hooks.Download
+	if h.Header > 0 {
+		l.Header = h.Header
+	}
+	if h.Idle > 0 {
+		l.Idle = h.Idle
+	}
+	if h.Base > 0 {
+		l.Base = h.Base
+	}
+	if h.MinRate > 0 {
+		l.MinRate = h.MinRate
+	}
+	return l
+}
+
 // download fetches a's file into dir, refusing anything larger than the
 // signed size, and checks the signed size and SHA-256. It returns the path of
 // the verified executable.
@@ -62,17 +100,35 @@ func (m *Module) download(ctx context.Context, a Asset, dir string, progress pro
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.URL, nil)
+	lim := m.downloadLimits()
+	total := lim.overall(a.Size)
+	ctx, cancelAll := context.WithTimeoutCause(ctx, total, fmt.Errorf("the download took longer than %s", total))
+	defer cancelAll()
+	// One context for the request and its body: the watchdogs cancel it with
+	// the reason, which the error then reports.
+	rctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	headers := time.AfterFunc(lim.Header, func() {
+		cancel(fmt.Errorf("the release server did not answer within %s", lim.Header))
+	})
+	req, err := http.NewRequestWithContext(rctx, http.MethodGet, a.URL, nil)
 	if err != nil {
+		headers.Stop()
 		return "", err
 	}
 	req.Header.Set("User-Agent", userAgent)
 	client := m.client(0)
 	resp, err := client.Do(req)
+	headers.Stop()
 	if err != nil {
-		return "", err
+		return "", downloadErr(rctx, err)
 	}
 	defer resp.Body.Close()
+	var n int64
+	idle := time.AfterFunc(lim.Idle, func() {
+		cancel(fmt.Errorf("the download stalled: no data for %s", lim.Idle))
+	})
+	defer idle.Stop()
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("GET %s: %s", a.URL, resp.Status)
 	}
@@ -85,13 +141,13 @@ func (m *Module) download(ctx context.Context, a Asset, dir string, progress pro
 		return "", err
 	}
 	h := sha256.New()
-	var n int64
 	buf := make([]byte, 256<<10)
 	body := io.LimitReader(resp.Body, a.Size+1)
 	last := time.Time{}
 	for {
 		k, rerr := body.Read(buf)
 		if k > 0 {
+			idle.Reset(lim.Idle)
 			n += int64(k)
 			if n > a.Size {
 				_ = f.Close()
@@ -112,9 +168,10 @@ func (m *Module) download(ctx context.Context, a Asset, dir string, progress pro
 		}
 		if rerr != nil {
 			_ = f.Close()
-			return "", fmt.Errorf("download interrupted after %d of %d bytes: %w", n, a.Size, rerr)
+			return "", fmt.Errorf("download interrupted after %d of %d bytes: %w", n, a.Size, downloadErr(rctx, rerr))
 		}
 	}
+	idle.Stop()
 	if err := f.Sync(); err != nil {
 		_ = f.Close()
 		return "", err
@@ -148,6 +205,15 @@ func (m *Module) download(ctx context.Context, a Asset, dir string, progress pro
 		return "", err
 	}
 	return out, nil
+}
+
+// downloadErr reports why a watchdog ended the download (no answer, a stall,
+// the overall deadline) instead of the bare "context canceled".
+func downloadErr(ctx context.Context, err error) error {
+	if cause := context.Cause(ctx); cause != nil && !errors.Is(cause, context.Canceled) {
+		return cause
+	}
+	return err
 }
 
 // extractBinary copies the regular file named "mangaveyra" out of a gzip
