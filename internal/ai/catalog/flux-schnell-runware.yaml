@@ -1,0 +1,21 @@
+# FLUX.1 [schnell] (runware:100@1) through a Runware connection (ADR 0013 §9).
+# Billed by compute time: the quote is an application allowance. Seed image
+# and mask inputs (white = edit). Fake-transport tested, not live-verified.
+id: runware/flux-schnell
+name: FLUX.1 schnell (Runware)
+maker: Black Forest Labs
+kind: image
+licence: Apache-2.0
+commercial: true
+providers: [runware]
+references: 0
+text_in_art: false
+bw: true
+edit: true
+mask: true
+max_width: 1024
+max_height: 1024
+max_count: 4
+quality: 65
+speed: 90
+gpu_seconds: 0

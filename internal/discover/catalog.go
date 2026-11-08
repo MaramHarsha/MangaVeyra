@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/admin/adminapi"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 )
@@ -87,10 +88,12 @@ func (m *Module) byIDs(ctx context.Context, v publish.Viewer, ids []string, genr
 }
 
 // latestPublic returns the newest published_at of each series' public
-// chapters (read-only over the publish module's chapter_publications). It is
-// used only to order and badge series ListSeries already returned for the
-// viewer; public chapters of a readable series are readable by everyone who
-// can read the series, so the badge reveals nothing about restricted chapters.
+// chapters that readers can open (read-only over the publish module's
+// chapter_publications; a chapter an admin took down, ADR 0013 §1, does not
+// count). It is used only to order and badge series ListSeries already
+// returned for the viewer; public chapters of a readable series are readable
+// by everyone who can read the series, so the badge reveals nothing about
+// restricted chapters.
 func (m *Module) latestPublic(ctx context.Context, series []publish.Series) (map[string]time.Time, error) {
 	out := map[string]time.Time{}
 	if len(series) == 0 {
@@ -105,10 +108,12 @@ func (m *Module) latestPublic(ctx context.Context, series []publish.Series) (map
 		At time.Time `db:"published_at"`
 	}
 	in := strings.TrimSuffix(strings.Repeat("?, ", len(ids)), ", ")
+	args := append(append([]any{}, ids...), m.now(), adminapi.ChapterTakedownPrefix)
 	if err := m.d.DB.Select(ctx, &rows, `SELECT p.series_id, p.published_at FROM chapter_publications p
 		WHERE p.series_id IN (`+in+`) AND p.status = 'published' AND p.visibility = 'public'
-		AND p.published_at IS NOT NULL AND p.published_at <= ? ORDER BY p.published_at DESC LIMIT 3000`,
-		append(ids, m.now())...); err != nil {
+		AND p.published_at IS NOT NULL AND p.published_at <= ?
+		AND NOT EXISTS (SELECT 1 FROM instance_settings tk WHERE tk.key = ? || p.chapter_id)
+		ORDER BY p.published_at DESC LIMIT 3000`, args...); err != nil {
 		return nil, fmt.Errorf("discover: latest chapters: %w", err)
 	}
 	for _, r := range rows {

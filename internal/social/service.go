@@ -11,6 +11,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 )
 
 // Errors returned by the social service. ErrNotFound hides anything the
@@ -36,6 +37,8 @@ type service struct {
 	auth *auth.Service
 	pub  publish.Service
 	now  func() time.Time
+	// settings holds the content rules (blocked words, ADR 0013 §2).
+	settings *settings.Service
 }
 
 var _ Follows = (*service)(nil)

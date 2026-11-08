@@ -15,6 +15,7 @@ import (
 type Module struct {
 	d       *core.Deps
 	studio  studio.Service
+	targets studio.TargetAuthorizer
 	pages   pagestore.Service
 	letter  lettering.Engine
 	gen     gen.Service
@@ -32,6 +33,7 @@ func (m *Module) Name() string { return "editor" }
 
 func (m *Module) Init(context.Context) error {
 	m.studio = core.MustUse[studio.Service](m.d)
+	m.targets = core.MustUse[studio.TargetAuthorizer](m.d)
 	m.pages = core.MustUse[pagestore.Service](m.d)
 	m.letter = core.MustUse[lettering.Engine](m.d)
 	m.gen = core.MustUse[gen.Service](m.d)

@@ -384,7 +384,7 @@ func TestBearerTokensFollowJobRulesOnUserAndAdminTopics(t *testing.T) {
 	ctx := context.Background()
 	u := ta.CreateUser(t, "kite", auth.RoleAdmin)
 	mk := func(name string, scopes, projects []string) string {
-		raw, _, err := ta.Deps.Auth.CreateToken(ctx, auth.TokenInput{UserID: u.ID, Kind: auth.TokenAgent, Name: name,
+		raw, _, err := ta.Deps.Auth.CreateToken(ctx, auth.TokenInput{UserID: u.ID, Kind: auth.TokenAPI, Name: name,
 			Scopes: scopes, ProjectIDs: projects})
 		if err != nil {
 			t.Fatal(err)

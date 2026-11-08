@@ -183,10 +183,10 @@ func (m *Module) uploadSketch(w http.ResponseWriter, r *http.Request) error {
 	defer m.assets.DiscardStaged(context.WithoutCancel(r.Context()), staged)
 	var a assets.Asset
 	err = m.d.DB.WithTx(r.Context(), func(tx *db.Tx) error {
-		if err := m.studio.AuthorizeTx(r.Context(), tx, res.Actor, res.Project.ID, studio.ActEditArt); err != nil {
+		if err := m.targets.AuthorizeTargetTx(r.Context(), tx, res.Actor, pageTarget(res), studio.ActEditArt); err != nil {
 			return err
 		}
-		if err := m.studio.AuthorizeTx(r.Context(), tx, res.Actor, res.Project.ID, studio.ActGenerate); err != nil {
+		if err := m.targets.AuthorizeTargetTx(r.Context(), tx, res.Actor, pageTarget(res), studio.ActGenerate); err != nil {
 			return err
 		}
 		p, err := m.pages.GetPageTx(r.Context(), tx, res.Page.ID)

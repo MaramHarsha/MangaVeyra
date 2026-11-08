@@ -23,7 +23,7 @@ func TestRemoteTextReservationsRepairUsageAndAttemptPurpose(t *testing.T) {
 		inputRaw := testScriptInputJSON(t)
 		valid := testScriptDocument(t, input)
 		plan := TextPlan{Task: TaskScript, Schema: SchemaScriptV1, RoutingMode: ModeBalanced,
-			ProviderID: provider.ID, ModelID: openRouterModel, Remote: true, Decision: json.RawMessage(`{"remote":false}`)}
+			ProviderID: provider.ID, ModelID: openRouterModel, Remote: true, Decision: json.RawMessage(`{"remote":false}`), Estimate: jobs.Cost{USD: openRouterPlanUSD}}
 
 		t.Run("reported cost and exact request", func(t *testing.T) {
 			jobID := fixture.seedRunningJob(t, provider.ID, 1)

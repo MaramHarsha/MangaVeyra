@@ -376,12 +376,12 @@ func TestModelsPageMatchesDesignedLayout(t *testing.T) {
 
 		// Capability tabs in design order; this request selects Text.
 		mustAppearInOrder(t, body, `<nav class="mv-seg" aria-label="Capabilities">`,
-			`href="/models?cap=image">Image 15</a>`, `href="/models?cap=text" aria-current="true">Text 1</a>`,
+			`href="/models?cap=image">Image 21</a>`, `href="/models?cap=text" aria-current="true">Text 1</a>`,
 			`href="/models?cap=video">Video 0</a>`, `href="/models?cap=voice">Voice 0</a>`, `href="/models?cap=ocr">OCR 0</a>`)
 		// The designed G2 opens on Image, with only the two designed header
 		// actions (G11 is reached from the subtitle's "auto-routing").
 		landing := mainOf(t, admin.Get("/models"))
-		mustContain(t, landing, `href="/models?cap=image" aria-current="true">Image 15</a>`,
+		mustContain(t, landing, `href="/models?cap=image" aria-current="true">Image 21</a>`,
 			`<caption class="mv-sr-only">Image models auto-routing can use</caption>`)
 		mustNotContain(t, landing, "Text models auto-routing can use", `href="/models/routing" class="mv-btn`)
 
@@ -399,11 +399,13 @@ func TestModelsPageMatchesDesignedLayout(t *testing.T) {
 func TestModelsPageSoonItemsNeverLink(t *testing.T) {
 	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
 		body := mainOf(t, ta.Login(t, ta.Admin.Username).Get("/models?cap=text"))
-		for _, path := range []string{"/models/providers/new/google", "/models/providers/new/xai"} {
-			if ta.Router.Serves(http.MethodGet, path) {
-				t.Fatalf("%s is served now; update the Soon expectations", path)
+		// ADR 0013 §9: Google and xAI are built, so their designed menu
+		// entries are links now; G12's types are no longer Soon either.
+		for _, path := range []string{"/models/providers/new/google", "/models/providers/new/xai", "/models/providers/new/replicate",
+			"/models/providers/new/together", "/models/providers/new/runware"} {
+			if !ta.Router.Serves(http.MethodGet, path) {
+				t.Fatalf("%s is not served", path)
 			}
-			mustNotContain(t, body, `href="`+path)
 		}
 		// Built connection flows and routing are now real destinations.
 		mustContain(t, body, `href="/models/providers/custom"`, `href="/models/routing"`)
@@ -412,14 +414,20 @@ func TestModelsPageSoonItemsNeverLink(t *testing.T) {
 				t.Fatalf("missing built route %s", path)
 			}
 		}
-		// "Add provider" lists OpenRouter and OpenAI as links, the rest as Soon.
+		// "Add provider" lists every provider as a link: the aggregators
+		// (with Replicate, Together and Runware after fal), then vendor keys.
 		mustAppearInOrder(t, body, `<details class="mv-dropdown mv-dropdown--end mv-models__add">`,
 			`href="/models/providers/new?kind=openrouter" role="menuitem"`, "<span>OpenRouter</span>",
 			`href="/models/providers/new/fal" role="menuitem"`, "<span>fal</span>",
+			`href="/models/providers/new/replicate" role="menuitem"`, "<span>Replicate</span>",
+			`href="/models/providers/new/together" role="menuitem"`, "<span>Together</span>",
+			`href="/models/providers/new/runware" role="menuitem"`, "<span>Runware</span>",
 			`href="/models/providers/new?kind=openai" role="menuitem"`, "<span>OpenAI</span>",
-			`class="mv-menu__item is-soon"`, "<span>Google</span>", `<span class="mv-soon">Soon</span>`,
-			`class="mv-menu__item is-soon"`, "<span>xAI</span>", `<span class="mv-soon">Soon</span>`,
+			`href="/models/providers/new/google" role="menuitem"`, "<span>Google</span>",
+			`href="/models/providers/new/xai" role="menuitem"`, "<span>xAI</span>",
 			`href="/models/providers/new/ollama" role="menuitem"`, "<span>Ollama</span>", "</details>")
+		menu := body[strings.Index(body, `mv-models__add`):]
+		mustNotContain(t, menu[:strings.Index(menu, "</details>")], "is-soon")
 
 		// Empty capability tabs use the designed empty state with a Soon tag.
 		for capability, title := range map[string]string{"video": "No video models yet",
@@ -431,7 +439,7 @@ func TestModelsPageSoonItemsNeverLink(t *testing.T) {
 		}
 		// Unknown tabs fall back to the designed default, Image.
 		mustContain(t, mainOf(t, ta.Login(t, ta.Admin.Username).Get("/models?cap=bogus")),
-			`href="/models?cap=image" aria-current="true">Image 15</a>`, "Placeholder art")
+			`href="/models?cap=image" aria-current="true">Image 21</a>`, "Placeholder art")
 	})
 }
 
@@ -608,4 +616,30 @@ func TestSetupStepThreeShowsDesignedProviderRows(t *testing.T) {
 		t.Fatalf("vendor connect = %d %q", got.StatusCode, got.Header.Get("Location"))
 	}
 	mustAppearInOrder(t, string(admin.Get("/setup/models").Body), "OpenAI · Google · xAI", "Connected", "Ollama · local text model")
+}
+
+// A key saved under another master key (secret.key replaced or lost) cannot be
+// read; the connection check must say so instead of a generic failure, so the
+// admin knows to replace the key.
+func TestModelsTestNamesAnUnreadableKey(t *testing.T) {
+	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
+		admin := ta.Login(t, ta.Admin.Username)
+		created := postModelsForm(admin, "/models/providers", url.Values{"kind": {"openai"}, "name": {"Lost Key OpenAI"},
+			"key": {"sk-openai-lost-master-key"}, "scope": {"server"}})
+		if created.StatusCode != http.StatusSeeOther {
+			t.Fatalf("create = %d", created.StatusCode)
+		}
+		id := providerIDByName(t, ta, "Lost Key OpenAI")
+		// Well-formed ciphertext this server cannot open for this provider (as after secret.key changed).
+		other := ta.Deps.Secrets.SealString("sk-openai-lost-master-key", "another-aad")
+		if _, err := ta.Deps.DB.Exec(context.Background(), `UPDATE providers SET key_enc = ? WHERE id = ?`, other, id); err != nil {
+			t.Fatal(err)
+		}
+		admin.Header.Set("HX-Request", "true")
+		res := postModelsForm(admin, "/models/providers/"+id+"/test", url.Values{})
+		admin.Header.Del("HX-Request")
+		if res.StatusCode != http.StatusOK || !strings.Contains(string(res.Body), "The saved key can’t be read") {
+			t.Fatalf("unreadable key test = %d: %.1500s", res.StatusCode, res.Body)
+		}
+	})
 }

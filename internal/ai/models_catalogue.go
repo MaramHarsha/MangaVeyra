@@ -19,6 +19,8 @@ type imageModelView struct {
 	// as the design's Licence guard); Detail says why in full.
 	Warning bool
 	Detail  string
+	// Verification is how the row's route has been verified (G2 meta line).
+	Verification string
 }
 
 func (m *Module) catalogueRows(ctx context.Context, actor providerActor, manageable []providerView, inst settings.Instance) ([]imageModelView, error) {
@@ -38,6 +40,9 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 	out := []imageModelView{}
 	for _, model := range models {
 		row := imageModelView{Name: model.Name, ID: model.ID, Status: i18n.T(ctx, "models.tile.not_connected"), Use: i18n.T(ctx, "aiimage.use.panels"), Cost: imageEstimate(ctx, model)}
+		if len(model.Providers) > 0 {
+			row.Verification = providerVerification(model.Providers[0])
+		}
 		if model.Edit {
 			row.Use = i18n.T(ctx, "aiimage.use.edits")
 		}
@@ -103,7 +108,7 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 		}
 		// The connection's last test (or a GPT Image refusal) showed the key
 		// cannot use this model, so routing skips it: say so in the row.
-		if routed != nil && routed.Kind == providerKindOpenAI && !inst.LocalOnly && !routed.Test.imageModelAvailable(model.ID) {
+		if routed != nil && capabilityKind(routed.Kind) && !inst.LocalOnly && !routed.Test.imageModelAvailable(model.ID) {
 			row.Ready, row.Warning = false, true
 			row.Status, row.Detail = i18n.T(ctx, "models.status.no_access"), i18n.T(ctx, "models.test.unavailable")
 			if routed.Test.Images == capabilityVerification {
@@ -133,7 +138,30 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 		}
 		out = append(out, row)
 	}
-	return out, nil
+	return append(out, customImageRows(ctx, manageable, inst)...), nil
+}
+
+// customImageRows are the G12 image connections (ComfyUI workflows, HTTP
+// endpoints, Hugging Face image endpoints): one row each, managed in place.
+func customImageRows(ctx context.Context, manageable []providerView, inst settings.Instance) []imageModelView {
+	out := []imageModelView{}
+	for _, v := range manageable {
+		if !v.ImageOnly || !customKind(v.Kind) {
+			continue
+		}
+		view := v
+		row := imageModelView{Name: v.Name, ID: customModelPrefix + v.ID, Provider: providerKindName(v.Kind), Use: i18n.T(ctx, "aiimage.use.panels"),
+			Status: providerStatusLabel(ctx, v), Ready: v.Enabled && v.LastTest.State == "ok" && !inst.LocalOnly, Connection: &view,
+			Cost: i18n.T(ctx, "aiimage.cost.gpu_time"), Verification: providerVerification(v.Kind)}
+		if v.Kind == providerKindHuggingFace {
+			row.Cost = i18n.T(ctx, "models.cost.endpoint_hours")
+		}
+		if inst.LocalOnly {
+			row.Status = i18n.T(ctx, "models.tile.blocked")
+		}
+		out = append(out, row)
+	}
+	return out
 }
 
 // estimateQuote is the one 1024 × 1024 image a COST cell estimates: a new
@@ -179,6 +207,9 @@ func imageCostLabel(ctx context.Context, usd float64) string {
 func providerRowModel(v providerView) string {
 	if v.Kind == providerKindLocalText {
 		return v.LocalModel
+	}
+	if v.TextModel != "" {
+		return v.TextModel
 	}
 	return providerKindModel(v.Kind)
 }

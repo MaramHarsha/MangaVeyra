@@ -14,6 +14,7 @@ import (
 	"maps"
 	"net/http"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/backup"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
@@ -156,7 +157,13 @@ func (m *Module) sectionBody(r *http.Request, key string) (templComponent, error
 		return AccessibilitySection(prefs), nil
 	case SecData:
 		inst := m.d.Settings.MustInstance(ctx)
-		return DataSection(dataView{QuotaMB: inst.Limits.StorageQuotaMB, Host: web.ServerHost(inst.PublicURL, m.d.Cfg.PublicURL, r.Host)}), nil
+		v := dataView{QuotaMB: inst.Limits.StorageQuotaMB, Host: web.ServerHost(inst.PublicURL, m.d.Cfg.PublicURL, r.Host)}
+		if ex, ok := core.Use[backup.MemberExports](m.d); ok {
+			if b, found, err := ex.LastUserExport(ctx, u.ID); err == nil && found {
+				v.LastExport, v.LastExportURL = backup.LastExportText(ctx, b), backup.LastExportURL(b)
+			}
+		}
+		return DataSection(v), nil
 	}
 	return nil, core.ErrNotFound()
 }

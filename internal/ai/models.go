@@ -30,9 +30,13 @@ var _ setup.ModelStep = (*Module)(nil)
 const (
 	modelsCustomHref  = "/models/providers/custom"
 	falConnectHref    = "/models/providers/new/fal"
-	googleConnectHref = "/models/providers/new/google"
-	xaiConnectHref    = "/models/providers/new/xai"
-	ollamaConnectHref = "/models/providers/new/ollama"
+	googleConnectHref = "/models/providers/new/" + providerKindGoogle
+	xaiConnectHref    = "/models/providers/new/" + providerKindXAI
+	// Phase 4 key-form providers without a designed menu place (ADR 0004).
+	replicateConnectHref = "/models/providers/new/" + providerKindReplicate
+	togetherConnectHref  = "/models/providers/new/" + providerKindTogether
+	runwareConnectHref   = "/models/providers/new/" + providerKindRunware
+	ollamaConnectHref    = "/models/providers/new/ollama"
 )
 
 // Capability tabs of G2, in design order. Image and Text are populated.
@@ -72,7 +76,7 @@ func (v modelsPageView) capCount(capability string) int {
 	if capability == capText {
 		count := 1
 		for _, p := range v.Providers {
-			if p.Kind != providerKindFal {
+			if !p.ImageOnly {
 				count++
 			}
 		}
@@ -247,11 +251,15 @@ func (m *Module) newProviderPage(w http.ResponseWriter, r *http.Request) error {
 		return core.ErrInternal(errors.New("ai: web UI unavailable"))
 	}
 	kind := r.URL.Query().Get("kind")
-	if kind == providerKindLocalText {
-		core.Redirect(w, r, customURL("connect", ""))
+	if customKind(kind) {
+		target := customURL("connect", "")
+		if typ := customKindType(kind); typ != customTypeCompatible {
+			target += "?type=" + typ
+		}
+		core.Redirect(w, r, target)
 		return nil
 	}
-	if !validProviderKind(kind) {
+	if !kindIn(kind, keyFormKinds) {
 		return core.ErrNotFound()
 	}
 	actor, err := browserProviderActor(r.Context())
@@ -299,7 +307,7 @@ func (m *Module) createProvider(w http.ResponseWriter, r *http.Request) error {
 	if kind == "" {
 		kind = providerKindOpenRouter
 	}
-	if !validProviderKind(kind) || kind == providerKindLocalText {
+	if !kindIn(kind, keyFormKinds) {
 		return core.ErrNotFound()
 	}
 	v := providerFormView{Kind: kind, Name: web.FormValue(r, "name"), Scope: scope,
@@ -362,9 +370,12 @@ func (m *Module) testProvider(w http.ResponseWriter, r *http.Request) error {
 		return settingsErr
 	}
 	row := providerRowView{Provider: view, LocalOnly: inst.LocalOnly, Tested: true}
-	if testErr != nil {
+	switch {
+	case errors.Is(testErr, errProviderKeyUnreadable):
+		row.Tone, row.Notice = ui.ToneError, i18n.T(ctx, "models.test.key_unreadable")
+	case testErr != nil:
 		row.Tone, row.Notice = ui.ToneError, i18n.T(ctx, "models.test.failed")
-	} else {
+	default:
 		row.Tone, row.Notice = ui.ToneSuccess, i18n.T(ctx, "models.test.ok")
 	}
 	if core.IsHTMX(r) {
@@ -398,12 +409,28 @@ func (m *Module) setProviderEnabled(w http.ResponseWriter, r *http.Request) erro
 		return core.ErrBadRequest(i18n.T(r.Context(), "models.error.enabled"))
 	}
 	view, err := m.providers.SetEnabled(ctx, actor, id, enabled)
+	inst, settingsErr := loadRemoteSettings(ctx, m.d.Settings)
+	if errors.Is(err, errProviderUntested) && settingsErr == nil {
+		// A custom connection turns on only after a passed test of what it
+		// is now (G12 step 2 or Test connection).
+		view, err = m.providers.GetManageable(ctx, actor, id)
+		if err != nil {
+			return m.providerPageError(r.Context(), err)
+		}
+		notice := i18n.T(ctx, "models.toggle.untested")
+		if core.IsHTMX(r) {
+			return web.Render(w, r, http.StatusUnprocessableEntity, ProviderRows(providerRowView{Provider: view, LocalOnly: inst.LocalOnly,
+				Tone: ui.ToneError, Notice: notice}), nil)
+		}
+		web.Flash(w, r, "error", notice, "")
+		core.Redirect(w, r, modelsReturnURL(r))
+		return nil
+	}
 	if err != nil {
 		return m.providerPageError(r.Context(), err)
 	}
-	inst, err := loadRemoteSettings(ctx, m.d.Settings)
-	if err != nil {
-		return err
+	if settingsErr != nil {
+		return settingsErr
 	}
 	message := i18n.T(ctx, "models.flash.disabled")
 	if enabled {
@@ -574,6 +601,18 @@ func providerKindName(kind string) string {
 	if route, ok := routeForKind(kind); ok {
 		return route.Label
 	}
+	switch kind {
+	case providerKindReplicate:
+		return "Replicate"
+	case providerKindRunware:
+		return "Runware"
+	case providerKindHuggingFace:
+		return "Hugging Face"
+	case providerKindHTTP:
+		return "HTTP"
+	case providerKindComfyUI:
+		return "ComfyUI"
+	}
 	return kind
 }
 
@@ -585,6 +624,21 @@ func providerKindModel(kind string) string {
 		return route.Model
 	}
 	return ""
+}
+
+// providerRowCost is the text row's COST cell: a Hugging Face connection's
+// own bound (serverless) or its hourly billing (dedicated), else the route's.
+func providerRowCost(ctx context.Context, p providerView) string {
+	switch p.Cost {
+	case hfCostHourly:
+		return i18n.T(ctx, "models.cost.endpoint_hours")
+	case hfCostUnpriced:
+		return i18n.T(ctx, "models.cost.listed")
+	case "":
+		return providerCostLabel(ctx, p.Kind)
+	}
+	usd, _ := strconv.ParseFloat(p.Cost, 64)
+	return i18n.T(ctx, "models.cost.per_call", "amount", formatUSD(math.Ceil(usd*100)/100))
 }
 
 // providerCostLabel is the COST column for a remote route: the hard per-call

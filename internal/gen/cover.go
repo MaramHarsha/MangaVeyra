@@ -271,7 +271,7 @@ func coverActor(p coverPayload) studio.Actor {
 // checkCoverTx repeats the panel-art checks for a chapter scope: membership
 // and art permissions, the chapter lock and the basis fingerprint.
 func (s *service) checkCoverTx(ctx context.Context, tx *db.Tx, p coverPayload, actor studio.Actor) error {
-	if err := s.authorizeImageTx(ctx, tx, actor, p.Scope.ProjectID); err != nil {
+	if err := s.authorizeImageTx(ctx, tx, actor, p.Scope); err != nil {
 		return err
 	}
 	if err := s.studio.CheckScopeWritableTx(ctx, tx, p.Scope); err != nil {
@@ -313,7 +313,7 @@ func (s *service) EnqueueCover(ctx context.Context, actor studio.Actor, req Cove
 		return nil, err
 	}
 	req.Variations = n
-	if _, err := s.resolveImageActor(ctx, actor, req.ProjectID, jobs.Cost{}, false); err != nil {
+	if _, err := s.resolveImageActor(ctx, actor, projectTarget(req.ProjectID), jobs.Cost{}, false); err != nil {
 		return nil, err
 	}
 	chapter, err := s.studio.GetChapter(ctx, req.ChapterID)
@@ -360,7 +360,7 @@ func (s *service) EnqueueCover(ctx context.Context, actor studio.Actor, req Cove
 	if err != nil {
 		return nil, studio.ErrInvalid
 	}
-	actor, err = s.resolveImageActor(ctx, actor, req.ProjectID, cost, plan.Remote)
+	actor, err = s.resolveImageActor(ctx, actor, projectTarget(req.ProjectID), cost, plan.Remote)
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +391,7 @@ func (s *service) handleCover(ctx context.Context, run *jobs.Run) error {
 	if err != nil || cost != j.Estimate {
 		return mapImageJobError(ctx, studio.ErrInvalid)
 	}
-	actor, err := s.resolveImageActor(ctx, coverActor(p), p.Scope.ProjectID, cost, plan.Remote)
+	actor, err := s.resolveImageActor(ctx, coverActor(p), p.Scope, cost, plan.Remote)
 	if err != nil {
 		return mapImageJobError(ctx, err)
 	}
@@ -544,7 +544,7 @@ func (s *service) KeepCover(ctx context.Context, actor studio.Actor, id string, 
 	if out.KeptIndex != nil {
 		return "", ErrCoverKept
 	}
-	if _, err := s.resolveImageActor(ctx, actor, p.Scope.ProjectID, jobs.Cost{}, false); err != nil {
+	if _, err := s.resolveImageActor(ctx, actor, p.Scope, jobs.Cost{}, false); err != nil {
 		return "", err
 	}
 	kept := ""

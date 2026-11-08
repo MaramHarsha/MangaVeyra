@@ -30,7 +30,7 @@ func (s *service) EnqueuePage(ctx context.Context, actor studio.Actor, req PageR
 	if !db.ValidID(req.ProjectID) || !db.ValidID(req.PageID) || req.ExpectedVersion < 1 || req.RoutingMode != "" && !validRoutingMode(req.RoutingMode) || !finiteControlStrength(req.Strength) {
 		return nil, studio.ErrInvalid
 	}
-	if _, err := s.resolveImageActor(ctx, actor, req.ProjectID, jobs.Cost{}, false); err != nil {
+	if _, err := s.resolveImageActor(ctx, actor, jobs.Scope{Kind: jobs.ScopePage, ProjectID: req.ProjectID, PageID: req.PageID}, jobs.Cost{}, false); err != nil {
 		return nil, err
 	}
 	page, err := s.pages.GetPage(ctx, req.PageID)
@@ -104,7 +104,7 @@ func (s *service) EnqueueRepair(ctx context.Context, actor studio.Actor, req Rep
 	if !db.ValidID(req.ProjectID) || !db.ValidID(req.CharacterID) || !db.ValidID(req.ChapterID) || len(req.Targets) == 0 || len(req.Targets) > 24 {
 		return nil, studio.ErrInvalid
 	}
-	if _, err := s.resolveImageActor(ctx, actor, req.ProjectID, jobs.Cost{}, false); err != nil {
+	if _, err := s.resolveImageActor(ctx, actor, projectTarget(req.ProjectID), jobs.Cost{}, false); err != nil {
 		return nil, err
 	}
 	req.Targets = append([]RepairTarget(nil), req.Targets...)
@@ -188,7 +188,7 @@ func (s *service) addControlPanel(ctx context.Context, all *controlArtPayload, p
 	return nil
 }
 func (s *service) checkControlArtTx(ctx context.Context, tx *db.Tx, p controlArtPayload, actor studio.Actor) error {
-	if err := s.authorizeImageTx(ctx, tx, actor, p.Scope.ProjectID); err != nil {
+	if err := s.authorizeImageTx(ctx, tx, actor, p.Scope); err != nil {
 		return err
 	}
 	if err := s.studio.CheckScopeWritableTx(ctx, tx, p.Scope); err != nil {
@@ -202,7 +202,7 @@ func (s *service) checkControlArtTx(ctx context.Context, tx *db.Tx, p controlArt
 	return s.approvalTx(ctx, tx, actor, p.Estimate, p.Remote)
 }
 func (s *service) enqueueControlArt(ctx context.Context, actor studio.Actor, kind string, p controlArtPayload) (*jobs.Job, error) {
-	if _, err := s.resolveImageActor(ctx, actor, p.Scope.ProjectID, p.Estimate, p.Remote); err != nil {
+	if _, err := s.resolveImageActor(ctx, actor, p.Scope, p.Estimate, p.Remote); err != nil {
 		return nil, err
 	}
 	first := p.Panels[0].Plan

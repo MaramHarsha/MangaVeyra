@@ -97,7 +97,7 @@ func (s *service) runLockWorker(ctx context.Context, run *jobs.Run, kind, model,
 		if inst.LocalOnly {
 			return studio.ErrForbidden
 		}
-		if err := s.authorizeImageTx(ctx, tx, studio.Actor{UserID: run.Job.UserID, TokenID: storedToken(run.Job.Input)}, scope.ProjectID); err != nil {
+		if err := s.authorizeImageTx(ctx, tx, studio.Actor{UserID: run.Job.UserID, TokenID: storedToken(run.Job.Input)}, scope); err != nil {
 			return err
 		}
 		if err := s.studio.CheckScopeWritableTx(ctx, tx, scope); err != nil {

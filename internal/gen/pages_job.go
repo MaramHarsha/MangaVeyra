@@ -33,7 +33,7 @@ func (s *service) checkPagesTx(ctx context.Context, tx *db.Tx, p pagesPayload) e
 	if p.Request.Replace && actor.TokenID != "" {
 		return studio.ErrForbidden
 	}
-	if err := s.authorizeImageTx(ctx, tx, actor, p.Request.ProjectID); err != nil {
+	if err := s.authorizeImageTx(ctx, tx, actor, projectTarget(p.Request.ProjectID)); err != nil {
 		return err
 	}
 	if p.Request.Letter {
@@ -76,7 +76,7 @@ func (s *service) EnqueuePagesFromScript(ctx context.Context, actor studio.Actor
 	if !db.ValidID(req.ProjectID) || !db.ValidID(req.ChapterID) || req.Replace && actor.TokenID != "" || req.RoutingMode != "" && !validRoutingMode(req.RoutingMode) {
 		return nil, studio.ErrInvalid
 	}
-	if _, err := s.resolveImageActor(ctx, actor, req.ProjectID, jobs.Cost{}, false); err != nil {
+	if _, err := s.resolveImageActor(ctx, actor, projectTarget(req.ProjectID), jobs.Cost{}, false); err != nil {
 		return nil, err
 	}
 	ch, err := s.studio.GetChapter(ctx, req.ChapterID)
@@ -115,7 +115,7 @@ func (s *service) EnqueuePagesFromScript(ctx context.Context, actor studio.Actor
 				p.Remote = p.Remote || child.Plan.Remote
 			}
 		}
-		if _, err = s.resolveImageActor(ctx, actor, req.ProjectID, p.Estimate, p.Remote); err != nil {
+		if _, err = s.resolveImageActor(ctx, actor, projectTarget(req.ProjectID), p.Estimate, p.Remote); err != nil {
 			return nil, err
 		}
 	}
@@ -262,7 +262,7 @@ func (s *service) handlePages(ctx context.Context, run *jobs.Run) error {
 		if !validCost(total) || total.USD > p.Estimate.USD+.0000001 || total.GPUSeconds > p.Estimate.GPUSeconds+.0000001 {
 			return mapImageJobError(ctx, studio.ErrInvalid)
 		}
-		if _, err = s.resolveImageActor(ctx, actor, p.Request.ProjectID, total, total.USD > 0); err != nil {
+		if _, err = s.resolveImageActor(ctx, actor, projectTarget(p.Request.ProjectID), total, total.USD > 0); err != nil {
 			return mapImageJobError(ctx, err)
 		}
 	}

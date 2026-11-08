@@ -1,6 +1,7 @@
 # systemd unit for a bare-metal install.
 #   sudo useradd --system --home /var/lib/mangaveyra --create-home mangaveyra
-#   sudo install -m 0755 bin/mangaveyra /usr/local/bin/mangaveyra
+#   sudo install -d -m 0755 -o mangaveyra -g mangaveyra /opt/mangaveyra/bin   # the in-app updater replaces the binary here
+#   sudo install -m 0755 -o mangaveyra -g mangaveyra bin/mangaveyra /opt/mangaveyra/bin/mangaveyra
 #   sudo install -d -m 0750 -o root -g mangaveyra /etc/mangaveyra
 #   sudo install -m 0640 -o root -g mangaveyra .env.example /etc/mangaveyra/mangaveyra.env   # then edit it
 #   sudo cp deploy/mangaveyra.service /etc/systemd/system/ && sudo systemctl enable --now mangaveyra
@@ -16,8 +17,10 @@ User=mangaveyra
 Group=mangaveyra
 Environment=MV_DATA_DIR=/var/lib/mangaveyra
 EnvironmentFile=-/etc/mangaveyra/mangaveyra.env
-ExecStart=/usr/local/bin/mangaveyra serve
+ExecStart=/opt/mangaveyra/bin/mangaveyra serve
 Restart=on-failure
+# The in-app updater (G14) exits with 75 after swapping in a verified release.
+RestartForceExitStatus=75
 RestartSec=5
 TimeoutStopSec=30
 # Hardening
@@ -25,7 +28,10 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/mangaveyra
+# /opt/mangaveyra/bin lets the in-app updater replace the binary. For a read-only
+# binary, install it elsewhere and drop that path: G14 then refuses before
+# changing anything and you update by hand.
+ReadWritePaths=/var/lib/mangaveyra /opt/mangaveyra/bin
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true

@@ -74,7 +74,9 @@ func validateManifest(m ModelManifest) error {
 		}
 	}
 	for _, p := range m.Providers {
-		if p != PlaceholderID && p != providerKindOpenRouter && p != providerKindOpenAI && p != providerKindFal && p != providerKindWorker {
+		// Manifests may name only kinds with compiled, frozen image routes;
+		// custom G12 connections describe their own capabilities.
+		if p != PlaceholderID && p != providerKindWorker && !kindIn(p, keyFormKinds) {
 			return errors.New("ai: unsupported model adapter")
 		}
 	}

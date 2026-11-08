@@ -1,0 +1,125 @@
+/* D7 Collaboration & review (1440 × 900): the review drawer replaces the
+   inspector, the canvas keeps the page at the artboard's 60 / 30 px offset,
+   and the left rail and footer give way as in the other editor workbenches.
+   Kit tokens and components only; the six cursor tones are the avatar tones. */
+.mv-ed.mv-ed--review { grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "bar bar" "stage right"; grid-template-rows: 52px minmax(0, 1fr); }
+.mv-ed.mv-ed--review .mv-ed__left, .mv-ed.mv-ed--review .mv-ed__footer,
+.mv-ed.mv-ed--review .mv-ed__history-buttons, .mv-ed.mv-ed--review .mv-ed__history-shortcut, .mv-ed.mv-ed--review .mv-ed__project,
+.mv-ed.mv-ed--review .mv-ed__crumb, .mv-ed.mv-ed--review .mv-ed__zoom, .mv-ed.mv-ed--review .mv-ed__preview,
+.mv-ed.mv-ed--review .mv-ed__export, .mv-ed.mv-ed--review .mv-presence { display: none; }
+.mv-ed.mv-ed--review .mv-ed__chapter .ti { display: none; }
+.mv-ed.mv-ed--control .mv-presence, .mv-ed.mv-ed--layouts .mv-presence { display: none; }
+.mv-ed.mv-ed--review .mv-ed__canvas-scroll { justify-content: flex-start; padding: 30px 60px; }
+
+/* Top-bar presence (D1): 28 px avatars, 6 px overlap, online ring for people on the page. */
+.mv-presence { position: relative; display: inline-flex; align-items: center; min-width: 32px; height: 32px; padding: 0 2px; border: 0; border-radius: var(--mv-radius-control); background: transparent; color: var(--mv-text-2); }
+.mv-presence.empty { justify-content: center; width: 32px; }
+.mv-presence .ti { font-size: 16px; }
+.mv-presence:hover { background: var(--mv-surface-2); color: var(--mv-text); }
+.mv-presence[aria-pressed="true"] { background: var(--mv-surface-2); }
+.mv-presence:focus-visible { outline: var(--mv-focus-width, 2px) solid var(--mv-focus); outline-offset: var(--mv-focus-offset, 2px); }
+.mv-presence .mv-avatar-stack > * + * { margin-left: -6px; }
+.mv-presence .mv-avatar { font-size: 11px; }
+.mv-presence .mv-avatar-stack__more { width: 28px; height: 28px; }
+
+/* The design's cursor is Tabler's filled pointer (ti-pointer-filled). Only
+   the outline font ships in the main bundle, so the filled glyph comes from
+   the same package's filled font, woff2 only, fetched only when a cursor is
+   drawn (single-codepoint unicode-range). */
+@font-face {
+  font-family: "mv-tabler-filled";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("../../node_modules/@tabler/icons-webfont/dist/fonts/tabler-icons-filled.woff2") format("woff2");
+  unicode-range: U+FB30;
+}
+.mv-marks__pointer { font-family: "mv-tabler-filled"; font-style: normal; font-size: 20px; line-height: 1; color: var(--mv-tone); speak: none; -webkit-font-smoothing: antialiased; }
+.mv-marks__pointer::before { content: "\fb30"; }
+
+/* Canvas marks: comment pins (bottom-left corner on the anchor) and cursors. */
+.mv-marks { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.mv-marks__pin { position: absolute; transform: translateY(-100%); display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 2px solid var(--mv-on-accent); border-radius: 13px 13px 13px 2px; background: var(--mv-warning); color: var(--mv-on-accent); font: 700 12px/1 var(--mv-font-ui); pointer-events: auto; cursor: pointer; }
+.mv-marks__pin:focus-visible { outline: var(--mv-focus-width, 2px) solid var(--mv-focus); outline-offset: 2px; }
+.mv-marks__cursor { --mv-tone: #F5B83D; position: absolute; display: flex; align-items: flex-start; gap: 2px; pointer-events: none; transition: left 80ms linear, top 80ms linear; }
+.mv-marks__cursor span { margin-top: 14px; padding: 2px 6px; border-radius: var(--mv-radius-control); background: var(--mv-tone); color: var(--mv-on-accent); font: 700 11px/1.4 var(--mv-font-ui); white-space: nowrap; }
+.mv-marks__cursor--c1 { --mv-tone: #F5B83D; }
+.mv-marks__cursor--c2 { --mv-tone: #4DA8FF; }
+.mv-marks__cursor--c3 { --mv-tone: #3CCB7F; }
+.mv-marks__cursor--c4 { --mv-tone: #6AA8FF; }
+.mv-marks__cursor--c5 { --mv-tone: #B08CFF; }
+.mv-marks__cursor--c6 { --mv-tone: #FF8A5C; }
+@media (prefers-reduced-motion: reduce) { .mv-marks__cursor { transition: none; } }
+html[data-motion="reduce"] .mv-marks__cursor { transition: none; }
+
+/* The review drawer. */
+.mv-review { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden; }
+.mv-review__head { display: flex; align-items: flex-start; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--mv-line); }
+.mv-review__head > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mv-review__head strong { font-size: 16px; font-weight: 700; line-height: 1.25; }
+.mv-review__head span { font-size: 12px; line-height: 1.35; color: var(--mv-text-2); }
+.mv-review__head .mv-iconlink { flex: none; }
+.mv-review__head .mv-review__new[aria-pressed="true"] { color: var(--mv-text); background: var(--mv-surface-2); }
+.mv-review__notice { margin: 12px 16px 0; font-size: var(--mv-fs-small); }
+.mv-review__notice > div { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.mv-review__scroll { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.mv-review__filters { margin: 12px 16px 0; flex: none; width: auto; }
+.mv-review__filters .mv-seg__item { padding: 6px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.mv-review__add { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; padding: 0; border: 0; background: transparent; color: var(--mv-acc-text); font: 600 12px/1.5 var(--mv-font-ui); text-align: start; }
+.mv-review__add .ti { font-size: 15px; }
+.mv-review__add:hover { text-decoration: underline; text-underline-offset: 3px; }
+.mv-review__composer { display: flex; flex-direction: column; gap: 8px; margin: 12px 16px 0; padding-bottom: 12px; border-bottom: 1px solid var(--mv-line); }
+.mv-review__composer--reply { margin: 0; padding: 0; border: 0; }
+.mv-review__buttons { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.mv-review__spacer { flex: 1; }
+.mv-review__item { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--mv-line); outline: none; }
+.mv-review__item.focused { background: var(--mv-surface); box-shadow: inset 3px 0 var(--mv-accent); }
+.mv-review__item:focus-visible { box-shadow: inset 0 0 0 2px var(--mv-focus); }
+.mv-review__who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mv-review__who strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 700; }
+.mv-review__avatar { --mv-avatar: 26px; font-size: 10px; }
+.mv-review__label { margin-inline-start: auto; flex: none; padding: 0; border: 0; background: transparent; font-family: var(--mv-font-mono); font-size: 11px; color: var(--mv-text-3); }
+.mv-review__label:hover { color: var(--mv-text); }
+.mv-review__body { margin: 0; font-size: 13px; line-height: 1.45; color: var(--mv-text-2); overflow-wrap: anywhere; white-space: pre-wrap; }
+.mv-review__meta { margin: 0; font-size: 12px; color: var(--mv-text-3); }
+.mv-review__row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.mv-review__reply { padding: 0; border: 0; background: transparent; font: 400 12px/1.5 var(--mv-font-ui); color: var(--mv-acc-text); }
+.mv-review__reply:hover { text-decoration: underline; text-underline-offset: 3px; }
+.mv-review__status-wrap { position: relative; display: inline-flex; }
+.mv-review__status { cursor: pointer; background: transparent; }
+.mv-review__status .ti { font-size: 11px; margin-inline-start: -1px; }
+.mv-review__status:focus-visible { outline: var(--mv-focus-width, 2px) solid var(--mv-focus); outline-offset: 2px; }
+.mv-review__menu { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; min-width: 168px; font-size: var(--mv-fs-small); }
+.mv-review__menu .mv-menu__item { font: inherit; white-space: nowrap; }
+.mv-review__dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--mv-info); }
+.mv-review__dot--warning { background: var(--mv-warning); }
+.mv-review__dot--success { background: var(--mv-success); }
+.mv-review__dot--accent { background: var(--mv-acc-text); }
+.mv-review__thread { list-style: none; margin: 0; padding: 0 0 0 12px; border-inline-start: 2px solid var(--mv-line); display: flex; flex-direction: column; gap: 8px; }
+.mv-review__thread li { display: flex; gap: 8px; align-items: flex-start; }
+.mv-review__thread strong { font-size: 12px; }
+.mv-review__thread p { margin: 0; font-size: 12px; line-height: 1.45; color: var(--mv-text-2); overflow-wrap: anywhere; white-space: pre-wrap; }
+.mv-review__empty { margin: 0; padding: 16px; font-size: 13px; color: var(--mv-text-2); border-bottom: 1px solid var(--mv-line); }
+.mv-review__roles { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--mv-line); }
+.mv-review__roles > strong { font-size: 12px; font-weight: 700; }
+.mv-review__roles ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.mv-review__role { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 16px; line-height: 16px; }
+.mv-review__role > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mv-review__role-line { margin-inline-start: auto; color: var(--mv-text-2); text-align: end; }
+.mv-ed .mv-review__edit { width: 20px; height: 16px; margin-block: -2px; margin-inline-end: -4px; }
+.mv-ed .mv-review__edit .ti { font-size: 13px; }
+.mv-review__member { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 4px; padding: 10px; border: 1px solid var(--mv-line); border-radius: var(--mv-radius-control); background: var(--mv-surface); }
+.mv-review__foot { flex: none; margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--mv-line); }
+.mv-review__foot > span { display: block; }
+.mv-review__foot .mv-btn { height: 40px; font-size: 14px; }
+
+/* Phones get the stacked responsive version of the desktop drawer (the
+   mobile artboards are deferred): bar, page, then the review below it. */
+@media (max-width: 768px) {
+ .mv-ed.mv-ed--review { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 440px auto; grid-template-areas: "bar" "stage" "right"; }
+ .mv-ed.mv-ed--review .mv-ed__canvas-scroll { justify-content: center; padding: 16px; }
+ .mv-review { height: auto; overflow: visible; }
+ .mv-review__scroll { overflow: visible; }
+ .mv-review__status, .mv-review__reply, .mv-review__label, .mv-review__add { min-height: 44px; min-width: 44px; }
+ .mv-ed .mv-review__edit { width: 44px; height: 44px; margin: -14px -12px -14px 0; }
+}

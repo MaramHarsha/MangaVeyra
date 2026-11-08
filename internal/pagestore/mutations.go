@@ -11,15 +11,34 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 )
 
+// authorizePage authorizes a write to one page under the member scope.
 func (s *store) authorizePage(ctx context.Context, tx *db.Tx, id string, action studio.Action, ch Change) error {
+	projectID, err := pageProject(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	return s.authorizeOnPage(ctx, tx, projectID, id, action, ch)
+}
+
+// authorizePageChapterWide authorizes a page change that also renumbers the
+// chapter's other pages (deletion): the project-level check applies.
+func (s *store) authorizePageChapterWide(ctx context.Context, tx *db.Tx, id string, action studio.Action, ch Change) error {
+	projectID, err := pageProject(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	return s.authorize(ctx, tx, projectID, action, ch)
+}
+
+func pageProject(ctx context.Context, tx *db.Tx, id string) (string, error) {
 	if tx == nil {
-		return ErrInvalid
+		return "", ErrInvalid
 	}
 	var projectID string
 	if err := tx.Get(ctx, &projectID, `SELECT project_id FROM pages WHERE id = ?`, id); err != nil {
-		return lookupError(err)
+		return "", lookupError(err)
 	}
-	return s.authorize(ctx, tx, projectID, action, ch)
+	return projectID, nil
 }
 
 func (s *store) SetLayerAssetTx(ctx context.Context, tx *db.Tx, in SetLayerAsset, ch Change) (pagedoc.Layer, error) {
@@ -288,7 +307,7 @@ func (s *store) DeletePage(ctx context.Context, id string, ch Change) error {
 		return studio.ErrForbidden
 	}
 	return s.db.WithTx(ctx, func(tx *db.Tx) error {
-		if err := s.authorizePage(ctx, tx, id, studio.ActEditArt, ch); err != nil {
+		if err := s.authorizePageChapterWide(ctx, tx, id, studio.ActEditArt, ch); err != nil {
 			return err
 		}
 		p, err := s.GetPageTx(ctx, tx, id)

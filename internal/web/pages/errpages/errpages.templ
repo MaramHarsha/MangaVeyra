@@ -99,7 +99,7 @@ templ Offline() {
 }
 
 // Maintenance is the G6 maintenance page (GARA GARA) shown while an admin updates the server.
-templ Maintenance(instance, message string) {
+templ Maintenance(instance, message, progress string) {
 	<section class="mv-state mv-state--page" aria-labelledby="mv-err-title">
 		<div class="mv-tex-speedlines mv-tex-speedlines--wide" aria-hidden="true"></div>
 		<div class="mv-tex-calm mv-tex-calm--wide" aria-hidden="true"></div>
@@ -107,7 +107,11 @@ templ Maintenance(instance, message string) {
 		<h1 class="mv-state__title mv-state__title--lg" id="mv-err-title">{ i18n.T(ctx, "errors.maintenance.title", "instance", instance) }</h1>
 		<p class="mv-state__body mv-state__body--lg">{ message }</p>
 		<div class="mv-state__actions">
-			<span class="mv-state__meta">{ i18n.T(ctx, "errors.maintenance.meta") }</span>
+			if progress != "" {
+				<span class="mv-state__meta">{ progress }</span>
+			} else {
+				<span class="mv-state__meta">{ i18n.T(ctx, "errors.maintenance.meta") }</span>
+			}
 		</div>
 		<meta http-equiv="refresh" content="30"/>
 	</section>

@@ -91,12 +91,18 @@ templ AppShell(c *Chrome) {
 				@Sidebar(c)
 			}
 			<main id="main" class="mv-main" tabindex="-1">
+				if c.Banner != nil {
+					@c.Banner
+				}
 				{ children... }
 			</main>
 		</div>
 		if c.User != nil {
 			@BottomNav(c)
 			@ShortcutSheet()
+			if c.Overlay != nil {
+				@c.Overlay
+			}
 		}
 	}
 }

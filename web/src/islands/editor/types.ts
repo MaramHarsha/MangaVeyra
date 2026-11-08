@@ -9,7 +9,7 @@ export interface BubbleText {text:string;status:string;source:string;ruby?:Ruby[
 export interface Bubble {id:string;panel_id?:string;kind:'speech'|'thought'|'shout'|'whisper'|'caption'|'sfx';speaker_character_id?:string;script_panel_id?:string;order:number;box:Rect;shape:string;tail:{enabled:boolean;tip:Point};style:{font?:string;size?:number;auto_fit:boolean;align?:string;rotate?:number;stroke?:boolean};vertical:boolean;texts:Record<string,BubbleText>}
 export interface Page {schema:string;id:string;project_id:string;chapter_id:string;number:number;width:number;height:number;direction:string;layout_id?:string;locked:boolean;locked_by?:string;version:number;panels:Panel[];bubbles:Bubble[];note?:string;thumb?:Asset}
 export interface Lettering {bubble_id:string;lang:string;shape_path:string;text_path:string;rotate:number;rotation_center:Point;fill:string;stroke:string;stroke_width:number;text_color:string;text_stroke?:string;text_stroke_width?:number;overflow:boolean;font?:string;font_size?:number}
-export interface PageResponse {page:Page;lettering:Lettering[]}
+export interface PageResponse {page:Page;lettering:Lettering[];permissions?:{art:boolean;letter:boolean;generate:boolean;lock:boolean}}
 export interface PageSummary {id:string;number:number;panels:number;locked:boolean;version:number;thumb?:Asset;layout_id?:string;updated_at?:string}
 export interface Layout {id:string;name:string;panels:number;points:Point[][];suggested:boolean;rank?:number}
 export interface Character {id:string;name:string;portrait_asset_id?:string;lock_score?:number}

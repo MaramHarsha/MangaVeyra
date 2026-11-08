@@ -522,3 +522,119 @@ the mobile artboards stay deferred (ADR 0012 §11).
   of the same chapter and language is running ("This chapter is already being published in {language}. Nothing was
   changed: publish again once it finishes."), followed by the job progress notice only for the viewer's own job. A
   scheduled chapter whose scheduler lost the right to publish reuses the unpublished notice.
+
+## 12. Phase 4 screens
+
+The approved desktop artboards are followed at 1440 × 900; the mobile artboards stay deferred (ADR 0013 §10).
+
+- **G13 Agents & MCP.** The header switch is the member's "Allow AI agents (MCP)" setting (accessible name from the
+  mobile artboard; a Save button without JavaScript); when it is off a warning notice reads "AI agents are off. Your
+  tokens are kept, but every agent request is refused until you turn this back on." Connect an assistant shows the
+  server's own `/mcp` address. Create token opens a dialog built from the kit's modal and fields (Name; Projects: all or
+  a checklist; Access: Read always on, "Edit scripts and characters", "Generate with your models"; an approval threshold
+  with a `$` prefix, default 0.50, empty never asks; Expires: 30 days, 90 days, 1 year, Never); without JavaScript it
+  renders open under Connect an assistant. After creation a success box shows the secret once with the
+  `mangaveyra mcp-stdio --url … --token …` command. Token rows keep the three drawn lines ("Approve over $0.50", "No
+  approval needed" or "—"; "Expired" in the warning colour). Recent agent actions lists real rows newest first (every
+  waiting request plus the latest ten others) with Undo where version history supports a revert and, on a waiting
+  request, the kit's small Approve and Decline buttons for the token owner and the project owner; Approve on a
+  human-only request opens its real screen (E1, the editor) and is disabled with Soon while that screen does not exist
+  (project deletion, sharing, roles). Empty states describe where items appear. MCP client (v2) keeps its card with
+  Connect a server in the Soon state.
+- **D7 Collaboration & review.** `?panel=review` replaces the inspector with the 340 px review drawer and gives the
+  editor D7's workbench layout (the left rail, footer, undo/redo, history, zoom, Preview, Export and the presence
+  avatars give way; the page sits at the artboard's 60 / 30 px offset). The drawer header adds the inspector's close (×)
+  and a "Comment on panel N.M" button (the D1 panel toolbar's Comment opens the same composer: a textarea, an optional
+  "Assign to" member select, Cancel / Post). A status chip the viewer may change carries a chevron opening the allowed
+  statuses (Reopen, Needs changes, Mark done, Approve). Open lists every comment not yet approved; the header counts
+  those as open and approved ones as resolved. Each roles row shows the member's one project role with its limit
+  ("Letterer · lettering layer only", "Artist · pages 1–20"); the artboard's "Owner · Writer" has no equivalent because
+  a member holds one role. Owners see a pencil per member (Role, "Can change": everything the role allows / lettering
+  layer only / only some pages, Remove from project) and an "Add member" row. "Approve page N" is disabled for members
+  who do not review and while the current version is approved; "Approved by {name} · {time}" (or "· changed since")
+  sits above it. Below 768 px the drawer stacks under the page.
+- **D1 presence and pins.** The disabled collaboration control becomes the designed avatar stack (people on the page
+  first with the online ring, then other members, up to four and "+N"), opening the review drawer. Cursors are the
+  filled pointer with a name label in the member's avatar tone. Pins for open comments are numbered in Open-list
+  order, sit at the comment's anchor (the panel's top-left corner by default) and step sideways when several share a
+  corner.
+- **G5 Admin · Reports and disputes.** Review opens a review panel under the row (not drawn), built from key-value
+  rows, quote boxes and buttons: the reported thing, reason, reporter, time, the account, the reporter's note, the
+  reported comment and, for AI-label disputes, the per-role labels as provenance badges. A "Note for the log" field
+  sits above only the actions that apply (Ask the creator to review the label, Hide comment, Take chapter down, Take
+  series down, Suspend {name}, Dismiss). A resolved report shows its outcome. Dispute rows add the labels on a mono line.
+  A "Taken down" card lists each takedown with Restore ("Hidden from everyone outside its project. Nothing was deleted;
+  restoring shows it again."). Empty queues use the kit's empty state. The header action reads "Update to {version}"
+  when the update module knows a release, and "Updates" otherwise.
+- **G5 Admin · Users.** Member rows add a mono line "{n} projects · seen {when}". Sign-up is followed by an "Approve
+  open sign-ups" switch; "Waiting for approval · {n}" (Decline / Approve) and "Invites" (read-only link with Copy link,
+  role, who may use it, "{used} / {max} used · expires {date}", Revoke) cards follow the Limits and Roles cards. Invite
+  opens an "Invite someone" dialog (Role, Expires, Uses, Email). The ⋯ menu offers Suspend / Reactivate / Approve, a
+  reset-password link shown once, and Delete account (typing @username to confirm). Limits make the enforced limits
+  editable and add Other running jobs, Upload size (read-only from `MV_MAX_UPLOAD_MB`) and the whole-server remote
+  spend; Storage quota and Projects per member stay Soon until something enforces them.
+- **G5 Admin · Content rules.** The artboard's single "Allow Mature 18+ series" becomes "Allow Mature 17+ series" and
+  "Allow Adult 18+ series", matching the four age ratings (ADR 0012). "Default age rating for new series" and "Licence
+  guard" rows are added. "Require an AI label on every chapter" is an always-on disabled switch. NSFW filter, Auto-hold
+  reported chapters, Comments, Panel comments and "New members need approval before publishing" keep their places in
+  the Soon state showing the real state. "{n} words · edit" opens the list in place. Server rules gets a Save button.
+- **G5 Admin · Server.** The Instance card adds Description; Services adds Job queue and Uptime; Database reads "{name}
+  {version} · OK · {size}". Maintenance mode opens a dialog (message, Turn on / Save message / Turn off) and the card
+  shows a warning notice while it is on. View logs is Soon.
+- **G2 Models (Phase 4 providers).** Google and xAI keep their designed Add provider places and open the one-page key
+  form. Replicate, Together and Runware, which have no designed place, follow fal among the hosted aggregators
+  (OpenRouter, fal, Replicate, Together, Runware, OpenAI, Google, xAI, Ollama). Rows of fake-transport-tested routes carry
+  the meta line "Fake-transport tested · not live-verified". A Hugging Face dedicated endpoint's cost reads "Billed per
+  endpoint hour", and a serverless connection not yet tested reads "Listed rate at the test". G12 image connections
+  appear in the Image tab with the connection's name and "GPU time".
+- **G12 (Phase 4 connection types).** On step 1 of a new connection the four designed types are segmented links
+  (OpenAI-compatible, ComfyUI workflow, Hugging Face, HTTP); once a draft exists the designed switch shows the type
+  without links. ComfyUI step 1 takes the server and the workflow exported with "Export (API)"; step 2 shows "Map
+  inputs" as designed, with each row as a select after Back. The ComfyUI test checks the server and the workflow's nodes
+  without generating, so the result reads "NODE CHECK · N nodes on the server" instead of the sample test image, and Cost
+  reads "Local GPU". Hugging Face and HTTP step 1 (no artboard) use the existing fields, segmented controls and textarea.
+  Step 3 for image types (no artboard) asks for the largest width and height, images per run, and "Its model licence
+  allows commercial use" (off by default). Free only is disabled for Hugging Face in step 4.
+- **G14 Update available.** The third badge shows the signed download size ("46.8 MB download") instead of "~3 min ·
+  no downtime for readers": no duration is measured and readers see G6 Maintenance while an update runs. A minor
+  release shows "Minor · new features" (info), a major one "Major · read the notes" (warning), and a release with a
+  security fix adds "Security fix". Step 1 reads "Database, settings and projects · last backup {size}" (omitted when
+  none); the destination is not shown. Step 4 reads "App, database and storage tested", the checks `/readyz` makes.
+  "Full changelog" appears only when the manifest has `notes_url`. Without a backup service, a trusted key or a download
+  for this platform, a warning notice explains why and "Back up and update" is disabled; in a container a notice says the
+  backup is taken and the host commands follow. The close button leads back to Admin.
+- **G14 Updating / Done / Failed, restored.** Updating's subtitle reads "Don’t close this tab. The studio is paused;
+  members see the maintenance page."; the footer shows "Started {time}" without a remaining-time estimate; step details
+  use measured values and only the download shows a percentage; without JavaScript the page refreshes every 3 s (8 s
+  while restarting). Done's footer note is a link to the plain-text log; step 4 adds "· {n} workers online" when any is
+  online and says the backup is kept for 7 days when chosen. Failed names the failed step or migration (UPD-MIGRATE-0602)
+  with a short cause and advice for that failure; a failure before the backup reads "Nothing was changed. Your server is
+  still on {version}."; a failed restore keeps maintenance on and gives the restore command. Copy log opens the log
+  without JavaScript and copies it with JavaScript.
+- **G14 states without artboards** are built from G14's window: Update settings ("Check for updates", release address,
+  channel, the 7-day and 03:00 toggles, last update, Check now, Save), Container ("Update to {version} on the host", the
+  backup step and the exact Compose commands), and the members' banner (a kit info notice: "Update {version} available.
+  Only an admin can install it on {host}; you don’t need to do anything."). The window uses `--mv-glow-status` and the
+  backdrop `--mv-scrim`. G6 Maintenance shows the update's progress line ("Started 21:04 · step 3 of 5 · migrating
+  database") while an update runs.
+- **G10 Backup & import.** Built to the desktop artboard (two cards and the dashed Export everything row; the sidebar
+  highlights Settings as drawn). Last backup reads the newest archive this server wrote ("Never" before the first),
+  Schedule reads "Daily · keep N", "Weekly · keep N" or "Off", and Destination shows the backup folder; both open a
+  "Backup schedule" dialog (frequency, day, time in the admin's time zone, keep 1–365, a destination folder that must
+  exist and be writable). Restore… opens "Restore a backup" (a warning notice, archives as radio rows, "Type restore to
+  confirm", a danger Restore button, "Or upload an archive"). The Backups card adds a progress line while a backup,
+  export or restore runs (polled; Refresh without JavaScript) and an "Archives" list (kind · time, size, download, delete
+  with a confirming dialog). Notices above the grid report a restore, keys sealed with another master key, a refused
+  archive and a failed backup. The import drop zone is the kit's file picker with an Import button; without pdftoppm the
+  prompt reads "Drop CBZ, CBR or image folders" with a "PDF" Soon tag. Queue rows read "Queued · N images", "Reading ·
+  N%", "Detecting panels & bubbles · N%", "Creating pages · N%", "Done · N pages" with Open, or "Failed · {reason}" with
+  Retry. The Export everything row adds a quiet button and, once an export exists, "Download · {time} · {size}".
+- **G1 Settings · Data & export.** Export everything downloads the member's own archive (their account without
+  credentials, projects, characters, published works, comments and reading data); Last export shows "{date} · {size}"
+  as a link to the newest export, kept for 7 days, or Never.
+- **G13 and G12/G2 after review.** G13's success box shows `MV_AGENT_TOKEN=… mangaveyra mcp-stdio --url …`; Recent
+  actions read "Can't undo: edited since" where history holds a person's edit, and a waiting generation whose price rose
+  shows the new estimate before it can be approved. A member choosing ComfyUI or HTTP in G12 sees an "An admin connects
+  this server" state (403) built like the existing Blocked state with the type switch kept; the ComfyUI and HTTP first
+  step has no scope picker. Test connection is available on a custom connection that is off, and the ON switch refuses
+  an untested one with a notice; a connection changed since its passed test shows "Not checked".

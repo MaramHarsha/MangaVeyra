@@ -9,6 +9,9 @@ const sources = import.meta.glob('./*.{svelte,ts}', {query: '?raw', import: 'def
 const locales = '../../../../internal/i18n/locales/';
 const catalogue = (lang: string) => JSON.parse(readFileSync(new URL(locales + lang + '/editor.json', import.meta.url), 'utf8')) as Record<string, string>;
 const catalogues = {en: catalogue('en'), ja: catalogue('ja')};
+// Collaboration (D7) strings live in collab.json and keep their "collab." prefix.
+const collabCatalogue = (lang: string) => JSON.parse(readFileSync(new URL(locales + lang + '/collab.json', import.meta.url), 'utf8')) as Record<string, string>;
+const collab = {en: collabCatalogue('en'), ja: collabCatalogue('ja')};
 
 /** firstArgument returns the source text of the first argument of the call starting at `open` ("("). */
 function firstArgument(src: string, open: number): string {
@@ -48,9 +51,14 @@ const dynamic = [
   ...['failed', 'canceled'].map(k => `job.${k}`),
   ...['provider_verification', 'provider_auth', 'spend_limit', 'no_provider', 'rate_limited', 'timeout', 'safety', 'provider_refused', 'local_only', 'scope_locked'].map(k => `job.error.${k}`),
   ...['generate_page', 'character_repair', 'revert', 'save', 'lock'].map(k => `history.action.${k}`),
+  ...['owner', 'writer', 'artist', 'letterer', 'editor', 'viewer'].map(k => `collab.role.${k}`),
+  ...['open', 'needs_changes', 'done', 'approved'].flatMap(k => [`collab.status.${k}`, `collab.action.${k}`]),
+  ...['open', 'needs_changes', 'approved'].flatMap(k => [`collab.filter.${k}`, `collab.empty.${k}`]),
+  ...['all', 'lettering', 'pages'].map(k => `collab.scope.option.${k}`),
 ];
 
 function has(lang: keyof typeof catalogues, key: string): boolean {
+  if (key.startsWith('collab.')) return key in collab[lang] || (`${key}.one` in collab[lang] && `${key}.other` in collab[lang]);
   const c = catalogues[lang], full = `editor.${key}`;
   return full in c || (`${full}.one` in c && `${full}.other` in c);
 }
@@ -72,6 +80,7 @@ describe('editor message keys', () => {
 
   it('keep the same keys in both catalogues', () => {
     expect(Object.keys(catalogues.ja).sort()).toEqual(Object.keys(catalogues.en).sort());
+    expect(Object.keys(collab.ja).sort()).toEqual(Object.keys(collab.en).sort());
   });
 
   it('give every English count message singular and plural forms', () => {

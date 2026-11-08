@@ -4,8 +4,9 @@
 //	mangaveyra migrate [status]          apply or list database migrations
 //	mangaveyra user create|reset-password|set-role ...
 //	mangaveyra seed --demo               create the original demo content
-//	mangaveyra mcp-stdio                 MCP over stdin/stdout for local agents
-//	mangaveyra backup ...                create, list or restore backups
+//	mangaveyra mcp-stdio                 MCP over stdin/stdout for local agents (bridges to /mcp)
+//	mangaveyra backup ...                create, list, restore or delete backups
+//	mangaveyra release ...               sign and verify update releases (project owner)
 //	mangaveyra version
 //
 // Every command accepts --config <file.yaml>; MV_* environment variables override it.
@@ -31,6 +32,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/mcp"
 	"github.com/MaramHarsha/MangaVeyra/internal/seed"
+	"github.com/MaramHarsha/MangaVeyra/internal/update"
 	"github.com/MaramHarsha/MangaVeyra/internal/version"
 )
 
@@ -46,8 +48,9 @@ Commands:
   user reset-password                Set a new password (--user <username|email> [--password])
   user set-role                      Change a site role (--user --role)
   seed [--demo]                      Create the demo content
-  mcp-stdio [--token mva_...]        Serve MCP over stdin/stdout
-  backup <create|list|restore> ...   Manage backups
+  mcp-stdio [--url]                  Bridge MCP over stdin/stdout to a server (token in $MV_AGENT_TOKEN)
+  backup <create|list|restore|delete> Manage backups (restore needs --yes)
+  release <keygen|asset|sign|verify> Sign and verify update releases (project owner)
   version                            Print version information
 
 Common flags:
@@ -86,7 +89,9 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	case "mcp-stdio":
 		return cmdMCPStdio(ctx, rest, stdin, stdout, stderr)
 	case "backup":
-		return cmdBackup(ctx, rest, stderr)
+		return cmdBackup(ctx, rest, stdout, stderr)
+	case "release":
+		return update.RunReleaseCLI(rest, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, version.Get().String())
 		return nil
@@ -128,11 +133,22 @@ func cmdServe(ctx context.Context, args []string, stderr io.Writer) error {
 	if *dev {
 		cfg.Dev = true
 	}
+	// A finished update stops serve through this context, then starts the new binary.
+	ctx, stopServe := context.WithCancel(ctx)
+	defer stopServe()
+	update.SetLaunch(update.Launch{ConfigPath: *cfgPath, Stop: stopServe})
 	a, err := app.New(ctx, cfg, app.Options{LogOutput: stderr})
 	if err != nil {
 		return err
 	}
-	return a.Run(ctx)
+	runErr := a.Run(ctx)
+	// A finished update restarts into the swapped, already health-checked
+	// binary even when the graceful shutdown timed out; otherwise a hand-started
+	// server would simply stop.
+	if err := update.RestartIfPending(); err != nil {
+		return err
+	}
+	return runErr
 }
 
 // withDeps opens the services without the HTTP server for CLI commands.
@@ -295,21 +311,35 @@ func cmdSeed(ctx context.Context, args []string, stdout, stderr io.Writer) error
 
 func cmdMCPStdio(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	fs, cfgPath := newFlags("mcp-stdio", stderr)
-	token := fs.String("token", os.Getenv("MV_AGENT_TOKEN"), "agent token (mva_...), default $MV_AGENT_TOKEN")
+	token := fs.String("token", os.Getenv("MV_AGENT_TOKEN"), "agent token (mva_...); prefer $MV_AGENT_TOKEN, since command-line arguments are visible to other local users")
+	serverURL := fs.String("url", "", "server URL, default $MV_PUBLIC_URL (or public_url in --config)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	return withDeps(ctx, *cfgPath, stderr, false, func(d *core.Deps) error {
-		return mcp.RunStdio(ctx, d, *token, stdin, stdout)
-	})
+	// The bridge talks to a running server's /mcp over HTTP; it opens no database.
+	if *serverURL == "" {
+		cfg, err := loadConfig(*cfgPath)
+		if err != nil {
+			return err
+		}
+		*serverURL = cfg.PublicURL
+	}
+	return mcp.RunStdio(ctx, mcp.StdioOptions{URL: *serverURL, Token: *token}, stdin, stdout)
 }
 
-func cmdBackup(ctx context.Context, args []string, stderr io.Writer) error {
-	fs, cfgPath := newFlags("backup", stderr)
-	if err := fs.Parse(args); err != nil {
+func cmdBackup(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		fmt.Fprintln(stderr, backup.CLIUsage)
+		return errors.New("missing backup command")
+	}
+	sub := args[0]
+	fs, cfgPath := newFlags("backup "+sub, stderr)
+	opts := backup.CLIFlags(fs)
+	pos, err := backup.ParseInterspersed(fs, args[1:])
+	if err != nil {
 		return err
 	}
 	return withDeps(ctx, *cfgPath, stderr, false, func(d *core.Deps) error {
-		return backup.RunCLI(ctx, d, fs.Args())
+		return backup.RunCLI(ctx, d, sub, pos, opts, stdout)
 	})
 }

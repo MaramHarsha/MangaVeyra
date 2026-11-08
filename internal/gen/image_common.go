@@ -87,14 +87,24 @@ func changeFor(actor studio.Actor, jobID, action string) pagestore.Change {
 func imageActor(p imagePayload) studio.Actor {
 	return studio.Actor{UserID: p.Actor.UserID, TokenID: p.Actor.TokenID}
 }
-func (s *service) resolveImageActor(ctx context.Context, actor studio.Actor, projectID string, cost jobs.Cost, remote bool) (studio.Actor, error) {
+
+// projectTarget is the target of project- and chapter-wide image work. A
+// page-range member is refused it (studio.TargetAuthorizer).
+func projectTarget(projectID string) jobs.Scope {
+	return jobs.Scope{Kind: jobs.ScopeProject, ProjectID: projectID}
+}
+
+// resolveImageActor authorizes image work on target, applying the member
+// scope (page range, lettering only) as well as roles, tokens and spend.
+func (s *service) resolveImageActor(ctx context.Context, actor studio.Actor, target jobs.Scope, cost jobs.Cost, remote bool) (studio.Actor, error) {
 	if !db.ValidID(actor.UserID) {
 		return actor, studio.ErrForbidden
 	}
-	if err := s.studio.Authorize(ctx, actor, projectID, studio.ActGenerate); err != nil {
+	projectID := target.ProjectID
+	if err := s.targets.AuthorizeTarget(ctx, actor, target, studio.ActGenerate); err != nil {
 		return actor, err
 	}
-	if err := s.studio.Authorize(ctx, actor, projectID, studio.ActEditArt); err != nil {
+	if err := s.targets.AuthorizeTarget(ctx, actor, target, studio.ActEditArt); err != nil {
 		return actor, err
 	}
 	if actor.TokenID != "" {
@@ -112,9 +122,9 @@ func (s *service) resolveImageActor(ctx context.Context, actor studio.Actor, pro
 	actor.SiteRole = ""
 	return actor, nil
 }
-func (s *service) authorizeImageTx(ctx context.Context, tx *db.Tx, actor studio.Actor, projectID string) error {
+func (s *service) authorizeImageTx(ctx context.Context, tx *db.Tx, actor studio.Actor, target jobs.Scope) error {
 	for _, action := range []studio.Action{studio.ActGenerate, studio.ActEditArt} {
-		if err := s.studio.AuthorizeTx(ctx, tx, actor, projectID, action); err != nil {
+		if err := s.targets.AuthorizeTargetTx(ctx, tx, actor, target, action); err != nil {
 			return err
 		}
 	}
@@ -231,7 +241,7 @@ func (s *service) failoverImage(ctx context.Context, j *jobs.Job, failure jobs.J
 func stringJSON(v any) string { b, _ := json.Marshal(v); return string(b) }
 
 func (s *service) checkImageTx(ctx context.Context, tx *db.Tx, p imagePayload, actor studio.Actor) error {
-	if err := s.authorizeImageTx(ctx, tx, actor, p.Scope.ProjectID); err != nil {
+	if err := s.authorizeImageTx(ctx, tx, actor, p.Scope); err != nil {
 		return err
 	}
 	if err := s.studio.CheckScopeWritableTx(ctx, tx, p.Scope); err != nil {
@@ -337,7 +347,7 @@ func (s *service) enqueueImageOnce(ctx context.Context, p imagePayload, dedupeKe
 	if err != nil {
 		return nil, studio.ErrInvalid
 	}
-	actor, err := s.resolveImageActor(ctx, imageActor(p), p.Scope.ProjectID, cost, p.Plan.Remote)
+	actor, err := s.resolveImageActor(ctx, imageActor(p), p.Scope, cost, p.Plan.Remote)
 	if err != nil {
 		return nil, err
 	}

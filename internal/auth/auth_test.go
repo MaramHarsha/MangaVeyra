@@ -362,13 +362,21 @@ func TestBearerTokens(t *testing.T) {
 			t.Fatalf("token %q prefix %q", created.Token, created.Info.Prefix)
 		}
 		bc := ta.BearerClient(created.Token)
-		me := bc.Get("/api/v1/auth/me").Map(t)
-		if me["user"].(map[string]any)["id"] != u.ID || me["token"].(map[string]any)["kind"] != "agent" {
-			t.Fatalf("bearer identity: %v", me)
+		// Agent tokens work only through MCP (ADR 0013 §7): every other API refuses them.
+		if r := bc.Get("/api/v1/auth/me"); r.StatusCode != 403 || !strings.Contains(string(r.Body), "agent_token_mcp_only") {
+			t.Fatalf("agent token outside /mcp = %d %s", r.StatusCode, r.Body)
 		}
-		// agents cannot manage the account (human-only actions)
 		if r := bc.PostJSON("/api/v1/auth/tokens", map[string]any{"name": "x"}); r.StatusCode != 403 {
 			t.Fatalf("agent created a token: %d", r.StatusCode)
+		}
+		// API tokens identify their owner on the REST API.
+		apiRaw, _, err := ta.Deps.Auth.CreateToken(ctx, auth.TokenInput{UserID: u.ID, Kind: auth.TokenAPI, Name: "script", Scopes: []string{"projects:read"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		me := ta.BearerClient(apiRaw).Get("/api/v1/auth/me").Map(t)
+		if me["user"].(map[string]any)["id"] != u.ID || me["token"].(map[string]any)["kind"] != "api" {
+			t.Fatalf("bearer identity: %v", me)
 		}
 		// a bad bearer token is rejected outright
 		if r := ta.BearerClient("mva_nottherightone").Get("/api/v1/auth/me"); r.StatusCode != 401 {

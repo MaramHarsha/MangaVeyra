@@ -41,10 +41,26 @@ func (s *store) authorize(ctx context.Context, tx *db.Tx, projectID string, acti
 	if err != nil {
 		return err
 	}
-	if ch.JobID != "" && action != studio.ActLock && action != studio.ActLetter {
-		action = studio.ActGenerate
+	return s.studio.AuthorizeTx(ctx, tx, actor, projectID, changeAction(action, ch))
+}
+
+// authorizeOnPage authorizes a write to one page, applying the member scope
+// (a page-range member writes only inside the range, a lettering-only member
+// only lettering). Chapter-wide writes (create, reorder, delete, replace)
+// keep the project-level check, which refuses page-range members.
+func (s *store) authorizeOnPage(ctx context.Context, tx *db.Tx, projectID, pageID string, action studio.Action, ch Change) error {
+	actor, err := changeActor(ch)
+	if err != nil {
+		return err
 	}
-	return s.studio.AuthorizeTx(ctx, tx, actor, projectID, action)
+	return s.targets.AuthorizeTargetTx(ctx, tx, actor, jobs.Scope{Kind: jobs.ScopePage, ProjectID: projectID, PageID: pageID}, changeAction(action, ch))
+}
+
+func changeAction(action studio.Action, ch Change) studio.Action {
+	if ch.JobID != "" && action != studio.ActLock && action != studio.ActLetter {
+		return studio.ActGenerate
+	}
+	return action
 }
 
 func writable(err error) error {
@@ -245,18 +261,18 @@ func (s *store) save(ctx context.Context, tx *db.Tx, input pagedoc.Page, baseVer
 	oldArt, newArt := old, p
 	oldArt.Bubbles, newArt.Bubbles = nil, nil
 	if !reflect.DeepEqual(oldArt, newArt) {
-		if err := s.authorize(ctx, tx, projectID, studio.ActEditArt, ch); err != nil {
+		if err := s.authorizeOnPage(ctx, tx, projectID, old.ID, studio.ActEditArt, ch); err != nil {
 			return pagedoc.Page{}, err
 		}
 	}
 	if !reflect.DeepEqual(old.Bubbles, p.Bubbles) {
-		if err := s.authorize(ctx, tx, projectID, studio.ActLetter, ch); err != nil {
+		if err := s.authorizeOnPage(ctx, tx, projectID, old.ID, studio.ActLetter, ch); err != nil {
 			return pagedoc.Page{}, err
 		}
 	}
 	// A no-op still requires write permission and creates an auditable version.
 	if reflect.DeepEqual(old, p) {
-		if err := s.authorize(ctx, tx, projectID, studio.ActEditArt, ch); err != nil {
+		if err := s.authorizeOnPage(ctx, tx, projectID, old.ID, studio.ActEditArt, ch); err != nil {
 			return pagedoc.Page{}, err
 		}
 	}

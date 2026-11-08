@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/admin/adminapi"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
@@ -198,7 +199,7 @@ func seriesForProject(ctx context.Context, q db.Querier, projectID string) (Seri
 
 // seriesDefaults derives a new series from its project: title, synopsis,
 // genres, tags, format and language, with a slug that is free right now.
-func seriesDefaults(ctx context.Context, q db.Querier, p studio.Project) (seriesInput, error) {
+func seriesDefaults(ctx context.Context, q db.Querier, p studio.Project, rating string) (seriesInput, error) {
 	synopsis := p.Logline
 	if synopsis == "" {
 		synopsis = p.Premise
@@ -207,7 +208,10 @@ func seriesDefaults(ctx context.Context, q db.Querier, p studio.Project) (series
 		synopsis = string([]rune(synopsis)[:maxSynopsis])
 	}
 	in := seriesInput{Title: p.Title, Synopsis: synopsis, Genres: p.Genres, Tags: p.Tags, Format: p.Format,
-		AgeRating: RatingAll, Licence: "all_rights", Visibility: VisibilityPublic, Status: SeriesDraft, OriginalLang: p.Language}
+		AgeRating: rating, Licence: "all_rights", Visibility: VisibilityPublic, Status: SeriesDraft, OriginalLang: p.Language}
+	if !slices.Contains(Ratings, in.AgeRating) {
+		in.AgeRating = RatingAll
+	}
 	if utf8.RuneCountInString(in.Title) > maxTitle {
 		in.Title = string([]rune(in.Title)[:maxTitle])
 	}
@@ -332,14 +336,17 @@ func (s *service) ensureSeriesTx(ctx context.Context, tx *db.Tx, actor studio.Ac
 	if err != nil || exists {
 		return cur, err
 	}
-	in, err := seriesDefaults(ctx, tx, p)
+	rules := s.contentRules(ctx)
+	in, err := seriesDefaults(ctx, tx, p, adminapi.DefaultRating(rules))
 	if err != nil {
 		return Series{}, err
 	}
 	if slices.Contains(Visibilities, visibility) {
 		in.Visibility = visibility
 	}
-	if errs := in.validate(); len(errs) > 0 {
+	errs := in.validate()
+	checkSeriesRules(rules, in, errs)
+	if len(errs) > 0 {
 		return Series{}, fmt.Errorf("%w: project defaults: %v", ErrInvalid, errs)
 	}
 	return s.saveSeriesTx(ctx, tx, actor, p, in, time.Time{})

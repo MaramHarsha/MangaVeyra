@@ -29,8 +29,11 @@ type textService struct {
 	// clients holds one transport per remote provider kind (remoteRoutes).
 	clients   map[string]remoteTextClient
 	localDoer httpDoer
-	spend     remoteSpendStore
-	now       func() time.Time
+	// hfDoer reaches the fixed Hugging Face hosts (router, dedicated
+	// endpoints) through the public SSRF-guarded transport.
+	hfDoer httpDoer
+	spend  remoteSpendStore
+	now    func() time.Time
 }
 
 type textDecision struct {
@@ -139,20 +142,21 @@ func (s *textService) PlanText(ctx context.Context, req TextPlanRequest) (TextPl
 	// frozen route cannot hold this input, or does not match a model pin, is
 	// skipped rather than truncating private source text.
 	var chosen providerCandidate
+	var chosenRoute remoteRoute
 	tooLarge := false
 	if pin.providerID != "" {
 		candidate, err := s.providers.Candidate(ctx, req.ActorID, pin.providerID)
 		if err != nil {
 			return zero, noProviderError(err)
 		}
-		route, ok := routeForKind(candidate.Kind)
+		route, ok := candidateTextRoute(candidate, req.RoutingMode, true)
 		if !ok || (pin.modelID != "" && pin.modelID != route.Model) || !candidate.Test.textAvailable() {
 			return zero, noProviderError(nil)
 		}
 		if !route.fits(in) {
 			return zero, badInputError(errors.New("ai: script input exceeds remote context"))
 		}
-		chosen = candidate
+		chosen, chosenRoute = candidate, route
 	} else {
 		candidates, err := s.providers.Candidates(ctx, req.ActorID)
 		if err != nil {
@@ -162,7 +166,7 @@ func (s *textService) PlanText(ctx context.Context, req TextPlanRequest) (TextPl
 			return placeholderPlan(req, "provider lookup unavailable"), nil
 		}
 		for _, candidate := range candidates {
-			route, ok := routeForKind(candidate.Kind)
+			route, ok := candidateTextRoute(candidate, req.RoutingMode, pin.modelID != "")
 			// A connection whose last model-list check did not list the
 			// frozen text model is skipped like any other unusable route.
 			if !ok || (pin.modelID != "" && pin.modelID != route.Model) || !candidate.Test.textAvailable() {
@@ -172,7 +176,7 @@ func (s *textService) PlanText(ctx context.Context, req TextPlanRequest) (TextPl
 				tooLarge = true
 				continue
 			}
-			chosen = candidate
+			chosen, chosenRoute = candidate, route
 			break
 		}
 		if chosen.ID == "" {
@@ -188,7 +192,7 @@ func (s *textService) PlanText(ctx context.Context, req TextPlanRequest) (TextPl
 			return placeholderPlan(req, "no remote provider connected"), nil
 		}
 	}
-	route, _ := routeForKind(chosen.Kind)
+	route := chosenRoute
 	decision := marshalDecision(textDecision{Mode: req.RoutingMode, ProviderID: chosen.ID, ModelID: route.Model,
 		Remote: true, Reason: "eligible " + route.Label + " connection"})
 	return TextPlan{Task: req.Task, Schema: req.Schema, RoutingMode: req.RoutingMode, ProviderID: chosen.ID,
@@ -218,7 +222,7 @@ func (s *textService) GenerateText(ctx context.Context, req TextGenerateRequest)
 	if !req.Plan.Remote && req.Plan.ProviderID != PlaceholderID {
 		return s.generateLocalText(ctx, req, in)
 	}
-	route, known := routeForModel(req.Plan.ModelID)
+	route, known := s.planTextRoute(ctx, req)
 	if !req.Plan.Remote || req.Plan.ProviderID == "" || !known || req.JobID == "" || req.Attempt <= 0 {
 		return zero, badInputError(nil)
 	}
@@ -231,12 +235,11 @@ func (s *textService) GenerateText(ctx context.Context, req TextGenerateRequest)
 	if !route.fits(in) {
 		return zero, badInputError(errors.New("ai: script input exceeds remote context"))
 	}
-
 	purpose, err := s.initialSpendPurpose(ctx, req.JobID, req.Attempt)
 	if err != nil {
 		return zero, upstreamError(err, false, jobs.Cost{})
 	}
-	initial, initialErr := s.remoteCall(ctx, req, in, scriptAttempt{}, purpose)
+	initial, initialErr := s.remoteCall(ctx, req, route, in, scriptAttempt{}, purpose)
 	total := initial.cost
 	reason := ""
 	if initialErr == nil {
@@ -251,7 +254,7 @@ func (s *textService) GenerateText(ctx context.Context, req TextGenerateRequest)
 		return zero, generateErrorFrom(initialErr, total)
 	}
 
-	repair, repairErr := s.remoteCall(ctx, req, in, scriptAttempt{Repair: true, Reason: reason}, SpendPurposeRepair)
+	repair, repairErr := s.remoteCall(ctx, req, route, in, scriptAttempt{Repair: true, Reason: reason}, SpendPurposeRepair)
 	total = total.Add(repair.cost)
 	if repairErr != nil {
 		return zero, generateErrorFrom(repairErr, total)
@@ -276,14 +279,20 @@ type remoteCallResult struct {
 	cost    jobs.Cost
 }
 
-func (s *textService) remoteCall(ctx context.Context, req TextGenerateRequest, in ScriptInput, attempt scriptAttempt, purpose string) (remoteCallResult, error) {
+func (s *textService) remoteCall(ctx context.Context, req TextGenerateRequest, route remoteRoute, in ScriptInput, attempt scriptAttempt, purpose string) (remoteCallResult, error) {
 	var out remoteCallResult
-	if err := s.remoteGuard(ctx, req); err != nil {
+	if err := s.remoteGuard(ctx, req, route); err != nil {
 		return out, err
 	}
-	route, known := routeForModel(req.Plan.ModelID)
-	client := s.clients[route.Kind]
-	if !known || client == nil {
+	// The plan's estimate is what was approved (by the token threshold or a
+	// person). A route now bounded above it (a Hugging Face tariff frozen by
+	// a later re-test, a frozen route changed by an update) needs approval
+	// again: it never silently reserves more.
+	if aboveEstimate(route.PlanUSD, req.Plan.Estimate.USD) {
+		return out, &GenerateError{Code: CodeApproval, Err: errAboveEstimate,
+			SafeMessage: "The provider's price rose after this was approved. Start it again to review and approve the new estimate."}
+	}
+	if route.Kind != providerKindHuggingFace && s.clients[route.Kind] == nil {
 		return out, badInputAdapterError()
 	}
 	reservationID := db.NewID()
@@ -317,7 +326,7 @@ func (s *textService) remoteCall(ctx context.Context, req TextGenerateRequest, i
 	// The reservation repeats job/settings/provider checks under the spend lock.
 	// Re-read settings and decrypt the current row only after it commits, then do
 	// no unrelated work before the transport call.
-	if err := s.remoteGuard(ctx, req); err != nil {
+	if err := s.remoteGuard(ctx, req, route); err != nil {
 		zero := 0.0
 		closed, reconcileErr := s.reconcile(reservation.ID, SpendOutcomeFailure, &zero)
 		out.cost = reservationCost(closed, reservation)
@@ -329,6 +338,12 @@ func (s *textService) remoteCall(ctx context.Context, req TextGenerateRequest, i
 	provider, err := s.providers.ResolveDispatch(ctx, req.ActorID, req.Plan.ProviderID)
 	if err == nil && provider.Kind != route.Kind {
 		err = errProviderUnavailable
+	}
+	var client remoteTextClient
+	if err == nil {
+		if client = s.clientFor(route, provider); client == nil {
+			err = errProviderUnavailable
+		}
 	}
 	if err != nil {
 		zero := 0.0
@@ -433,7 +448,7 @@ func definitiveReserveError(err error) bool {
 	return false
 }
 
-func (s *textService) remoteGuard(ctx context.Context, req TextGenerateRequest) error {
+func (s *textService) remoteGuard(ctx context.Context, req TextGenerateRequest, route remoteRoute) error {
 	inst, err := loadRemoteSettings(ctx, s.settings)
 	if err != nil || inst.LocalOnly || req.Plan.RoutingMode == ModeLocalOnly {
 		return localOnlyError(err)
@@ -441,8 +456,7 @@ func (s *textService) remoteGuard(ctx context.Context, req TextGenerateRequest) 
 	if req.Plan.RoutingMode == ModeFreeOnly {
 		return noProviderError(nil)
 	}
-	route, known := routeForModel(req.Plan.ModelID)
-	if !known || req.Plan.ProviderID == "" || req.Plan.ProviderID == PlaceholderID {
+	if route.Model != req.Plan.ModelID || req.Plan.ProviderID == "" || req.Plan.ProviderID == PlaceholderID {
 		return badInputAdapterError()
 	}
 	candidate, err := s.providers.Candidate(ctx, req.ActorID, req.Plan.ProviderID)
@@ -452,7 +466,69 @@ func (s *textService) remoteGuard(ctx context.Context, req TextGenerateRequest) 
 	if candidate.Kind != route.Kind {
 		return noProviderError(errProviderUnavailable)
 	}
+	// A custom remote route is rebuilt from the connection's current
+	// description: a changed model or tariff refuses the queued plan.
+	if current, ok := candidateTextRoute(candidate, req.Plan.RoutingMode, true); !ok || current.Model != route.Model || current.ReserveUSD != route.ReserveUSD {
+		return noProviderError(errProviderUnavailable)
+	}
 	return nil
+}
+
+var errAboveEstimate = errors.New("ai: route bound exceeds the approved plan estimate")
+
+// aboveEstimate reports a route bound above the approved estimate, compared
+// in whole microdollars (equal passes; an unreadable amount never passes).
+func aboveEstimate(bound, approved float64) bool {
+	b, err := usdToMicrodollars(bound)
+	if err != nil {
+		return true
+	}
+	a, err := usdToMicrodollars(approved)
+	return err != nil || b > a
+}
+
+// planTextRoute is the route a remote plan names: a Hugging Face
+// connection's own route rebuilt from its current config (its model may be
+// named like a built-in route), or a frozen route by model.
+func (s *textService) planTextRoute(ctx context.Context, req TextGenerateRequest) (remoteRoute, bool) {
+	if req.Plan.ProviderID != "" && req.Plan.ProviderID != PlaceholderID && s.providers != nil {
+		candidate, err := s.providers.Candidate(ctx, req.ActorID, req.Plan.ProviderID)
+		if err == nil && candidate.Kind == providerKindHuggingFace {
+			route, ok := candidateTextRoute(candidate, req.Plan.RoutingMode, true)
+			if !ok || route.Model != req.Plan.ModelID {
+				return remoteRoute{}, false
+			}
+			return route, true
+		}
+	}
+	return routeForModel(req.Plan.ModelID)
+}
+
+// clientFor is the transport for one resolved connection: the kind's shared
+// client, or a Hugging Face client bound to the connection's endpoint.
+func (s *textService) clientFor(route remoteRoute, provider dispatchProvider) remoteTextClient {
+	if route.Kind == providerKindHuggingFace {
+		cfg, err := decodeHFConfig(provider.Config)
+		if err != nil || cfg.Task != hfTaskText || cfg.Model != route.Model {
+			return nil
+		}
+		return newHFTextClient(s.hfDoer, provider.BaseURL, cfg)
+	}
+	return s.clients[route.Kind]
+}
+
+// candidateTextRoute is the remote text route of one connection: the frozen
+// route of a fixed kind, or the route a Hugging Face text connection
+// describes. Unpinned routing honours a custom connection's routing modes.
+func candidateTextRoute(c providerCandidate, mode string, pinned bool) (remoteRoute, bool) {
+	if c.Kind == providerKindHuggingFace {
+		cfg, err := decodeHFConfig(c.Config)
+		if err != nil || cfg.Task != hfTaskText || (!pinned && !cfg.allowsMode(mode)) {
+			return remoteRoute{}, false
+		}
+		return hfTextRoute(cfg)
+	}
+	return routeForKind(c.Kind)
 }
 
 func (s *textService) reconcile(id, outcome string, actual *float64) (RemoteReservation, error) {

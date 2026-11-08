@@ -140,14 +140,19 @@ To use PostgreSQL instead of SQLite, set `MV_DB=postgres://user:password@host:54
 
 ```sh
 sudo useradd --system --home /var/lib/mangaveyra --create-home mangaveyra
-sudo install -m 0755 bin/mangaveyra /usr/local/bin/mangaveyra
+sudo install -d -m 0755 -o mangaveyra -g mangaveyra /opt/mangaveyra/bin
+sudo install -m 0755 -o mangaveyra -g mangaveyra bin/mangaveyra /opt/mangaveyra/bin/mangaveyra
 sudo install -d -m 0750 -o root -g mangaveyra /etc/mangaveyra
 sudo install -m 0640 -o root -g mangaveyra .env.example /etc/mangaveyra/mangaveyra.env   # then edit it
 sudo cp deploy/mangaveyra.service /etc/systemd/system/
 sudo systemctl enable --now mangaveyra
 ```
 
-The unit keeps its data in `/var/lib/mangaveyra`. Put a reverse proxy in front for HTTPS as described for Compose.
+The unit keeps its data in `/var/lib/mangaveyra`. The binary lives in `/opt/mangaveyra/bin`, owned by the service
+user, so the in-app updater can replace it (see [Upgrading](#upgrading)); the unit restarts the server when an update
+exits with status 75. If you prefer a binary the service cannot change, install it elsewhere and remove
+`/opt/mangaveyra/bin` from `ReadWritePaths`: updates are then refused before anything changes and you update by hand.
+Put a reverse proxy in front for HTTPS as described for Compose.
 
 ## First-run setup
 
@@ -310,8 +315,16 @@ Copy backups to another machine. Test a restore before you rely on it.
 
 ## Upgrading
 
-There is no in-app updater yet, and pre-alpha builds can change between commits. Database migrations only move
-forward, so **back up first**: the backup is your way back.
+Admins can update from **Admin → Server → Update settings** (`/admin/update`). Update checks are **off** until you
+turn them on and enter the release address: a server never contacts anyone by itself. Only releases signed with the
+key compiled into your build are offered, and none are published yet, so for now you update from the repository as
+below. When signed releases exist, the single-binary install updates in place: a pre-update backup, download and
+checksum and signature verification, the new version's migrations, a health check of the new version on a loopback
+port, then the swap and restart; any failure before the swap restores the backup and keeps the current version.
+Compose installs take the backup in the app and then show the commands below.
+
+Pre-alpha builds can change between commits. Database migrations only move forward, so **back up first**: the
+backup is your way back.
 
 **Docker Compose:**
 

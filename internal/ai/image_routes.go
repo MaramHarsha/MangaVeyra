@@ -22,6 +22,9 @@ type imageRoute struct {
 	// MaxRefs is the number of reference images one call sends.
 	MaxRefs int
 	quote   func(ImageNeeds) (jobs.Cost, bool)
+	// validate checks the route's per-call ceilings before anything is
+	// reserved; nil means ADR 0009's GPT Image prompt-bytes check.
+	validate func(ImageGenerateRequest) error
 }
 
 // Model identifiers of the ADR 0009 routes.
@@ -74,6 +77,15 @@ var imageRoutes = []imageRoute{
 	{Kind: providerKindOpenRouter, Model: openRouterGPTImageSunburst, PinOnly: true, MaxRefs: gptImageMaxRefs, quote: quoteGPTImageOpenRouter},
 	{Kind: providerKindOpenRouter, Model: openRouterNanoBanana21, PinOnly: true, MaxRefs: nanoBananaMaxRefs, quote: quoteNanoBanana21},
 	{Kind: providerKindOpenRouter, Model: openRouterNanoBananaPro, PinOnly: true, MaxRefs: nanoBananaMaxRefs, quote: quoteNanoBananaPro},
+	// ADR 0013 §9 (fake-transport tested, not live-verified). Neither
+	// preferred nor pin-only, except the time-billed SDXL route whose quote is
+	// an application bound.
+	{Kind: providerKindGoogle, Model: googleImageModel, MaxRefs: nanoBananaMaxRefs, quote: quoteGoogleImage, validate: validateGoogleImageRequest},
+	{Kind: providerKindXAI, Model: xaiImageModel, quote: quoteXAIImage, validate: func(r ImageGenerateRequest) error { return validatePlainPrompt(r, imagePromptBytes) }},
+	{Kind: providerKindTogether, Model: togetherImageModel, quote: quoteTogetherImage, validate: func(r ImageGenerateRequest) error { return validatePlainPrompt(r, imagePromptBytes) }},
+	{Kind: providerKindReplicate, Model: replicateFluxModel, quote: quoteReplicateFlux, validate: func(r ImageGenerateRequest) error { return validatePlainPrompt(r, imagePromptBytes) }},
+	{Kind: providerKindReplicate, Model: replicateSDXLModel, PinOnly: true, quote: quoteReplicateSDXL, validate: func(r ImageGenerateRequest) error { return validatePlainPrompt(r, imagePromptBytes) }},
+	{Kind: providerKindRunware, Model: runwareModel, quote: quoteRunware, validate: validateRunwareRequest},
 }
 
 func imageRouteFor(kind, model string) (imageRoute, bool) {

@@ -17,11 +17,11 @@ func customProgress(ctx context.Context, step string) []ui.Step {
 	return steps
 }
 
-// CustomProviderPage is G12: the four-step custom provider wizard. Step 1
-// saves a disabled draft and runs the connection check, so step 2 opens on
-// its result (Status · Time · Cost) as designed. Step 4 chooses the routing
-// modes in which auto-routing may use the connection. Every step is a plain
-// form and works without JavaScript.
+// CustomProviderPage is G12: the four-step custom provider wizard for the
+// four designed connection types. Step 1 saves a disabled draft and runs the
+// connection check, so step 2 opens on its result (Status · Time · Cost) as
+// designed. Step 4 chooses the routing modes in which auto-routing may use
+// the connection. Every step is a plain form and works without JavaScript.
 templ CustomProviderPage(v customProviderView) {
 	<div class="mv-aicustom">
 		@ui.PageHead(i18n.T(ctx, "aiimage.custom.title"), i18n.T(ctx, "aiimage.custom.progress", "number", customStepNumber(v.Step), "name", i18n.T(ctx, "aiimage.custom.step."+v.Step)), nil)
@@ -47,21 +47,53 @@ templ CustomProviderPage(v customProviderView) {
 					{ i18n.T(ctx, "aiimage.custom.blocked_back") }
 				}
 			}
-		} else {
-		<form method="post" action={ templ.URL(customURL(v.Step, "")) } novalidate class="mv-aicustom__columns" hx-disabled-elt="find button[type=submit]">
-			<input type="hidden" name="id" value={ v.ID }/>
+		} else if v.AdminOnly {
 			<div class="mv-aicustom__fields">
-				@customTypes()
+				@customTypeSwitch(v)
+				@ui.State(ui.StateProps{Title: i18n.T(ctx, "aiimage.custom.admin_only_title"), Body: i18n.T(ctx, "aiimage.custom.admin_only_body"), Boxed: true}) {
+					@ui.LinkButton("/models", ui.ButtonProps{Variant: ui.Secondary, Icon: "arrow-left"}) {
+						{ i18n.T(ctx, "aiimage.custom.blocked_back") }
+					}
+				}
+			</div>
+		} else {
+		<form
+			method="post"
+			action={ templ.URL(customURL(v.Step, "")) }
+			novalidate
+			class="mv-aicustom__columns"
+			hx-disabled-elt="find button[type=submit]"
+			if v.Step == "connect" && v.Type == customTypeComfyUI {
+				enctype="multipart/form-data"
+			}
+		>
+			<input type="hidden" name="id" value={ v.ID }/>
+			<input type="hidden" name="type" value={ v.Type }/>
+			<div class="mv-aicustom__fields">
+				@customTypeSwitch(v)
 				switch v.Step {
 					case "connect":
-						@customConnectFields(v)
+						switch v.Type {
+							case customTypeComfyUI:
+								@comfyConnectFields(v)
+							case customTypeHF:
+								@hfConnectFields(v)
+							case customTypeHTTP:
+								@httpConnectFields(v)
+							default:
+								@customConnectFields(v)
+						}
 					case "describe":
 						@customNameField(v)
-						@ui.Field(ui.FieldProps{ID: "custom-context", Label: i18n.T(ctx, "aiimage.custom.context"), Hint: i18n.T(ctx, "aiimage.custom.context_hint"), Error: v.Errors["context"]}) {
-							@ui.Input(ui.InputProps{ID: "custom-context", Name: "context", Type: "number", Value: fmt.Sprint(v.Context), Required: true, Described: true, Invalid: v.Errors["context"] != "", Attrs: templ.Attributes{"min": "4096", "max": "1048576"}})
-						}
-						@ui.Field(ui.FieldProps{ID: "custom-output", Label: i18n.T(ctx, "aiimage.custom.output")}) {
-							@ui.Input(ui.InputProps{ID: "custom-output", Name: "output", Type: "number", Value: fmt.Sprint(v.Output), Required: true, Attrs: templ.Attributes{"min": "256", "max": "16384"}})
+						if customDescribesText(v) {
+							@ui.Field(ui.FieldProps{ID: "custom-context", Label: i18n.T(ctx, "aiimage.custom.context"), Hint: i18n.T(ctx, "aiimage.custom.context_hint"), Error: v.Errors["context"]}) {
+								@ui.Input(ui.InputProps{ID: "custom-context", Name: "context", Type: "number", Value: fmt.Sprint(v.Context), Required: true, Described: true, Invalid: v.Errors["context"] != "", Attrs: templ.Attributes{"min": "4096", "max": "1048576"}})
+							}
+							@ui.Field(ui.FieldProps{ID: "custom-output", Label: i18n.T(ctx, "aiimage.custom.output")}) {
+								@ui.Input(ui.InputProps{ID: "custom-output", Name: "output", Type: "number", Value: fmt.Sprint(v.Output), Required: true, Attrs: templ.Attributes{"min": "256", "max": "16384"}})
+							}
+						} else {
+							@customImageFields(v)
 						}
 					case "route":
 						@customRouteFields(v)
@@ -75,26 +107,54 @@ templ CustomProviderPage(v customProviderView) {
 	</div>
 }
 
-// customTypes is the designed connection-type switch. Only OpenAI-compatible
-// servers are built; the other types keep their place as Soon.
-templ customTypes() {
+// customDescribesText reports a connection described by token budgets.
+func customDescribesText(v customProviderView) bool {
+	return v.Type == customTypeCompatible || v.Type == customTypeHF && v.Task == hfTaskText
+}
+
+func customTypeLabel(ctx context.Context, typ string) string {
+	switch typ {
+	case customTypeComfyUI:
+		return i18n.T(ctx, "aiimage.custom.comfyui")
+	case customTypeHF:
+		return "Hugging Face"
+	case customTypeHTTP:
+		return "HTTP"
+	}
+	return i18n.T(ctx, "aiimage.custom.compatible")
+}
+
+func customTypeLinks(ctx context.Context, v customProviderView) []ui.SegLink {
+	links := []ui.SegLink{}
+	for _, t := range customTypeOrder {
+		href := "/models/providers/new/connect"
+		if t != customTypeCompatible {
+			href += "?type=" + t
+		}
+		links = append(links, ui.SegLink{Href: href, Label: customTypeLabel(ctx, t), Current: t == v.Type})
+	}
+	return links
+}
+
+// customTypeSwitch is the designed connection-type switch. A new connection
+// chooses its type on step 1; once a draft exists the type is fixed and the
+// switch only shows it.
+templ customTypeSwitch(v customProviderView) {
 	<fieldset class="mv-field">
 		<legend class="mv-field__label">{ i18n.T(ctx,"aiimage.custom.type") }</legend>
-		<div class="mv-aicustom__types">
-			<span class="is-current">{ i18n.T(ctx,"aiimage.custom.compatible") }</span>
-			<span aria-disabled="true">
-				ComfyUI
-				@ui.SoonTag()
-			</span>
-			<span aria-disabled="true">
-				Hugging Face
-				@ui.SoonTag()
-			</span>
-			<span aria-disabled="true">
-				HTTP
-				@ui.SoonTag()
-			</span>
-		</div>
+		if v.Step == "connect" && v.ID == "" {
+			@ui.SegmentedLinks(i18n.T(ctx,"aiimage.custom.type"), customTypeLinks(ctx, v))
+		} else {
+			<div class="mv-aicustom__types">
+				for _, t := range customTypeOrder {
+					if t == v.Type {
+						<span class="is-current">{ customTypeLabel(ctx, t) }</span>
+					} else {
+						<span aria-disabled="true">{ customTypeLabel(ctx, t) }</span>
+					}
+				}
+			</div>
+		}
 	</fieldset>
 }
 
@@ -105,15 +165,10 @@ func customKeyHint(ctx context.Context, v customProviderView) string {
 	return i18n.T(ctx, "models.form.key_hint")
 }
 
-// customConnectFields is step 1. While private-network endpoints are off, an
-// admin gets the switch that allows them (on, because this wizard always
-// connects a server on this machine or network) and anyone else is told to
-// ask an admin.
-templ customConnectFields(v customProviderView) {
-	@customNameField(v)
-	@ui.Field(ui.FieldProps{ID: "custom-endpoint", Label: i18n.T(ctx, "aiimage.custom.endpoint"), Error: v.Errors["endpoint"], Hint: i18n.T(ctx, "aiimage.custom.endpoint_hint")}) {
-		@ui.Input(ui.InputProps{ID: "custom-endpoint", Name: "endpoint", Value: v.Endpoint, Required: true, Invalid: v.Errors["endpoint"] != "", Described: true, MaxLength: 2048})
-	}
+// customPrivateSwitch: while private-network endpoints are off, an admin
+// gets the switch that allows them (on, because these types connect a server
+// on this machine or network) and anyone else is told to ask an admin.
+templ customPrivateSwitch(v customProviderView) {
 	if !v.PrivateAllowed {
 		if v.Admin {
 			<div class="mv-aicustom__private">
@@ -127,13 +182,16 @@ templ customConnectFields(v customProviderView) {
 			}
 		}
 	}
-	@ui.Field(ui.FieldProps{ID: "custom-model", Label: i18n.T(ctx, "aiimage.custom.model"), Hint: i18n.T(ctx, "aiimage.custom.model_hint"), Error: v.Errors["model"]}) {
-		@ui.Input(ui.InputProps{ID: "custom-model", Name: "model", Value: v.Model, Required: true, MaxLength: 160, Described: true, Invalid: v.Errors["model"] != "", Placeholder: "qwen3:8b"})
-	}
-	@ui.Field(ui.FieldProps{ID: "custom-key", Label: i18n.T(ctx, "aiimage.custom.key"), Error: v.Errors["key"], Hint: customKeyHint(ctx, v)}) {
+}
+
+templ customKeyAndScope(v customProviderView, label string) {
+	@ui.Field(ui.FieldProps{ID: "custom-key", Label: label, Error: v.Errors["key"], Hint: customKeyHint(ctx, v)}) {
 		@ui.Input(ui.InputProps{ID: "custom-key", Name: "key", Type: "password", Autocomplete: "off", MaxLength: maxProviderKeyBytes, Described: true, Invalid: v.Errors["key"] != ""})
 	}
-	if v.Admin {
+	if adminOnlyKind(customTypeKind(v.Type)) {
+		// A ComfyUI or HTTP server is always shared with everyone (ADR 0013 §9).
+		<input type="hidden" name="scope" value={ providerScopeServer }/>
+	} else if v.Admin {
 		@ui.Field(ui.FieldProps{ID: "custom-scope", Label: i18n.T(ctx, "models.form.scope"), Error: v.Errors["scope"]}) {
 			@ui.Select(ui.SelectProps{ID: "custom-scope", Name: "scope", Value: v.Scope, Options: providerScopeOptions(ctx)})
 		}
@@ -142,14 +200,180 @@ templ customConnectFields(v customProviderView) {
 	}
 }
 
-// customConnectionSummary is the left column of step 2: the connection the
-// result on the right belongs to, read-only (Back edits it).
-templ customConnectionSummary(v customProviderView) {
-	@ui.Field(ui.FieldProps{ID: "custom-endpoint", Label: i18n.T(ctx, "aiimage.custom.endpoint")}) {
-		@ui.Input(ui.InputProps{ID: "custom-endpoint", Value: v.Endpoint, ReadOnly: true})
+// customConnectFields is step 1 of an OpenAI-compatible local text server.
+templ customConnectFields(v customProviderView) {
+	@customNameField(v)
+	@ui.Field(ui.FieldProps{ID: "custom-endpoint", Label: i18n.T(ctx, "aiimage.custom.endpoint"), Error: v.Errors["endpoint"], Hint: i18n.T(ctx, "aiimage.custom.endpoint_hint")}) {
+		@ui.Input(ui.InputProps{ID: "custom-endpoint", Name: "endpoint", Value: v.Endpoint, Required: true, Invalid: v.Errors["endpoint"] != "", Described: true, MaxLength: 2048})
 	}
-	@ui.Field(ui.FieldProps{ID: "custom-model", Label: i18n.T(ctx, "aiimage.custom.model")}) {
-		@ui.Input(ui.InputProps{ID: "custom-model", Value: v.Model, ReadOnly: true})
+	@customPrivateSwitch(v)
+	@ui.Field(ui.FieldProps{ID: "custom-model", Label: i18n.T(ctx, "aiimage.custom.model"), Hint: i18n.T(ctx, "aiimage.custom.model_hint"), Error: v.Errors["model"]}) {
+		@ui.Input(ui.InputProps{ID: "custom-model", Name: "model", Value: v.Model, Required: true, MaxLength: 160, Described: true, Invalid: v.Errors["model"] != "", Placeholder: "qwen3:8b"})
+	}
+	@customKeyAndScope(v, i18n.T(ctx, "aiimage.custom.key"))
+}
+
+// comfyConnectFields is step 1 of a ComfyUI workflow: the server, the
+// workflow exported in ComfyUI's API format and, once a draft exists, the
+// input map (MangaVeyra proposes it from the workflow).
+templ comfyConnectFields(v customProviderView) {
+	@customNameField(v)
+	@ui.Field(ui.FieldProps{ID: "custom-endpoint", Label: i18n.T(ctx, "aiimage.custom.comfy_server"), Error: v.Errors["endpoint"], Hint: i18n.T(ctx, "aiimage.custom.comfy_server_hint")}) {
+		@ui.Input(ui.InputProps{ID: "custom-endpoint", Name: "endpoint", Value: v.Endpoint, Required: true, Invalid: v.Errors["endpoint"] != "", Described: true, MaxLength: 2048, Placeholder: "http://192.168.1.40:8188"})
+	}
+	@customPrivateSwitch(v)
+	@ui.Field(ui.FieldProps{ID: "custom-workflow", Label: i18n.T(ctx, "aiimage.custom.workflow"), Error: v.Errors["workflow"], Hint: comfyWorkflowHint(ctx, v)}) {
+		@ui.FileDrop(ui.FileDropProps{ID: "custom-workflow", Name: "workflow", Accept: "application/json,.json", Prompt: i18n.T(ctx, "aiimage.custom.workflow_prompt"), Invalid: v.Errors["workflow"] != "", DescribedBy: "custom-workflow-hint"})
+	}
+	if len(v.MapOptions) > 0 {
+		<fieldset class="mv-field">
+			<legend class="mv-field__label">{ i18n.T(ctx, "aiimage.custom.map") }</legend>
+			for _, slot := range customMapSlots {
+				@ui.Field(ui.FieldProps{ID: "custom-map-" + slot, Label: i18n.T(ctx, "aiimage.custom.map." + slot)}) {
+					@ui.Select(ui.SelectProps{ID: "custom-map-" + slot, Name: "map_" + slot, Value: v.MapValues[slot], Options: v.MapOptions[slot]})
+				}
+			}
+		</fieldset>
+	}
+	@customKeyAndScope(v, i18n.T(ctx, "aiimage.custom.key"))
+}
+
+func comfyWorkflowHint(ctx context.Context, v customProviderView) string {
+	if v.WorkflowName != "" {
+		return i18n.T(ctx, "aiimage.custom.workflow_saved", "name", v.WorkflowName, "count", v.Nodes)
+	}
+	return i18n.T(ctx, "aiimage.custom.workflow_hint")
+}
+
+// hfConnectFields is step 1 of a Hugging Face connection: serverless
+// Inference Providers (text) or a dedicated Inference Endpoint (text or
+// image), the model and the token.
+templ hfConnectFields(v customProviderView) {
+	@customNameField(v)
+	<fieldset class="mv-field">
+		<legend class="mv-field__label">{ i18n.T(ctx, "aiimage.custom.hf_where") }</legend>
+		@ui.Segmented(ui.SegmentedProps{Name: "hf_endpoint", Value: v.HFEndpoint, Options: hfEndpointOptions(ctx), Label: i18n.T(ctx, "aiimage.custom.hf_where"), Full: true})
+		<span class="mv-field__hint">{ i18n.T(ctx, "aiimage.custom.hf_where_hint") }</span>
+	</fieldset>
+	@ui.Field(ui.FieldProps{ID: "custom-endpoint", Label: i18n.T(ctx, "aiimage.custom.hf_endpoint"), Error: v.Errors["endpoint"], Hint: i18n.T(ctx, "aiimage.custom.hf_endpoint_hint")}) {
+		@ui.Input(ui.InputProps{ID: "custom-endpoint", Name: "endpoint", Value: v.Endpoint, Invalid: v.Errors["endpoint"] != "", Described: true, MaxLength: 2048, Placeholder: "https://…endpoints.huggingface.cloud"})
+	}
+	<fieldset class="mv-field">
+		<legend class="mv-field__label">{ i18n.T(ctx, "aiimage.custom.hf_task") }</legend>
+		@ui.Segmented(ui.SegmentedProps{Name: "task", Value: v.Task, Options: hfTaskOptions(ctx), Label: i18n.T(ctx, "aiimage.custom.hf_task"), Full: true})
+	</fieldset>
+	@ui.Field(ui.FieldProps{ID: "custom-model", Label: i18n.T(ctx, "aiimage.custom.model"), Hint: i18n.T(ctx, "aiimage.custom.hf_model_hint"), Error: v.Errors["model"]}) {
+		@ui.Input(ui.InputProps{ID: "custom-model", Name: "model", Value: v.Model, Required: true, MaxLength: 200, Described: true, Invalid: v.Errors["model"] != "", Placeholder: "Qwen/Qwen3-32B:together"})
+	}
+	@customKeyAndScope(v, i18n.T(ctx, "aiimage.custom.hf_token"))
+}
+
+// httpConnectFields is step 1 of an HTTP image endpoint: the URL, the JSON
+// request template and where the image (or the status URL) is in the reply.
+templ httpConnectFields(v customProviderView) {
+	@customNameField(v)
+	@ui.Field(ui.FieldProps{ID: "custom-endpoint", Label: i18n.T(ctx, "aiimage.custom.http_endpoint"), Error: v.Errors["endpoint"], Hint: i18n.T(ctx, "aiimage.custom.http_endpoint_hint")}) {
+		@ui.Input(ui.InputProps{ID: "custom-endpoint", Name: "endpoint", Value: v.Endpoint, Required: true, Invalid: v.Errors["endpoint"] != "", Described: true, MaxLength: 2048})
+	}
+	@customPrivateSwitch(v)
+	@ui.Field(ui.FieldProps{ID: "custom-template", Label: i18n.T(ctx, "aiimage.custom.template"), Error: v.Errors["template"], Hint: i18n.T(ctx, "aiimage.custom.template_hint", "list", httpPlaceholderList())}) {
+		@ui.Textarea(ui.TextareaProps{ID: "custom-template", Name: "template", Value: v.Template, Rows: 6, Required: true, Invalid: v.Errors["template"] != "", Attrs: templ.Attributes{"spellcheck": "false", "aria-describedby": "custom-template-hint"}})
+	}
+	<fieldset class="mv-field">
+		<legend class="mv-field__label">{ i18n.T(ctx, "aiimage.custom.http_mode") }</legend>
+		@ui.Segmented(ui.SegmentedProps{Name: "mode", Value: v.Mode, Options: httpModeOptions(ctx), Label: i18n.T(ctx, "aiimage.custom.http_mode"), Full: true})
+	</fieldset>
+	@ui.Field(ui.FieldProps{ID: "custom-image-path", Label: i18n.T(ctx, "aiimage.custom.image_path"), Error: v.Errors["image_path"], Hint: i18n.T(ctx, "aiimage.custom.image_path_hint")}) {
+		@ui.Input(ui.InputProps{ID: "custom-image-path", Name: "image_path", Value: v.ImagePath, Required: true, MaxLength: 256, Described: true, Invalid: v.Errors["image_path"] != "", Placeholder: "images.0"})
+	}
+	<fieldset class="mv-field">
+		<legend class="mv-field__label">{ i18n.T(ctx, "aiimage.custom.image_kind") }</legend>
+		@ui.Segmented(ui.SegmentedProps{Name: "image_kind", Value: v.ImageKind, Options: httpImageKindOptions(ctx), Label: i18n.T(ctx, "aiimage.custom.image_kind"), Full: true})
+	</fieldset>
+	@ui.Field(ui.FieldProps{ID: "custom-status-url", Label: i18n.T(ctx, "aiimage.custom.status_url_path"), Hint: i18n.T(ctx, "aiimage.custom.poll_hint")}) {
+		@ui.Input(ui.InputProps{ID: "custom-status-url", Name: "status_url_path", Value: v.StatusURLPath, MaxLength: 256, Described: true, Placeholder: "job.status_url"})
+	}
+	@ui.Field(ui.FieldProps{ID: "custom-status-path", Label: i18n.T(ctx, "aiimage.custom.status_path")}) {
+		@ui.Input(ui.InputProps{ID: "custom-status-path", Name: "status_path", Value: v.StatusPath, MaxLength: 256, Placeholder: "state"})
+	}
+	@ui.Field(ui.FieldProps{ID: "custom-done", Label: i18n.T(ctx, "aiimage.custom.done")}) {
+		@ui.Input(ui.InputProps{ID: "custom-done", Name: "done", Value: v.Done, MaxLength: 64, Placeholder: "done"})
+	}
+	@ui.Field(ui.FieldProps{ID: "custom-failed", Label: i18n.T(ctx, "aiimage.custom.failed")}) {
+		@ui.Input(ui.InputProps{ID: "custom-failed", Name: "failed", Value: v.Failed, MaxLength: 64, Placeholder: "failed"})
+	}
+	@ui.Field(ui.FieldProps{ID: "custom-check-url", Label: i18n.T(ctx, "aiimage.custom.check_url"), Hint: i18n.T(ctx, "aiimage.custom.check_url_hint")}) {
+		@ui.Input(ui.InputProps{ID: "custom-check-url", Name: "check_url", Value: v.CheckURL, MaxLength: 2048, Described: true, Placeholder: "/health"})
+	}
+	@customKeyAndScope(v, i18n.T(ctx, "aiimage.custom.key"))
+}
+
+// customImageFields is step 3 of an image connection (no artboard): the
+// largest size it serves, outputs per run, and the licence answer the
+// licence guard reads.
+templ customImageFields(v customProviderView) {
+	@ui.Field(ui.FieldProps{ID: "custom-max-width", Label: i18n.T(ctx, "aiimage.custom.max_width"), Error: v.Errors["max_width"]}) {
+		@ui.Input(ui.InputProps{ID: "custom-max-width", Name: "max_width", Type: "number", Value: strconv.Itoa(v.MaxWidth), Required: true, Invalid: v.Errors["max_width"] != "", Attrs: templ.Attributes{"min": "64", "max": "4096"}})
+	}
+	@ui.Field(ui.FieldProps{ID: "custom-max-height", Label: i18n.T(ctx, "aiimage.custom.max_height")}) {
+		@ui.Input(ui.InputProps{ID: "custom-max-height", Name: "max_height", Type: "number", Value: strconv.Itoa(v.MaxHeight), Required: true, Attrs: templ.Attributes{"min": "64", "max": "4096"}})
+	}
+	if v.Type == customTypeComfyUI && v.MapValues["batch"] != "" {
+		@ui.Field(ui.FieldProps{ID: "custom-max-count", Label: i18n.T(ctx, "aiimage.custom.max_count")}) {
+			@ui.Input(ui.InputProps{ID: "custom-max-count", Name: "max_count", Type: "number", Value: strconv.Itoa(v.MaxCount), Required: true, Attrs: templ.Attributes{"min": "1", "max": "4"}})
+		}
+	} else {
+		<input type="hidden" name="max_count" value="1"/>
+	}
+	<div class="mv-aicustom__private">
+		@ui.Toggle(ui.ToggleProps{ID: "custom-commercial", Name: "commercial", Value: "true", Checked: v.Commercial, Label: i18n.T(ctx, "aiimage.custom.commercial"), Attrs: templ.Attributes{"aria-describedby": "custom-commercial-hint"}})
+		<span class="mv-field__hint" id="custom-commercial-hint">{ i18n.T(ctx,"aiimage.custom.commercial_hint") }</span>
+	</div>
+}
+
+// customConnectionSummary is the left column of step 2: the connection the
+// result on the right belongs to, read-only (Back edits it). A ComfyUI
+// workflow shows its file and the designed "Map inputs" rows.
+templ customConnectionSummary(v customProviderView) {
+	switch v.Type {
+		case customTypeComfyUI:
+			@ui.Field(ui.FieldProps{ID: "custom-endpoint", Label: i18n.T(ctx, "aiimage.custom.comfy_server")}) {
+				@ui.Input(ui.InputProps{ID: "custom-endpoint", Value: v.Endpoint, ReadOnly: true})
+			}
+			@ui.Field(ui.FieldProps{ID: "custom-workflow", Label: i18n.T(ctx, "aiimage.custom.workflow")}) {
+				@ui.Input(ui.InputProps{ID: "custom-workflow", Value: i18n.T(ctx, "aiimage.custom.workflow_nodes", "name", v.WorkflowName, "count", v.Nodes), ReadOnly: true})
+			}
+			<div class="mv-field">
+				<span class="mv-field__label">{ i18n.T(ctx, "aiimage.custom.map") }</span>
+				<dl class="mv-aicustom__routes">
+					for _, row := range customMapRows(ctx, v) {
+						<div><dt>{ row[0] }</dt><dd>{ row[1] }</dd></div>
+					}
+				</dl>
+			</div>
+		case customTypeHF:
+			if v.HFEndpoint == hfDedicated {
+				@ui.Field(ui.FieldProps{ID: "custom-endpoint", Label: i18n.T(ctx, "aiimage.custom.hf_endpoint")}) {
+					@ui.Input(ui.InputProps{ID: "custom-endpoint", Value: v.Endpoint, ReadOnly: true})
+				}
+			}
+			@ui.Field(ui.FieldProps{ID: "custom-model", Label: i18n.T(ctx, "aiimage.custom.model")}) {
+				@ui.Input(ui.InputProps{ID: "custom-model", Value: v.Model, ReadOnly: true})
+			}
+		case customTypeHTTP:
+			@ui.Field(ui.FieldProps{ID: "custom-endpoint", Label: i18n.T(ctx, "aiimage.custom.http_endpoint")}) {
+				@ui.Input(ui.InputProps{ID: "custom-endpoint", Value: v.Endpoint, ReadOnly: true})
+			}
+			@ui.Field(ui.FieldProps{ID: "custom-image-path", Label: i18n.T(ctx, "aiimage.custom.image_path")}) {
+				@ui.Input(ui.InputProps{ID: "custom-image-path", Value: v.ImagePath, ReadOnly: true})
+			}
+		default:
+			@ui.Field(ui.FieldProps{ID: "custom-endpoint", Label: i18n.T(ctx, "aiimage.custom.endpoint")}) {
+				@ui.Input(ui.InputProps{ID: "custom-endpoint", Value: v.Endpoint, ReadOnly: true})
+			}
+			@ui.Field(ui.FieldProps{ID: "custom-model", Label: i18n.T(ctx, "aiimage.custom.model")}) {
+				@ui.Input(ui.InputProps{ID: "custom-model", Value: v.Model, ReadOnly: true})
+			}
 	}
 }
 
@@ -169,6 +393,26 @@ func customScopeText(ctx context.Context, scope string) string {
 	return i18n.T(ctx, "aiimage.custom.scope_server")
 }
 
+// customModeOff: Local only never calls a custom connection, and a paid
+// Hugging Face connection never joins Free only.
+func customModeOff(v customProviderView, mode string) bool {
+	return mode == ModeLocalOnly || mode == ModeFreeOnly && v.Type == customTypeHF
+}
+
+func customModesHint(ctx context.Context, v customProviderView) string {
+	if v.Type == customTypeHF {
+		return i18n.T(ctx, "aiimage.custom.modes_hint_paid")
+	}
+	return i18n.T(ctx, "aiimage.custom.modes_hint")
+}
+
+func customUse(ctx context.Context, v customProviderView) string {
+	if customDescribesText(v) {
+		return i18n.T(ctx, "models.use.scripts")
+	}
+	return i18n.T(ctx, "aiimage.use.panels")
+}
+
 // customRouteFields is step 4 (no artboard): the routing-mode chips of G11 as
 // a multi-choice of where auto-routing may pick this connection, and the
 // designed pins rows summarising what it is used for.
@@ -177,8 +421,8 @@ templ customRouteFields(v customProviderView) {
 		<legend class="mv-field__label">{ i18n.T(ctx,"aiimage.custom.modes") }</legend>
 		<div class="mv-chips">
 			for _, mode := range []string{ModeBalanced, ModeBest, ModeFastest, ModeLocalOnly, ModeFreeOnly} {
-				if mode == ModeLocalOnly {
-					<span class="mv-chip mv-aicustom__chip-off" aria-disabled="true">{ i18n.T(ctx,"aiimage.mode.local_only") }</span>
+				if customModeOff(v, mode) {
+					<span class="mv-chip mv-aicustom__chip-off" aria-disabled="true">{ i18n.T(ctx,"aiimage.mode." + mode) }</span>
 				} else {
 					<label class="mv-chip">
 						<input type="checkbox" name="modes" value={ mode } checked?={ customModeChecked(v, mode) }/>
@@ -194,10 +438,10 @@ templ customRouteFields(v customProviderView) {
 				<span>{ v.Errors["modes"] }</span>
 			</span>
 		}
-		<span class="mv-field__hint" id="custom-modes-hint">{ i18n.T(ctx,"aiimage.custom.modes_hint") }</span>
+		<span class="mv-field__hint" id="custom-modes-hint">{ customModesHint(ctx, v) }</span>
 	</fieldset>
 	<dl class="mv-aicustom__routes">
-		<div><dt>{ i18n.T(ctx,"models.col.use") }</dt><dd>{ i18n.T(ctx,"models.use.scripts") }</dd></div>
+		<div><dt>{ i18n.T(ctx,"models.col.use") }</dt><dd>{ customUse(ctx, v) }</dd></div>
 		<div><dt>{ i18n.T(ctx,"aiimage.custom.server_mode") }</dt><dd>{ i18n.T(ctx,"aiimage.mode." + v.ServerMode) }</dd></div>
 		<div><dt>{ i18n.T(ctx,"aiimage.custom.available_to") }</dt><dd>{ customScopeText(ctx, v.Scope) }</dd></div>
 	</dl>
@@ -257,7 +501,7 @@ func customAction(ctx context.Context, v customProviderView) (label, action stri
 
 func customActionDisabled(v customProviderView) bool {
 	if v.Step == "connect" {
-		return !v.PrivateAllowed && !v.Admin
+		return !v.PrivateAllowed && !v.Admin && v.Type != customTypeHF
 	}
 	return v.LocalOnly && v.Step == "test" && v.TestState != "ok"
 }
@@ -269,36 +513,73 @@ func customActionAttrs(action string) templ.Attributes {
 	return templ.Attributes{"name": "action", "value": action}
 }
 
+// customResultText is the preview of the test result: what was checked.
+func customResultText(ctx context.Context, v customProviderView) (found, missing, check, how string) {
+	switch v.Type {
+	case customTypeComfyUI:
+		return i18n.T(ctx, "aiimage.custom.comfy_found", "count", v.Nodes), i18n.T(ctx, "aiimage.custom.comfy_missing", "count", v.Nodes),
+			i18n.T(ctx, "aiimage.custom.comfy_check"), i18n.T(ctx, "aiimage.custom.comfy_non_generation")
+	case customTypeHF:
+		return i18n.T(ctx, "aiimage.custom.hf_found", "model", v.Model), i18n.T(ctx, "aiimage.custom.hf_missing", "model", v.Model),
+			i18n.T(ctx, "aiimage.custom.hf_check"), i18n.T(ctx, "aiimage.custom.hf_non_generation")
+	case customTypeHTTP:
+		return i18n.T(ctx, "aiimage.custom.http_found"), i18n.T(ctx, "aiimage.custom.http_missing"),
+			i18n.T(ctx, "aiimage.custom.http_check"), i18n.T(ctx, "aiimage.custom.http_non_generation")
+	}
+	return i18n.T(ctx, "aiimage.custom.found", "model", v.Model), i18n.T(ctx, "aiimage.custom.missing", "model", v.Model),
+		i18n.T(ctx, "aiimage.custom.text_check"), i18n.T(ctx, "aiimage.custom.non_generation")
+}
+
+func customFailedText(ctx context.Context, v customProviderView) string {
+	switch v.Type {
+	case customTypeComfyUI:
+		return i18n.T(ctx, "aiimage.custom.comfy_failed")
+	case customTypeHF:
+		return i18n.T(ctx, "aiimage.custom.hf_failed")
+	case customTypeHTTP:
+		return i18n.T(ctx, "aiimage.custom.http_failed")
+	}
+	return i18n.T(ctx, "aiimage.custom.test_failed")
+}
+
+func customCostTile(ctx context.Context, v customProviderView) string {
+	if v.Type == customTypeCompatible || v.CostLabel == "" {
+		return i18n.T(ctx, "aiimage.custom.cost_local")
+	}
+	return v.CostLabel
+}
+
 // customResult is the designed right column: the test result preview, the
 // Status · Time · Cost tiles and Back / Next.
 templ customResult(v customProviderView) {
 	{{ label, action := customAction(ctx, v) }}
+	{{ found, missing, check, how := customResultText(ctx, v) }}
 	<div class="mv-aicustom__result">
 		<h2>{ i18n.T(ctx,"aiimage.custom.result") }</h2>
 		<div class={ "mv-aicustom__preview", "mv-aicustom__preview--" + customPreviewState(v) } role="status">
 			switch v.TestState {
 				case "ok":
-					@ui.ToneBox(i18n.T(ctx, "aiimage.custom.found", "model", v.Model), "", "mv-aicustom__tone")
+					@ui.ToneBox(found, "", "mv-aicustom__tone")
 				case "error":
-					@ui.ToneBox(i18n.T(ctx, "aiimage.custom.missing", "model", v.Model), "", "mv-aicustom__tone") {
+					@ui.ToneBox(missing, "", "mv-aicustom__tone") {
 						<div class="mv-aicustom__message">
 							@ui.Icon("alert-triangle", 28)
 							<strong>{ i18n.T(ctx,"aiimage.custom.status.error") }</strong>
-							<span>{ i18n.T(ctx,"aiimage.custom.test_failed") }</span>
+							<span>{ customFailedText(ctx, v) }</span>
 						</div>
 					}
 				default:
 					<div class="mv-aicustom__message">
 						@ui.Icon("plug-connected", 32)
-						<strong>{ i18n.T(ctx,"aiimage.custom.text_check") }</strong>
-						<span>{ i18n.T(ctx,"aiimage.custom.non_generation") }</span>
+						<strong>{ check }</strong>
+						<span>{ how }</span>
 					</div>
 			}
 		</div>
 		<dl class="mv-aicustom__metrics">
 			<div><dt>{ i18n.T(ctx,"models.col.status") }</dt><dd class={ "mv-aicustom__status--" + customPreviewState(v) }>{ customStatus(ctx,v.TestState) }</dd></div>
 			<div><dt>{ i18n.T(ctx,"aiimage.custom.time") }</dt><dd>{ customTime(ctx, v) }</dd></div>
-			<div><dt>{ i18n.T(ctx,"models.col.cost") }</dt><dd>{ i18n.T(ctx,"aiimage.custom.cost_local") }</dd></div>
+			<div><dt>{ i18n.T(ctx,"models.col.cost") }</dt><dd>{ customCostTile(ctx, v) }</dd></div>
 		</dl>
 		<div class="mv-aicustom__actions">
 			@ui.LinkButton(customBack(v), ui.ButtonProps{Variant: ui.Ghost}) {

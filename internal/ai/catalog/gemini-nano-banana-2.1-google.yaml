@@ -1,0 +1,22 @@
+# Google Nano Banana 2.1 through a direct Google connection (ADR 0013 §9).
+# Imagen is shut down on the Gemini API; this is its documented replacement.
+# One 1K image per call; input images guide it but the API has no mask, so
+# editing is absent. Fake-transport tested, not live-verified.
+id: gemini-nano-banana-2.1
+name: Nano Banana 2.1 (Google)
+maker: Google
+kind: image
+licence: provider-commercial
+commercial: true
+providers: [google]
+references: 32
+text_in_art: false
+bw: true
+edit: false
+mask: false
+max_width: 4096
+max_height: 4096
+max_count: 1
+quality: 88
+speed: 75
+gpu_seconds: 0

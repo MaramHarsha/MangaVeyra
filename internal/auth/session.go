@@ -328,6 +328,13 @@ func (s *Service) Identify(next http.Handler) http.Handler {
 				httpx.WriteError(w, r, ErrTokenInvalid)
 				return
 			}
+			// Agent tokens work only through MCP, where the owner's "Allow AI
+			// agents" switch, the per-token limits, agent action labels and
+			// undo apply (ADR 0013 §7); every other API takes API tokens.
+			if tok.Kind == TokenAgent && r.URL.Path != "/mcp" && !strings.HasPrefix(r.URL.Path, "/mcp/") {
+				httpx.WriteError(w, r, ErrAgentTokenNotHere)
+				return
+			}
 			next.ServeHTTP(w, r.WithContext(httpx.WithIdentity(ctx, httpx.Identity{User: u, Token: tok})))
 			return
 		}

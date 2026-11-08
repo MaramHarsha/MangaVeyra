@@ -11,6 +11,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/authui"
 	"github.com/MaramHarsha/MangaVeyra/internal/backup"
+	"github.com/MaramHarsha/MangaVeyra/internal/collab"
 	"github.com/MaramHarsha/MangaVeyra/internal/compose"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/discover"
@@ -74,6 +75,7 @@ func FeatureModules(d *core.Deps) []core.Module {
 		compose.New(d),
 		lettering.New(d),
 		editor.New(d),
+		collab.New(d),
 		gen.New(d),
 		studioui.New(d),
 		activityui.New(d),

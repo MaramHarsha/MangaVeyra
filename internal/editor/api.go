@@ -44,6 +44,9 @@ type layoutView struct {
 type pageResponse struct {
 	Page      pagedoc.Page             `json:"page"`
 	Lettering []lettering.BubbleLayout `json:"lettering"`
+	// Permissions are the member's rights on this page; sent when a page is
+	// loaded, since a page-range member's rights differ per page.
+	Permissions *permissions `json:"permissions,omitempty"`
 }
 type bootstrapData struct {
 	PosePresets map[string]pagedoc.Pose `json:"pose_presets"`
@@ -135,8 +138,36 @@ func (m *Module) resource(r *http.Request, withPage bool) (resource, error) {
 	}
 	return out, nil
 }
+
+// authorize checks action on the resource's page (applying the member scope:
+// page ranges and lettering only) or, without a page, on the project.
 func (m *Module) authorize(r *http.Request, res resource, action studio.Action) error {
+	if res.Page.ID != "" {
+		return m.targets.AuthorizeTarget(r.Context(), res.Actor, pageTarget(res), action)
+	}
 	return m.studio.Authorize(r.Context(), res.Actor, res.Project.ID, action)
+}
+func pageTarget(res resource) jobs.Scope {
+	return jobs.Scope{Kind: jobs.ScopePage, ProjectID: res.Project.ID, PageID: res.Page.ID}
+}
+
+// permissionsFor reports what the actor may do on pageID ("" = the chapter
+// without a page), as the editor's controls show it.
+func (m *Module) permissionsFor(ctx context.Context, res resource, pageID string) (permissions, error) {
+	var out permissions
+	for action, dst := range map[studio.Action]*bool{studio.ActEditArt: &out.Art, studio.ActLetter: &out.Letter, studio.ActGenerate: &out.Generate, studio.ActLock: &out.Lock} {
+		var e error
+		if pageID != "" {
+			e = m.targets.AuthorizeTarget(ctx, res.Actor, jobs.Scope{Kind: jobs.ScopePage, ProjectID: res.Project.ID, PageID: pageID}, action)
+		} else {
+			e = m.studio.Authorize(ctx, res.Actor, res.Project.ID, action)
+		}
+		if e != nil && !errors.Is(e, studio.ErrForbidden) {
+			return out, e
+		}
+		*dst = e == nil
+	}
+	return out, nil
 }
 func change(res resource, action string, version int) pagestore.Change {
 	return pagestore.Change{ActorKind: "user", ActorID: res.Actor.UserID, Action: action, Summary: action, ExpectedVersion: version}
@@ -206,13 +237,6 @@ func (m *Module) data(r *http.Request, res resource) (bootstrapData, error) {
 	if err != nil {
 		return v, err
 	}
-	for action, dst := range map[studio.Action]*bool{studio.ActEditArt: &v.Permissions.Art, studio.ActLetter: &v.Permissions.Letter, studio.ActGenerate: &v.Permissions.Generate, studio.ActLock: &v.Permissions.Lock} {
-		e := m.studio.Authorize(ctx, res.Actor, res.Project.ID, action)
-		if e != nil && !errors.Is(e, studio.ErrForbidden) {
-			return v, e
-		}
-		*dst = e == nil
-	}
 	selected := r.URL.Query().Get("page")
 	for _, s := range v.Pages {
 		if selected == s.ID || selected == strconv.Itoa(s.Number) || (selected == "" && v.Current == nil) {
@@ -232,6 +256,13 @@ func (m *Module) data(r *http.Request, res resource) (bootstrapData, error) {
 	}
 	if selected != "" && v.Current == nil {
 		return v, studio.ErrNotFound
+	}
+	currentID := ""
+	if v.Current != nil {
+		currentID = v.Current.Page.ID
+	}
+	if v.Permissions, err = m.permissionsFor(ctx, res, currentID); err != nil {
+		return v, err
 	}
 	chapters, err := m.studio.ListChapters(ctx, res.Project.ID)
 	if err != nil {
@@ -274,6 +305,11 @@ func (m *Module) getPage(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return mapped(r, err)
 	}
+	perms, err := m.permissionsFor(r.Context(), res, res.Page.ID)
+	if err != nil {
+		return mapped(r, err)
+	}
+	v.Permissions = &perms
 	w.Header().Set("Cache-Control", "no-store")
 	core.JSON(w, 200, v)
 	return nil
@@ -457,7 +493,9 @@ func (m *Module) deletePage(w http.ResponseWriter, r *http.Request) error {
 	if !in.Confirm || in.BaseVersion <= 0 {
 		return mapped(r, studio.ErrInvalid)
 	}
-	if err := m.authorize(r, res, studio.ActEditArt); err != nil {
+	// Deleting renumbers the chapter's other pages: chapter-wide, so the
+	// project-level check applies (a page-range member is refused).
+	if err := m.studio.Authorize(r.Context(), res.Actor, res.Project.ID, studio.ActEditArt); err != nil {
 		return mapped(r, err)
 	}
 	if err := m.pages.DeletePage(r.Context(), res.Page.ID, change(res, "delete_page", in.BaseVersion)); err != nil {
@@ -728,7 +766,7 @@ func (m *Module) uploadMask(w http.ResponseWriter, r *http.Request) error {
 	defer m.assets.DiscardStaged(context.WithoutCancel(r.Context()), staged)
 	var stored assets.Asset
 	err = m.d.DB.WithTx(r.Context(), func(tx *db.Tx) error {
-		if err := m.studio.AuthorizeTx(r.Context(), tx, res.Actor, res.Project.ID, studio.ActGenerate); err != nil {
+		if err := m.targets.AuthorizeTargetTx(r.Context(), tx, res.Actor, jobs.Scope{Kind: jobs.ScopeLayer, ProjectID: res.Project.ID, PanelID: targetPanelID, LayerID: layerID}, studio.ActGenerate); err != nil {
 			return err
 		}
 		current, err := m.pages.GetPageTx(r.Context(), tx, res.Page.ID)

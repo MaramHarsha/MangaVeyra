@@ -1,0 +1,239 @@
+package mcp
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+var autoSubmit = templ.Attributes{"data-autosubmit": true}
+
+// agentsBody is G13 Agents & MCP (desktop artboard): the header switch, a
+// 1.2fr/1fr grid with Connect an assistant and Tokens on the left, and Always
+// needs a person, Recent agent actions and MCP client (v2) on the right.
+templ agentsBody(v pageView) {
+	<div class="mv-agents" data-screen="G13">
+		@ui.PageHead(i18n.T(ctx, "agents.title"), i18n.T(ctx, "agents.subtitle"), allowSwitch(v.Allowed))
+		if !v.Allowed {
+			@ui.Notice(ui.ToneWarning, "plug-off") {
+				<span>{ i18n.T(ctx, "agents.off_notice") }</span>
+			}
+		}
+		<div class="mv-agents__grid">
+			<div class="mv-agents__col">
+				if v.Created != nil {
+					@createdBox(*v.Created)
+				}
+				@ui.Box("mv-box--pad mv-agents__card mv-agents__connect") {
+					<strong class="mv-agents__title">{ i18n.T(ctx, "agents.connect.title") }</strong>
+					<code class="mv-agents__url">{ v.MCPURL }</code>
+					<span class="mv-agents__hint">{ i18n.T(ctx, "agents.connect.hint") }</span>
+					if v.FormOpen {
+						@ui.LinkButton("#create-token", ui.ButtonProps{Variant: ui.Primary, Icon: "key", Class: "mv-agents__create"}) {
+							{ i18n.T(ctx, "agents.create") }
+						}
+					} else {
+						@ui.LinkButton("/agents?new=1#create-token", ui.ButtonProps{Variant: ui.Primary, Icon: "key", Class: "mv-agents__create",
+							Attrs: templ.Attributes{"data-dialog-open": "create-token"}}) {
+							{ i18n.T(ctx, "agents.create") }
+						}
+					}
+				}
+				@createDialog(v)
+				@ui.Box("mv-agents__list") {
+					<h2 class="mv-agents__list-head">{ i18n.T(ctx, "agents.tokens.title") }</h2>
+					if len(v.Tokens) == 0 {
+						<p class="mv-agents__empty">{ i18n.T(ctx, "agents.tokens.empty") }</p>
+					}
+					for _, t := range v.Tokens {
+						<div class="mv-agents__token" data-token-id={ t.ID }>
+							<strong class="mv-agents__token-name">{ t.Name }</strong>
+							<form method="post" action={ templ.URL("/agents/tokens/" + t.ID + "/revoke") } class="mv-agents__token-revoke">
+								<button type="submit" class="mv-agents__link" aria-label={ i18n.T(ctx, "agents.tokens.revoke_label", "name", t.Name) }>{ i18n.T(ctx, "agents.tokens.revoke") }</button>
+							</form>
+							<span class="mv-agents__token-scope">{ t.Scope }</span>
+							<span class={ "mv-agents__token-limit", ui.If(t.Expired, "is-expired") }>{ t.Limit }</span>
+						</div>
+					}
+				}
+			</div>
+			<div class="mv-agents__col">
+				@ui.Box("mv-box--pad mv-agents__card mv-agents__human") {
+					<strong class="mv-agents__title">{ i18n.T(ctx, "agents.human.title") }</strong>
+					<ul class="mv-agents__human-list">
+						for _, key := range []string{"agents.human.publish", "agents.human.delete", "agents.human.share", "agents.human.unlock"} {
+							<li>
+								@ui.Icon("user-check", 16)
+								{ i18n.T(ctx, key) }
+							</li>
+						}
+					</ul>
+				}
+				@ui.Box("mv-box--pad mv-agents__card mv-agents__recent") {
+					<strong class="mv-agents__title" id="agents-recent">{ i18n.T(ctx, "agents.recent.title") }</strong>
+					if len(v.Actions) == 0 {
+						<p class="mv-agents__empty">{ i18n.T(ctx, "agents.recent.empty") }</p>
+					} else {
+						<ul class="mv-agents__actions" aria-labelledby="agents-recent">
+							for _, a := range v.Actions {
+								@actionItem(a)
+							}
+						</ul>
+					}
+				}
+				@ui.Box("mv-box--pad mv-agents__card mv-agents__client") {
+					<strong class="mv-agents__title">{ i18n.T(ctx, "agents.client.title") }</strong>
+					<span class="mv-agents__hint">{ i18n.T(ctx, "agents.client.hint") }</span>
+					@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Icon: "plug", Disabled: true, Class: "is-soon mv-agents__client-btn",
+						Attrs: templ.Attributes{"title": i18n.T(ctx, "ui.soon_hint")}}) {
+						{ i18n.T(ctx, "agents.client.connect") }
+						@ui.SoonTag()
+					}
+				}
+			</div>
+		</div>
+	</div>
+}
+
+// allowSwitch is the header's "Allow AI agents (MCP)" switch. It submits on
+// change; without JavaScript a Save button submits it.
+templ allowSwitch(on bool) {
+	<form method="post" action="/agents/allow" class="mv-agents__allow">
+		@ui.Toggle(ui.ToggleProps{ID: "agents-allowed", Name: "allowed", Checked: on, AriaLabel: i18n.T(ctx, "agents.allow"), Attrs: autoSubmit})
+		@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Type: "submit", Class: "mv-nojs-only"}) {
+			{ i18n.T(ctx, "agents.allow_save") }
+		}
+	</form>
+}
+
+templ actionItem(a actionView) {
+	<li class={ "mv-agents__action", ui.If(a.Pending, "is-pending") } data-action-id={ a.ID }>
+		<span class="mv-agents__action-text" title={ a.Title }>{ a.Text }</span>
+		<span class="mv-agents__action-status">
+			{ a.Status }
+			if a.EditedSince {
+				{ " · " + i18n.T(ctx, "agents.recent.edited_since") }
+			}
+			if a.Undo {
+				{ " · " }
+				<form method="post" action={ templ.URL("/agents/actions/" + a.ID + "/undo") } class="mv-agents__inline">
+					<button type="submit" class="mv-agents__link" aria-label={ i18n.T(ctx, "agents.recent.undo_label", "action", a.Text) }>{ i18n.T(ctx, "agents.recent.undo") }</button>
+				</form>
+			}
+		</span>
+		if a.Pending {
+			<div class="mv-agents__decide">
+				if a.ApproveSoon {
+					@ui.Button(ui.ButtonProps{Size: ui.SM, Disabled: true, Class: "is-soon", Attrs: templ.Attributes{"title": i18n.T(ctx, "ui.soon_hint")}}) {
+						{ i18n.T(ctx, "agents.recent.approve") }
+						@ui.SoonTag()
+					}
+				} else {
+					<form method="post" action={ templ.URL("/agents/actions/" + a.ID + "/approve") }>
+						@ui.Button(ui.ButtonProps{Size: ui.SM, Type: "submit", Attrs: templ.Attributes{"aria-label": i18n.T(ctx, "agents.recent.approve_label", "action", a.Text)}}) {
+							{ i18n.T(ctx, "agents.recent.approve") }
+						}
+					</form>
+				}
+				<form method="post" action={ templ.URL("/agents/actions/" + a.ID + "/decline") }>
+					@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Type: "submit", Attrs: templ.Attributes{"aria-label": i18n.T(ctx, "agents.recent.decline_label", "action", a.Text)}}) {
+						{ i18n.T(ctx, "agents.recent.decline") }
+					}
+				</form>
+			</div>
+		}
+	</li>
+}
+
+// createdBox shows a new token's secret once, with the stdio command.
+templ createdBox(c createdView) {
+	@ui.Box("mv-box--pad mv-box--success mv-agents__card mv-agents__created") {
+		<strong class="mv-agents__title" role="status">{ i18n.T(ctx, "agents.created.title", "name", c.Name) }</strong>
+		<span class="mv-agents__hint">{ i18n.T(ctx, "agents.created.once") }</span>
+		<code class="mv-code-block mv-agents__secret" aria-label={ i18n.T(ctx, "agents.created.token") }>{ c.Secret }</code>
+		<span class="mv-agents__hint">{ i18n.T(ctx, "agents.created.stdio") }</span>
+		<code class="mv-code-block">{ c.Command }</code>
+	}
+}
+
+// createDialog is the Create token form: a dialog opened from Create token,
+// rendered open in the page without JavaScript or after a refused submit.
+templ createDialog(v pageView) {
+	@ui.Modal(ui.ModalProps{ID: "create-token", Title: i18n.T(ctx, "agents.form.title"), Static: v.FormOpen, Class: "mv-agents__dialog"}) {
+		<form method="post" action="/agents/tokens" novalidate>
+			@ui.ModalBody() {
+				@ui.Field(ui.FieldProps{ID: "token-name", Label: i18n.T(ctx, "agents.form.name"), Hint: i18n.T(ctx, "agents.form.name_hint"), Error: v.Form.Errors["name"]}) {
+					@ui.Input(ui.InputProps{ID: "token-name", Name: "name", Value: v.Form.Name, Required: true, MaxLength: 80,
+						Placeholder: i18n.T(ctx, "agents.form.name_placeholder"), Invalid: v.Form.Errors["name"] != "", Described: true})
+				}
+				<fieldset
+					class="mv-agents__fieldset"
+					if v.Form.Errors["projects"] != "" {
+						aria-describedby="token-projects-error"
+					}
+				>
+					<legend class="mv-field__label">{ i18n.T(ctx, "agents.form.projects") }</legend>
+					@ui.Radio(ui.CheckProps{ID: "token-projects-all", Name: "projects", Value: "all", Checked: v.Form.Projects != "some", Label: i18n.T(ctx, "agents.form.projects_all")})
+					@ui.Radio(ui.CheckProps{ID: "token-projects-some", Name: "projects", Value: "some", Checked: v.Form.Projects == "some", Label: i18n.T(ctx, "agents.form.projects_some")})
+					if len(v.Form.Options) > 0 {
+						<div class="mv-agents__projects">
+							for _, o := range v.Form.Options {
+								@ui.Checkbox(ui.CheckProps{ID: "token-project-" + o.ID, Name: "project_ids", Value: o.ID, Checked: o.Checked, Label: o.Title})
+							}
+						</div>
+					}
+					if v.Form.Errors["projects"] != "" {
+						<span class="mv-field__error" id="token-projects-error" role="alert">
+							@ui.Icon("alert-triangle", 14)
+							<span>{ v.Form.Errors["projects"] }</span>
+						</span>
+					}
+				</fieldset>
+				<fieldset
+					class="mv-agents__fieldset"
+					if v.Form.Errors["access"] != "" {
+						aria-describedby="token-access-error"
+					}
+				>
+					<legend class="mv-field__label">{ i18n.T(ctx, "agents.form.access") }</legend>
+					@ui.Checkbox(ui.CheckProps{ID: "token-read", Checked: true, Disabled: true, Label: i18n.T(ctx, "agents.form.read")})
+					@ui.Checkbox(ui.CheckProps{ID: "token-edit", Name: "edit", Checked: v.Form.Edit, Label: i18n.T(ctx, "agents.form.edit")})
+					@ui.Checkbox(ui.CheckProps{ID: "token-generate", Name: "generate", Checked: v.Form.Generate, Label: i18n.T(ctx, "agents.form.generate")})
+					if v.Form.Errors["access"] != "" {
+						<span class="mv-field__error" id="token-access-error" role="alert">
+							@ui.Icon("alert-triangle", 14)
+							<span>{ v.Form.Errors["access"] }</span>
+						</span>
+					}
+				</fieldset>
+				@ui.Field(ui.FieldProps{ID: "token-approve", Label: i18n.T(ctx, "agents.form.approve"), Hint: i18n.T(ctx, "agents.form.approve_hint"), Error: v.Form.Errors["approve_over"]}) {
+					@ui.InputGroup("$", v.Form.Errors["approve_over"] != "") {
+						@ui.Input(ui.InputProps{ID: "token-approve", Name: "approve_over", Value: v.Form.Approve, Inputmode: "decimal",
+							Invalid: v.Form.Errors["approve_over"] != "", Described: true})
+					}
+				}
+				@ui.Field(ui.FieldProps{ID: "token-expires", Label: i18n.T(ctx, "agents.form.expires"), Error: v.Form.Errors["expires"]}) {
+					@ui.Select(ui.SelectProps{ID: "token-expires", Name: "expires", Value: v.Form.Expires, Invalid: v.Form.Errors["expires"] != "", Options: []ui.Option{
+						{Value: "30", Label: i18n.T(ctx, "agents.form.expires_30")},
+						{Value: "90", Label: i18n.T(ctx, "agents.form.expires_90")},
+						{Value: "365", Label: i18n.T(ctx, "agents.form.expires_365")},
+						{Value: "never", Label: i18n.T(ctx, "agents.form.expires_never")},
+					}})
+				}
+			}
+			@ui.ModalFoot() {
+				if v.FormOpen {
+					@ui.LinkButton("/agents", ui.ButtonProps{Variant: ui.Ghost}) {
+						{ i18n.T(ctx, "agents.form.cancel") }
+					}
+				} else {
+					@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Attrs: templ.Attributes{"data-dialog-close": true}}) {
+						{ i18n.T(ctx, "agents.form.cancel") }
+					}
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "key"}) {
+					{ i18n.T(ctx, "agents.form.submit") }
+				}
+			}
+		</form>
+	}
+}

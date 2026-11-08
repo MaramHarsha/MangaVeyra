@@ -284,6 +284,13 @@ func New(ctx context.Context, cfg *config.Config, opts Options) (*App, error) {
 func (a *App) Start(ctx context.Context) {
 	ctx, a.cancel = context.WithCancel(ctx)
 	d := a.Deps
+	// A release candidate started by the update module for its loopback health
+	// check (MV_UPDATE_CANDIDATE=1, internal/update) only answers requests: it
+	// must not run jobs, schedules or loops next to the live server.
+	if os.Getenv("MV_UPDATE_CANDIDATE") == "1" {
+		d.Log.Info("update candidate: background loops are off")
+		return
+	}
 	run := func(name string, fn func(context.Context) error) {
 		a.loops.Add(1)
 		go func() {

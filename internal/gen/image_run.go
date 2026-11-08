@@ -121,7 +121,7 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 	if err != nil || cost != j.Estimate {
 		return mapImageJobError(ctx, studio.ErrInvalid)
 	}
-	actor, err := s.resolveImageActor(ctx, imageActor(p), p.Scope.ProjectID, cost, plan.Remote)
+	actor, err := s.resolveImageActor(ctx, imageActor(p), p.Scope, cost, plan.Remote)
 	if err != nil {
 		return mapImageJobError(ctx, err)
 	}
@@ -191,7 +191,7 @@ func (s *service) renderImage(ctx context.Context, run *jobs.Run, p imagePayload
 	if err != nil {
 		return mapImageJobError(ctx, err)
 	}
-	actor, err := s.resolveImageActor(ctx, imageActor(p), p.Scope.ProjectID, cost, plan.Remote)
+	actor, err := s.resolveImageActor(ctx, imageActor(p), p.Scope, cost, plan.Remote)
 	if err != nil {
 		return mapImageJobError(ctx, err)
 	}
@@ -274,7 +274,7 @@ func (s *service) renderImage(ctx context.Context, run *jobs.Run, p imagePayload
 		if err := progress(ctx, i); err != nil {
 			return mapImageJobError(ctx, err)
 		}
-		if _, err := s.resolveImageActor(ctx, actor, p.Scope.ProjectID, cost, plan.Remote); err != nil {
+		if _, err := s.resolveImageActor(ctx, actor, p.Scope, cost, plan.Remote); err != nil {
 			return mapImageJobError(ctx, err)
 		}
 		if err = s.db.WithTx(ctx, func(tx *db.Tx) error { return s.checkImageTx(ctx, tx, p, actor) }); err != nil {
@@ -548,7 +548,7 @@ func (s *service) ApplyVariation(ctx context.Context, actor studio.Actor, id str
 	if index < 0 || index >= len(out.Candidates) || out.AppliedIndex != nil {
 		return studio.ErrConflict
 	}
-	if _, err = s.resolveImageActor(ctx, actor, p.Scope.ProjectID, jobs.Cost{}, false); err != nil {
+	if _, err = s.resolveImageActor(ctx, actor, p.Scope, jobs.Cost{}, false); err != nil {
 		return err
 	}
 	// Storage is read outside the transaction. Refuse any region candidate that

@@ -386,6 +386,7 @@ type providerService struct {
 	// testers covers the other remote kinds (OpenRouter uses client).
 	testers   map[string]remoteKeyTester
 	localDoer httpDoer
+	hfDoer    httpDoer
 }
 
 func (s *providerService) tester(kind string) remoteKeyTester {
@@ -410,17 +411,27 @@ func (s *providerService) TestConnection(ctx context.Context, actor providerActo
 	if err != nil || inst.LocalOnly {
 		return zero, errProviderUnavailable
 	}
-	provider, err := s.store.ResolveDispatch(ctx, actor.UserID, id)
+	provider, err := s.store.resolveForTest(ctx, actor, id)
+	if errors.Is(err, errProviderKeyUnreadable) {
+		return zero, errProviderKeyUnreadable
+	}
 	if err != nil {
 		return zero, errProviderUnavailable
 	}
-	if provider.Kind == providerKindLocalText {
-		err := testLocalText(ctx, provider, s.localDoer)
+	if customKind(provider.Kind) {
+		var err error
+		if provider.Kind == providerKindLocalText {
+			err = testLocalText(ctx, provider, s.localDoer)
+		} else {
+			_, err = checkCustomConnection(ctx, s.store, s.localDoer, s.hfDoer, provider)
+		}
 		state := "ok"
 		if err != nil {
 			state = "error"
 		}
-		if saveErr := s.store.recordTest(context.WithoutCancel(ctx), provider.ID, provider.KeyEnc, state, ""); saveErr != nil {
+		// The result is for what was tested: a passed test is recorded with
+		// its fingerprint, so routing and the ON switch see a later change.
+		if saveErr := s.store.recordCustomTest(context.WithoutCancel(ctx), provider, state); saveErr != nil {
 			return zero, saveErr
 		}
 		view, getErr := s.store.GetManageable(ctx, actor, id)
@@ -445,7 +456,7 @@ func (s *providerService) TestConnection(ctx context.Context, actor providerActo
 	if testErr != nil {
 		test.State = "error"
 	}
-	if err := s.store.recordTestResult(context.WithoutCancel(ctx), provider.ID, provider.KeyEnc, test); err != nil {
+	if err := s.store.recordTestResult(context.WithoutCancel(ctx), provider.ID, provider.Kind, provider.KeyEnc, test); err != nil {
 		return zero, err
 	}
 	view, err := s.store.GetManageable(ctx, actor, id)

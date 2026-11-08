@@ -23,6 +23,7 @@ func New(d *core.Deps) *Module {
 
 func (m *Module) Init(context.Context) error {
 	m.s.studio = core.MustUse[studio.Service](m.d)
+	m.s.targets = core.MustUse[studio.TargetAuthorizer](m.d)
 	m.s.assets = core.MustUse[*assets.Service](m.d)
 	return nil
 }

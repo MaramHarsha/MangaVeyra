@@ -512,6 +512,7 @@ func (m *Module) seriesPost(w http.ResponseWriter, r *http.Request) error {
 	}
 	in.normalize()
 	v.Form, v.Errors = in, in.validate()
+	checkSeriesRules(v.Rules, in, v.Errors)
 	var expected time.Time
 	if rev := web.FormValue(r, "revision"); rev != "" {
 		if expected, err = time.Parse(time.RFC3339Nano, rev); err != nil {

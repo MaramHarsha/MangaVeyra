@@ -47,10 +47,12 @@ func TestCustomProviderFourStepsAndRoutingPermissions(t *testing.T) {
 				t.Fatalf("Next: test made %d model-list requests", calls.Load())
 			}
 			body := mainOf(t, admin.Get("/models/providers/new/test?id="+id))
-			mustContain(t, body, "Step 2 of 4", "ComfyUI", "Hugging Face", "Soon", "MODEL LIST · “qwen3:8b” installed",
+			// Once a draft exists the designed type switch only shows its type.
+			mustContain(t, body, "Step 2 of 4", `<span class="is-current">OpenAI-compatible</span>`, `<span aria-disabled="true">ComfyUI workflow</span>`,
+				`<span aria-disabled="true">Hugging Face</span>`, "MODEL LIST · “qwen3:8b” installed",
 				`<dd class="mv-aicustom__status--ok">Success</dd>`, "<dt>Time</dt>", "<dt>Cost</dt>", "<dd>Local</dd>", "Next: describe",
 				`href="/models/providers/new/connect?id=`+id+`"`)
-			mustNotContain(t, body, "custom-sealed-secret", "Capability", "Test and continue", "Checks the installed model list")
+			mustNotContain(t, body, "custom-sealed-secret", "Capability", "Test and continue", "Checks the installed model list", "mv-soon")
 			var sealed string
 			if err := ta.Deps.DB.Get(t.Context(), &sealed, `SELECT key_enc FROM providers WHERE id = ?`, id); err != nil || sealed == "" || strings.Contains(sealed, "custom-sealed-secret") {
 				t.Fatalf("key not sealed: %v", err)
@@ -118,7 +120,7 @@ func TestCustomProviderFourStepsAndRoutingPermissions(t *testing.T) {
 			}
 			// Explicit step registration must not turn unimplemented provider names into
 			// successful wizard pages through a wildcard route.
-			for _, path := range []string{"/models/providers/new/google", "/models/providers/new/xai", "/models/providers/new/not-a-step"} {
+			for _, path := range []string{"/models/providers/new/not-a-step", "/models/providers/new/huggingface", "/models/providers/new/comfyui"} {
 				if ta.Router.Serves(http.MethodGet, path) {
 					t.Errorf("unexpected route %s", path)
 				}

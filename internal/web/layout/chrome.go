@@ -1,6 +1,6 @@
 // Package layout holds the page frames every MangaVeyra screen renders in:
 // Base (the HTML document), AppShell (top bar, studio sidebar, mobile bottom
-// nav), AuthShell, SetupShell, OnboardingShell, SettingsLayout, AdminLayout,
+// nav), AuthShell, SetupShell, OnboardingShell, SettingsLayout,
 // ReaderShell, EditorShell and PlainShell.
 //
 // Layouts are pure templates: the web package collects the request-dependent
@@ -9,6 +9,7 @@
 package layout
 
 import (
+	"github.com/a-h/templ"
 	"strconv"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core/httpx"
@@ -64,6 +65,10 @@ const (
 
 // Chrome is everything a layout needs to know about the request.
 type Chrome struct {
+	// Banner is shown at the top of the main content of signed-in pages (G14's
+	// member banner); Overlay after the page (G14's admin login dialog). Feature
+	// modules supply them through web.UI.AddShellExtras.
+	Banner, Overlay templ.Component
 	// SignedOut marks a page rendered for a visitor known to be signed out
 	// (body[data-signed-out]); pages that do not know who is asking carry
 	// neither it nor data-user, so client code never mistakes them for either.

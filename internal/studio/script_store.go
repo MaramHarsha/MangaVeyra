@@ -186,7 +186,7 @@ func (s *service) EditScript(ctx context.Context, in EditScriptInput) (Chapter, 
 		if labels == nil {
 			labels = map[string]string{}
 		}
-		if labels["script"] == "ai" || labels["script"] == "ai_assisted" {
+		if labels["script"] == "ai" || labels["script"] == "ai_assisted" || in.Actor.Agent {
 			labels["script"] = "ai_assisted"
 		} else {
 			labels["script"] = "human"

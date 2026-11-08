@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"strings"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
@@ -22,6 +23,14 @@ func (m *Module) modelDisplayName(ctx context.Context, id string) string {
 		return i18n.T(ctx, "aiimage.placeholder.art")
 	case PlaceholderText:
 		return i18n.T(ctx, "aiimage.placeholder.text")
+	}
+	// A custom image connection is named by the admin in G12.
+	if providerID, ok := strings.CutPrefix(id, customModelPrefix); ok && db.ValidID(providerID) {
+		var name string
+		if err := m.d.DB.Get(ctx, &name, `SELECT name FROM providers WHERE id = ?`, providerID); err == nil && name != "" {
+			return name
+		}
+		return id
 	}
 	if manifest, err := m.catalog.lookup(ctx, id); err == nil && manifest.Name != "" {
 		return manifest.Name
@@ -47,7 +56,7 @@ func (m *Module) RouteNames(ctx context.Context, modelID, providerID string) (st
 		return model, i18n.T(ctx, "aiimage.decision.removed")
 	case err != nil:
 		return model, ""
-	case kind == providerKindLocalText || kind == providerKindWorker:
+	case kind == providerKindLocalText || kind == providerKindWorker || privateServerKind(kind):
 		return model, i18n.T(ctx, "aiimage.decision.local")
 	}
 	return model, providerKindName(kind)

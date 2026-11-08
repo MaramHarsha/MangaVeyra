@@ -1,0 +1,86 @@
+package importer
+
+import (
+	"context"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+func accept(pdf bool) string {
+	a := ".cbz,.zip,.cbr,.rar,image/png,image/jpeg,image/webp,image/gif"
+	if pdf {
+		a += ",.pdf,application/pdf"
+	}
+	return a
+}
+
+func prompt(ctx context.Context, pdf bool) string {
+	if pdf {
+		return i18n.T(ctx, "importer.drop")
+	}
+	return i18n.T(ctx, "importer.drop_no_pdf")
+}
+
+// Card is G10's "Import comics" card: the drop zone and the member's queue.
+templ Card(v cardView) {
+	<section class="mv-g10__card mv-import" aria-labelledby="g10-import-title">
+		<strong class="mv-g10__card-title" id="g10-import-title">{ i18n.T(ctx, "importer.title") }</strong>
+		<form class="mv-import__form" method="post" action={ templ.URL(v.Action) } enctype="multipart/form-data">
+			@ui.FileDrop(ui.FileDropProps{ID: "import-files", Name: "files", Accept: accept(v.PDF), Prompt: prompt(ctx, v.PDF), Class: "mv-import__drop",
+				Required: true, Attrs: templ.Attributes{"multiple": true}})
+			<div class="mv-import__foot">
+				if !v.PDF {
+					<span class="mv-import__soon mv-small" title={ i18n.T(ctx, "importer.error.pdf_unavailable") }>
+						{ i18n.T(ctx, "importer.pdf") }
+						@ui.SoonTag()
+					</span>
+				} else {
+					<span></span>
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit", Icon: "upload"}) {
+					{ i18n.T(ctx, "importer.submit") }
+				}
+			</div>
+		</form>
+		@queueList(v)
+	</section>
+}
+
+templ queueList(v cardView) {
+	<div
+		id="import-queue"
+		class="mv-import__queue"
+		if v.Active {
+			hx-get={ v.QueueURL }
+			hx-trigger="load delay:2s"
+			hx-swap="outerHTML"
+		}
+	>
+		if len(v.Rows) > 0 {
+			<ul class="mv-import__list" aria-label={ i18n.T(ctx, "importer.queue") }>
+				for _, row := range v.Rows {
+					<li class="mv-import__row">
+						<span class="mv-import__name">{ row.Name }</span>
+						<span class="mv-import__status">
+							{ row.Status }
+							if row.OpenURL != "" {
+								<a class="mv-link" href={ templ.URL(row.OpenURL) }>{ i18n.T(ctx, "importer.open") }</a>
+							}
+						</span>
+						if row.RetryURL != "" {
+							<form method="post" action={ templ.URL(row.RetryURL) }>
+								@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit", Icon: "refresh"}) {
+									{ i18n.T(ctx, "importer.retry") }
+								}
+							</form>
+						}
+					</li>
+				}
+			</ul>
+		}
+		if v.Active {
+			<p class="mv-nojs-only mv-small"><a class="mv-link" href={ templ.URL(v.ReturnTo) }>{ i18n.T(ctx, "importer.refresh") }</a></p>
+		}
+	</div>
+}

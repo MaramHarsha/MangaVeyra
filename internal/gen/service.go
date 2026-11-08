@@ -27,6 +27,7 @@ type service struct {
 	auth      *auth.Service
 	text      ai.TextService
 	studio    studio.Service
+	targets   studio.TargetAuthorizer
 	db        *db.DB
 	images    ai.ImageService
 	pages     pagestore.Service

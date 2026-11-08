@@ -312,3 +312,45 @@ func TestDedupeMigrationUpgradesExistingQueues(t *testing.T) {
 		})
 	}
 }
+
+// While a claim gate refuses (an update or a restore holds the server), no job
+// goes to the Go executor or to a worker; queued jobs wait and are claimed once
+// the gate allows it.
+func TestClaimGatesHoldEveryClaim(t *testing.T) {
+	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx, q := context.Background(), ta.Deps.Jobs
+		owner := ta.CreateUser(t, "", auth.RoleCreator)
+		var open sync.Mutex
+		allowed := false
+		q.AddClaimGate(func(context.Context, *db.Tx) (bool, error) {
+			open.Lock()
+			defer open.Unlock()
+			return allowed, nil
+		})
+		goJob, err := q.Enqueue(ctx, jobs.EnqueueParams{Type: "gate.go", UserID: owner.ID, Scope: none})
+		if err != nil {
+			t.Fatal(err)
+		}
+		workerJob, err := q.Enqueue(ctx, jobs.EnqueueParams{Type: "gate.worker", UserID: owner.ID, Scope: none, Executor: jobs.ExecutorWorker})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if j, err := q.Claim(ctx, jobs.ClaimParams{Executor: jobs.ExecutorGo, Types: []string{"gate.go"}}); err != nil || j != nil {
+			t.Fatalf("Go claim while gated = %v, %v", j, err)
+		}
+		if j, err := q.Claim(ctx, jobs.ClaimParams{Executor: jobs.ExecutorWorker, Types: []string{"gate.worker"}}); err != nil || j != nil {
+			t.Fatalf("worker claim while gated = %v, %v", j, err)
+		}
+		for _, id := range []string{goJob.ID, workerJob.ID} {
+			if j, _ := q.Get(ctx, id); j.State != jobs.StateQueued {
+				t.Fatalf("gated job left the queue: %s", j.State)
+			}
+		}
+		open.Lock()
+		allowed = true
+		open.Unlock()
+		if j, err := q.Claim(ctx, jobs.ClaimParams{Executor: jobs.ExecutorGo, Types: []string{"gate.go"}}); err != nil || j == nil || j.ID != goJob.ID {
+			t.Fatalf("Go claim after the gate opened = %v, %v", j, err)
+		}
+	})
+}

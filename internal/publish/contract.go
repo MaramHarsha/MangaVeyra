@@ -104,6 +104,10 @@ type Series struct {
 	ViewCount     int64             `json:"view_count"`
 	PublishedAt   *time.Time        `json:"published_at,omitempty"`
 	UpdatedAt     time.Time         `json:"updated_at"`
+	// TakenDown is set while an admin has taken the series down (ADR 0013
+	// §1). Only project members can still read such a series, so only they
+	// ever see it set (E1 and E5 show them a notice).
+	TakenDown bool `json:"taken_down,omitempty"`
 }
 
 // Publication is one chapter published in one language.
@@ -121,6 +125,9 @@ type Publication struct {
 	ScheduledAt   *time.Time        `json:"scheduled_at,omitempty"`
 	PublishedAt   *time.Time        `json:"published_at,omitempty"`
 	UnpublishedAt *time.Time        `json:"unpublished_at,omitempty"`
+	// TakenDown is set while an admin has taken this chapter (every language
+	// of it) down; like Series.TakenDown only project members see it.
+	TakenDown bool `json:"taken_down,omitempty"`
 }
 
 // GuidedBubble is one lettered line in reading order, for the guided view,

@@ -605,7 +605,13 @@ templ DataSection(v dataView) {
 				{ i18n.T(ctx, "settings.data.export_project") }
 			}
 		</div>
-		@ui.KV(i18n.T(ctx, "settings.data.last_export"), i18n.T(ctx, "settings.data.never"))
+		if v.LastExport != "" {
+			@ui.KVC(i18n.T(ctx, "settings.data.last_export")) {
+				<a class="mv-link" href={ templ.URL(v.LastExportURL) }>{ v.LastExport }</a>
+			}
+		} else {
+			@ui.KV(i18n.T(ctx, "settings.data.last_export"), i18n.T(ctx, "settings.data.never"))
+		}
 	</section>
 	<section class="mv-box mv-box--pad-lg mv-stack" aria-labelledby="storage-h">
 		<h3 class="mv-box__title" id="storage-h">{ i18n.T(ctx, "settings.data.storage") }</h3>

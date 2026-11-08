@@ -15,7 +15,7 @@ templ imageModelsTable(rows []imageModelView) {
 		<tbody>
 			for index,row:=range rows {
 				<tr class="mv-models-table__row">
-					<td class="mv-models-table__model" data-label={ i18n.T(ctx, "models.col.model") }><strong title={ row.ID }>{ row.Name }</strong></td>
+					<td class="mv-models-table__model" data-label={ i18n.T(ctx, "models.col.model") }><strong title={ row.ID }>{ row.Name }</strong>@verificationMeta(row.Verification)</td>
 					<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.provider") }>
 						{ row.Provider }
 						if row.Connection!=nil {
@@ -73,5 +73,5 @@ func imageToggleIcon(enabled bool) string {
 	return "toggle-left"
 }
 func imageProviderMenu(ctx context.Context, p *providerView, blocked bool) []ui.MenuItem {
-	return []ui.MenuItem{{Post: true, Href: providerPath(p.ID, "test") + "?cap=image", Label: i18n.T(ctx, "models.test.action"), Icon: "plug-connected", Attrs: templ.Attributes{"disabled": blocked || !p.Enabled}}, {Href: "#" + providerKeyDialogID(p.ID), Label: i18n.T(ctx, "models.key.replace"), Icon: "key", Attrs: templ.Attributes{"data-dialog-open": providerKeyDialogID(p.ID)}}}
+	return []ui.MenuItem{{Post: true, Href: providerPath(p.ID, "test") + "?cap=image", Label: i18n.T(ctx, "models.test.action"), Icon: "plug-connected", Attrs: templ.Attributes{"disabled": blocked || !testable(*p)}}, {Href: "#" + providerKeyDialogID(p.ID), Label: i18n.T(ctx, "models.key.replace"), Icon: "key", Attrs: templ.Attributes{"data-dialog-open": providerKeyDialogID(p.ID)}}}
 }

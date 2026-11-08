@@ -177,3 +177,12 @@ func TestRemoteSpendLimitsRejectNonFiniteAndOverflow(t *testing.T) {
 		})
 	}
 }
+
+// Mature series stay readable behind the age confirmation on a fresh server;
+// adult series wait for an admin (ADR 0013 §2).
+func TestDefaultContentRules(t *testing.T) {
+	c := settings.DefaultInstance().Content
+	if !c.AllowMature || c.AllowAdult || c.DefaultAgeRating != "all" || !c.RequireAILabels {
+		t.Fatalf("default content rules = %+v", c)
+	}
+}

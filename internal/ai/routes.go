@@ -20,6 +20,13 @@ var remoteRoutes = []remoteRoute{
 		Label: "OpenRouter", fits: openRouterInputFits},
 	{Kind: providerKindOpenAI, Model: openAIModel, ReserveUSD: openAIReserveUSD, PlanUSD: openAIPlanUSD,
 		Label: "OpenAI", fits: openAIInputFits},
+	// ADR 0013 §9: fake-transport tested, not live-verified.
+	{Kind: providerKindGoogle, Model: googleTextModel, ReserveUSD: googleReserveUSD, PlanUSD: googlePlanUSD,
+		Label: "Google", fits: fitsInputCap(googleInputTokens)},
+	{Kind: providerKindXAI, Model: xaiTextModel, ReserveUSD: xaiReserveUSD, PlanUSD: xaiPlanUSD,
+		Label: "xAI", fits: fitsInputCap(xaiInputTokens)},
+	{Kind: providerKindTogether, Model: togetherTextModel, ReserveUSD: togetherReserveUSD, PlanUSD: togetherPlanUSD,
+		Label: "Together", fits: fitsInputCap(togetherInputTokens)},
 }
 
 func routeForKind(kind string) (remoteRoute, bool) {
@@ -42,7 +49,7 @@ func routeForModel(model string) (remoteRoute, bool) {
 
 func validProviderKind(kind string) bool {
 	_, ok := routeForKind(kind)
-	return ok || kind == providerKindFal || kind == providerKindLocalText
+	return ok || kindIn(kind, managedProviderKinds)
 }
 
 // remoteTextClient sends one structured script request with a decrypted key.

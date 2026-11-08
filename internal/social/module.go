@@ -35,9 +35,10 @@ type Module struct {
 // publish.FollowerSource for new-chapter notifications (publish cannot import
 // social without an import cycle).
 func New(d *core.Deps) *Module {
-	svc := &service{db: d.DB, auth: d.Auth, now: db.Now}
+	svc := &service{db: d.DB, auth: d.Auth, now: db.Now, settings: d.Settings}
 	core.Provide[Follows](d, svc)
 	core.Provide[publish.FollowerSource](d, svc)
+	core.Provide[Moderation](d, svc)
 	return &Module{d: d, svc: svc,
 		commentL: core.NewLimiter(commentRate, commentBurst),
 		editL:    core.NewLimiter(editRate, editBurst),

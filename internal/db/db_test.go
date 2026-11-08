@@ -47,7 +47,7 @@ func TestMigrationsApplyAndAreIdempotent(t *testing.T) {
 			"read_progress", "reader_prefs", "bookmarks", "downloads", "read_events", "reports", "notifications",
 			"notification_prefs", "push_subscriptions", "xp_events", "world_links", "world_server",
 			"world_submissions", "world_library", "packs", "plugins", "backups", "updates", "imports",
-			"page_doc_updates", "age_confirmations", "read_event_days", "analytics_day_salts",
+			"page_doc_updates", "age_confirmations", "read_event_days", "analytics_day_salts", "agent_actions",
 		} {
 			var n int
 			if err := d.Get(ctx, &n, "SELECT COUNT(*) FROM "+table); err != nil {
@@ -55,7 +55,7 @@ func TestMigrationsApplyAndAreIdempotent(t *testing.T) {
 			}
 		}
 		// Columns added after the base schema (Phase 3: the series page's release note).
-		for _, col := range []struct{ table, column string }{{"series", "schedule"}} {
+		for _, col := range []struct{ table, column string }{{"series", "schedule"}, {"comments", "assignee_id"}} {
 			var n int
 			if err := d.Get(ctx, &n, "SELECT COUNT("+col.column+") FROM "+col.table); err != nil {
 				t.Errorf("column %s.%s: %v", col.table, col.column, err)

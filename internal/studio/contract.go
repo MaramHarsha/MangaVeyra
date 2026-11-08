@@ -44,6 +44,34 @@ const (
 	ActLock       Action = "lock"
 )
 
+// MemberScope narrows a member's role (project_members.scope, ADR 0013 §8).
+// The zero value is the full role. Layer "lettering" limits every write to
+// the lettering layer (only ActLetter remains). PageFrom/PageTo limit every
+// write to pages numbered PageFrom..PageTo in each chapter; such a member
+// cannot make project- or chapter-wide changes. Reading is never narrowed.
+type MemberScope struct {
+	Layer    string `json:"layer,omitempty"`
+	PageFrom int    `json:"page_from,omitempty"`
+	PageTo   int    `json:"page_to,omitempty"`
+}
+
+// ScopeLayerLettering is the only MemberScope.Layer value.
+const ScopeLayerLettering = "lettering"
+
+// MaxScopePage bounds MemberScope page numbers (a chapter has at most 256 pages).
+const MaxScopePage = 256
+
+// TargetAuthorizer authorizes an action on one target. It is Authorize plus
+// the member scope: a page-range member is refused every write whose target
+// is not a page, panel, layer or region inside the range, and a
+// lettering-only member every write but lettering. Authorize, which has no
+// target, refuses writes to page-range members. Locks are checked
+// separately (CheckScopeWritable) and still win.
+type TargetAuthorizer interface {
+	AuthorizeTarget(ctx context.Context, actor Actor, target jobs.Scope, action Action) error
+	AuthorizeTargetTx(ctx context.Context, tx *db.Tx, actor Actor, target jobs.Scope, action Action) error
+}
+
 // Errors.
 var (
 	ErrNotFound  = errors.New("studio: not found")
@@ -60,6 +88,9 @@ type Actor struct {
 	TokenID string
 	// SiteRole is the user's site role ("admin", "creator", "reader").
 	SiteRole string
+	// Agent marks an AI agent acting for UserID through an agent token (MCP);
+	// its script edits make the chapter's script label AI-assisted.
+	Agent bool
 }
 
 // Project is a manga project.

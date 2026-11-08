@@ -27,6 +27,8 @@ var (
 	ErrUserNotFound       = httpx.KeyedError(http.StatusNotFound, httpx.CodeNotFound, "error.not_found")
 	ErrTokenInvalid       = httpx.NewError(http.StatusUnauthorized, httpx.CodeUnauthorized, "invalid or revoked token")
 	ErrLastAdmin          = httpx.NewError(http.StatusConflict, "last_admin", "the last admin cannot be demoted, suspended or deleted")
+	// ErrAgentTokenNotHere refuses an agent token outside /mcp.
+	ErrAgentTokenNotHere = httpx.NewError(http.StatusForbidden, "agent_token_mcp_only", "agent tokens work only through MCP at /mcp; use an API token here")
 )
 
 // FieldError is a validation error for one input field, carrying an i18n key.

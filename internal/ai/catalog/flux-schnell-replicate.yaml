@@ -1,0 +1,21 @@
+# FLUX.1 [schnell] through a Replicate connection (ADR 0013 §9): an official
+# model (stable API, not version-pinnable), USD 0.003 per image.
+# Fake-transport tested, not live-verified.
+id: black-forest-labs/flux-schnell
+name: FLUX.1 schnell (Replicate)
+maker: Black Forest Labs
+kind: image
+licence: Apache-2.0
+commercial: true
+providers: [replicate]
+references: 0
+text_in_art: false
+bw: true
+edit: false
+mask: false
+max_width: 4096
+max_height: 4096
+max_count: 4
+quality: 65
+speed: 90
+gpu_seconds: 0

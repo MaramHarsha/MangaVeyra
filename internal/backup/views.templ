@@ -1,0 +1,308 @@
+package backup
+
+import (
+	"strconv"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// pageBody is G10 – Backup & import (desktop artboard, file 09).
+templ pageBody(v pageView) {
+	<div class="mv-g10" data-screen="G10">
+		@ui.PageHead(i18n.T(ctx, "backup.title"), i18n.T(ctx, "backup.sub"), nil)
+		for _, n := range v.Notices {
+			@noticeBlock(n)
+		}
+		if v.RestoreOpen {
+			@ui.Modal(ui.ModalProps{ID: "backup-restore-open", Title: i18n.T(ctx, "backup.restore.title"), Static: true, Wide: true, Class: "mv-g10__panel"}) {
+				@restoreForms(v, "open", true)
+			}
+		}
+		if v.ScheduleOpen {
+			@ui.Modal(ui.ModalProps{ID: "backup-schedule-open", Title: i18n.T(ctx, "backup.schedule.title"), Static: true, Class: "mv-g10__panel"}) {
+				@scheduleForm(v, "open", true)
+			}
+		}
+		<div class="mv-g10__grid">
+			@backupsCard(v)
+			if v.ImportCard != nil {
+				@v.ImportCard
+			}
+		</div>
+		@exportRow(v)
+	</div>
+	if !v.RestoreOpen {
+		@ui.Modal(ui.ModalProps{ID: "backup-restore", Title: i18n.T(ctx, "backup.restore.title"), Wide: true}) {
+			@restoreForms(v, "dlg", false)
+		}
+	}
+	if !v.ScheduleOpen {
+		@ui.Modal(ui.ModalProps{ID: "backup-schedule", Title: i18n.T(ctx, "backup.schedule.title")}) {
+			@scheduleForm(v, "dlg", false)
+		}
+	}
+	for _, a := range v.Archives {
+		@ui.Modal(ui.ModalProps{ID: "backup-delete-" + a.ID, Title: i18n.T(ctx, "backup.delete.title")}) {
+			@deleteForm(a, false)
+		}
+	}
+}
+
+templ noticeBlock(n noticeView) {
+	@ui.Notice(ui.Tone(n.Tone), n.Icon) {
+		<p><strong>{ n.Title }</strong></p>
+		if n.Body != "" {
+			<p>{ n.Body }</p>
+		}
+		if n.Extra != "" {
+			<p class="mv-mono mv-mono--plain mv-small">{ n.Extra }</p>
+		}
+	}
+}
+
+templ backupsCard(v pageView) {
+	<section class="mv-g10__card" aria-labelledby="g10-backups-title">
+		<strong class="mv-g10__card-title" id="g10-backups-title">{ i18n.T(ctx, "backup.card.backups") }</strong>
+		@ui.KV(i18n.T(ctx, "backup.last"), v.LastBackup)
+		@ui.KVC(i18n.T(ctx, "backup.schedule")) {
+			@editValue(v.ScheduleText, i18n.T(ctx, "backup.schedule.change"))
+		}
+		@ui.KVC(i18n.T(ctx, "backup.destination")) {
+			@editValue(v.Destination, i18n.T(ctx, "backup.destination.change"))
+		}
+		<div class="mv-g10__actions">
+			<form method="post" action="/admin/backup/now">
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "database-export", Disabled: v.Busy}) {
+					{ i18n.T(ctx, "backup.now") }
+				}
+			</form>
+			@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Icon: "database-import", Disabled: v.Busy, Class: "mv-js-only", Attrs: templ.Attributes{"data-dialog-open": "backup-restore"}}) {
+				{ i18n.T(ctx, "backup.restore") }
+			}
+		</div>
+		@liveBlock(v)
+		@archiveList(v)
+		<details class="mv-nojs-only mv-g10__nojs">
+			<summary class="mv-link">{ i18n.T(ctx, "backup.restore") }</summary>
+			@restoreForms(v, "nojs", true)
+		</details>
+		<details class="mv-nojs-only mv-g10__nojs">
+			<summary class="mv-link">{ i18n.T(ctx, "backup.schedule.title") }</summary>
+			@scheduleForm(v, "nojs", true)
+		</details>
+	</section>
+}
+
+// editValue shows a key/value value that opens the schedule dialog.
+templ editValue(text, action string) {
+	<button type="button" class="mv-g10__value mv-js-only" data-dialog-open="backup-schedule">
+		{ text }
+		<span class="mv-sr-only">{ " · " + action }</span>
+	</button>
+	<span class="mv-nojs-only">{ text }</span>
+}
+
+templ liveBlock(v pageView) {
+	<div
+		id="g10-live"
+		class="mv-g10__live"
+		if v.Live != nil && v.Live.Active {
+			hx-get="/admin/backup/status"
+			hx-trigger="load delay:2s"
+			hx-swap="outerHTML"
+		}
+	>
+		if v.Live != nil {
+			<div class="mv-g10__progress" role="status">
+				<div class="mv-g10__line">
+					<span>{ v.Live.Label }</span>
+					<span class="mv-muted">{ strconv.Itoa(int(v.Live.Progress*100+0.5)) + "%" }</span>
+				</div>
+				@ui.Bar(v.Live.Progress, "", false, v.Live.Label)
+				<p class="mv-nojs-only mv-small"><a class="mv-link" href="/admin/backup">{ i18n.T(ctx, "backup.refresh") }</a></p>
+			</div>
+		}
+	</div>
+}
+
+templ archiveList(v pageView) {
+	<div class="mv-g10__archives">
+		<span class="mv-g10__label">{ i18n.T(ctx, "backup.archives") }</span>
+		if len(v.Archives) == 0 {
+			<p class="mv-small mv-muted">{ i18n.T(ctx, "backup.archives.empty") }</p>
+		} else {
+			<ul class="mv-g10__list">
+				for _, a := range v.Archives {
+					<li class="mv-g10__archive">
+						<span class="mv-g10__archive-name">
+							{ a.Kind + " · " + a.When }
+							if a.Uploaded {
+								<span class="mv-muted">{ " · " + i18n.T(ctx, "backup.uploaded") }</span>
+							}
+						</span>
+						<span class="mv-g10__archive-size">{ a.Size }</span>
+						@ui.LinkButton(a.DownloadURL, ui.ButtonProps{Variant: ui.Bare, Size: ui.SM, Icon: "download", Label: i18n.T(ctx, "backup.download", "name", a.Kind+" · "+a.When)}) {
+						}
+						@ui.Button(ui.ButtonProps{Variant: ui.Bare, Size: ui.SM, Icon: "trash", Class: "mv-js-only", Label: i18n.T(ctx, "backup.delete", "name", a.Kind+" · "+a.When), Attrs: templ.Attributes{"data-dialog-open": "backup-delete-" + a.ID}})
+						<details class="mv-nojs-only">
+							<summary class="mv-link mv-link--danger">{ i18n.T(ctx, "backup.delete.title") }</summary>
+							@deleteForm(a, true)
+						</details>
+					</li>
+				}
+			</ul>
+		}
+	</div>
+}
+
+templ exportRow(v pageView) {
+	<div class="mv-g10__export">
+		@ui.Icon("package-export", 18)
+		<span class="mv-g10__export-text">{ i18n.T(ctx, "backup.export.text") }</span>
+		<div class="mv-g10__export-actions">
+			if v.ExportRunning {
+				<span class="mv-small">{ i18n.T(ctx, "backup.live.exporting") }</span>
+			} else if v.Export != nil {
+				@ui.LinkButton(v.Export.DownloadURL, ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Icon: "download"}) {
+					{ i18n.T(ctx, "backup.export.download", "when", v.Export.When, "size", v.Export.Size) }
+				}
+			}
+			<form method="post" action="/admin/backup/export">
+				@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit", Disabled: v.Busy}) {
+					{ i18n.T(ctx, "backup.export.now") }
+				}
+			</form>
+		</div>
+	</div>
+}
+
+func chosen(v pageView, a archiveView, i int) bool {
+	if v.RestoreTarget != "" {
+		return a.ID == v.RestoreTarget
+	}
+	return i == 0
+}
+
+// restoreForms is the restore panel: choose an archive and type the word, or upload one.
+templ restoreForms(v pageView, prefix string, static bool) {
+	<form method="post" action="/admin/backup/restore">
+		@ui.ModalBody() {
+			@ui.Notice(ui.ToneWarning, "alert-triangle") {
+				<p>{ i18n.T(ctx, "backup.restore.warning") }</p>
+			}
+			if len(v.Restorable) == 0 {
+				<p class="mv-small mv-muted">{ i18n.T(ctx, "backup.restore.none") }</p>
+			} else {
+				<fieldset class="mv-g10__choices">
+					<legend class="mv-field__label">{ i18n.T(ctx, "backup.restore.choose") }</legend>
+					for i, a := range v.Restorable {
+						if i < 20 {
+							@ui.Radio(ui.CheckProps{ID: prefix + "-a-" + a.ID, Name: "archive", Value: a.ID, Checked: chosen(v, a, i), Label: a.Kind + " · " + a.When + " · " + a.Size})
+						}
+					}
+				</fieldset>
+				@ui.Field(ui.FieldProps{ID: prefix + "-confirm", Label: i18n.T(ctx, "backup.restore.type", "word", confirmWord), Error: v.ConfirmError}) {
+					@ui.Input(ui.InputProps{ID: prefix + "-confirm", Name: "confirm", Required: true, Autocomplete: "off", Invalid: v.ConfirmError != ""})
+				}
+			}
+		}
+		@ui.ModalFoot() {
+			@cancel(static)
+			@ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit", Icon: "database-import", Disabled: len(v.Restorable) == 0 || v.Busy}) {
+				{ i18n.T(ctx, "backup.restore.submit") }
+			}
+		}
+	</form>
+	<form method="post" action="/admin/backup/upload" enctype="multipart/form-data" class="mv-g10__upload">
+		@ui.ModalBody() {
+			@ui.Field(ui.FieldProps{ID: prefix + "-archive", Label: i18n.T(ctx, "backup.upload.label"), Hint: i18n.T(ctx, "backup.upload.hint"), Error: v.UploadError}) {
+				@ui.FileDrop(ui.FileDropProps{ID: prefix + "-archive", Name: "archive", Accept: ".mvbackup,.zip", Prompt: i18n.T(ctx, "backup.upload.prompt"), Required: true, Invalid: v.UploadError != ""})
+			}
+			<div>
+				@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Size: ui.SM, Type: "submit", Icon: "upload"}) {
+					{ i18n.T(ctx, "backup.upload.submit") }
+				}
+			</div>
+		}
+	</form>
+}
+
+templ cancel(static bool) {
+	if static {
+		@ui.LinkButton("/admin/backup", ui.ButtonProps{Variant: ui.Ghost}) {
+			{ i18n.T(ctx, "ui.cancel") }
+		}
+	} else {
+		@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Attrs: templ.Attributes{"data-dialog-close": ""}}) {
+			{ i18n.T(ctx, "ui.cancel") }
+		}
+	}
+}
+
+func hourOptions() []ui.Option {
+	out := make([]ui.Option, 24)
+	for h := range 24 {
+		s := strconv.Itoa(h)
+		if h < 10 {
+			s = "0" + s
+		}
+		out[h] = ui.Option{Value: strconv.Itoa(h), Label: s + ":00"}
+	}
+	return out
+}
+
+templ scheduleForm(v pageView, prefix string, static bool) {
+	<form method="post" action="/admin/backup/schedule" novalidate>
+		@ui.ModalBody() {
+			@ui.Field(ui.FieldProps{ID: prefix + "-frequency", Label: i18n.T(ctx, "backup.schedule.frequency"), Error: v.Errors["frequency"]}) {
+				@ui.Select(ui.SelectProps{ID: prefix + "-frequency", Name: "frequency", Value: v.Schedule.Frequency, Options: []ui.Option{
+					{Value: FrequencyOff, Label: i18n.T(ctx, "backup.schedule.off")},
+					{Value: FrequencyDaily, Label: i18n.T(ctx, "backup.schedule.daily")},
+					{Value: FrequencyWeekly, Label: i18n.T(ctx, "backup.schedule.weekly")},
+				}})
+			}
+			<div class="mv-grid-2">
+				@ui.Field(ui.FieldProps{ID: prefix + "-weekday", Label: i18n.T(ctx, "backup.schedule.weekday"), Hint: i18n.T(ctx, "backup.schedule.weekday_hint"), Error: v.Errors["weekday"]}) {
+					@ui.Select(ui.SelectProps{ID: prefix + "-weekday", Name: "weekday", Value: strconv.Itoa(v.Schedule.Weekday), Options: []ui.Option{
+						{Value: "0", Label: i18n.T(ctx, "backup.day.0")}, {Value: "1", Label: i18n.T(ctx, "backup.day.1")},
+						{Value: "2", Label: i18n.T(ctx, "backup.day.2")}, {Value: "3", Label: i18n.T(ctx, "backup.day.3")},
+						{Value: "4", Label: i18n.T(ctx, "backup.day.4")}, {Value: "5", Label: i18n.T(ctx, "backup.day.5")},
+						{Value: "6", Label: i18n.T(ctx, "backup.day.6")},
+					}})
+				}
+				@ui.Field(ui.FieldProps{ID: prefix + "-hour", Label: i18n.T(ctx, "backup.schedule.hour"), Hint: i18n.T(ctx, "backup.schedule.hour_hint", "tz", v.Schedule.TZ), Error: v.Errors["hour"]}) {
+					@ui.Select(ui.SelectProps{ID: prefix + "-hour", Name: "hour", Value: strconv.Itoa(v.Schedule.Hour), Options: hourOptions()})
+				}
+			</div>
+			@ui.Field(ui.FieldProps{ID: prefix + "-keep", Label: i18n.T(ctx, "backup.schedule.keep"), Hint: i18n.T(ctx, "backup.schedule.keep_hint"), Error: v.Errors["keep"]}) {
+				@ui.Input(ui.InputProps{ID: prefix + "-keep", Name: "keep", Type: "number", Value: strconv.Itoa(v.Schedule.Keep), Inputmode: "numeric", Required: true, Invalid: v.Errors["keep"] != "", Described: true})
+			}
+			@ui.Field(ui.FieldProps{ID: prefix + "-destination", Label: i18n.T(ctx, "backup.destination"), Hint: i18n.T(ctx, "backup.destination.hint", "dir", v.DefaultDir), Error: v.Errors["destination"]}) {
+				@ui.Input(ui.InputProps{ID: prefix + "-destination", Name: "destination", Value: v.Schedule.Destination, Placeholder: v.DefaultDir, Autocomplete: "off", Invalid: v.Errors["destination"] != "", Described: true})
+			}
+		}
+		@ui.ModalFoot() {
+			@cancel(static)
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+				{ i18n.T(ctx, "backup.schedule.save") }
+			}
+		}
+	</form>
+}
+
+templ deleteForm(a archiveView, static bool) {
+	<form method="post" action={ templ.URL(a.DeleteURL) }>
+		@ui.ModalBody() {
+			<p>{ i18n.T(ctx, "backup.delete.body", "name", a.Kind+" · "+a.When) }</p>
+		}
+		@ui.ModalFoot() {
+			if !static {
+				@cancel(false)
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit", Icon: "trash"}) {
+				{ i18n.T(ctx, "backup.delete.submit") }
+			}
+		}
+	</form>
+}

@@ -1,0 +1,21 @@
+# FLUX1.1 [pro] through a Together connection (ADR 0013 §9). Generation only
+# (no mask input); at most 1024 px per side. Fake-transport tested, not
+# live-verified.
+id: black-forest-labs/FLUX.1.1-pro
+name: FLUX1.1 [pro] (Together)
+maker: Black Forest Labs
+kind: image
+licence: provider-commercial
+commercial: true
+providers: [together]
+references: 0
+text_in_art: false
+bw: true
+edit: false
+mask: false
+max_width: 1024
+max_height: 1024
+max_count: 4
+quality: 85
+speed: 70
+gpu_seconds: 0

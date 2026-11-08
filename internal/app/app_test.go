@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net"
@@ -194,5 +195,28 @@ func TestServeAndGracefulShutdown(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("server did not shut down")
+	}
+}
+
+// A release candidate under the update module's loopback health check only
+// answers requests; it starts no job executor, schedules or loops.
+func TestUpdateCandidateStartsNoBackgroundLoops(t *testing.T) {
+	t.Setenv("MV_UPDATE_CANDIDATE", "1")
+	env := map[string]string{"MV_DATA_DIR": t.TempDir(), "MV_LOG_LEVEL": "info"}
+	cfg, err := config.Load("", func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	params := auth.FastHashParams
+	a, err := app.New(context.Background(), cfg, app.Options{HashParams: &params, LogOutput: &logs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a.Start(ctx)
+	if !strings.Contains(logs.String(), "update candidate: background loops are off") {
+		t.Fatalf("candidate started its loops: %s", logs.String())
 	}
 }

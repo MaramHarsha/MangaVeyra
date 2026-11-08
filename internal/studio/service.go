@@ -11,6 +11,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/core/httpx"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 )
 
 const (
@@ -24,7 +25,10 @@ type service struct {
 	assets *assets.Service
 }
 
-var _ Service = (*service)(nil)
+var (
+	_ Service          = (*service)(nil)
+	_ TargetAuthorizer = (*service)(nil)
+)
 
 type actorState struct {
 	user  *auth.User
@@ -50,6 +54,13 @@ func (s *service) Authorize(ctx context.Context, actor Actor, projectID string, 
 }
 
 func (s *service) authorize(ctx context.Context, q db.Querier, actor Actor, projectID string, action Action) error {
+	return s.authorizeAt(ctx, q, actor, projectID, action, nil)
+}
+
+// authorizeAt is Authorize with an optional target (TargetAuthorizer). The
+// member scope is applied after the role matrix; without a target a
+// page-range member may only read.
+func (s *service) authorizeAt(ctx context.Context, q db.Querier, actor Actor, projectID string, action Action, at *jobs.Scope) error {
 	if projectID == "" || !validAction(action) {
 		return ErrInvalid
 	}
@@ -73,17 +84,38 @@ func (s *service) authorize(ctx context.Context, q db.Querier, actor Actor, proj
 	// A site admin may act on any project, but a narrow API token does not
 	// carry that power unless it has the admin scope (as for job access).
 	if state.user.IsAdmin() && (state.token == nil || state.token.HasScope("admin")) {
+		if at != nil {
+			_, err := resolveTarget(ctx, q, *at)
+			return err
+		}
 		return nil
 	}
 
-	var role string
-	if err := q.Get(ctx, &role, `SELECT role FROM project_members WHERE project_id = ? AND user_id = ?`+forUpdate(q), projectID, state.user.ID); err != nil {
+	var member struct {
+		Role  string `db:"role"`
+		Scope string `db:"scope"`
+	}
+	if err := q.Get(ctx, &member, `SELECT role, scope FROM project_members WHERE project_id = ? AND user_id = ?`+forUpdate(q), projectID, state.user.ID); err != nil {
 		if db.IsNotFound(err) {
 			return ErrForbidden
 		}
 		return fmt.Errorf("studio: find project membership: %w", err)
 	}
-	if !roleAllows(role, action) {
+	if !roleAllows(member.Role, action) {
+		return ErrForbidden
+	}
+	scope, bad := ParseMemberScope(member.Scope)
+	if at == nil {
+		if !scopeAllows(scope, bad != nil, action, nil) {
+			return ErrForbidden
+		}
+		return nil
+	}
+	t, err := resolveTarget(ctx, q, *at)
+	if err != nil {
+		return err
+	}
+	if !scopeAllows(scope, bad != nil, action, &t) {
 		return ErrForbidden
 	}
 	return nil
