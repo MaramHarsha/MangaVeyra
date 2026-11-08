@@ -28,6 +28,9 @@ Basic D10 compares the saved current proof with an immutable selected snapshot. 
 project/chapter/page; restoring creates a new revision through the existing optimistic fence. The latest 50
 snapshots are visible. Named branches and merging remain designed Soon controls for Phase 6.
 
+Identical active requests are reused through database guards only (row-locked coordinator checks and the jobs dedupe
+index, migration 0204); no process-local lock is relied on.
+
 ## Learned evidence and licensing
 
 The optional learned scorer is locally provisioned **DINOv2 Small** (`facebook/dinov2-small`, Apache-2.0).

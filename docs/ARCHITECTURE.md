@@ -163,6 +163,17 @@ lookups while keeping imports acyclic.
   verifies the project and every lock at enqueue and persistence.
 * Enqueue validates scope + locks first. Fair share: per-user running limit (admin setting, default 2); night mode
   can defer batch jobs.
+* Interactive generation is de-duplicated in the database, not in process memory: `EnqueueParams.DedupeKey` (user,
+  resolved target, mask content hash, prompt, routing mode, variations, pins) is stored as a SHA-256 digest with a
+  partial unique index over active jobs (`queued|running` without a pending cancellation, migration 0204). An identical
+  request on any server process returns the active job (`Job.Deduplicated`; the editor answers 200 `existing:true`).
+  Page regeneration, Character Lock repair and assessment reuse an identical coordinator under row locks inside the
+  enqueue transaction. A manual retry that would reactivate a key held by another active job is refused (409).
+* `cover.generate` is a chapter-scoped image job (E1 Publish "Generate cover"): four opaque 3:4 candidates from the
+  project style, chapter title and synopsis and up to three lead characters' kept references, with the panel-art
+  permission, lock, approval, reservation, local_only and lease fences plus a basis fingerprint. A human keep (session
+  only) sets `projects.cover_asset_id`. Its E1 screen arrives in Phase 3; today it is reachable through the editor
+  chapter API.
 * Browser Studio pages and manual retry require a signed-in session. Bearer job reads require `projects:read`,
   bearer cancellation requires `projects:write` plus `generate`, and both per-job access and lists enforce the
   token's project allow-list. Aggregate job stats and manual retry are not bearer-token operations.

@@ -154,3 +154,6 @@ they do not satisfy the square-image token assertion or the reference/mask/multi
 - The OpenAI connection test reports Text and Images separately from the model list (ADR 0006). An organisation not
   verified for GPT Image still lists the models, so the test cannot detect it; the first image job fails with
   `provider_verification` and is remembered as above.
+- Cover generation runs through `cover.generate` (chapter scope, opaque 768×1024 candidates mapped to the frozen
+  864×1152 size, at most four kept lead references interleaved sheet-first) and the editor chapter API; its E1 screen
+  arrives in Phase 3. A kept cover becomes the project cover because chapters have no cover column.
