@@ -104,6 +104,24 @@ func (r backupRow) backup() Backup {
 	return b
 }
 
+func (r backupRow) includes() Includes {
+	var inc Includes
+	_ = json.Unmarshal([]byte(r.Includes), &inc)
+	return inc
+}
+
+// ownsFile reports whether the record's file is one this module wrote (or
+// moved into its backup directory) and may delete: it carries the name the
+// module gives an archive of this record's id, and it is not an archive the
+// admin registered where it lies.
+func (r backupRow) ownsFile() bool {
+	if r.Path == "" || !filepath.IsAbs(r.Path) || r.includes().External {
+		return false
+	}
+	base := filepath.Base(r.Path)
+	return strings.HasPrefix(base, "mangaveyra-") && strings.HasSuffix(base, "-"+r.ID+Extension)
+}
+
 func validKind(k string) bool {
 	switch k {
 	case KindScheduled, KindManual, KindPreUpdate, KindExport, KindUserExport:
@@ -192,7 +210,7 @@ func (s *service) Delete(ctx context.Context, id string) error {
 	case StatusRunning:
 		return ErrBusy
 	}
-	if r.Path != "" {
+	if r.ownsFile() {
 		if err := os.Remove(r.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("backup: delete archive: %w", err)
 		}

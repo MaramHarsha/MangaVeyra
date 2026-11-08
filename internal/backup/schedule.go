@@ -235,20 +235,22 @@ func (s *service) runDue(ctx context.Context) error {
 	return s.prune(ctx, sc.Keep)
 }
 
-// prune keeps the newest keep scheduled archives.
+// prune keeps the newest keep scheduled archives this server wrote.
+// Archives registered from elsewhere keep their manifest's kind but are never
+// pruned: they are the admin's to delete.
 func (s *service) prune(ctx context.Context, keep int) error {
-	list, err := s.List(ctx, KindScheduled, 500)
+	rows, err := s.listRows(ctx, KindScheduled, 500)
 	if err != nil {
 		return err
 	}
 	kept := 0
-	for _, b := range list {
-		if b.Status != StatusDone && b.Status != StatusRestored {
+	for _, r := range rows {
+		if r.Status != StatusDone && r.Status != StatusRestored || r.includes().Uploaded {
 			continue
 		}
 		kept++
 		if kept > keep {
-			if err := s.Delete(ctx, b.ID); err != nil {
+			if err := s.Delete(ctx, r.ID); err != nil {
 				return err
 			}
 		}

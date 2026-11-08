@@ -1049,6 +1049,88 @@ func TestScheduledBackupsRunOnceAndKeepTheNewest(t *testing.T) {
 	})
 }
 
+// An archive registered from elsewhere (`backup restore <path>` or an upload)
+// is never pruned by the schedule, and deleting its record never removes a
+// file the module did not write into its own backup directory.
+func TestPruneAndDeleteNeverTouchOutsideArchives(t *testing.T) {
+	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		s := svcOf(t, ta)
+		now := time.Date(2026, 11, 9, 2, 0, 0, 0, time.UTC)
+		s.SetNow(func() time.Time { return now })
+		if _, err := s.SaveSchedule(ctx, backup.Schedule{Frequency: backup.FrequencyDaily, Hour: 3, TZ: "UTC", Keep: 1}, ta.Admin.ID); err != nil {
+			t.Fatal(err)
+		}
+		now = time.Date(2026, 11, 9, 3, 1, 0, 0, time.UTC)
+		if err := s.RunDue(ctx); err != nil {
+			t.Fatal(err)
+		}
+		list, err := s.List(ctx, backup.KindScheduled, 10)
+		if err != nil || len(list) != 1 {
+			t.Fatalf("scheduled = %v %v", list, err)
+		}
+		// The admin keeps an old scheduled archive in their home directory and registers it.
+		data, _ := os.ReadFile(pathOf(t, ta, list[0].ID))
+		outside := filepath.Join(t.TempDir(), "old.mvbackup")
+		if err := os.WriteFile(outside, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		reg, err := s.Register(ctx, outside, ta.Admin.ID, false)
+		if err != nil || reg.Kind != backup.KindScheduled {
+			t.Fatalf("register = %+v %v", reg, err)
+		}
+		for day := 1; day <= 3; day++ {
+			now = time.Date(2026, 11, 9+day, 3, 1, 0, 0, time.UTC)
+			if err := s.RunDue(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got, _ := s.Get(ctx, reg.ID); got.Status != backup.StatusDone {
+			t.Fatalf("the registered archive was pruned: %s", got.Status)
+		}
+		if _, err := os.Stat(outside); err != nil {
+			t.Fatalf("the outside file was removed: %v", err)
+		}
+		var kept int
+		_ = ta.Deps.DB.Get(ctx, &kept, `SELECT COUNT(*) FROM backups WHERE kind = 'scheduled' AND status = 'done' AND id <> ?`, reg.ID)
+		if kept != 1 {
+			t.Fatalf("the schedule kept %d of its own archives, want 1", kept)
+		}
+		// Deleting the registered record forgets it but leaves the admin's file.
+		if err := s.Delete(ctx, reg.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(outside); err != nil {
+			t.Fatalf("delete removed a file outside the backup directory: %v", err)
+		}
+		// A record pointing at a file the module did not name is never removed either.
+		stray := filepath.Join(t.TempDir(), "notes.txt")
+		_ = os.WriteFile(stray, []byte("keep me"), 0o600)
+		id := db.NewID()
+		if _, err := ta.Deps.DB.Exec(ctx, `INSERT INTO backups (id, kind, status, path, created_at) VALUES (?, 'manual', 'done', ?, ?)`, id, stray, db.Now()); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Delete(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(stray); err != nil {
+			t.Fatalf("delete removed %s: %v", stray, err)
+		}
+		// The module's own archives are deleted from disk.
+		own, err := s.Create(ctx, backup.Request{Kind: backup.KindManual})
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := pathOf(t, ta, own.ID)
+		if err := s.Delete(ctx, own.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("the module's own archive stayed on disk: %v", err)
+		}
+	})
+}
+
 func TestScheduleSlotsAndDestination(t *testing.T) {
 	ta := testutil.NewTestApp(t)
 	ctx := context.Background()

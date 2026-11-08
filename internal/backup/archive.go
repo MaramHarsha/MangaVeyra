@@ -63,8 +63,11 @@ type Includes struct {
 	// Secrets is always false: the master key is never archived.
 	Secrets bool `json:"secrets"`
 	// Uploaded marks an archive added from outside (G10 upload or the CLI);
-	// it is not counted as this server's last backup.
+	// it is not counted as this server's last backup and never pruned.
 	Uploaded bool `json:"uploaded,omitempty"`
+	// External marks an archive registered where it lies (`backup restore
+	// <path>`): its file is the admin's and is never removed.
+	External bool `json:"external,omitempty"`
 }
 
 // TableEntry is one table file.

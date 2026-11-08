@@ -56,7 +56,7 @@ func (s *service) Register(ctx context.Context, path, actorID string, move bool)
 		_ = os.Chmod(final, 0o600)
 	}
 	inc := m.Includes
-	inc.Uploaded = true
+	inc.Uploaded, inc.External = true, !move
 	incJSON, _ := json.Marshal(inc)
 	created := m.CreatedAt.UTC()
 	if created.IsZero() {
