@@ -59,11 +59,51 @@ func (e *engine) Layout(b pagedoc.Bubble, lang string) (BubbleLayout, error) {
 
 // layout lays out one bubble, returning ctx.Err() once ctx is done.
 func (e *engine) layout(ctx context.Context, b pagedoc.Bubble, lang string) (BubbleLayout, layoutStats, error) {
+	p, err := e.prepare(ctx, b, lang)
+	if err != nil {
+		return BubbleLayout{}, layoutStats{}, err
+	}
+	size, set, overflow, err := p.fit(ctx, p.size, p.minSize, p.empty)
+	p.stats.fit = p.fitter.stats
+	if err != nil {
+		return BubbleLayout{}, p.stats, err
+	}
+	r := b.Box
+	l := BubbleLayout{BubbleID: b.ID, Lang: p.lang, TextBox: p.area.bounds(), Font: p.key, FontFamily: p.info.family, FontWeight: p.info.weight,
+		FontSize: size, LineHeight: size * p.gap, Fill: "#FFFFFF", Stroke: "#070A12", StrokeWidth: p.strokeWidth, TextColor: "#070A12",
+		Lines: set.lines, Overflow: overflow, Rotate: b.Style.Rotate, RotationCenter: pagedoc.Point{X: r.X + r.W/2, Y: r.Y + r.H/2}}
+	shape, err := bubblePath(b)
+	if err != nil {
+		return BubbleLayout{}, p.stats, err
+	}
+	l.ShapePath = shape
+	if b.Style.Stroke {
+		l.TextStroke = "#FFFFFF"
+		l.TextStrokeWidth = textStrokeWidth(size)
+	}
+	p.stats.lines = set.texts
+	l.TextPath = pathSVG(set.path)
+	return l, p.stats, nil
+}
+
+// bubbleFit is a bubble validated, shaped and ready to fit.
+type bubbleFit struct {
+	*fitter
+	lang, key     string
+	info          fontInfo
+	strokeWidth   float64
+	size, minSize float64 // the requested (or default) and the minimum size
+	empty         bool    // no text
+	stats         layoutStats
+}
+
+// prepare validates a bubble and shapes its text in the bubble's language.
+func (e *engine) prepare(ctx context.Context, b pagedoc.Bubble, lang string) (*bubbleFit, error) {
 	var stats layoutStats
 	switch b.Kind {
 	case pagedoc.BubbleSpeech, pagedoc.BubbleThought, pagedoc.BubbleShout, pagedoc.BubbleWhisper, pagedoc.BubbleCaption, pagedoc.BubbleSFX:
 	default:
-		return BubbleLayout{}, stats, errors.New("lettering: invalid bubble kind")
+		return nil, errors.New("lettering: invalid bubble kind")
 	}
 	if len(b.Texts) > 0 {
 		lang = pagedoc.TextLanguage(b.Texts, lang)
@@ -71,11 +111,11 @@ func (e *engine) layout(ctx context.Context, b pagedoc.Bubble, lang string) (Bub
 	key := fontFor(b, lang)
 	info, ok := lookupFont(key)
 	if !ok {
-		return BubbleLayout{}, stats, errors.New("lettering: unknown font")
+		return nil, errors.New("lettering: unknown font")
 	}
 	r := b.Box
 	if !finite(r.X) || !finite(r.Y) || !finite(r.W) || !finite(r.H) || r.W <= 0 || r.H <= 0 || !finite(b.Style.Rotate) || !finite(b.Style.Size) || b.Style.Size < 0 || b.Style.Size > 1000 {
-		return BubbleLayout{}, stats, errors.New("lettering: invalid geometry")
+		return nil, errors.New("lettering: invalid geometry")
 	}
 	strokeWidth := 3.0
 	if b.Kind == pagedoc.BubbleWhisper {
@@ -95,20 +135,20 @@ func (e *engine) layout(ctx context.Context, b pagedoc.Bubble, lang string) (Bub
 	textRunes := len([]rune(t.Text))
 	for _, ruby := range t.Ruby {
 		if ruby.Start < 0 || ruby.End <= ruby.Start || ruby.End > textRunes || len([]rune(ruby.Text)) > pagedoc.MaxTextRunes {
-			return BubbleLayout{}, stats, errors.New("lettering: invalid ruby")
+			return nil, errors.New("lettering: invalid ruby")
 		}
 	}
 	if textRunes > pagedoc.MaxTextRunes {
-		return BubbleLayout{}, stats, errors.New("lettering: text too long")
+		return nil, errors.New("lettering: text too long")
 	}
 	if err := ctx.Err(); err != nil {
-		return BubbleLayout{}, stats, err
+		return nil, err
 	}
 	e.mu.Lock()
 	st, rubies, err := e.shapeBubble(t, lang, key, vertical)
 	e.mu.Unlock()
 	if err != nil {
-		return BubbleLayout{}, stats, err
+		return nil, err
 	}
 	stats.notdef, stats.fonts = st.notdef, st.fonts
 	for _, rs := range rubies {
@@ -126,28 +166,8 @@ func (e *engine) layout(ctx context.Context, b pagedoc.Bubble, lang string) (Bub
 		// Scripts with tall marks (Devanagari) need more leading.
 		gap = math.Max(gap, (st.ascent+st.descent)*1.06)
 	}
-	f := &fitter{e: e, b: b, st: st, ruby: t.Ruby, rubies: rubies, area: area, gap: gap, vertical: vertical, limit: fitBudget}
-	f.minEm = st.unbreakableEm()
-	size, set, overflow, err := f.fit(ctx, size, minSize, textRunes == 0)
-	stats.fit = f.stats
-	if err != nil {
-		return BubbleLayout{}, stats, err
-	}
-	l := BubbleLayout{BubbleID: b.ID, Lang: lang, TextBox: area.bounds(), Font: key, FontFamily: info.family, FontWeight: info.weight,
-		FontSize: size, LineHeight: size * gap, Fill: "#FFFFFF", Stroke: "#070A12", StrokeWidth: strokeWidth, TextColor: "#070A12",
-		Lines: set.lines, Overflow: overflow, Rotate: b.Style.Rotate, RotationCenter: pagedoc.Point{X: r.X + r.W/2, Y: r.Y + r.H/2}}
-	shape, err := bubblePath(b)
-	if err != nil {
-		return BubbleLayout{}, stats, err
-	}
-	l.ShapePath = shape
-	if b.Style.Stroke {
-		l.TextStroke = "#FFFFFF"
-		l.TextStrokeWidth = textStrokeWidth(size)
-	}
-	stats.lines = set.texts
-	l.TextPath = pathSVG(set.path)
-	return l, stats, nil
+	f := &fitter{e: e, b: b, st: st, ruby: t.Ruby, rubies: rubies, area: area, gap: gap, vertical: vertical, limit: fitBudget, minEm: st.unbreakableEm()}
+	return &bubbleFit{fitter: f, lang: lang, key: key, info: info, strokeWidth: strokeWidth, size: size, minSize: minSize, empty: textRunes == 0, stats: stats}, nil
 }
 
 // shapeBubble shapes a bubble's text and its ruby annotations (engine mutex
