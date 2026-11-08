@@ -21,17 +21,19 @@ import (
 
 // RestoreReport describes a finished restore (G10 notice, CLI output, audit log).
 type RestoreReport struct {
-	BackupID   string    `json:"backup_id"`
-	ArchiveID  string    `json:"archive_id"`
-	Kind       string    `json:"kind"`
-	FromSchema string    `json:"from_schema"`
-	Dialect    string    `json:"dialect"`
-	Tables     int       `json:"tables"`
-	Rows       int64     `json:"rows"`
-	Media      int       `json:"media"`
-	Migrated   []string  `json:"migrated,omitempty"`
-	At         time.Time `json:"at"`
-	ActorID    string    `json:"actor_id,omitempty"`
+	BackupID   string   `json:"backup_id"`
+	ArchiveID  string   `json:"archive_id"`
+	Kind       string   `json:"kind"`
+	FromSchema string   `json:"from_schema"`
+	Dialect    string   `json:"dialect"`
+	Tables     int      `json:"tables"`
+	Rows       int64    `json:"rows"`
+	Media      int      `json:"media"`
+	Migrated   []string `json:"migrated,omitempty"`
+	// CanceledJobs counts jobs that were queued or running in the archive.
+	CanceledJobs int       `json:"canceled_jobs,omitempty"`
+	At           time.Time `json:"at"`
+	ActorID      string    `json:"actor_id,omitempty"`
 	// MasterKeyDiffers is true when a sealed value in the restored data cannot
 	// be opened with this server's master key.
 	MasterKeyDiffers bool `json:"master_key_differs"`
@@ -407,7 +409,19 @@ func (s *service) replace(ctx context.Context, tx *db.Tx, a *archiveReader, curr
 			return err
 		}
 	}
-	if err := restorePreserved(ctx, tx, target, keep, s.now()); err != nil {
+	// Work that was waiting or running when the archive was written is
+	// canceled: a restore never starts generation (or spend) by itself.
+	now := s.now()
+	res, err := tx.Exec(ctx, `UPDATE jobs SET state = 'canceled', cancel_requested = TRUE, lease_expires_at = NULL, worker_id = NULL,
+		error = ?, finished_at = ?, updated_at = ? WHERE state IN ('queued', 'running')`,
+		`{"code":"canceled","message":"canceled by a restore","retryable":false}`, now, now)
+	if err != nil {
+		return fmt.Errorf("cancel restored jobs: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		rep.CanceledJobs = int(n)
+	}
+	if err := restorePreserved(ctx, tx, target, keep, now); err != nil {
 		return err
 	}
 	rep.Sealed, rep.MasterKeyDiffers = checkSealed(ctx, tx, s.d.Secrets)

@@ -964,3 +964,33 @@ func TestExpiredArchivesAreDeleted(t *testing.T) {
 		t.Fatalf("expired file kept: %v", err)
 	}
 }
+
+func TestRestoreCancelsUnfinishedJobs(t *testing.T) {
+	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		s := svcOf(t, ta)
+		queued := db.NewID()
+		now := db.Now()
+		if _, err := ta.Deps.DB.Exec(ctx, `INSERT INTO jobs (id, type, scope, scope_kind, user_id, state, executor, created_at, updated_at)
+			VALUES (?, 'image.generate', '{"kind":"none"}', 'none', ?, 'queued', 'worker', ?, ?)`, queued, ta.Admin.ID, now, now); err != nil {
+			t.Fatal(err)
+		}
+		b, err := s.Create(ctx, backup.Request{Kind: backup.KindManual})
+		if err != nil {
+			t.Fatal(err)
+		}
+		maintenance(t, ta, true)
+		rep, err := s.RestoreArchive(ctx, b.ID, ta.Admin.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var state string
+		var cancel bool
+		if err := ta.Deps.DB.QueryRow(ctx, `SELECT state, cancel_requested FROM jobs WHERE id = ?`, queued).Scan(&state, &cancel); err != nil {
+			t.Fatal(err)
+		}
+		if state != "canceled" || !cancel || rep.CanceledJobs != 1 {
+			t.Fatalf("restored queued job is %s (cancel %v, report %d): a restore must not start work", state, cancel, rep.CanceledJobs)
+		}
+	})
+}
