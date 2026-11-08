@@ -387,3 +387,22 @@ filmstrip/footer and redundant history shortcut are hidden in these workbenches.
   existing inspector patterns. Generated control images are machine inputs, not a new product illustration style.
 
 Desktop and basic 390×844 evidence is recorded in [the control QA record](../qa/phase-2-control-2026-11-08.md).
+
+## 11. Phase 3 screens
+
+The approved desktop artboards are followed at 1440 × 900. Phones get the responsive version of the desktop design;
+the mobile artboards stay deferred (ADR 0012 §11).
+
+- **A1 Landing (`site/`).** The hero badges add a `Pre-alpha` warning badge. The hero command chip keeps the design's
+  `docker compose up`, which works from the repository root through `compose.yaml`; the self-host terminal adds the
+  required `cp .env.example .env` and spells out the clone URL, with the design's output lines unchanged. The
+  designer note beside the sample page is built as the reveal-and-slash animation it describes (a 120 ms fade
+  without the slash under reduced motion), not shown as text. Step 03 carries a `Publishing soon` tag and the
+  Panel-aware reader card a `Soon` tag until the reader ships. Showcase covers are labelled `Placeholder cover`, with
+  the note "Original sample titles. Covers are placeholders until the first series are published." The first answer
+  adds "MangaVeyra is pre-alpha: the studio and exports work today, and publishing, the reader and the community are
+  being built now."; the four collapsed answers, which the design does not draw, describe shipped behaviour. The
+  footer's Community item is a `Soon` item and Security links to the README's privacy and security section. The page
+  follows the operating-system theme (Gate night by default, Paper when the system prefers light), keeps ink text on
+  the Gate-blue band in both themes, and uses `--mv-acc-text` for large accent text on Paper. Fonts, the icon font and
+  logos are self-hosted with their licences; the page makes no external requests and runs no JavaScript.
