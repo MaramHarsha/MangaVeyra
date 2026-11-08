@@ -58,7 +58,7 @@ and return changed files, tests and ADR 0004 text. Root alone edits `docs/**`, `
 4. [ ] **D — Discover and analytics.** `internal/discover/**` (E6 Explore with rising creators, genres and the
    hand-drawn filter; E8 search over the existing full-text index) and `internal/analytics/**` (`Recorder`, daily
    session hashing, 90-day aggregation, F2); their locales and styles.
-5. [ ] **W — Landing and install docs.** `site/**` (A1, static, no external requests) and `docs/install/**`.
+5. [x] **W — Landing and install docs.** `site/**` (A1, static, no external requests) and `docs/install/**`.
 6. [ ] **Root integration.** Activate Explore/Library/Search navigation once routes exist, wire contracts, e2e
    (publish → follow → read guided → download offline), ADR 0004 records, README, full gates on SQLite and
    PostgreSQL, desktop design comparison, independent review.

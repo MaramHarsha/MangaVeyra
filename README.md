@@ -136,6 +136,8 @@ not a list of shipped behavior.
 
 These commands start the first playable studio for development and evaluation. No provider keys or GPU are required
 for the complete placeholder workflow.
+The [install guide](docs/install/README.md) covers both installs step by step, first-run setup, models, backups and
+upgrades. The project website lives in [`site/`](site/README.md).
 
 ### Docker Compose (PostgreSQL)
 
