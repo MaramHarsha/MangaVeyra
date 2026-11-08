@@ -8,8 +8,19 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
+	"github.com/MaramHarsha/MangaVeyra/internal/auth"
+	"github.com/MaramHarsha/MangaVeyra/internal/compose"
+	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/gen"
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/lettering"
+	"github.com/MaramHarsha/MangaVeyra/internal/notify"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagestore"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 )
@@ -33,6 +44,22 @@ type service struct {
 	studio   studio.Service
 	assets   *assets.Service
 	now      func() time.Time
+
+	// Write side (resolved in Init).
+	deps      *core.Deps
+	log       *slog.Logger
+	auth      *auth.Service
+	i18n      *i18n.Bundle
+	jobs      *jobs.Queue
+	notify    *notify.Service
+	pages     pagestore.Service
+	renderer  compose.Renderer
+	lettering lettering.Engine
+	cover     gen.CoverService // optional
+	// followsOverride replaces the provided FollowerSource (tests).
+	followsOverride FollowerSource
+	// scheduleEvery is the schedule loop interval (default 30s).
+	scheduleEvery time.Duration
 }
 
 var _ Service = (*service)(nil)

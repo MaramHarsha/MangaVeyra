@@ -1,0 +1,467 @@
+package publish
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+	"strconv"
+)
+
+// publishScreen is E1 – Publish flow – Desktop: cover, chapter fields and the
+// visibility, schedule, AI label and notification column, with the alt-text
+// review below (ADR 0004).
+templ publishScreen(v publishView) {
+	<form class="mv-publish" method="post" action={ templ.URL(v.Base + "/publish") } novalidate hx-disabled-elt="find button[type='submit']">
+		<input type="hidden" name="page_lang" value={ v.Lang }/>
+		<header class="mv-publish__head">
+			<div class="mv-publish__heading">
+				<h1 class="mv-publish__title">{ i18n.T(ctx, "publish.title", "number", v.Chapter.Number) }</h1>
+				<span class="mv-publish__sub">{ i18n.T(ctx, "publish.sub", "project", v.Project.Title, "chapter", v.Chapter.Title, "count", v.pageCount()) }</span>
+			</div>
+			<div class="mv-publish__actions">
+				@ui.LinkButton(v.ReaderURL, ui.ButtonProps{Variant: ui.Quiet, Icon: "eye"}) {
+					{ i18n.T(ctx, "publish.preview") }
+				}
+				if v.Pub.Status == PublicationPublished || v.Pub.Status == PublicationScheduled {
+					@ui.Button(ui.ButtonProps{Variant: ui.DangerOutline, Icon: "eye-off", Type: "submit",
+						Attrs: templ.Attributes{"formaction": v.Base + "/publish/unpublish", "formnovalidate": true}}) {
+						{ i18n.T(ctx, "publish.unpublish") }
+					}
+				}
+				if v.live() {
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "refresh", Type: "submit", Disabled: v.Job != nil}) {
+						{ i18n.T(ctx, "publish.update") }
+					}
+				} else {
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "send", Type: "submit", Disabled: v.Job != nil, Class: "mv-publish__go"}) {
+						<span class="mv-publish__go-now">{ i18n.T(ctx, "publish.now") }</span>
+						<span class="mv-publish__go-later">{ i18n.T(ctx, "publish.schedule") }</span>
+					}
+				}
+			</div>
+		</header>
+		@publishNotices(v)
+		<div class="mv-publish__grid">
+			@coverColumn(v)
+			<div class="mv-publish__fields">
+				@ui.Field(ui.FieldProps{ID: "pub-title", Label: i18n.T(ctx, "publish.field.title"), Error: errText(ctx, v.err("title"))}) {
+					@ui.Input(ui.InputProps{ID: "pub-title", Name: "title", Value: v.Form.Title, MaxLength: 160, Required: true, Invalid: v.err("title") != "", Described: v.err("title") != ""})
+				}
+				@ui.Field(ui.FieldProps{ID: "pub-synopsis", Label: i18n.T(ctx, "publish.field.synopsis"), Error: errText(ctx, v.err("synopsis"))}) {
+					@ui.Textarea(ui.TextareaProps{ID: "pub-synopsis", Name: "synopsis", Value: v.Form.Synopsis, Rows: 3, Invalid: v.err("synopsis") != ""})
+				}
+				@ui.Field(ui.FieldProps{ID: "pub-tags", Label: i18n.T(ctx, "publish.field.tags"), Hint: i18n.T(ctx, "publish.field.tags_hint"), Error: errText(ctx, v.err("tags"))}) {
+					@ui.Input(ui.InputProps{ID: "pub-tags", Name: "tags", Value: v.Form.Tags, Placeholder: i18n.T(ctx, "publish.field.tags_placeholder"), MaxLength: 800, Invalid: v.err("tags") != "", Described: true})
+				}
+				if len(tagList(v.Form.Tags)) > 0 {
+					<div class="mv-publish__chips" aria-hidden="true">
+						for _, t := range tagList(v.Form.Tags) {
+							@ui.Badge(ui.ToneMuted, "", t)
+						}
+					</div>
+				}
+				<div class="mv-publish__pair">
+					@ui.Field(ui.FieldProps{ID: "pub-lang", Label: i18n.T(ctx, "publish.field.language"), Aside: readyAside(ctx, v), Error: errText(ctx, v.err("lang"))}) {
+						@ui.Select(ui.SelectProps{ID: "pub-lang", Name: "lang", Value: v.Lang, Options: langOptions(ctx, v), Invalid: v.err("lang") != ""})
+					}
+					@ui.Field(ui.FieldProps{ID: "pub-rating", Label: i18n.T(ctx, "publish.field.rating"), Error: errText(ctx, v.err("age_rating"))}) {
+						@ui.Select(ui.SelectProps{ID: "pub-rating", Name: "age_rating", Value: v.Form.AgeRating, Options: choiceOptions(ctx, "publish.rating.", Ratings)})
+					}
+				</div>
+				@ui.Field(ui.FieldProps{ID: "pub-licence", Label: i18n.T(ctx, "publish.field.licence"), Error: errText(ctx, v.err("licence"))}) {
+					@ui.Select(ui.SelectProps{ID: "pub-licence", Name: "licence", Value: v.Form.Licence, Options: choiceOptions(ctx, "publish.licence.", Licences)})
+				}
+				<a class="mv-publish__series-link" href={ templ.URL("/studio/p/" + v.Project.ID + "/series") }>
+					@ui.Icon("settings", 16)
+					{ i18n.T(ctx, "publish.series.link") }
+				</a>
+			</div>
+			<div class="mv-publish__side">
+				<div class="mv-publish__group">
+					<span class="mv-publish__label" aria-hidden="true">{ i18n.T(ctx, "publish.field.visibility") }</span>
+					@ui.Segmented(ui.SegmentedProps{Name: "visibility", Value: v.Form.Visibility, Label: i18n.T(ctx, "publish.field.visibility"), Full: true, Options: choiceOptions(ctx, "publish.visibility.", Visibilities)})
+					if v.err("visibility") != "" {
+						<p class="mv-publish__error" role="alert">{ errText(ctx, v.err("visibility")) }</p>
+					}
+				</div>
+				<div class="mv-publish__group">
+					<span class="mv-publish__label" aria-hidden="true">{ i18n.T(ctx, "publish.field.when") }</span>
+					if v.live() {
+						<p class="mv-publish__live">
+							@ui.StatusBadge(ui.StatusPublished, i18n.T(ctx, "publish.status.published"))
+							if v.Pub.PublishedAt != nil {
+								<span>{ i18n.T(ctx, "publish.live_since", "date", v.Pub.PublishedAt.In(locFrom(ctx)).Format("Mon 2 Jan 2006 15:04")) }</span>
+							}
+						</p>
+					} else {
+						@ui.Segmented(ui.SegmentedProps{Name: "when", Value: v.Form.When, Label: i18n.T(ctx, "publish.field.when"), Full: true, Options: []ui.Option{
+							{Value: "now", Label: i18n.T(ctx, "publish.when.now")}, {Value: "schedule", Label: i18n.T(ctx, "publish.when.schedule")}}})
+						<div class="mv-publish__pair mv-publish__when">
+							@ui.Field(ui.FieldProps{ID: "pub-date", Label: i18n.T(ctx, "publish.field.date"), Class: "mv-publish__quiet-label"}) {
+								@ui.Input(ui.InputProps{ID: "pub-date", Name: "date", Type: "date", Value: v.Form.Date, Invalid: v.err("when") != ""})
+							}
+							@ui.Field(ui.FieldProps{ID: "pub-time", Label: i18n.T(ctx, "publish.field.time"), Aside: v.TZ, Class: "mv-publish__quiet-label"}) {
+								@ui.Input(ui.InputProps{ID: "pub-time", Name: "time", Type: "time", Value: v.Form.Time, Invalid: v.err("when") != ""})
+							}
+						</div>
+						if v.err("when") != "" {
+							<p class="mv-publish__error" role="alert">{ errText(ctx, v.err("when")) }</p>
+						}
+					}
+				</div>
+				<section class="mv-publish__ai" aria-labelledby="pub-ai-title">
+					<strong id="pub-ai-title" class="mv-publish__ai-title">
+						@ui.Icon("sparkles", 16)
+						{ i18n.T(ctx, "publish.ai.title") }
+					</strong>
+					<span class="mv-publish__ai-hint">{ i18n.T(ctx, "publish.ai.hint") }</span>
+					for _, role := range aiRoles {
+						<div class="mv-publish__ai-row">
+							<label class="mv-publish__ai-role" for={ "pub-ai-" + role }>{ i18n.T(ctx, "publish.ai.role." + role) }</label>
+							@ui.Select(ui.SelectProps{ID: "pub-ai-" + role, Name: "ai_" + role, Value: v.Form.AILabel[role], Options: aiOptions(ctx, v.Recorded[role]), Invalid: v.err("ai_"+role) != "", Class: "mv-publish__ai-select"})
+						</div>
+						if v.err("ai_"+role) != "" {
+							<p class="mv-publish__error" role="alert">{ errText(ctx, v.err("ai_"+role)) }</p>
+						}
+					}
+				</section>
+				<div class="mv-publish__checks">
+					@ui.Checkbox(ui.CheckProps{ID: "pub-notify", Name: "notify", Value: "on", Checked: v.Form.Notify, Label: i18n.T(ctx, "publish.notify", "count", compactCount(v.Series.FollowerCount))})
+					<div class="mv-publish__soon">
+						@ui.Checkbox(ui.CheckProps{ID: "pub-offline", Checked: true, Disabled: true, Label: i18n.T(ctx, "publish.offline")})
+						@ui.SoonTag()
+					</div>
+					<div class="mv-publish__soon">
+						@ui.Checkbox(ui.CheckProps{ID: "pub-comments", Disabled: true, Label: i18n.T(ctx, "publish.comments")})
+						@ui.SoonTag()
+					</div>
+				</div>
+			</div>
+		</div>
+		@altSection(v)
+	</form>
+}
+
+templ publishNotices(v publishView) {
+	if v.err("") != "" {
+		@ui.Notice(ui.ToneError, "alert-triangle") {
+			<p>{ errText(ctx, v.err("")) }</p>
+		}
+	} else if len(v.Errors) > 0 {
+		@ui.Notice(ui.ToneError, "alert-triangle") {
+			<p>{ i18n.T(ctx, "publish.error.form") }</p>
+		}
+	}
+	if v.Switched {
+		@ui.Notice(ui.ToneInfo, "language") {
+			<p>{ i18n.T(ctx, "publish.switched", "language", langName(ctx, v.Lang)) }</p>
+		}
+	}
+	if v.Job != nil {
+		@jobNotice(v)
+	}
+	if v.Pub.Status == PublicationScheduled && v.Pub.ScheduledAt != nil {
+		@ui.Notice(ui.ToneInfo, "calendar") {
+			<p>{ i18n.T(ctx, "publish.scheduled_for", "date", v.Pub.ScheduledAt.In(locFrom(ctx)).Format("Mon 2 Jan 2006 15:04")) }</p>
+		}
+	}
+	if v.Pub.Status == PublicationUnpublished {
+		@ui.Notice(ui.ToneWarning, "eye-off") {
+			<p>{ i18n.T(ctx, "publish.unpublished_note") }</p>
+		}
+	}
+	if !v.HasSeries {
+		@ui.Notice(ui.ToneInfo, "books") {
+			<p>{ i18n.T(ctx, "publish.first_chapter") }</p>
+		}
+	} else if stricter(v.Series.Visibility, v.Form.Visibility) {
+		@ui.Notice(ui.ToneWarning, "lock") {
+			<p>{ i18n.T(ctx, "publish.series_stricter", "visibility", i18n.T(ctx, "publish.visibility."+v.Series.Visibility)) }</p>
+		}
+	}
+}
+
+// jobNotice shows publish progress; with HTMX it polls until the job ends.
+templ jobNotice(v publishView) {
+	<div
+		id="publish-job"
+		class="mv-publish__job"
+		if !v.Job.Finished() {
+			hx-get={ v.Base + "/publish/jobs/" + v.Job.ID }
+			hx-trigger="load delay:2s"
+			hx-swap="outerHTML"
+		}
+	>
+		if v.Job.State == jobs.StateFailed || v.Job.State == jobs.StateCanceled {
+			@ui.Notice(ui.ToneError, "alert-triangle") {
+				<p><strong>{ i18n.T(ctx, "publish.job.failed") }</strong></p>
+				<p>{ i18n.T(ctx, jobErrorKey(v.Job)) }</p>
+			}
+		} else {
+			@ui.Notice(ui.ToneInfo, "loader-2") {
+				<p><strong>{ i18n.T(ctx, "publish.job.running", "step", v.Job.Step, "steps", v.Job.Steps) }</strong></p>
+				@ui.Bar(v.Job.Progress, "", true, i18n.T(ctx, "publish.job.progress"))
+				<p class="mv-nojs-only">
+					<a href={ templ.URL(v.Base + "/publish/jobs/" + v.Job.ID) }>{ i18n.T(ctx, "publish.job.refresh") }</a>
+				</p>
+			}
+		}
+	</div>
+}
+
+templ coverColumn(v publishView) {
+	<div class="mv-publish__cover">
+		if v.CoverURL != "" {
+			<img class="mv-publish__cover-img" src={ v.CoverURL } alt={ i18n.T(ctx, "publish.cover.alt", "series", v.seriesTitle()) }/>
+		} else {
+			@ui.ToneBox(i18n.T(ctx, "publish.cover.placeholder"), "3x4", "mv-publish__cover-tone")
+		}
+		<details class="mv-publish__picker">
+			<summary class="mv-btn mv-btn--quiet mv-btn--full">
+				@ui.Icon("photo", 18)
+				{ i18n.T(ctx, "publish.cover.choose") }
+			</summary>
+			<div class="mv-publish__picker-grid" role="group" aria-label={ i18n.T(ctx, "publish.cover.choose") }>
+				for _, p := range v.Pages {
+					<button class="mv-publish__thumb" type="submit" name="page" value={ p.ID } formaction={ v.Base + "/publish/cover/page" } formnovalidate>
+						<img src={ v.Base + "/publish/pages/" + p.ID + "/image?lang=" + v.Lang } alt="" loading="lazy" width="120"/>
+						<span>{ i18n.T(ctx, "publish.cover.page", "number", p.Number) }</span>
+					</button>
+				}
+			</div>
+		</details>
+		if v.CanCover {
+			@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Icon: "sparkles", Type: "submit", Full: true, Disabled: v.Chapter.Locked,
+				Attrs: templ.Attributes{"formaction": v.Base + "/publish/cover/generate", "formnovalidate": true}}) {
+				{ i18n.T(ctx, "publish.cover.generate") }
+			}
+			if v.Chapter.Locked {
+				<p class="mv-publish__hint">{ i18n.T(ctx, "publish.cover.locked") }</p>
+			}
+		}
+		if v.CoverJob != nil {
+			@coverJob(v)
+		}
+	</div>
+}
+
+templ coverJob(v publishView) {
+	<div class="mv-publish__cover-job">
+		switch v.CoverJob.Job.State {
+			case jobs.StateDone:
+				if len(v.CoverJob.Result.Candidates) > 0 && v.CoverJob.Result.KeptIndex == nil {
+					<input type="hidden" name="cover_job" value={ v.CoverJob.Job.ID }/>
+					<p class="mv-publish__hint">{ i18n.T(ctx, "publish.cover.pick") }</p>
+					<div class="mv-publish__candidates">
+						for _, c := range v.CoverJob.Result.Candidates {
+							<button class="mv-publish__thumb" type="submit" name="index" value={ strconv.Itoa(c.Index) } formaction={ v.Base + "/publish/cover/keep" } formnovalidate>
+								<img src={ c.URL } alt="" width="120"/>
+								<span>{ i18n.T(ctx, "publish.cover.keep", "number", c.Index+1) }</span>
+							</button>
+						}
+					</div>
+				}
+			case jobs.StateFailed, jobs.StateCanceled:
+				<p class="mv-publish__error" role="alert">{ i18n.T(ctx, jobErrorKey(v.CoverJob.Job)) }</p>
+			default:
+				@ui.Bar(v.CoverJob.Job.Progress, "", false, i18n.T(ctx, "publish.cover.generating"))
+				<p class="mv-publish__hint">
+					{ i18n.T(ctx, "publish.cover.generating") }
+					<a href={ templ.URL(v.Base + "/publish?lang=" + v.Lang + "&cover_job=" + v.CoverJob.Job.ID) }>{ i18n.T(ctx, "publish.job.refresh") }</a>
+				</p>
+		}
+	</div>
+}
+
+templ altSection(v publishView) {
+	<section class="mv-publish__alt" aria-labelledby="pub-alt-title">
+		<header class="mv-publish__alt-head">
+			<h2 id="pub-alt-title" class="mv-publish__alt-title">{ i18n.T(ctx, "publish.alt.title") }</h2>
+			<p class="mv-publish__hint">{ i18n.T(ctx, "publish.alt.hint", "language", langName(ctx, v.Lang)) }</p>
+		</header>
+		if len(v.Pages) == 0 {
+			<p class="mv-publish__hint">{ i18n.T(ctx, "publish.error.no_pages") }</p>
+		}
+		for i, p := range v.Pages {
+			<details class="mv-publish__alt-page" open?={ i == 0 }>
+				<summary>{ i18n.T(ctx, "publish.alt.page", "number", p.Number, "count", len(p.Panels)) }</summary>
+				<div class="mv-publish__alt-panels">
+					if len(p.Panels) == 0 {
+						<p class="mv-publish__hint">{ i18n.T(ctx, "publish.alt.no_panels") }</p>
+					}
+					for _, pn := range p.Panels {
+						@ui.Field(ui.FieldProps{ID: "alt-" + pn.ID, Label: i18n.T(ctx, "publish.alt.panel", "page", p.Number, "number", pn.Order)}) {
+							@ui.Textarea(ui.TextareaProps{ID: "alt-" + pn.ID, Name: "alt_" + pn.ID, Value: pn.Value, Rows: 2, MaxLength: maxAltText})
+						}
+					}
+				</div>
+			</details>
+		}
+	</section>
+}
+
+// publishedScreen is E1 – Published – Desktop: the celebration moment.
+templ publishedScreen(v publishView) {
+	<section class="mv-published">
+		<div class="mv-tex-speedlines mv-tex-speedlines--wide" aria-hidden="true"></div>
+		<div class="mv-tex-calm mv-tex-calm--wide" aria-hidden="true"></div>
+		<div class="mv-published__body">
+			<span class={ ui.Cls("mv-sfx mv-sfx--accent mv-published__sfx", ui.If(i18n.LocaleFrom(ctx) == "ja", "mv-sfx--jp")) } aria-hidden="true">{ i18n.T(ctx, "publish.live.sfx") }</span>
+			if v.live() {
+				<h1 class="mv-published__title">{ i18n.T(ctx, "publish.live.title", "number", v.Chapter.Number) }</h1>
+			} else {
+				<h1 class="mv-published__title">{ i18n.T(ctx, "publish.live.scheduled", "number", v.Chapter.Number) }</h1>
+			}
+			<p class="mv-published__quest">
+				{ i18n.T(ctx, "publish.live.quest") }
+				@ui.SoonTag()
+			</p>
+			<p class="mv-published__meta">{ publishedMeta(ctx, v) }</p>
+			<div class="mv-published__actions">
+				@ui.LinkButton(v.SeriesURL, ui.ButtonProps{Variant: ui.Primary, Size: ui.LG}) {
+					{ i18n.T(ctx, "publish.live.series") }
+				}
+				if len(v.OtherReady) > 0 {
+					@ui.LinkButton(v.Base+"/publish?lang="+v.OtherReady[0], ui.ButtonProps{Variant: ui.Secondary, Size: ui.LG, Icon: "language"}) {
+						{ i18n.T(ctx, "publish.live.next_lang", "language", langName(ctx, v.OtherReady[0])) }
+					}
+				}
+				if v.ReaderURL != "" && ui.Ready(ctx, v.ReaderURL) {
+					<details class="mv-published__share">
+						<summary class="mv-btn mv-btn--ghost mv-btn--lg">
+							@ui.Icon("share", 18)
+							{ i18n.T(ctx, "publish.live.share") }
+						</summary>
+						<label class="mv-published__share-box">
+							<span class="mv-sr-only">{ i18n.T(ctx, "publish.live.share_link") }</span>
+							<input class="mv-input" type="text" readonly value={ v.ReaderURL }/>
+						</label>
+					</details>
+				} else {
+					@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Size: ui.LG, Icon: "share", Disabled: true, Class: "is-soon", Attrs: templ.Attributes{"title": i18n.T(ctx, "ui.soon_hint")}}) {
+						{ i18n.T(ctx, "publish.live.share") }
+						@ui.SoonTag()
+					}
+				}
+			</div>
+			<a class="mv-published__back" href={ templ.URL(v.Base + "/publish?lang=" + v.Lang) }>{ i18n.T(ctx, "publish.live.back") }</a>
+		</div>
+	</section>
+}
+
+// seriesScreen edits the series a project publishes as (no artboard: built
+// from the E1 fields; ADR 0004).
+templ seriesScreen(v seriesView) {
+	<form class="mv-publish mv-publish--series" method="post" action={ templ.URL(v.Action) } novalidate>
+		if v.Revision != "" {
+			<input type="hidden" name="revision" value={ v.Revision }/>
+		}
+		<header class="mv-publish__head">
+			<div class="mv-publish__heading">
+				<h1 class="mv-publish__title">{ i18n.T(ctx, "publish.series.title") }</h1>
+				<span class="mv-publish__sub">{ v.Project.Title }</span>
+			</div>
+			<div class="mv-publish__actions">
+				if v.SeriesURL != "" {
+					@ui.LinkButton(v.SeriesURL, ui.ButtonProps{Variant: ui.Quiet, Icon: "external-link"}) {
+						{ i18n.T(ctx, "publish.live.series") }
+					}
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "device-floppy", Type: "submit"}) {
+					{ i18n.T(ctx, "publish.series.save") }
+				}
+			</div>
+		</header>
+		if v.Errors[""] != "" {
+			@ui.Notice(ui.ToneError, "alert-triangle") {
+				<p>{ errText(ctx, v.Errors[""]) }</p>
+			}
+		} else if len(v.Errors) > 0 {
+			@ui.Notice(ui.ToneError, "alert-triangle") {
+				<p>{ i18n.T(ctx, "publish.error.form") }</p>
+			}
+		}
+		if !v.Exists {
+			@ui.Notice(ui.ToneInfo, "books") {
+				<p>{ i18n.T(ctx, "publish.series.new") }</p>
+			}
+		}
+		<div class="mv-publish__grid">
+			<div class="mv-publish__cover">
+				if v.CoverURL != "" {
+					<img class="mv-publish__cover-img" src={ v.CoverURL } alt={ i18n.T(ctx, "publish.cover.alt", "series", v.Form.Title) }/>
+				} else {
+					@ui.ToneBox(i18n.T(ctx, "publish.series.cover"), "3x4", "mv-publish__cover-tone")
+				}
+				<p class="mv-publish__hint">{ i18n.T(ctx, "publish.series.cover_hint") }</p>
+			</div>
+			<div class="mv-publish__fields">
+				@ui.Field(ui.FieldProps{ID: "series-title", Label: i18n.T(ctx, "publish.series.field.title"), Error: errText(ctx, v.Errors["title"])}) {
+					@ui.Input(ui.InputProps{ID: "series-title", Name: "title", Value: v.Form.Title, MaxLength: maxTitle, Required: true, Invalid: v.Errors["title"] != ""})
+				}
+				@ui.Field(ui.FieldProps{ID: "series-slug", Label: i18n.T(ctx, "publish.series.field.slug"), Hint: i18n.T(ctx, "publish.series.field.slug_hint"), Error: errText(ctx, v.Errors["slug"])}) {
+					@ui.InputGroup("/s/", v.Errors["slug"] != "") {
+						@ui.Input(ui.InputProps{ID: "series-slug", Name: "slug", Value: v.Form.Slug, MaxLength: 60, Required: true, Invalid: v.Errors["slug"] != "", Described: true, Autocomplete: "off"})
+					}
+				}
+				@ui.Field(ui.FieldProps{ID: "series-synopsis", Label: i18n.T(ctx, "publish.field.synopsis"), Error: errText(ctx, v.Errors["synopsis"])}) {
+					@ui.Textarea(ui.TextareaProps{ID: "series-synopsis", Name: "synopsis", Value: v.Form.Synopsis, Rows: 4, MaxLength: maxSynopsis, Invalid: v.Errors["synopsis"] != ""})
+				}
+				@ui.Field(ui.FieldProps{ID: "series-genres", Label: i18n.T(ctx, "publish.series.field.genres"), Hint: i18n.T(ctx, "publish.field.tags_hint"), Error: errText(ctx, v.Errors["genres"])}) {
+					@ui.Input(ui.InputProps{ID: "series-genres", Name: "genres", Value: joinList(v.Form.Genres), MaxLength: 400, Invalid: v.Errors["genres"] != "", Described: true})
+				}
+				@ui.Field(ui.FieldProps{ID: "series-tags", Label: i18n.T(ctx, "publish.field.tags"), Hint: i18n.T(ctx, "publish.field.tags_hint"), Error: errText(ctx, v.Errors["tags"])}) {
+					@ui.Input(ui.InputProps{ID: "series-tags", Name: "tags", Value: joinList(v.Form.Tags), MaxLength: 800, Invalid: v.Errors["tags"] != "", Described: true})
+				}
+				<fieldset class="mv-publish__links">
+					<legend class="mv-publish__label">{ i18n.T(ctx, "publish.series.field.links") }</legend>
+					<p class="mv-publish__hint">{ i18n.T(ctx, "publish.series.field.links_hint") }</p>
+					if v.Errors["support_links"] != "" {
+						<p class="mv-publish__error" role="alert">{ errText(ctx, v.Errors["support_links"]) }</p>
+					}
+					for i := range maxSupportLinks {
+						<div class="mv-publish__pair">
+							<label class="mv-sr-only" for={ "link-label-" + strconv.Itoa(i) }>{ i18n.T(ctx, "publish.series.field.link_label", "number", i+1) }</label>
+							@ui.Input(ui.InputProps{ID: "link-label-" + strconv.Itoa(i), Name: "link_label_" + strconv.Itoa(i), Value: v.link(i).Label, MaxLength: maxLinkLabel, Placeholder: i18n.T(ctx, "publish.series.field.link_label_placeholder")})
+							<label class="mv-sr-only" for={ "link-url-" + strconv.Itoa(i) }>{ i18n.T(ctx, "publish.series.field.link_url", "number", i+1) }</label>
+							@ui.Input(ui.InputProps{ID: "link-url-" + strconv.Itoa(i), Name: "link_url_" + strconv.Itoa(i), Type: "url", Value: v.link(i).URL, MaxLength: maxLinkURL, Placeholder: "https://"})
+						</div>
+					}
+				</fieldset>
+			</div>
+			<div class="mv-publish__side">
+				<div class="mv-publish__group">
+					<span class="mv-publish__label" aria-hidden="true">{ i18n.T(ctx, "publish.series.field.visibility") }</span>
+					@ui.Segmented(ui.SegmentedProps{Name: "visibility", Value: v.Form.Visibility, Label: i18n.T(ctx, "publish.series.field.visibility"), Full: true, Options: choiceOptions(ctx, "publish.visibility.", Visibilities)})
+				</div>
+				@ui.Field(ui.FieldProps{ID: "series-format", Label: i18n.T(ctx, "publish.series.field.format"), Error: errText(ctx, v.Errors["format"])}) {
+					@ui.Select(ui.SelectProps{ID: "series-format", Name: "format", Value: v.Form.Format, Options: choiceOptions(ctx, "publish.format.", Formats)})
+				}
+				<div class="mv-publish__pair">
+					@ui.Field(ui.FieldProps{ID: "series-rating", Label: i18n.T(ctx, "publish.field.rating"), Error: errText(ctx, v.Errors["age_rating"])}) {
+						@ui.Select(ui.SelectProps{ID: "series-rating", Name: "age_rating", Value: v.Form.AgeRating, Options: choiceOptions(ctx, "publish.rating.", Ratings)})
+					}
+					@ui.Field(ui.FieldProps{ID: "series-status", Label: i18n.T(ctx, "publish.series.field.status"), Error: errText(ctx, v.Errors["status"])}) {
+						@ui.Select(ui.SelectProps{ID: "series-status", Name: "status", Value: v.Form.Status, Options: choiceOptions(ctx, "publish.series.status.", Statuses)})
+					}
+				</div>
+				@ui.Field(ui.FieldProps{ID: "series-licence", Label: i18n.T(ctx, "publish.field.licence"), Error: errText(ctx, v.Errors["licence"])}) {
+					@ui.Select(ui.SelectProps{ID: "series-licence", Name: "licence", Value: v.Form.Licence, Options: choiceOptions(ctx, "publish.licence.", Licences)})
+				}
+				@ui.Field(ui.FieldProps{ID: "series-lang", Label: i18n.T(ctx, "publish.series.field.language"), Error: errText(ctx, v.Errors["original_lang"])}) {
+					@ui.Select(ui.SelectProps{ID: "series-lang", Name: "original_lang", Value: v.Form.OriginalLang, Options: contentLangOptions(ctx)})
+				}
+				if v.Exists {
+					<div class="mv-publish__group">
+						<span class="mv-publish__label">{ i18n.T(ctx, "publish.series.field.languages") }</span>
+						<div class="mv-publish__chips">
+							for _, l := range v.Series.Languages {
+								@ui.Badge(ui.ToneMuted, "", langName(ctx, l))
+							}
+						</div>
+					</div>
+				}
+			</div>
+		</div>
+	</form>
+}
