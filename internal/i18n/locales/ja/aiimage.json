@@ -182,7 +182,7 @@
   "aiimage.custom.image_path": "画像のパス",
   "aiimage.custom.image_path_hint": "JSON応答（または最終状態）の画像の位置（例：images.0、result.url）。",
   "aiimage.custom.image_kind": "画像の形式",
-  "aiimage.custom.http_base64": "Base64",
+  "aiimage.custom.http_base64": "Base64形式",
   "aiimage.custom.http_url": "このサーバー上のURL",
   "aiimage.custom.status_url_path": "状態URLのパス",
   "aiimage.custom.poll_hint": "確認する場合のみ：最初の応答の状態URLの位置、各状態応答の状態フィールド、その完了値と失敗値。状態URLと画像URLは同じサーバー上である必要があります。",
