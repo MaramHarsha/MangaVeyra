@@ -5,7 +5,7 @@
 //	mangaveyra user create|reset-password|set-role ...
 //	mangaveyra seed --demo               create the original demo content
 //	mangaveyra mcp-stdio                 MCP over stdin/stdout for local agents (bridges to /mcp)
-//	mangaveyra backup ...                create, list or restore backups
+//	mangaveyra backup ...                create, list, restore or delete backups
 //	mangaveyra release ...               sign and verify update releases (project owner)
 //	mangaveyra version
 //
@@ -49,7 +49,7 @@ Commands:
   user set-role                      Change a site role (--user --role)
   seed [--demo]                      Create the demo content
   mcp-stdio [--url --token mva_...]  Bridge MCP over stdin/stdout to a server
-  backup <create|list|restore> ...   Manage backups
+  backup <create|list|restore|delete> Manage backups (restore needs --yes)
   release <keygen|asset|sign|verify> Sign and verify update releases (project owner)
   version                            Print version information
 
@@ -89,7 +89,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	case "mcp-stdio":
 		return cmdMCPStdio(ctx, rest, stdin, stdout, stderr)
 	case "backup":
-		return cmdBackup(ctx, rest, stderr)
+		return cmdBackup(ctx, rest, stdout, stderr)
 	case "release":
 		return update.RunReleaseCLI(rest, stdout, stderr)
 	case "version", "--version", "-v":
@@ -323,12 +323,19 @@ func cmdMCPStdio(ctx context.Context, args []string, stdin io.Reader, stdout, st
 	return mcp.RunStdio(ctx, mcp.StdioOptions{URL: *serverURL, Token: *token}, stdin, stdout)
 }
 
-func cmdBackup(ctx context.Context, args []string, stderr io.Writer) error {
-	fs, cfgPath := newFlags("backup", stderr)
-	if err := fs.Parse(args); err != nil {
+func cmdBackup(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		fmt.Fprintln(stderr, backup.CLIUsage)
+		return errors.New("missing backup command")
+	}
+	sub := args[0]
+	fs, cfgPath := newFlags("backup "+sub, stderr)
+	opts := backup.CLIFlags(fs)
+	pos, err := backup.ParseInterspersed(fs, args[1:])
+	if err != nil {
 		return err
 	}
 	return withDeps(ctx, *cfgPath, stderr, false, func(d *core.Deps) error {
-		return backup.RunCLI(ctx, d, fs.Args())
+		return backup.RunCLI(ctx, d, sub, pos, opts, stdout)
 	})
 }
