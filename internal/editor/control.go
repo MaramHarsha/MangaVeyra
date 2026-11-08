@@ -2,6 +2,7 @@ package editor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -14,6 +15,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/gen"
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
 	"github.com/MaramHarsha/MangaVeyra/internal/storage"
@@ -93,6 +95,9 @@ func (m *Module) generatePage(w http.ResponseWriter, r *http.Request) error {
 	if err := decode(w, r, &in); err != nil {
 		return err
 	}
+	if in.SketchAssetID != "" && !db.ValidID(in.SketchAssetID) {
+		return sketchInvalid(r)
+	}
 	// Serialize interactive generation per page and reuse the exact active
 	// coordinator. The service still fences every target inside its transaction.
 	release := m.generating.lock(res.Actor.UserID + "/" + res.Page.ID)
@@ -122,6 +127,9 @@ func (m *Module) generatePage(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	j, err := m.control.EnqueuePage(r.Context(), res.Actor, gen.PageRequest{ProjectID: res.Project.ID, PageID: res.Page.ID, ExpectedVersion: in.BaseVersion, SketchAssetID: in.SketchAssetID, Strength: in.Strength, Finish: in.Finish})
+	if in.SketchAssetID != "" && errors.Is(err, assets.ErrNotFound) {
+		return sketchInvalid(r)
+	}
 	if err != nil {
 		return mapped(r, err)
 	}
@@ -141,7 +149,7 @@ func (m *Module) uploadSketch(w http.ResponseWriter, r *http.Request) error {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 17<<20)
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
-		return mapped(r, studio.ErrInvalid)
+		return sketchInvalid(r)
 	}
 	defer r.MultipartForm.RemoveAll()
 	version, err := strconv.Atoi(r.FormValue("base_version"))
@@ -150,19 +158,19 @@ func (m *Module) uploadSketch(w http.ResponseWriter, r *http.Request) error {
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		return mapped(r, studio.ErrInvalid)
+		return sketchInvalid(r)
 	}
 	defer file.Close()
 	if header.Size < 1 || header.Size > 16<<20 {
-		return mapped(r, studio.ErrInvalid)
+		return sketchInvalid(r)
 	}
 	data, err := io.ReadAll(io.LimitReader(file, (16<<20)+1))
 	if err != nil || len(data) > 16<<20 {
-		return mapped(r, studio.ErrInvalid)
+		return sketchInvalid(r)
 	}
 	img, _, err := storage.DecodeImage(data, storage.ImageLimits{MaxWidth: 4096, MaxHeight: 4096, MaxPixels: 16 << 20})
 	if err != nil || img.Bounds().Dx() < 64 || img.Bounds().Dy() < 64 {
-		return mapped(r, studio.ErrInvalid)
+		return sketchInvalid(r)
 	}
 	staged, err := m.assets.Stage(r.Context(), assets.SaveParams{OwnerID: res.Actor.UserID, ProjectID: res.Project.ID, Kind: "sketch", Source: assets.SourceUpload, Data: data, ContentType: storage.DetectContentType(data)})
 	if err != nil {
@@ -213,9 +221,12 @@ func (m *Module) lockStatus(w http.ResponseWriter, r *http.Request) error {
 	}
 	id := r.PathValue("character")
 	if !db.ValidID(id) {
-		return core.ErrNotFound()
+		return characterMissing(r)
 	}
 	status, err := m.control.LockChapterStatus(r.Context(), res.Actor, res.Project.ID, id, res.Chapter.ID)
+	if errors.Is(err, studio.ErrNotFound) {
+		return characterMissing(r)
+	}
 	if err != nil {
 		return mapped(r, err)
 	}
@@ -294,4 +305,19 @@ func (m *Module) repairQuote(w http.ResponseWriter, r *http.Request) error {
 	w.Header().Set("Cache-Control", "no-store")
 	core.JSON(w, 200, map[string]any{"quote": quote, "model_name": m.modelName(r.Context(), quote.ModelID)})
 	return nil
+}
+
+// sketchInvalid is the one D4 validation message for files and sketch
+// references outside the documented limits (ADR 0010).
+func sketchInvalid(r *http.Request) error {
+	msg := i18n.T(r.Context(), "editor.control.sketch_invalid")
+	e := core.NewError(http.StatusUnprocessableEntity, "validation", msg)
+	e.Fields = map[string]string{"file": msg}
+	return e
+}
+
+// characterMissing tells D12 that the requested character is not in this
+// project, so it can offer the project's characters instead.
+func characterMissing(r *http.Request) error {
+	return core.NewError(http.StatusNotFound, "not_found", i18n.T(r.Context(), "editor.control.character_missing"))
 }
