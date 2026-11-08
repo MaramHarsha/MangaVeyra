@@ -8,9 +8,11 @@
 .mv-publish__actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
 /* The primary action follows the When control: "Publish now" or "Schedule". */
+.mv-publish__go-now,
+.mv-publish__go-later { display: inline-flex; align-items: center; gap: 8px; }
 .mv-publish__go-later { display: none; }
 .mv-publish:has(input[name="when"][value="schedule"]:checked) .mv-publish__go-now { display: none; }
-.mv-publish:has(input[name="when"][value="schedule"]:checked) .mv-publish__go-later { display: inline; }
+.mv-publish:has(input[name="when"][value="schedule"]:checked) .mv-publish__go-later { display: inline-flex; }
 
 .mv-publish__grid { display: grid; grid-template-columns: 260px minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
 .mv-publish__cover, .mv-publish__fields, .mv-publish__side { display: flex; flex-direction: column; min-width: 0; }
