@@ -15,7 +15,6 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish/publishtest"
-	"github.com/MaramHarsha/MangaVeyra/internal/reader"
 	"github.com/MaramHarsha/MangaVeyra/internal/reader/agegate"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
@@ -539,24 +538,15 @@ func TestAnonymousOpensAreLimitedPerAddress(t *testing.T) {
 // card leave it out, listed chapters step over it, and the library's
 // "New ch." never points at it. A member who read, bookmarked or downloaded
 // it by its link still finds it in the library, and the download is not
-// revoked. All of this holds whether publish.Service's Publications lists
-// unlisted chapters for the viewer or leaves them out for anyone outside the
-// project (checked with a wrapper that does).
+// revoked. publish.Service's Publications lists unlisted chapters for project
+// members (the owner below) and leaves them out for everyone else (the
+// anonymous visitor and the member), so both cases are covered.
 func TestUnlistedChapterIsReadByLinkOnly(t *testing.T) {
-	each(t, func(t *testing.T, e *env) {
-		rm := e.readerModule()
-		svc := reader.Publish(rm)
-		for _, behaviour := range []string{"Publications lists unlisted", "Publications omits unlisted"} {
-			if behaviour == "Publications omits unlisted" {
-				reader.SetPublish(rm, listedOnly{svc})
-			}
-			checkUnlistedChapter(t, e, behaviour)
-		}
-		reader.SetPublish(rm, svc)
-	})
+	each(t, func(t *testing.T, e *env) { checkUnlistedChapter(t, e) })
 }
 
-func checkUnlistedChapter(t *testing.T, e *env, behaviour string) {
+func checkUnlistedChapter(t *testing.T, e *env) {
+	const behaviour = "unlisted"
 	s := e.f.Series(publishtest.SeriesSpec{Title: "Paper Crows"})
 	ch1 := e.f.Publish(s, publishtest.PublicationSpec{Pages: 2})
 	bonus := e.f.Publish(s, publishtest.PublicationSpec{Pages: 2, Visibility: publish.VisibilityUnlisted, Title: "Harbour bonus"})

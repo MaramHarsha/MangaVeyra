@@ -15,7 +15,6 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish/publishtest"
-	"github.com/MaramHarsha/MangaVeyra/internal/reader"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/social"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
@@ -173,41 +172,6 @@ func (e *env) provideRecorder() *fakeRecorder {
 		core.Provide[analytics.ReadingSessions](e.ta.Deps, fakeSessions{})
 	}
 	return r
-}
-
-// readerModule is the app's reader module.
-func (e *env) readerModule() *reader.Module {
-	e.t.Helper()
-	for _, m := range e.ta.App.Modules {
-		if rm, ok := m.(*reader.Module); ok {
-			return rm
-		}
-	}
-	e.t.Fatal("no reader module")
-	return nil
-}
-
-// listedOnly is a publish.Service whose Publications leaves unlisted
-// chapters out for everyone but the series owner, while Publication still
-// serves them by link (the publish module's intended behaviour for
-// non-project-members).
-type listedOnly struct{ publish.Service }
-
-func (l listedOnly) Publications(ctx context.Context, v publish.Viewer, seriesID, lang string) ([]publish.Publication, error) {
-	list, err := l.Service.Publications(ctx, v, seriesID, lang)
-	if err != nil {
-		return nil, err
-	}
-	if s, err := l.Service.SeriesByID(ctx, v, seriesID); err == nil && v.UserID != "" && s.OwnerID == v.UserID {
-		return list, nil
-	}
-	out := []publish.Publication{}
-	for _, p := range list {
-		if p.Visibility != publish.VisibilityUnlisted {
-			out = append(out, p)
-		}
-	}
-	return out, nil
 }
 
 // fakeSessions hands every anonymous request the same reading session.
