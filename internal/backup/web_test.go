@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/backup"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/storage"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 )
@@ -304,6 +306,98 @@ func TestMemberExportHoldsOnlyTheirData(t *testing.T) {
 		}
 		if body := string(c.Get("/settings/data").Body); !strings.Contains(body, "Last export") || !strings.Contains(body, backup.LastExportURL(ex)) {
 			t.Fatal("Settings → Data does not show the last export")
+		}
+	})
+}
+
+// readExport returns an archive's table rows and media names.
+func readExport(t *testing.T, path string) (map[string][]map[string]any, []string) {
+	t.Helper()
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zr.Close()
+	rows := map[string][]map[string]any{}
+	var media []string
+	for _, zf := range zr.File {
+		switch {
+		case strings.HasPrefix(zf.Name, "db/"):
+			rc, _ := zf.Open()
+			dec := json.NewDecoder(rc)
+			name := strings.TrimSuffix(strings.TrimPrefix(zf.Name, "db/"), ".jsonl")
+			for {
+				var row map[string]any
+				if dec.Decode(&row) != nil {
+					break
+				}
+				rows[name] = append(rows[name], row)
+			}
+			_ = rc.Close()
+		case strings.HasPrefix(zf.Name, "media/"):
+			media = append(media, strings.TrimPrefix(zf.Name, "media/"))
+		}
+	}
+	return rows, media
+}
+
+// A member who worked in someone else's project (renders, masks, inputs they
+// made there carry their owner_id) exports only their own projects' files and
+// their own files outside any project, never another owner's project media.
+func TestMemberExportLeavesOutOtherOwnersProjectMedia(t *testing.T) {
+	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		st := core.MustUse[studio.Service](ta.Deps)
+		x := ta.CreateUser(t, "kaito", auth.RoleCreator)
+		y := ta.CreateUser(t, "mio", auth.RoleCreator)
+		ax, _ := st.ActorFromUser(ctx, x.ID)
+		ay, _ := st.ActorFromUser(ctx, y.ID)
+		own, err := st.CreateProject(ctx, ax, studio.NewProject{Title: "Paper Lanterns"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		theirs, err := st.CreateProject(ctx, ay, studio.NewProject{Title: "Salt Road"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		now := db.Now()
+		// kaito was a member of mio's project and has been removed since.
+		asset := func(key string, project any) {
+			t.Helper()
+			if err := storage.PutBytes(ctx, ta.Deps.Store, key, []byte("art "+key), "image/png"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ta.Deps.DB.Exec(ctx, `INSERT INTO assets (id, key, content_type, bytes, kind, source, owner_id, project_id, created_at)
+				VALUES (?, ?, 'image/png', 10, 'render', 'ai', ?, ?, ?)`, db.NewID(), key, x.ID, project, now); err != nil {
+				t.Fatal(err)
+			}
+		}
+		ownKey := "projects/" + own.ID + "/renders/" + db.NewID() + ".png"
+		theirKey := "projects/" + theirs.ID + "/renders/" + db.NewID() + ".png"
+		maskKey := "projects/" + theirs.ID + "/masks/" + db.NewID() + ".png"
+		avatarKey := "assets/avatar/" + db.NewID() + ".png"
+		asset(ownKey, own.ID)
+		asset(theirKey, theirs.ID)
+		asset(maskKey, theirs.ID)
+		asset(avatarKey, nil)
+		b, err := svcOf(t, ta).Create(ctx, backup.Request{Kind: backup.KindUserExport, UserID: x.ID, CreatedBy: x.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, media := readExport(t, pathOf(t, ta, b.ID))
+		slices.Sort(media)
+		want := []string{avatarKey, ownKey}
+		slices.Sort(want)
+		if !slices.Equal(media, want) {
+			t.Fatalf("export media = %v, want %v", media, want)
+		}
+		for _, a := range rows["assets"] {
+			if a["project_id"] != nil && a["project_id"] != own.ID {
+				t.Fatalf("export holds an asset of another owner's project: %v", a)
+			}
+		}
+		if len(rows["assets"]) != 2 {
+			t.Fatalf("assets rows = %v", rows["assets"])
 		}
 	})
 }

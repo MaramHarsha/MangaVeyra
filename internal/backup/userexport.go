@@ -27,14 +27,19 @@ type scopeRule struct {
 
 // Subqueries naming the member's projects, series, chapters, pages and panels.
 const (
-	ownProjects  = `SELECT id FROM projects WHERE owner_id = ?`
-	ownSeries    = `SELECT id FROM series WHERE owner_id = ? OR project_id IN (SELECT id FROM projects WHERE owner_id = ?)`
-	ownPages     = `SELECT id FROM pages WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)`
-	ownPanels    = `SELECT id FROM panels WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)`
-	ownChars     = `SELECT id FROM characters WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)`
-	ownBubbles   = `SELECT id FROM bubbles WHERE page_id IN (SELECT id FROM pages WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?))`
-	ownPubs      = `SELECT id FROM chapter_publications WHERE series_id IN (SELECT id FROM series WHERE owner_id = ? OR project_id IN (SELECT id FROM projects WHERE owner_id = ?))`
-	ownAssetsSQL = `owner_id = ? OR project_id IN (SELECT id FROM projects WHERE owner_id = ?)`
+	ownProjects = `SELECT id FROM projects WHERE owner_id = ?`
+	ownSeries   = `SELECT id FROM series WHERE owner_id = ? OR project_id IN (SELECT id FROM projects WHERE owner_id = ?)`
+	ownPages    = `SELECT id FROM pages WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)`
+	ownPanels   = `SELECT id FROM panels WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)`
+	ownChars    = `SELECT id FROM characters WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)`
+	ownBubbles  = `SELECT id FROM bubbles WHERE page_id IN (SELECT id FROM pages WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?))`
+	ownPubs     = `SELECT id FROM chapter_publications WHERE series_id IN (SELECT id FROM series WHERE owner_id = ? OR project_id IN (SELECT id FROM projects WHERE owner_id = ?))`
+	// ownAssetsSQL selects the files of the member's own projects and their own
+	// files outside any project (avatar, banner). assets.owner_id is whoever
+	// made the file, so renders, masks, sketches and inputs a member made in
+	// someone else's project carry their id: those belong to that project's
+	// owner and are never exported.
+	ownAssetsSQL = `project_id IN (SELECT id FROM projects WHERE owner_id = ?) OR ((project_id IS NULL OR project_id = '') AND owner_id = ?)`
 )
 
 func userScope(userID string) *exportScope {
