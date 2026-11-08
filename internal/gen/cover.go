@@ -217,9 +217,9 @@ func coverPrompt(style, title, synopsis string, cast []castMember, refs bool) st
 		details = append(details, "Each lead character's face, hair, build and outfit come only from that character's kept references.")
 	}
 	if len(cast) > 0 {
-		details = append(details, "Composition: one striking cover image with the lead characters as the clear focal point, dramatic lighting and depth, filling the whole frame edge to edge on an opaque background; leave calm space near the top where the title is set separately as text.")
+		details = append(details, "Composition: one striking cover image with the lead characters as the clear focal point, dramatic lighting and depth, filling the whole frame edge to edge on an opaque background; leave calm, empty space near the top for the chapter title, which is added later outside the artwork.")
 	} else {
-		details = append(details, "Composition: one striking cover image that evokes the chapter with a clear focal point, dramatic lighting and depth, filling the whole frame edge to edge on an opaque background; leave calm space near the top where the title is set separately as text.")
+		details = append(details, "Composition: one striking cover image that evokes the chapter with a clear focal point, dramatic lighting and depth, filling the whole frame edge to edge on an opaque background; leave calm, empty space near the top for the chapter title, which is added later outside the artwork.")
 	}
 	return assemblePrompt(head, "Chapter theme (never write it as text): ", title, details)
 }
