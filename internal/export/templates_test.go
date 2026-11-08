@@ -161,7 +161,7 @@ func TestExportBackdropIsTheD1EditorShell(t *testing.T) {
 				}
 			}
 			// Top bar: logo, "project > Ch. 8 · title ⌄", undo/redo, Pages current, presence,
-			// compute, history, zoom, Preview, Export, Publish (Soon).
+			// compute, history, zoom, Preview, Export, Publish (live in the editor since Phase 3).
 			bar := section(t, shell, `class="mv-exportui__bar"`, `</header>`)
 			chapter := i18n.T(ctx, "exportui.chapter_title", "number", 8, "title", "The Lighthouse Debt")
 			inOrder(t, bar, "/static/brand/mark-color-on-dark-gate-blue.svg", `<span>Tidebreak Courier</span>`, "ti-chevron-right", "<strong>"+chapter+"</strong>", "ti-chevron-down",
@@ -170,7 +170,7 @@ func TestExportBackdropIsTheD1EditorShell(t *testing.T) {
 				"ti-users", "2 queued", "ti-history", "ti-zoom-in", "100%",
 				`<span class="mv-btn mv-btn--quiet mv-btn--sm">`, "ti-eye", i18n.T(ctx, "exportui.preview"),
 				`<span class="mv-btn mv-btn--quiet mv-btn--sm">`, "ti-download", i18n.T(ctx, "exportui.export"),
-				`<span class="mv-btn mv-btn--primary mv-btn--sm is-soon">`, i18n.T(ctx, "exportui.publish"), `<span class="mv-soon">`+i18n.T(ctx, "ui.soon")+`</span>`)
+				`<span class="mv-btn mv-btn--primary mv-btn--sm">`, i18n.T(ctx, "exportui.publish"))
 			if strings.Count(bar, `aria-current="true"`) != 1 {
 				t.Fatal("exactly one editor mode (Pages) is current")
 			}
