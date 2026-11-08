@@ -57,6 +57,10 @@ type service struct {
 	now   func() time.Time
 
 	busy atomic.Bool
+	// hold is the update's or restore's hold this process runs (nil when none).
+	hold atomic.Pointer[lease]
+	// holdPoll is how often Hold retries while it waits.
+	holdPoll time.Duration
 	// exporting holds the members whose export this process is writing.
 	exporting sync.Map
 
@@ -69,7 +73,7 @@ func newService(d *core.Deps) *service {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &service{d: d, db: d.DB, store: d.Store, log: log, now: func() time.Time { return db.Now() }}
+	return &service{d: d, db: d.DB, store: d.Store, log: log, now: func() time.Time { return db.Now() }, holdPoll: 2 * time.Second}
 }
 
 type backupRow struct {
@@ -282,10 +286,11 @@ func (s *service) Create(ctx context.Context, req Request) (Backup, error) {
 		}
 	}
 	export := req.Kind == KindUserExport
-	if !export {
+	if !export && s.leaseFrom(ctx) == nil {
 		// Member exports read one database snapshot and never take the
-		// server-wide lease (see MemberExport); every other kind does.
-		release, err := s.acquire(ctx, "create")
+		// server-wide lease (see MemberExport); every other kind does, unless
+		// it runs under an update's hold, which holds the lease already.
+		release, err := s.acquire(ctx, req.Kind)
 		if err != nil {
 			return Backup{}, err
 		}

@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -246,4 +247,36 @@ type Takedown struct {
 type UpdateNotice interface {
 	// AvailableUpdate returns the version an update would install, if one is known.
 	AvailableUpdate(ctx context.Context) (version string, ok bool)
+}
+
+// ---- maintenance ownership ----------------------------------------------------
+
+// Operations that can own maintenance mode (MaintenanceHeldError.What).
+const (
+	HoldUpdate  = "update"
+	HoldRestore = "restore"
+)
+
+// MaintenanceGuard is optional: the backup module provides it with
+// core.Provide[adminapi.MaintenanceGuard]. An update and a restore turn
+// maintenance mode on and own it while they run (ADR 0013 §3): the G5 toggle
+// stores the admin's setting through the guard, which refuses while one of
+// them runs, in the same transaction that writes the setting.
+type MaintenanceGuard interface {
+	// SetMaintenance stores m as the maintenance setting, or returns a
+	// *MaintenanceHeldError naming the operation that owns maintenance mode.
+	SetMaintenance(ctx context.Context, by string, m settings.Maintenance) error
+}
+
+// MaintenanceHeldError refuses a maintenance change while an update or a
+// restore owns maintenance mode.
+type MaintenanceHeldError struct {
+	// What is HoldUpdate or HoldRestore.
+	What string
+	// Since is when the operation took maintenance mode.
+	Since time.Time
+}
+
+func (e *MaintenanceHeldError) Error() string {
+	return "adminapi: maintenance mode is held by a running " + e.What
 }

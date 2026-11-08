@@ -30,6 +30,23 @@ func (s *service) RestoreArchive(ctx context.Context, id, actor string) (*Restor
 func (s *service) Destination(ctx context.Context) (string, error) { return s.destination(ctx) }
 func (s *service) Announce(ctx context.Context)                    { s.announce(ctx, presencePre+"test") }
 
+// SetHoldPoll changes how often Hold retries while it waits.
+func (s *service) SetHoldPoll(d time.Duration) { s.holdPoll = d }
+
+// ClaimsAllowedNow runs ClaimsAllowed in its own transaction.
+func (s *service) ClaimsAllowedNow(ctx context.Context) (bool, error) {
+	var ok bool
+	err := s.db.WithTx(ctx, func(tx *db.Tx) error {
+		var err error
+		ok, err = s.ClaimsAllowed(ctx, tx)
+		return err
+	})
+	return ok, err
+}
+
+// SweepTempIn removes the module's temporary files older than cutoff in dirs.
+func SweepTempIn(dirs []string, cutoff time.Time) int { return sweepTempIn(dirs, cutoff) }
+
 // SetArchiveLimits lowers the archive table-of-contents limits until the
 // returned function restores them.
 func SetArchiveLimits(entries int, directoryBytes int64) func() {

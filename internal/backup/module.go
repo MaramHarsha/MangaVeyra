@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/admin/adminapi"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
@@ -26,12 +27,22 @@ type Module struct {
 	ui  *web.UI
 }
 
-// New creates the module and provides backup.Service and MemberExports.
+// New creates the module and provides backup.Service, backup.Holder,
+// MemberExports and the G5 toggle's adminapi.MaintenanceGuard.
 func New(d *core.Deps) *Module {
 	svc := newService(d)
 	core.Provide[Service](d, svc)
+	core.Provide[Holder](d, svc)
 	core.Provide[MemberExports](d, svc)
+	core.Provide[adminapi.MaintenanceGuard](d, svc)
 	return &Module{d: d, svc: svc}
+}
+
+// claimGates is the job queue's hook for refusing claims (see Init). The
+// queue offers it once internal/jobs gains AddClaimGate; until then holds
+// still stop new backups and restores but not other job claims.
+type claimGates interface {
+	AddClaimGate(func(ctx context.Context, tx *db.Tx) (bool, error))
 }
 
 // NewService builds a standalone service for CLI tools that run without the
@@ -47,6 +58,12 @@ func (m *Module) Init(context.Context) error {
 		m.ui = ui
 	}
 	m.d.Jobs.MarkNoRetry(JobCreate)
+	// While an update or a restore holds the server, the queue hands out no
+	// new work to the Go executor or to workers: anything started then would
+	// be rolled back with the data it changed.
+	if g, ok := any(m.d.Jobs).(claimGates); ok {
+		g.AddClaimGate(m.svc.ClaimsAllowed)
+	}
 	return nil
 }
 

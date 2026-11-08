@@ -12,7 +12,6 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
-	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 )
 
 // CLIUsage documents `mangaveyra backup`.
@@ -24,8 +23,9 @@ const CLIUsage = `usage:
 
 restore replaces every account, project and setting with the archive's. It
 refuses while a server is running against the same database (stop it first, or
-restore from Admin → Backup & import), turns maintenance mode on for its
-duration and runs migrations when the archive is from an older version.`
+restore from Admin → Backup & import), holds maintenance mode for its duration
+(putting the previous setting back afterwards) and runs migrations when the
+archive is from an older version.`
 
 // CLIOptions are the flags of `mangaveyra backup`.
 type CLIOptions struct {
@@ -117,15 +117,14 @@ func RunCLI(ctx context.Context, d *core.Deps, sub string, args []string, o CLIO
 			}
 			id = b.ID
 		}
-		turnedOn, err := setMaintenance(ctx, d, true, "")
+		l, err := s.Hold(ctx, HoldRequest{What: HoldRestore})
 		if err != nil {
 			return err
 		}
-		rep, rerr := s.restoreArchive(ctx, id, "")
-		if turnedOn {
-			if _, err := setMaintenance(ctx, d, false, ""); err != nil && rerr == nil {
-				rerr = err
-			}
+		rep, rerr := s.restoreArchive(l.Context(ctx), id, "")
+		before := l.Info().Before
+		if err := l.Release(ctx, &before); err != nil && rerr == nil {
+			rerr = err
 		}
 		if rerr != nil {
 			return rerr
@@ -152,24 +151,4 @@ func RunCLI(ctx context.Context, d *core.Deps, sub string, args []string, o CLIO
 		return nil
 	}
 	return errors.New(CLIUsage)
-}
-
-// setMaintenance switches maintenance mode and reports whether it changed it.
-func setMaintenance(ctx context.Context, d *core.Deps, on bool, message string) (bool, error) {
-	d.Settings.Invalidate()
-	inst, err := d.Settings.Instance(ctx)
-	if err != nil {
-		return false, err
-	}
-	if inst.Maintenance.Enabled == on {
-		return false, nil
-	}
-	_, err = d.Settings.UpdateInstance(ctx, "", func(i *settings.Instance) error {
-		i.Maintenance.Enabled = on
-		if on {
-			i.Maintenance.Message = message
-		}
-		return nil
-	})
-	return err == nil, err
 }

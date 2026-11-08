@@ -191,6 +191,9 @@ func (m *Module) load(r *http.Request) (pageView, error) {
 	if st.Running {
 		v.Live = &liveView{Label: i18n.T(ctx, "backup.live.restoring"), Progress: st.Progress, Active: true}
 		v.Busy = true
+	} else if l := s.hold.Load(); l != nil && l.info.What == HoldUpdate {
+		// An update holds the server (G14 shows its progress): nothing can start here.
+		v.Busy = true
 	} else {
 		active, err := m.d.Jobs.List(ctx, jobs.Filter{Types: []string{JobCreate}, States: []string{jobs.StateQueued, jobs.StateRunning}, Limit: 1})
 		if err != nil {
@@ -423,23 +426,28 @@ func (m *Module) startRestore(w http.ResponseWriter, r *http.Request) error {
 		v.RestoreOpen, v.RestoreTarget, v.ConfirmError = true, id, i18n.T(ctx, "backup.restore.error.confirm", "word", confirmWord)
 		return m.render(w, r, http.StatusUnprocessableEntity, v)
 	}
-	if m.svc.busy.Load() || m.svc.State().Running {
+	if m.svc.State().Running {
 		return m.busyFlash(w, r)
 	}
 	actor := core.UserFrom(ctx).ID
-	turnedOn, err := setMaintenance(ctx, m.d, true, i18n.T(ctx, "backup.restore.maintenance"))
+	// The hold is taken here, in the request: of two submits only one gets it
+	// (the other sees the busy notice), and it owns maintenance mode until the
+	// restore ends, when the setting from before the restore is put back.
+	bg := context.WithoutCancel(ctx)
+	l, err := m.svc.Hold(bg, HoldRequest{What: HoldRestore, Message: i18n.T(ctx, "backup.restore.maintenance"), ActorID: actor})
+	if errors.Is(err, ErrBusy) {
+		return m.busyFlash(w, r)
+	}
 	if err != nil {
 		return err
 	}
 	m.svc.setState(func(s *RestoreState) { *s = RestoreState{Running: true, BackupID: id} })
-	bg := context.WithoutCancel(ctx)
 	go func() {
-		pctx := WithProgress(bg, func(p float64) { m.svc.setState(func(s *RestoreState) { s.Progress = p }) })
+		pctx := WithProgress(l.Context(bg), func(p float64) { m.svc.setState(func(s *RestoreState) { s.Progress = p }) })
 		rep, err := m.svc.restoreArchive(pctx, id, actor)
-		if turnedOn {
-			if _, merr := setMaintenance(bg, m.d, false, ""); merr != nil {
-				m.svc.log.Error("backup: turn maintenance mode off after restore", "err", merr)
-			}
+		before := l.Info().Before
+		if merr := l.Release(bg, &before); merr != nil {
+			m.svc.log.Error("backup: put maintenance mode back after the restore", "err", merr)
 		}
 		if err != nil {
 			m.svc.log.Warn("backup: restore", "backup", id, "err", err)

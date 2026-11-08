@@ -198,19 +198,25 @@ func (s *service) restoreArchive(ctx context.Context, id, actorID string) (*Rest
 	if r.Status != StatusDone && r.Status != StatusRestored || r.Path == "" {
 		return nil, incompatible("the archive is %s", r.Status)
 	}
-	s.d.Settings.Invalidate()
-	inst, err := s.d.Settings.Instance(ctx)
-	if err != nil {
-		return nil, err
+	if s.leaseFrom(ctx) == nil {
+		// Called without a hold (Service.Restore): the caller turned maintenance
+		// on; the restore holds the server for its duration, so the admin cannot
+		// turn maintenance off half-way, and leaves maintenance as it was.
+		s.d.Settings.Invalidate()
+		inst, err := s.d.Settings.Instance(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !inst.Maintenance.Enabled {
+			return nil, ErrNotInMaintenance
+		}
+		l, err := s.Hold(ctx, HoldRequest{What: HoldRestore, ActorID: actorID})
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = l.Release(ctx, nil) }()
+		ctx = l.Context(ctx)
 	}
-	if !inst.Maintenance.Enabled {
-		return nil, ErrNotInMaintenance
-	}
-	release, err := s.acquire(ctx, "restore")
-	if err != nil {
-		return nil, err
-	}
-	defer release()
 	prog := progressFrom(ctx)
 	if r.SHA256 != "" {
 		sum, err := fileSHA256(r.Path)

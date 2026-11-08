@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
@@ -218,9 +220,13 @@ func (s *service) runDue(ctx context.Context) error {
 	if err != nil || !won {
 		return err
 	}
-	for attempt := 0; ; attempt++ {
+	// The slot is ours: wait for a running backup, restore or update (an
+	// update holds the lease for its whole run, migrations included) for up
+	// to dueWait rather than skipping the day's backup.
+	deadline := time.Now().Add(dueWait)
+	for {
 		_, err = s.Create(ctx, Request{Kind: KindScheduled})
-		if !errors.Is(err, ErrBusy) || attempt >= 20 {
+		if !errors.Is(err, ErrBusy) || !time.Now().Before(deadline) {
 			break
 		}
 		select {
@@ -305,17 +311,27 @@ func (s *service) announce(ctx context.Context, key string) {
 	}
 }
 
-// loop runs scheduled backups, expiry and the server presence heartbeat.
+// dueWait is how long a scheduled backup waits for other backup work.
+const dueWait = 2 * time.Hour
+
+// loop runs scheduled backups, expiry, the removal of leftover temporary
+// files and the server presence heartbeat. A scheduled backup runs beside the
+// loop (one at a time), so the heartbeat continues while it waits or writes.
 func (s *service) loop(ctx context.Context) error {
 	key := presencePre + db.NewID()
 	s.announce(ctx, key)
+	var wg sync.WaitGroup
+	var due atomic.Bool
 	defer func() {
+		wg.Wait()
 		bctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		_, _ = s.db.Exec(bctx, `DELETE FROM instance_settings WHERE key = ?`, key)
 	}()
 	tick := time.NewTicker(30 * time.Second)
 	defer tick.Stop()
+	s.sweepTemp(ctx)
+	sweptTemp := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
@@ -323,11 +339,62 @@ func (s *service) loop(ctx context.Context) error {
 		case <-tick.C:
 		}
 		s.announce(ctx, key)
-		if err := s.runDue(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			s.log.Warn("backup: scheduled backup", "err", err)
+		if due.CompareAndSwap(false, true) {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer due.Store(false)
+				if err := s.runDue(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					s.log.Warn("backup: scheduled backup", "err", err)
+				}
+			}()
 		}
 		if err := s.sweep(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			s.log.Warn("backup: sweep", "err", err)
 		}
+		if time.Since(sweptTemp) >= time.Hour {
+			s.sweepTemp(ctx)
+			sweptTemp = time.Now()
+		}
 	}
+}
+
+// Temporary files the module writes into a backup directory: archives being
+// written (.<id>.mvbackup.tmp) and uploads being received (.upload-*.mvbackup).
+const tempMaxAge = 24 * time.Hour
+
+func backupTempFile(name string) bool {
+	return strings.HasPrefix(name, ".") && strings.HasSuffix(name, Extension+".tmp") ||
+		strings.HasPrefix(name, ".upload-") && strings.HasSuffix(name, Extension)
+}
+
+// sweepTemp removes this module's temporary files older than a day from the
+// backup directories (an interrupted write or upload leaves them behind).
+func (s *service) sweepTemp(ctx context.Context) {
+	dirs := []string{s.d.Cfg.BackupDir()}
+	if sc, err := s.Schedule(ctx); err == nil && sc.Destination != "" {
+		dirs = append(dirs, sc.Destination)
+	}
+	if n := sweepTempIn(dirs, time.Now().Add(-tempMaxAge)); n > 0 {
+		s.log.Info("backup: removed leftover temporary files", "count", n)
+	}
+}
+
+func sweepTempIn(dirs []string, cutoff time.Time) int {
+	n := 0
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.Type().IsRegular() || !backupTempFile(e.Name()) {
+				continue
+			}
+			if fi, err := e.Info(); err == nil && fi.ModTime().Before(cutoff) && os.Remove(filepath.Join(dir, e.Name())) == nil {
+				n++
+			}
+		}
+	}
+	return n
 }
