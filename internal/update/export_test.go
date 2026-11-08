@@ -57,6 +57,17 @@ func HoldLockAs(m *Module, ctx context.Context, updateID, owner string) (bool, e
 	return m.acquireLock(ctx, lockValue{UpdateID: updateID, Owner: owner})
 }
 
+// TakeOverLock replaces an expired lease whose value was observed as raw, as
+// acquireLock does after reading it.
+func TakeOverLock(m *Module, ctx context.Context, raw, updateID, owner string) (bool, error) {
+	return m.takeOverLock(ctx, raw, lockValue{UpdateID: updateID, Owner: owner})
+}
+
+// LockValue is the stored value of the install lock held by owner.
+func LockValue(updateID, owner string) string {
+	return lockValue{UpdateID: updateID, Owner: owner}.encode()
+}
+
 // SnoozeCookie is the "Remind me next login" cookie value for a session.
 func SnoozeCookie(sessionID, version string) string { return snoozeValue(sessionID, version) }
 

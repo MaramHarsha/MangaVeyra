@@ -544,6 +544,35 @@ func TestManifestVersionSpellingsInstall(t *testing.T) {
 	})
 }
 
+// A lease that looked expired but was renewed before the takeover is not taken:
+// the swap compares the lease's age at the moment of the swap, not only its value.
+func TestLockTakeoverRefusesARenewedLease(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, dialect string) {
+		e := newEnv(t, dialect)
+		raw := update.LockValue("u1", "slow-process")
+		now := db.Now()
+		if _, err := e.ta.Deps.DB.Exec(e.ctx, `INSERT INTO instance_settings (key, value, updated_at) VALUES ('update.lock', ?, ?)`, raw, now); err != nil {
+			t.Fatal(err)
+		}
+		// The caller read the row while it was stale; the holder renewed it since.
+		if ok, err := update.TakeOverLock(e.m, e.ctx, raw, "u2", "thief"); err != nil || ok {
+			t.Fatalf("takeover of a live lease = %v, %v", ok, err)
+		}
+		var v string
+		_ = e.ta.Deps.DB.Get(e.ctx, &v, `SELECT value FROM instance_settings WHERE key = 'update.lock'`)
+		if v != raw {
+			t.Fatalf("lease value = %s", v)
+		}
+		// Once it really expired, it is taken over.
+		if _, err := e.ta.Deps.DB.Exec(e.ctx, `UPDATE instance_settings SET updated_at = ? WHERE key = 'update.lock'`, now.Add(-time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := update.TakeOverLock(e.m, e.ctx, raw, "u2", "thief"); err != nil || !ok {
+			t.Fatalf("takeover of an expired lease = %v, %v", ok, err)
+		}
+	})
+}
+
 func TestContainerInstallShowsHostCommands(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, dialect string) {
 		e := newEnv(t, dialect, withHooks(func(h *update.TestHooks) {

@@ -47,10 +47,25 @@ func (m *Module) acquireLock(ctx context.Context, v lockValue) (bool, error) {
 	if now.Sub(at) < lockTTL {
 		return false, nil
 	}
-	return m.swapLock(ctx, cur, v)
+	return m.takeOverLock(ctx, cur, v)
 }
 
-// takeOverLock replaces the exact value old with v (a restart hand-off or an
+// takeOverLock replaces an expired lease whose value was observed as old. The
+// swap is conditional on both the observed value and the lease still being
+// expired when it runs: a holder that renewed in between (updated_at moved
+// forward) keeps its lease.
+func (m *Module) takeOverLock(ctx context.Context, old string, v lockValue) (bool, error) {
+	now := db.Now()
+	res, err := m.d.DB.Exec(ctx, `UPDATE instance_settings SET value = ?, updated_at = ? WHERE key = ? AND value = ? AND updated_at < ?`,
+		v.encode(), now, keyLock, old, now.Add(-lockTTL))
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n == 1, nil
+}
+
+// swapLock replaces the exact value old with v (a restart hand-off or an
 // expired lease).
 func (m *Module) swapLock(ctx context.Context, old string, v lockValue) (bool, error) {
 	res, err := m.d.DB.Exec(ctx, `UPDATE instance_settings SET value = ?, updated_at = ? WHERE key = ? AND value = ?`,
