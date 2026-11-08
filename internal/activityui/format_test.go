@@ -48,14 +48,23 @@ func TestFoldedProgressFollowsTheRunningWorkerChild(t *testing.T) {
 	if got := percent(foldedProgress(parent, []*jobs.Job{child})); got != 62 {
 		t.Fatalf("single step parent = %d, want the child's 62", got)
 	}
-	// Two of four steps done (50%); the third step's child is at 50%.
+	// Two of four steps done (50%); the next step's child at 50% adds at
+	// most a step's share, never running ahead of the measured work.
 	parent = &jobs.Job{State: jobs.StateRunning, Progress: .5, Step: 2, Steps: 4}
 	child.Progress = .5
-	if got := percent(foldedProgress(parent, []*jobs.Job{child})); got != 63 {
-		t.Fatalf("multi-step parent = %d, want 63", got)
+	if got := percent(foldedProgress(parent, []*jobs.Job{child})); got != 60 {
+		t.Fatalf("multi-step parent = %d, want 60", got)
 	}
 	if got := percent(foldedProgress(parent, []*jobs.Job{{State: jobs.StateQueued}})); got != 50 {
 		t.Fatalf("a queued child added progress: %d", got)
+	}
+	// Training mirrors its child's progress and counters into the parent.
+	mirrored := &jobs.Job{State: jobs.StateRunning, Progress: .7, Step: 70, Steps: 100}
+	if got := percent(foldedProgress(mirrored, []*jobs.Job{{State: jobs.StateRunning, Progress: .7, Step: 70, Steps: 100}})); got != 70 {
+		t.Fatalf("mirrored parent = %d, want 70", got)
+	}
+	if got := percent(foldedProgress(&jobs.Job{State: jobs.StateRunning, Progress: .7}, []*jobs.Job{{State: jobs.StateRunning, Progress: .7}})); got != 70 {
+		t.Fatalf("parent measuring without steps = %d, want 70", got)
 	}
 	if got := percent(foldedProgress(&jobs.Job{State: jobs.StateRunning, Progress: math.NaN()}, nil)); got != 0 {
 		t.Fatalf("NaN progress = %d", got)

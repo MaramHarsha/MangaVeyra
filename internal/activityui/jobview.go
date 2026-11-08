@@ -126,9 +126,12 @@ func jobTitle(ctx context.Context, d *db.DB, j *jobs.Job) (string, error) {
 	return title, nil
 }
 
-// foldedProgress is the progress of a running parent whose current step runs
-// in a worker child: the parent's completed share plus the child's measured
-// share of the remaining step(s). It never exceeds what has been measured.
+// foldedProgress is the progress of a running parent whose current work runs
+// in a worker child (one row per job). Before the parent reports any progress
+// of its own, the child's measurement is the job's; a parent that mirrors its
+// child (same step counters) or measures without steps keeps its own value;
+// otherwise the child adds at most one step's share (1/(steps+1)), so the bar
+// never runs ahead of the measured work.
 func foldedProgress(parent *jobs.Job, children []*jobs.Job) float64 {
 	p := clamp01(parent.Progress)
 	var child *jobs.Job
@@ -140,11 +143,14 @@ func foldedProgress(parent *jobs.Job, children []*jobs.Job) float64 {
 	if child == nil || parent.State != jobs.StateRunning {
 		return p
 	}
-	remaining := 1
-	if parent.Step > 0 && parent.Steps > parent.Step {
-		remaining = parent.Steps - parent.Step
+	c := clamp01(child.Progress)
+	switch {
+	case parent.Steps <= 0 && p == 0:
+		return c
+	case parent.Steps <= 0, parent.Step == child.Step && parent.Steps == child.Steps:
+		return p
 	}
-	return p + clamp01(child.Progress)*(1-p)/float64(remaining)
+	return min(1, p+c/float64(parent.Steps+1))
 }
 
 func clamp01(v float64) float64 {
