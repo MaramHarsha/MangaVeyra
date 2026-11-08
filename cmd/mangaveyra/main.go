@@ -141,10 +141,14 @@ func cmdServe(ctx context.Context, args []string, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := a.Run(ctx); err != nil {
+	runErr := a.Run(ctx)
+	// A finished update restarts into the swapped, already health-checked
+	// binary even when the graceful shutdown timed out; otherwise a hand-started
+	// server would simply stop.
+	if err := update.RestartIfPending(); err != nil {
 		return err
 	}
-	return update.RestartIfPending()
+	return runErr
 }
 
 // withDeps opens the services without the HTTP server for CLI commands.
