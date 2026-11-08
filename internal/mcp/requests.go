@@ -458,6 +458,10 @@ func (m *Module) undoGenerate(ctx context.Context, actor studio.Actor, row actio
 	if err != nil || !row.ProjectID.Valid || page.ProjectID != row.ProjectID.String {
 		return errNoUndo
 	}
+	// Reverting art is an art edit for the person doing it.
+	if err := m.studio.Authorize(ctx, actor, page.ProjectID, studio.ActEditArt); err != nil {
+		return err
+	}
 	versions, err := m.pages.Versions(ctx, page.ID, 500)
 	if err != nil {
 		return err
