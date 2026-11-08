@@ -6,7 +6,7 @@
  import RegionMask from './RegionMask.svelte';
  import ControlWorkbench from './ControlWorkbench.svelte';
  import PoseTool from './PoseTool.svelte';
- import {pageBlock} from './control';
+ import {jobMessageKey, pageBlock} from './control';
  import {request, APIError} from './api';
  import {showToast} from '../../lib/toast';
  import {
@@ -162,7 +162,7 @@
   if (activeJob.state === 'done') parts.push(t('variations.ready', {ready: candidates.length, total: 4}), t('duration.seconds', {count: jobSeconds(activeJob, now)}));
   else if (activeJob.state === 'queued') parts.push(t('variations.queued_at', {position: (activeJob.position || 0) + 1}));
   else if (activeJob.state === 'running') parts.push(t('variations.generating', {percent: Math.round(activeJob.progress * 100)}), t('duration.seconds', {count: jobSeconds(activeJob, now)}));
-  else parts.push(t(`job.${activeJob.state}`));
+  else parts.push(t(jobMessageKey(activeJob)));
   if (activeJob.model_name) parts.push(activeJob.model_name);
   return parts.join(' · ');
  });
@@ -746,7 +746,7 @@
    </div>
   {/if}
   {#if !page}
-   <div class="mv-ed__empty"><h1>{t('empty.title')}</h1><p>{activeJob ? t(`job.${activeJob.state}`) : t('empty.body')}</p>{#if activeJob}<progress max="1" value={activeJob.progress} aria-label={t('progress')}></progress><Button onclick={() => void pollJob()}>{t('refresh')}</Button>{:else}<Button variant="primary" icon="plus" disabled={!initial.permissions.art} onclick={() => void addPage()}>{t('page.add')}</Button>{/if}</div>
+   <div class="mv-ed__empty"><h1>{t('empty.title')}</h1><p>{activeJob ? t(jobMessageKey(activeJob)) : t('empty.body')}</p>{#if activeJob}<progress max="1" value={activeJob.progress} aria-label={t('progress')}></progress><Button onclick={() => void pollJob()}>{t('refresh')}</Button>{:else}<Button variant="primary" icon="plus" disabled={!initial.permissions.art} onclick={() => void addPage()}>{t('page.add')}</Button>{/if}</div>
   {:else if tray === 'layouts'}
    <span class="mv-sr-only">{t('layouts')}</span>
   {:else if tool === 'region' && layer?.asset}

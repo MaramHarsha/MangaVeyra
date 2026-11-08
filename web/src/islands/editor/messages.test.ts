@@ -46,6 +46,7 @@ const dynamic = [
   ...['identity', 'outfit', 'both'].map(k => `control.evidence_${k}`),
   ...['front', 'side', 'back', 'face', 'expression', 'outfit', 'sheet', 'other'].map(k => `control.ref_${k}`),
   ...['failed', 'canceled'].map(k => `job.${k}`),
+  ...['provider_verification', 'provider_auth', 'spend_limit', 'no_provider', 'rate_limited', 'timeout', 'safety', 'provider_refused', 'local_only', 'scope_locked'].map(k => `job.error.${k}`),
   ...['generate_page', 'character_repair', 'revert', 'save', 'lock'].map(k => `history.action.${k}`),
 ];
 

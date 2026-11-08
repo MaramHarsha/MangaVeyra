@@ -4,7 +4,7 @@
  import Button from './Button.svelte';
  import SketchCanvas from './SketchCanvas.svelte';
  import {request, APIError} from './api';
- import {alphaBounds, changedPanels, driftEvidence, firstName, historyRows, imageSize, lockState, quoteChip, sketchFileOK, sketchSizeOK} from './control';
+ import {alphaBounds, changedPanels, jobMessageKey, driftEvidence, firstName, historyRows, imageSize, lockState, quoteChip, sketchFileOK, sketchSizeOK} from './control';
  import type {Page, Version, Job, LockStatus, DriftPanel, RepairTarget, Point} from './types';
 
  type T = (key: string, args?: Record<string, string | number>) => string;
@@ -359,7 +359,7 @@
  </div>
  <div class="mv-ed__inspector-actions mv-control__actions" class:mv-control__actions--history={kind === 'history'}>
   {#if running}<div role="status"><p>{t('control.generating')} · {Math.round((activeJob?.progress || 0) * 100)}%</p><progress class="mv-ed__progress" value={activeJob?.progress || 0} max="1" aria-label={t('progress')}></progress></div>{/if}
-  {#if activeJob?.state === 'failed' || activeJob?.state === 'canceled'}<p class="mv-notice mv-notice--error" role="alert">{t(`job.${activeJob.state}`)}</p>{/if}
+  {#if activeJob?.state === 'failed' || activeJob?.state === 'canceled'}<p class="mv-notice mv-notice--error" role="alert">{t(jobMessageKey(activeJob))}</p>{/if}
   {#if kind === 'history'}
    <Button full icon="git-branch" disabled>{t('control.new_branch')}<span class="mv-soon">{t('soon')}</span></Button>
    <Button full icon="git-merge" disabled>{t('control.merge_branch')}<span class="mv-soon">{t('soon')}</span></Button>

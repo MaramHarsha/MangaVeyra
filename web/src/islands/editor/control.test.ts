@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest';
-import {alphaBounds, changedPanels, driftEvidence, firstName, historyRows, lockState, pageBlock, quoteChip, sketchFileOK, sketchSizeOK} from './control';
+import {alphaBounds, changedPanels, jobMessageKey, driftEvidence, firstName, historyRows, lockState, pageBlock, quoteChip, sketchFileOK, sketchSizeOK} from './control';
 import type {DriftPanel, LockStatus, Page, Version} from './types';
 
 function page(): Page {
@@ -112,5 +112,15 @@ describe('route chip', () => {
     expect(quoteChip({...base, loading: true})).toBe('loading');
     expect(quoteChip({...base, failed: true})).toBe('failed');
     expect(quoteChip({...base, ready: true})).toBe('ready');
+  });
+});
+
+describe('jobMessageKey', () => {
+  it('uses specific copy for known failure codes and generic copy otherwise', () => {
+    expect(jobMessageKey({state: 'failed', error_code: 'provider_verification'})).toBe('job.error.provider_verification');
+    expect(jobMessageKey({state: 'failed', error_code: 'spend_limit'})).toBe('job.error.spend_limit');
+    expect(jobMessageKey({state: 'failed', error_code: 'internal'})).toBe('job.failed');
+    expect(jobMessageKey({state: 'failed'})).toBe('job.failed');
+    expect(jobMessageKey({state: 'canceled', error_code: 'provider_auth'})).toBe('job.canceled');
   });
 });

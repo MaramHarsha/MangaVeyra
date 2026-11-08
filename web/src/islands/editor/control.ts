@@ -147,3 +147,14 @@ export function alphaBounds(data: Uint8ClampedArray, width: number, height: numb
   // A fully opaque raster has no separable character region to outline.
   return box.w > .98 && box.h > .98 ? null : box;
 }
+
+/* ---- Job failure copy ---- */
+
+/** Safe public failure codes with their own editor copy (editor.job.error.<code>). */
+export const JOB_ERROR_CODES = ['provider_verification', 'provider_auth', 'spend_limit', 'no_provider', 'rate_limited', 'timeout', 'safety', 'provider_refused', 'local_only', 'scope_locked'] as const;
+
+/** jobMessageKey picks the message for a job state, using the specific copy for a known failure code. */
+export function jobMessageKey(job: {state: string; error_code?: string}): string {
+  if (job.state === 'failed' && job.error_code && (JOB_ERROR_CODES as readonly string[]).includes(job.error_code)) return `job.error.${job.error_code}`;
+  return `job.${job.state}`;
+}

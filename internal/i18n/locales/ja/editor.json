@@ -470,5 +470,15 @@
   "editor.control.snapshot_changes.other": "バージョン{number} · 変更{count}件",
   "editor.control.snapshot_same": "バージョン{number} · 変更なし",
   "editor.control.undo_body": "最新の変更を取り消し、バージョン{number}の内容を新しいバージョンとして保存しますか？",
-  "editor.control.before": "修正前"
+  "editor.control.before": "修正前",
+  "editor.job.error.provider_verification": "OpenAIで画像を生成するには、組織の確認が必要です。OpenAIアカウントで確認してから、もう一度接続を確認してください。",
+  "editor.job.error.provider_auth": "プロバイダーがキーを受け付けませんでした。「モデルとプロバイダー」を確認してから、もう一度お試しください。",
+  "editor.job.error.spend_limit": "月間のリモート利用上限に達しました。「モデルルーティング」で確認してください。",
+  "editor.job.error.no_provider": "使用できるモデルがありません。「モデルとプロバイダー」を確認してください。",
+  "editor.job.error.rate_limited": "プロバイダーが混み合っています。少し待ってから、もう一度お試しください。",
+  "editor.job.error.timeout": "生成に時間がかかりすぎました。もう一度お試しください。",
+  "editor.job.error.safety": "安全性チェックによりこのリクエストは受け付けられませんでした。プロンプトを変更してから、もう一度お試しください。",
+  "editor.job.error.provider_refused": "プロバイダーがこのリクエストを受け付けませんでした。プロンプトを変更してから、もう一度お試しください。",
+  "editor.job.error.local_only": "ローカル専用モードのため、このジョブはサーバー内に保持されました。ローカルモデルを選択してください。",
+  "editor.job.error.scope_locked": "この作業はロックされています。生成する前にロックを解除してください。"
 }

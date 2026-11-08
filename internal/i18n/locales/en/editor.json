@@ -470,5 +470,15 @@
   "editor.control.snapshot_changes.other": "Version {number} · {count} changes",
   "editor.control.snapshot_same": "Version {number} · no changes",
   "editor.control.undo_body": "Undo the latest change by restoring version {number} as a new saved version?",
-  "editor.control.before": "Before"
+  "editor.control.before": "Before",
+  "editor.job.error.provider_verification": "OpenAI needs your organisation verified for image generation. Verify it in your OpenAI account, then test the connection again.",
+  "editor.job.error.provider_auth": "The provider rejected its key. Check Models & providers, then try again.",
+  "editor.job.error.spend_limit": "The monthly remote spend limit was reached. Review it in Model routing.",
+  "editor.job.error.no_provider": "No suitable model is available. Check Models & providers.",
+  "editor.job.error.rate_limited": "The provider is busy. Wait a moment, then try again.",
+  "editor.job.error.timeout": "Generation took too long. Try again.",
+  "editor.job.error.safety": "A safety check declined this request. Change the prompt, then try again.",
+  "editor.job.error.provider_refused": "The provider declined this request. Change the prompt, then try again.",
+  "editor.job.error.local_only": "Local only mode kept this job on the server. Choose a local model.",
+  "editor.job.error.scope_locked": "This work is locked. Unlock it before generating."
 }
