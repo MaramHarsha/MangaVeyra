@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { frame, maskPath, panelPosition, sequence, spokenText, stepIndex } from './guided';
 import { comicsIslandMessages } from './testdata';
 import { translator, type Page } from './types';
-import { anchorOf, items, listURL, postBody } from './comments';
+import { anchorOf, authorName, items, listURL, postBody } from './comments';
 
 const page = (number: number, panels: Page['panels']): Page => ({ id: `p${number}`, number, width: 160, height: 240, src: '', alt: `Page ${number}`, panels });
 const panel = (order: number, y: number): Page['panels'][number] => ({
@@ -58,6 +58,9 @@ describe('comments anchoring', () => {
     expect(postBody('ser1', 'pub1', 'Nice!', null).target_kind).toBe('chapter');
     expect(anchorOf({ id: 'c', body: '', anchor: '{"page":3,"panel":2}' })).toEqual({ page: 3, panel: 2 });
     expect(anchorOf({ id: 'c', body: '', anchor: {} })).toBeNull();
+    expect(listURL('/api/v1/social/comments', 'panel', 'pub1', 'ser1', 4)).toContain('&page=4');
+    expect(authorName({ id: 'c', body: '', author: { id: 'u', username: 'jo.okafor', display_name: 'Jo Okafor' } })).toBe('Jo Okafor');
+    expect(authorName({ id: 'c', body: '', author: { username: 'jo.okafor' } })).toBe('jo.okafor');
     expect(items({ items: [{ id: 'a' }] })).toHaveLength(1);
     expect(items(null)).toEqual([]);
   });

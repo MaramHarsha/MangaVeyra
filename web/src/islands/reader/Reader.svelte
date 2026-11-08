@@ -388,11 +388,23 @@
   const refreshEvery = Math.max(30, (p.url_ttl || 600) - 90) * 1000;
   const timer = setInterval(() => void refreshURLs(), refreshEvery);
   if (online) void goOnline();
+  // ?download=1 (the E5 series page's per-chapter download link) starts the download once.
+  const askDownload = new URLSearchParams(location.search).get('download') === '1';
+  if (askDownload) {
+   const u = new URL(location.href);
+   u.searchParams.delete('download');
+   try {
+    history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+   } catch {
+    /* keep the URL */
+   }
+  }
   if (typeof caches !== 'undefined') {
    void readMeta(caches, p.publication.id).then((meta) => {
     onDevice = !!meta && !expired(meta, Date.now() / 1000) && download?.status !== 'expired';
+    if (askDownload && !onDevice) void toggleDownload();
    }).catch(() => undefined);
-  }
+  } else if (askDownload) void toggleDownload();
   if (mode === 'webtoon') requestAnimationFrame(() => scrollToPage(current, false));
   return () => {
    window.removeEventListener('resize', resize);

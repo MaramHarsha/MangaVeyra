@@ -1,6 +1,6 @@
 <script lang="ts">
  import type { T } from './types';
- import { anchorOf, load, postBody, type Comment, type LoadState } from './comments';
+ import { anchorOf, authorName, load, postBody, type Comment, type LoadState } from './comments';
  import { call } from './api';
  import { showToast } from '../../lib/toast';
 
@@ -44,7 +44,7 @@
   void refresh(page);
  }
 
- const name = (c: Comment) => c.author_name || c.author || '';
+ const name = authorName;
 </script>
 
 <aside class="mv-rd-comments" aria-labelledby="mv-rd-comments-title">

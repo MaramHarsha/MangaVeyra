@@ -6,12 +6,22 @@
  */
 import { call } from './api';
 
-export interface Comment { id: string; body: string; author?: string; author_name?: string; anchor?: unknown; created_at?: string }
+export interface Comment {
+  id: string; body: string; anchor?: unknown; created_at?: string; hidden?: boolean;
+  author?: { id?: string; username?: string; display_name?: string } | string; author_name?: string;
+}
+
+/** authorName is the display name of a comment's author (the social API sends an object). */
+export function authorName(c: Comment): string {
+  if (typeof c.author === 'string') return c.author;
+  return c.author?.display_name || c.author?.username || c.author_name || '';
+}
 
 export interface Anchor { page: number; panel: number }
 
-export function listURL(api: string, kind: 'chapter' | 'panel', publicationId: string, seriesId: string): string {
+export function listURL(api: string, kind: 'chapter' | 'panel', publicationId: string, seriesId: string, page = 0): string {
   const q = new URLSearchParams({ target_kind: kind, target_id: publicationId, series: seriesId });
+  if (page > 0) q.set('page', String(page));
   return `${api}?${q.toString()}`;
 }
 
@@ -49,11 +59,12 @@ export type LoadState = 'loading' | 'ready' | 'unavailable';
 export async function load(api: string, publicationId: string, seriesId: string, page: number, fetchFn: typeof fetch = fetch): Promise<{ state: LoadState; chapter: Comment[]; panel: Comment[] }> {
   const [ch, pn] = await Promise.all([
     call<unknown>('GET', listURL(api, 'chapter', publicationId, seriesId), undefined, fetchFn),
-    call<unknown>('GET', listURL(api, 'panel', publicationId, seriesId), undefined, fetchFn),
+    call<unknown>('GET', listURL(api, 'panel', publicationId, seriesId, page), undefined, fetchFn),
   ]);
   if (!ch.ok && !pn.ok) return { state: 'unavailable', chapter: [], panel: [] };
-  const panel = items(pn.data).filter((c) => anchorOf(c)?.page === page);
-  return { state: 'ready', chapter: items(ch.data), panel };
+  const visible = (c: Comment) => !c.hidden;
+  const panel = items(pn.data).filter((c) => visible(c) && anchorOf(c)?.page === page);
+  return { state: 'ready', chapter: items(ch.data).filter(visible), panel };
 }
 
 export function postBody(seriesId: string, publicationId: string, body: string, anchor: Anchor | null) {

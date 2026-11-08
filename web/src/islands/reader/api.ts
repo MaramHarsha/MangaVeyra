@@ -7,6 +7,7 @@ export async function call<T>(method: string, url: string, body?: unknown, fetch
     const res = await fetchFn(url, {
       method,
       credentials: 'same-origin',
+      cache: 'no-store',
       headers: body === undefined ? { Accept: 'application/json' } : { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });

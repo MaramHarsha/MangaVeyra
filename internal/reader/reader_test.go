@@ -369,7 +369,7 @@ func TestLibrary(t *testing.T) {
 		wantStatus(t, "unknown tab", c.Get("/library/settings"), http.StatusNotFound)
 		empty := string(c.Get("/library/following").Body)
 		if !strings.Contains(empty, "Nothing followed yet") {
-			t.Fatal("following without social.Follows does not show its empty state")
+			t.Fatal("following without follows does not show its empty state")
 		}
 
 		orchard := e.f.Series(publishtest.SeriesSpec{Title: "Glass Orchard", Cover: true})
@@ -384,8 +384,8 @@ func TestLibrary(t *testing.T) {
 			t.Fatalf("history: %.2000s", hist)
 		}
 
-		f := e.provideFollows()
-		f.byID[u.ID] = []string{hidden.ID, orchard.ID}
+		// The private series cannot be followed (or listed) by this member.
+		e.follow(c, u, hidden, orchard)
 		page := string(c.Get("/library/following").Body)
 		for _, want := range []string{"Glass Orchard", "Following 1", "Continue reading", "Ch. 1 · page 2 of 4", `src="/media/`} {
 			if !strings.Contains(page, want) {

@@ -110,9 +110,9 @@ func seedCover(t *testing.T, ta *testutil.TestApp, s publishtest.Series) {
 }
 
 // TestDevServeWithFollows serves the seeded data directory on
-// 127.0.0.1:6352 with a fake social.Follows in which every member follows
-// every series, so the E7 Following grid can be compared with the artboard
-// before the social module lands. Skipped unless MV_READER_DEVSERVE=1;
+// 127.0.0.1:6352; without the social module it registers a fake
+// social.Follows in which every member follows every series, so the E7
+// Following grid can be compared with the artboard. Skipped unless MV_READER_DEVSERVE=1;
 // it stops after R_SERVE_SECONDS (default 300).
 func TestDevServeWithFollows(t *testing.T) {
 	if os.Getenv("MV_READER_DEVSERVE") != "1" {
@@ -132,8 +132,9 @@ func TestDevServeWithFollows(t *testing.T) {
 	if err := a.Deps.DB.Select(ctx, &ids, `SELECT id FROM series ORDER BY published_at DESC, id DESC`); err != nil {
 		t.Fatal(err)
 	}
-	follows := &allFollows{ids: ids}
-	core.Provide[social.Follows](a.Deps, follows)
+	if _, ok := core.Use[social.Follows](a.Deps); !ok {
+		core.Provide[social.Follows](a.Deps, &allFollows{ids: ids})
+	}
 	secs, _ := strconv.Atoi(os.Getenv("R_SERVE_SECONDS"))
 	if secs <= 0 {
 		secs = 300

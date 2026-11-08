@@ -91,17 +91,24 @@ func (f *fakeFollows) Followers(context.Context, string, string, int) ([]string,
 	return nil, "", nil
 }
 
-// provideFollows registers a fake social.Follows unless the social module
-// already provides a real one (then the test is skipped: it checks the
-// reader against the fake's fixed answers).
-func (e *env) provideFollows() *fakeFollows {
+// follow makes u follow the series: through the social module's E5 form
+// when it provides social.Follows, otherwise through a fake.
+func (e *env) follow(c *testutil.Client, u *auth.User, series ...publishtest.Series) {
 	e.t.Helper()
 	if _, ok := core.Use[social.Follows](e.ta.Deps); ok {
-		e.t.Skip("social.Follows is provided by the social module")
+		for _, s := range series {
+			got := form(c, "/s/"+s.Slug+"/follow", url.Values{})
+			if got.StatusCode >= 400 && got.StatusCode != http.StatusNotFound {
+				e.t.Fatalf("follow %s: %d %.200s", s.Slug, got.StatusCode, got.Body)
+			}
+		}
+		return
 	}
 	f := &fakeFollows{byID: map[string][]string{}}
+	for _, s := range series {
+		f.byID[u.ID] = append(f.byID[u.ID], s.ID)
+	}
 	core.Provide[social.Follows](e.ta.Deps, f)
-	return f
 }
 
 // fakeRecorder is an analytics.Recorder that keeps events in memory and
