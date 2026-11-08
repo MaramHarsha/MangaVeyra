@@ -32,6 +32,11 @@ mobile optimisation, translation, animation, World and any new visual direction 
 - Development fixtures are isolated. The owner separately approved a bounded live run on 2026-11-08: only the
   required account and sealed OpenAI connection were copied into a new temporary database, with the matching
   encryption key kept locally at rest. The source database was opened read-only; no manuscripts were copied.
+  After review, `cmd/phase2check` no longer copies the production encryption key, password hash, email or TOTP data:
+  the isolated instance creates its own key, the one provider key is re-encrypted under it, a random throwaway login
+  is written inside the data root, and `-stage cleanup` securely removes an approved `/tmp/mv-phase2-*` root. The
+  earlier acceptance root (`/tmp/mv-phase2-live-acceptance`) still holds the key copied before this change and should
+  be cleaned up once its evidence is archived.
 
 ## Milestones and dependencies
 

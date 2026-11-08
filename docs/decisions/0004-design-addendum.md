@@ -206,8 +206,9 @@ nearest designed screen would put it.
   (Pages; the same value as the app shell: the instance public URL or request host, including the port), the worker
   GPU and VRAM or "No image worker · {host}" (Variations), the lettering note (Lettering) and "Region edit · step N in
   version history" (Region).
-- **D1 page and layer actions:** the "…" beside Pages holds Change layout, Move page earlier/later, Version history,
-  Lock/Unlock page and Delete page. The layout-grid-add icon adds a page and opens the layout picker. The Layers "+"
+- **D1 page and layer actions:** the "…" beside Pages holds Change layout, Move page earlier/later, Regenerate this
+  page, Sketch to manga, Version history, Lock/Unlock page and Delete page; Regenerate this page and Sketch to manga
+  are disabled with the lock reason while the page, a panel or an art layer is locked. The layout-grid-add icon adds a page and opens the layout picker. The Layers "+"
   adds a layer for a bible character not yet in the panel, or an FX layer. The dashed "Add" character chip is a native
   select styled as the chip; chips show the character's name and wrap to a second row rather than truncate. A page
   without panels shows "No panels yet" and Choose layout in the inspector; otherwise a panel is always selected.
@@ -338,6 +339,41 @@ filmstrip/footer and redundant history shortcut are hidden in these workbenches.
   to keep variants separate; it adds bilingual helper text using the existing form/help pattern. The measured
   caption distinguishes learned matching to kept outfit views from raw cosine. Actual longer names wrap and
   the necessary readiness/actions make C3 taller than the sample, without changing its grid or components.
+- **C3 drift line:** the drift line follows the handoff copy and amber tone ("1 drifted panel in Ch. 8 · Fix"). It
+  counts drifted appearances in the lowest-numbered chapter that has drift, which is the chapter its Fix opens in
+  D12. The score, chart and D12 still cover every assessed appearance; once that chapter is fixed the line names the
+  next one. The lock icon takes the card's state colour (green pass, amber drift). The worker helper appears only
+  while no scoring worker is online.
+- **D1 entry points:** the design draws no D1 control for D4 or D12. The character chip's designed lock score
+  ("🔒 96%") opens D12 for that character, D8's drift Fix opens D12 for the drifted character, and Sketch to manga
+  sits in the page "…" menu. No inspector button is added, so Style stays in view at 1440 × 900.
+- **D10 actions and comparison:** the newest snapshot is the saved page, so its row offers the design's Undo, which
+  restores the snapshot before it through the same confirmation and a new revision; older rows offer Restore.
+  Restoring is not destructive, so the confirmation uses the primary tone. The compared proof outlines, with the
+  design's dashed accent line, each panel whose geometry, prompt, camera, style, pose, locks, art layers or lettering
+  differ from the saved page; its caption counts those panels and panels added since ("Version 8 · 3 changes", or
+  "no changes"). Signed URLs and derived lock scores are not changes. A restore that meets the version fence shows
+  the shared conflict notice with Reload latest inside the workbench. Rows keep the design's 16 px inset and 52 px
+  height; the compared row uses the branch rows' surface and accent bar. Footer Soon tags sit on the buttons' top
+  edge like the other editor Soon tags.
+- **D12 evidence states:** the before proof outlines the visible pixels of the character layer with the design's
+  dashed warning line; no face or part region is inferred, and an opaque layer gets no outline. Its tag names only
+  what stored evidence shows ("{name} · identity differs", "outfit differs" or both), and a repaired result carries
+  "Only {name}'s layer regenerated". Before anything is measured the caption reads "Before · not assessed" in the
+  neutral caption colour and the subtitle counts the chapter's unassessed panels. The route chip asks for a
+  selection, shows "Estimating…" or names a lock; only a failed estimate reads "Estimate unavailable", next to the
+  notice's Refresh. A finished job reloads the selected targets' revisions before the next estimate. A character
+  outside the project opens a chooser built from the shared select. Japanese uses the C3 term キャラクターロック.
+  Assessment is read-only for artwork, so locked approved art can be assessed without unlocking it; repair and
+  generation still refuse locked targets.
+- **D4 proofs and limits:** both proofs use the page's aspect inside the designed 340 × 480 frame; in Draw here the
+  drawing help and Clear sit below the frame so the proofs stay aligned. The caption names the source ("Your sketch ·
+  uploaded" / "drawn") and the frame carries the design's "Rough pencil · page N" tag with the real page number.
+  In-proof tags (D4 and D12) use the reference-caption chip (surface background, secondary text) so they stay
+  legible over any sketch or art. Strength uses the editor's thin slider. Type, 16 MiB, 64–4096 px per side and 16 MP
+  are checked before upload and again on the server, with one message. Switching to Draw here replaces an uploaded
+  sketch. Locked panels or art layers disable Ink this page with the lock reason under the button. The "Art only · N
+  layers · lettering kept" helper appears under Ink this page only.
 - **Pose input:** the existing Leap/Crouch/Run cards show their own skeletons. Sketch opens the normalized joint
   editor; arrow keys (Shift for larger steps) and pointer dragging move joints. Its helper and clear control use
   existing inspector patterns. Generated control images are machine inputs, not a new product illustration style.
