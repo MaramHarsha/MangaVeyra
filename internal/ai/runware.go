@@ -3,6 +3,8 @@ package ai
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -203,16 +205,20 @@ func (s *imageService) runwareImage(ctx context.Context, key string, req ImageGe
 				pending = true
 				continue
 			}
-			if d.Image == "" || images[d.ImageUUID] != nil {
+			// A poll repeats every result so far: an image is one image by its
+			// imageUUID or, without one, by its content, so it is counted and
+			// charged once.
+			key := d.ImageUUID
+			if key == "" {
+				sum := sha256.Sum256([]byte(d.Image))
+				key = "sha256:" + hex.EncodeToString(sum[:])
+			}
+			if d.Image == "" || images[key] != nil {
 				continue
 			}
 			data, err := decodeBase64Image(d.Image)
 			if err != nil {
 				return false, badOutputAdapterError(false)
-			}
-			key := d.ImageUUID
-			if key == "" {
-				key = fmt.Sprint(len(images))
 			}
 			images[key] = data
 			refused = refused || d.NSFW
