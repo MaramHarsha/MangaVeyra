@@ -440,8 +440,11 @@ type Filter struct {
 	States     []string
 	Types      []string
 	Executor   string
-	Before     string // id cursor (exclusive)
-	Limit      int
+	// ExcludeWorkerChildren leaves out the worker jobs a parent job started;
+	// activity views show them as part of their parent.
+	ExcludeWorkerChildren bool
+	Before                string // id cursor (exclusive)
+	Limit                 int
 }
 
 // List returns jobs newest first.
@@ -465,6 +468,9 @@ func (q *Queue) List(ctx context.Context, f Filter) ([]*Job, error) {
 	}
 	if f.Executor != "" {
 		add("executor = ?", f.Executor)
+	}
+	if f.ExcludeWorkerChildren {
+		add("(parent_id IS NULL OR executor <> ?)", ExecutorWorker)
 	}
 	if f.Before != "" {
 		add("id < ?", f.Before)

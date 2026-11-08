@@ -69,7 +69,10 @@ func TestQueueOwnershipRedactionPagingAndCancel(t *testing.T) {
 			}
 		}
 		admin := ta.Login(t, ta.Admin.Username)
-		if got := admin.Get("/queue"); !strings.Contains(string(got.Body), foreign.ID) {
+		if got := admin.Get("/queue"); strings.Contains(string(got.Body), foreign.ID) {
+			t.Fatal("admin default queue is not their own")
+		}
+		if got := admin.Get("/queue?all=1"); !strings.Contains(string(got.Body), foreign.ID) {
 			t.Fatal("admin cannot inspect server queue")
 		}
 		if got := outsider.Get("/queue?job=" + mine.ID); got.StatusCode != http.StatusNotFound {

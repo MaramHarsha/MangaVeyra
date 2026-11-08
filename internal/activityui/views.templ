@@ -56,49 +56,56 @@ templ notificationActions(v notificationsView) {
 
 templ queueBody(v queueView) {
 	<div class="mv-activity mv-queue" data-screen="G9">
-		@ui.PageHead(i18n.T(ctx, "activity.queue.title"), v.Subtitle, workerControls(v))
+		@ui.PageHead(i18n.T(ctx, "activity.queue.title"), v.Subtitle, queueActions(v))
 		@queueLive(v)
 		<div data-queue-error hidden>
 			@ui.Notice(ui.ToneWarning, "wifi-off") {
 				<span>{ i18n.T(ctx, "activity.queue.refresh_failed") }</span>
-				@ui.LinkButton(queueURL("", ""), ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM}) {
+				@ui.LinkButton(v.PageURL, ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM}) {
 					{ i18n.T(ctx, "activity.queue.refresh") }
 				}
 			}
 		</div>
 		<noscript>
-			@ui.LinkButton(queueURL("", ""), ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Icon: "refresh"}) {
+			@ui.LinkButton(v.PageURL, ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Icon: "refresh"}) {
 				{ i18n.T(ctx, "activity.queue.refresh") }
 			}
 		</noscript>
 	</div>
 }
 
+templ queueActions(v queueView) {
+	if len(v.Scope) > 0 {
+		@ui.SegmentedLinks(i18n.T(ctx, "activity.queue.scope"), v.Scope)
+	}
+	@workerControls(v)
+}
+
 templ workerControls(v queueView) {
 	if len(v.WorkerActions) == 1 {
 		<form method="post" action={ templ.URL(v.WorkerActions[0].URL) } novalidate>
-			@ui.Button(ui.ButtonProps{Type: "submit", Icon: "player-pause", Tip: v.WorkerHint}) {
+			@ui.Button(ui.ButtonProps{Type: "submit", Icon: v.WorkerIcon, Tip: v.WorkerHint}) {
 				{ v.WorkerLabel }
 			}
 		</form>
 	} else if len(v.WorkerActions) > 1 {
-		@ui.Dropdown("", "end", false, workerTrigger(v.WorkerLabel), workerMenu(v.WorkerActions))
+		@ui.Dropdown("", "end", false, workerTrigger(v.WorkerLabel, v.WorkerIcon), workerMenu(v.WorkerActions))
 	} else {
-		@ui.Button(ui.ButtonProps{Icon: "player-pause", Disabled: true, Tip: v.WorkerHint}) {
+		@ui.Button(ui.ButtonProps{Icon: v.WorkerIcon, Disabled: true, Tip: v.WorkerHint}) {
 			{ v.WorkerLabel }
 		}
 	}
 }
 
-templ workerTrigger(label string) {
+templ workerTrigger(label, icon string) {
 	<span class="mv-btn mv-btn--secondary">
-		@ui.Icon("player-pause", 18)
+		@ui.Icon(icon, 18)
 		{ label }
 	</span>
 }
 
 templ queueLive(v queueView) {
-	<div id="queue-live" class="mv-queue__live" data-queue-refresh={ v.RefreshURL } data-queue-active={ boolString(v.Active) } data-queue-admin={ boolString(v.Admin) }>
+	<div id="queue-live" class="mv-queue__live" data-queue-refresh={ v.RefreshURL } data-queue-active={ boolString(v.Active) } data-queue-admin={ boolString(v.All) }>
 		if len(v.Jobs) == 0 {
 			@ui.State(ui.StateProps{Title: i18n.T(ctx, "activity.queue.empty"), Body: i18n.T(ctx, "activity.queue.empty_help"), Boxed: true}) {
 				@ui.LinkButton("/studio/projects", ui.ButtonProps{Size: ui.SM}) {
@@ -123,9 +130,9 @@ templ queueLive(v queueView) {
 						for _, j := range v.Jobs {
 							<tr role="row" data-job-id={ j.ID } data-job-state={ j.State }>
 								<td class="mv-queue__state">
-									@ui.Badge(jobTone(j.State), "", j.Status)
+									@ui.Badge(j.Tone, "", j.Status)
 								</td>
-								<th scope="row"><a class="mv-queue__job" href={ templ.URL(queueURL("", j.ID)) }>{ j.Title }</a></th>
+								<th scope="row"><a class="mv-queue__job" href={ templ.URL(j.DetailURL) }>{ j.Title }</a></th>
 								<td class="mv-queue__owner">{ j.Owner }</td>
 								<td class="mv-queue__route">{ j.Route }</td>
 								<td class="mv-queue__metric">
@@ -149,7 +156,7 @@ templ queueLive(v queueView) {
 			@queueSummary(i18n.T(ctx, "activity.queue.night"), v.Night, "")
 			@queueSummary(i18n.T(ctx, "activity.queue.week"), v.Usage, i18n.T(ctx, "activity.queue.usage_hint"))
 		</div>
-		@listNavigation(v.NextURL, "/queue", v.Past)
+		@listNavigation(v.NextURL, v.LatestURL, v.Past)
 		if v.Detail != nil {
 			@jobDetails(*v.Detail)
 		}
@@ -172,18 +179,25 @@ templ jobMenuTrigger(title string) {
 }
 
 templ jobDetails(v jobDetail) {
-	@ui.Box("mv-queue__detail") {
+	@ui.Box("mv-box--pad mv-queue__detail") {
 		<div class="mv-queue__detail-head">
 			<h2>{ v.Job.Title }</h2>
-			@ui.LinkButton("/queue", ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Icon: "x", Label: i18n.T(ctx, "ui.close")})
+			@ui.LinkButton(v.CloseURL, ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Icon: "x", Label: i18n.T(ctx, "ui.close")})
 		</div>
 		<span class="mv-meta">{ v.Job.ID }</span>
-		@ui.KV(i18n.T(ctx, "activity.queue.state"), v.Job.Status)
-		@ui.KV(i18n.T(ctx, "activity.queue.route"), v.Job.Route)
-		@ui.KV(i18n.T(ctx, "activity.queue.member"), v.Job.Owner)
-		@ui.KV(i18n.T(ctx, "activity.queue.estimate"), v.Estimate)
-		@ui.KV(i18n.T(ctx, "activity.queue.actual"), v.Actual)
-		@ui.KV(i18n.T(ctx, "activity.queue.created"), v.Created)
+		<div class="mv-queue__detail-kv">
+			@ui.KV(i18n.T(ctx, "activity.queue.state"), v.Job.Status)
+			if v.Job.Running {
+				@ui.KVC(i18n.T(ctx, "activity.queue.progress_label")) {
+					@ui.Bar(float64(v.Job.Progress)/100, "", false, i18n.T(ctx, "activity.queue.job_progress", "job", v.Job.Title))
+				}
+			}
+			@ui.KV(i18n.T(ctx, "activity.queue.route"), v.Job.Route)
+			@ui.KV(i18n.T(ctx, "activity.queue.member"), v.Job.Owner)
+			@ui.KV(i18n.T(ctx, "activity.queue.estimate"), v.Estimate)
+			@ui.KV(i18n.T(ctx, "activity.queue.actual"), v.Actual)
+			@ui.KV(i18n.T(ctx, "activity.queue.created"), v.Created)
+		</div>
 		if v.Error != "" {
 			@ui.Notice(ui.ToneError, "alert-triangle") {
 				{ v.Error }

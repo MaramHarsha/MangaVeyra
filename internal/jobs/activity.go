@@ -6,6 +6,8 @@ import (
 	"math"
 	"slices"
 	"time"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/db"
 )
 
 // CompletedUsage totals recorded actuals for completed top-level jobs in the
@@ -41,6 +43,30 @@ func (q *Queue) CompletedUsage(ctx context.Context, userID string, since time.Ti
 		}
 	}
 	return total, rows.Err()
+}
+
+// ActiveWorkerChildren returns the unfinished worker jobs started by each of
+// the given parents, oldest first. Activity views fold them into their parent
+// (one row per job) and show the child's measured progress on it.
+func (q *Queue) ActiveWorkerChildren(ctx context.Context, parentIDs []string) (map[string][]*Job, error) {
+	out := map[string][]*Job{}
+	if len(parentIDs) == 0 {
+		return out, nil
+	}
+	qs, args, err := db.In(`SELECT `+jobCols+` FROM jobs WHERE parent_id IN (?) AND executor = ? AND state IN ('queued', 'running')
+		ORDER BY id LIMIT 1000`, parentIDs, ExecutorWorker)
+	if err != nil {
+		return nil, err
+	}
+	var rows []jobRow
+	if err := q.db.Select(ctx, &rows, qs, args...); err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		j := rows[i].job()
+		out[j.ParentID] = append(out[j.ParentID], j)
+	}
+	return out, nil
 }
 
 // RecentEvents returns at most limit recent events, in chronological order.
