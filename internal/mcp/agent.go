@@ -116,7 +116,7 @@ func (m *Module) agentFor(ctx context.Context, req *mcpsdk.CallToolRequest, scop
 			return nil, fmt.Errorf("this token does not have the %s access this tool needs", scopeName(s))
 		}
 	}
-	return &agent{tok: tok, user: u, actor: studio.Actor{UserID: u.ID, TokenID: tok.ID}}, nil
+	return &agent{tok: tok, user: u, actor: studio.Actor{UserID: u.ID, TokenID: tok.ID, Agent: true}}, nil
 }
 
 // project checks the token may use projectID for action and returns it.

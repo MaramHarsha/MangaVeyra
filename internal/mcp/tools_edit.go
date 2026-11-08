@@ -297,38 +297,12 @@ func (m *Module) editScript(ctx context.Context, req *mcpsdk.CallToolRequest, in
 	return nil, out, nil
 }
 
-// recordScriptEdit keeps provenance honest after an agent edit (an agent edit
-// makes a human script AI-assisted) and records the labelled action in one
-// transaction. It returns the chapter revision after the label change, or the
-// zero time when someone else changed the chapter in between.
+// recordScriptEdit records the labelled agent action and returns the chapter
+// revision after the edit. Studio already labelled the script AI-assisted in
+// the edit's own transaction (studio.Actor.Agent).
 func (m *Module) recordScriptEdit(ctx context.Context, a *agent, projectID string, edited studio.Chapter, in newAction) (time.Time, actionRow, error) {
-	var newRev time.Time
-	var row actionRow
-	err := m.d.DB.WithTx(ctx, func(tx *db.Tx) error {
-		lock := ""
-		if tx.Dialect() == db.Postgres {
-			lock = " FOR UPDATE"
-		}
-		var current time.Time
-		if err := tx.Get(ctx, &current, `SELECT updated_at FROM chapters WHERE id = ?`+lock, edited.ID); err != nil {
-			return err
-		}
-		label := edited.AILabel["script"]
-		if label == "" || label == "human" {
-			if err := m.studio.SetChapterAILabelTx(ctx, tx, edited.ID, "script", "ai_assisted"); err != nil {
-				return err
-			}
-		}
-		if current.UTC().Equal(edited.UpdatedAt.UTC()) {
-			if err := tx.Get(ctx, &newRev, `SELECT updated_at FROM chapters WHERE id = ?`, edited.ID); err != nil {
-				return err
-			}
-		}
-		var err error
-		row, err = m.insertAction(ctx, tx, in)
-		return err
-	})
-	return newRev, row, err
+	row, err := m.insertAction(ctx, m.d.DB, in)
+	return edited.UpdatedAt, row, err
 }
 
 func (f characterFields) apply(c *studio.NewCharacter) {

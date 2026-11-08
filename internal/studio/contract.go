@@ -88,6 +88,9 @@ type Actor struct {
 	TokenID string
 	// SiteRole is the user's site role ("admin", "creator", "reader").
 	SiteRole string
+	// Agent marks an AI agent acting for UserID through an agent token (MCP);
+	// its script edits make the chapter's script label AI-assisted.
+	Agent bool
 }
 
 // Project is a manga project.
