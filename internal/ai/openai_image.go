@@ -98,23 +98,52 @@ func gptImageBackground(v string) string {
 	return "opaque"
 }
 
+// neighbourReferenceLabel marks a neighbouring-page context reference (set by
+// internal/gen); like a pose guide it is a control, not an identity reference.
+const neighbourReferenceLabel = "Neighbouring page: setting and lighting only"
+
+func controlReference(r ImageRef) bool {
+	return r.Role == "pose" || r.Label == neighbourReferenceLabel
+}
+
+// routeReferences is the bounded reference list one call sends. Identity
+// references keep their order and are never displaced by a control image (a
+// pose skeleton or a neighbouring page): controls only fill the slots the
+// identity references leave free, so a pose never silently replaces a kept
+// character reference on a route limited to its first limit references.
+func routeReferences(refs []ImageRef, limit int) []ImageRef {
+	out := make([]ImageRef, 0, max(0, min(len(refs), limit)))
+	for _, controls := range []bool{false, true} {
+		for _, r := range refs {
+			if len(out) >= limit {
+				return out
+			}
+			if controlReference(r) == controls {
+				out = append(out, r)
+			}
+		}
+	}
+	return out
+}
+
 // gptImagePrompt is the exact text a GPT Image call sends, so the byte bound
-// can be checked before any reservation.
-func gptImagePrompt(req ImageGenerateRequest, refs int, maskParam bool) string {
+// can be checked before any reservation. refs are the references actually
+// sent (routeReferences); the prompt never describes a control that was not.
+func gptImagePrompt(req ImageGenerateRequest, refs []ImageRef, maskParam bool) string {
 	var b strings.Builder
 	b.WriteString(req.Prompt)
 	if req.Negative != "" {
 		b.WriteString("\nAvoid: ")
 		b.WriteString(req.Negative)
 	}
-	if refs > 0 {
+	if len(refs) > 0 {
 		first := "The attached images are"
 		if req.Init != nil {
 			first = "After the first image, the attached images are"
 		}
 		hasControls := false
-		for _, ref := range req.References {
-			if ref.Role == "pose" || ref.Label == "Neighbouring page: setting and lighting only" {
+		for _, ref := range refs {
+			if controlReference(ref) {
 				hasControls = true
 			}
 		}
@@ -140,7 +169,7 @@ func gptImagePrompt(req ImageGenerateRequest, refs int, maskParam bool) string {
 // validateGPTImageRequest runs before the reservation: nothing is reserved or
 // sent for a request the route cannot carry.
 func validateGPTImageRequest(req ImageGenerateRequest, maskParam bool, maxRefs int) error {
-	if req.Count < 1 || req.Count > 4 || len(gptImagePrompt(req, min(len(req.References), maxRefs), maskParam)) > imagePromptBytes {
+	if req.Count < 1 || req.Count > 4 || len(gptImagePrompt(req, routeReferences(req.References, maxRefs), maskParam)) > imagePromptBytes {
 		return imageError(CodeBadInput, false, jobs.Cost{})
 	}
 	return nil
@@ -156,7 +185,7 @@ func (s *imageService) openAIImage(ctx context.Context, key string, req ImageGen
 	}
 	size := gptImageSizeFor(req.Width, req.Height)
 	background := gptImageBackground(req.Background)
-	refs := min(len(req.References), gptImageMaxRefs)
+	refs := routeReferences(req.References, gptImageMaxRefs)
 	payload := gptImageRequest{Model: req.Plan.ModelID, Prompt: gptImagePrompt(req, refs, true), N: req.Count,
 		Size: fmt.Sprintf("%dx%d", size.W, size.H), Quality: gptImageQuality, Background: background, OutputFormat: "png", Moderation: "auto"}
 	if len(payload.Prompt) > imagePromptBytes {
@@ -175,7 +204,7 @@ func (s *imageService) openAIImage(ctx context.Context, key string, req ImageGen
 			payload.Mask = &gptImageInput{ImageURL: pngDataURL(mask)}
 		}
 	}
-	for _, r := range req.References[:refs] {
+	for _, r := range refs {
 		data, err := downscaleReference(r.Data, gptImageRefEdge)
 		if err != nil {
 			return out, badInputAdapterError()

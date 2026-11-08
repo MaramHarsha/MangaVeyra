@@ -290,7 +290,10 @@ func (s *service) renderImage(ctx context.Context, run *jobs.Run, p imagePayload
 			callRefs = append(callRefs, contexts...)
 		}
 		if c.Kind == pagedoc.LayerCharacter && pose != nil {
-			callRefs = append([]ai.ImageRef{*pose}, callRefs...)
+			// Identity references stay first and the pose guide last, so a route
+			// that sends only its first N references never trades an identity
+			// reference for the skeleton (ADR 0009/0010).
+			callRefs = append(append([]ai.ImageRef(nil), callRefs...), *pose)
 			prompt += " Follow the supplied skeleton for pose only; kept character references define identity and outfit. "
 		}
 		loraID := ""
