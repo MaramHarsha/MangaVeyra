@@ -494,14 +494,15 @@ func (m *Module) deleteArchive(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// exportMe writes the member's own export and sends it as a download.
+// exportMe sends the member's own export as a download: their newest one
+// when it is less than an hour old, otherwise a new one (MemberExport).
 func (m *Module) exportMe(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	u := core.UserFrom(ctx)
-	b, err := m.svc.Create(ctx, Request{Kind: KindUserExport, UserID: u.ID, CreatedBy: u.ID})
+	b, err := m.svc.MemberExport(ctx, u.ID)
 	if err != nil {
-		if errors.Is(err, ErrBusy) {
-			web.Flash(w, r, "error", i18n.T(ctx, "backup.flash.busy"), "")
+		if errors.Is(err, ErrExportRunning) {
+			web.Flash(w, r, "error", i18n.T(ctx, "backup.flash.export_running"), "")
 			core.Redirect(w, r, "/settings/data")
 			return nil
 		}

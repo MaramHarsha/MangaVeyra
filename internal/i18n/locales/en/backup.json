@@ -86,5 +86,6 @@
   "backup.upload.error.invalid": "This file cannot be restored: {reason}",
   "backup.flash.busy": "A backup or restore is already running",
   "backup.flash.schedule_saved": "Schedule saved",
-  "backup.flash.deleted": "Archive deleted"
+  "backup.flash.deleted": "Archive deleted",
+  "backup.flash.export_running": "Your export is still being prepared. Try again in a few minutes."
 }

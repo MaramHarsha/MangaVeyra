@@ -86,5 +86,6 @@
   "backup.upload.error.invalid": "このファイルは復元できません：{reason}",
   "backup.flash.busy": "別のバックアップまたは復元が実行中です",
   "backup.flash.schedule_saved": "スケジュールを保存しました",
-  "backup.flash.deleted": "アーカイブを削除しました"
+  "backup.flash.deleted": "アーカイブを削除しました",
+  "backup.flash.export_running": "エクスポートを準備中です。数分後にもう一度お試しください。"
 }

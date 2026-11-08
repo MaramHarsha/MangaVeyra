@@ -270,14 +270,19 @@ func (s *service) sweep(ctx context.Context) error {
 			s.log.Warn("backup: delete expired archive", "id", id, "err", err)
 		}
 	}
+	// Member exports hold no lease: one still running after exportStale was interrupted.
+	if _, err := s.db.Exec(ctx, `UPDATE backups SET status = 'failed', error = 'interrupted', finished_at = ? WHERE status = 'running'
+		AND kind = 'user_export' AND created_at < ?`, now, now.Add(-exportStale)); err != nil {
+		return err
+	}
 	if !s.busy.Load() {
 		var held int
 		if err := s.db.Get(ctx, &held, `SELECT COUNT(*) FROM instance_settings WHERE key = ? AND updated_at >= ?`, lockKey, now.Add(-lockStale)); err != nil {
 			return err
 		}
 		if held == 0 {
-			_, err := s.db.Exec(ctx, `UPDATE backups SET status = 'failed', error = 'interrupted', finished_at = ? WHERE status = 'running' AND created_at < ?`,
-				now, now.Add(-lockStale))
+			_, err := s.db.Exec(ctx, `UPDATE backups SET status = 'failed', error = 'interrupted', finished_at = ? WHERE status = 'running'
+				AND kind <> 'user_export' AND created_at < ?`, now, now.Add(-lockStale))
 			return err
 		}
 	}

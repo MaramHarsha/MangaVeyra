@@ -57,6 +57,8 @@ type service struct {
 	now   func() time.Time
 
 	busy atomic.Bool
+	// exporting holds the members whose export this process is writing.
+	exporting sync.Map
 
 	mu      sync.Mutex
 	restore RestoreState
@@ -279,11 +281,16 @@ func (s *service) Create(ctx context.Context, req Request) (Backup, error) {
 			return Backup{}, ErrNotFound
 		}
 	}
-	release, err := s.acquire(ctx, "create")
-	if err != nil {
-		return Backup{}, err
+	export := req.Kind == KindUserExport
+	if !export {
+		// Member exports read one database snapshot and never take the
+		// server-wide lease (see MemberExport); every other kind does.
+		release, err := s.acquire(ctx, "create")
+		if err != nil {
+			return Backup{}, err
+		}
+		defer release()
 	}
-	defer release()
 	dir, err := s.destination(ctx)
 	if err != nil {
 		return Backup{}, err
@@ -305,9 +312,17 @@ func (s *service) Create(ctx context.Context, req Request) (Backup, error) {
 		expires = &t
 	}
 	version := s.d.Version.Version
-	if _, err := s.db.Exec(ctx, `INSERT INTO backups (id, kind, status, app_version, user_id, created_by, created_at, expires_at)
+	if export {
+		if err := s.startExport(ctx, id, req, now, expires); err != nil {
+			return Backup{}, err
+		}
+	} else if _, err := s.db.Exec(ctx, `INSERT INTO backups (id, kind, status, app_version, user_id, created_by, created_at, expires_at)
 		VALUES (?, ?, 'running', ?, ?, ?, ?, ?)`, id, req.Kind, version, db.NullString(req.UserID), s.userOrNull(ctx, req.CreatedBy), now, expires); err != nil {
 		return Backup{}, fmt.Errorf("backup: record: %w", err)
+	}
+	ok := false
+	if export {
+		defer func() { s.finishExport(context.WithoutCancel(ctx), req.UserID, id, ok) }()
 	}
 	final := filepath.Join(dir, fileName(req.Kind, now, id))
 	m, size, sum, err := s.write(ctx, dir, final, id, req, now)
@@ -325,7 +340,8 @@ func (s *service) Create(ctx context.Context, req Request) (Backup, error) {
 		_ = os.Remove(final)
 		return Backup{}, fmt.Errorf("backup: record: %w", err)
 	}
-	if s.d.Auth != nil && req.Kind != KindUserExport {
+	ok = true
+	if s.d.Auth != nil && !export {
 		s.d.Auth.Audit(ctx, auth.AuditEntry{ActorID: req.CreatedBy, Action: "backup.create", TargetKind: "backup", TargetID: id,
 			Data: map[string]any{"kind": req.Kind, "bytes": size}})
 	}
