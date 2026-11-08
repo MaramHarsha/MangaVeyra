@@ -67,7 +67,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "ui.skip_to_content"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 24, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 24, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -89,7 +89,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var4).String())
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 1, Col: 0}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 1, Col: 0}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 			if templ_7745c5c3_Err != nil {
@@ -102,7 +102,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Props)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 28, Col: 23}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 28, Col: 23}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 			if templ_7745c5c3_Err != nil {
@@ -115,7 +115,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Prefs.Background)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 29, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 29, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 			if templ_7745c5c3_Err != nil {
@@ -136,7 +136,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(stageTheme(v.Prefs.Background))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 32, Col: 103}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 32, Col: 103}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 			if templ_7745c5c3_Err != nil {
@@ -149,7 +149,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Prefs.Background)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 32, Col: 134}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 32, Col: 134}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
@@ -162,7 +162,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(v.Series.Title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 33, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 33, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {
@@ -175,7 +175,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(v.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 33, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 33, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -188,7 +188,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.nojs", "count", len(v.Pages)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 34, Col: 94}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 34, Col: 94}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 			if templ_7745c5c3_Err != nil {
@@ -201,7 +201,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "reader.pages", "count", len(v.Pages)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 35, Col: 92}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 35, Col: 92}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 			if templ_7745c5c3_Err != nil {
@@ -219,7 +219,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 				var templ_7745c5c3_Var14 string
 				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue("page-" + strconv.Itoa(p.Number))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 37, Col: 68}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 37, Col: 68}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 				if templ_7745c5c3_Err != nil {
@@ -237,7 +237,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 					var templ_7745c5c3_Var15 string
 					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Src)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 42, Col: 21}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 42, Col: 21}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 					if templ_7745c5c3_Err != nil {
@@ -250,7 +250,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 					var templ_7745c5c3_Var16 string
 					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(pageAlt(ctx, p))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 43, Col: 31}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 43, Col: 31}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 					if templ_7745c5c3_Err != nil {
@@ -263,7 +263,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 					var templ_7745c5c3_Var17 string
 					templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(p.Width))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 44, Col: 39}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 44, Col: 39}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 					if templ_7745c5c3_Err != nil {
@@ -276,7 +276,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 					var templ_7745c5c3_Var18 string
 					templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(p.Height))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 45, Col: 41}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 45, Col: 41}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 					if templ_7745c5c3_Err != nil {
@@ -309,7 +309,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 				var templ_7745c5c3_Var19 string
 				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.page.of", "page", p.Number, "total", len(v.Pages)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 55, Col: 87}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 55, Col: 87}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 				if templ_7745c5c3_Err != nil {
@@ -327,7 +327,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 					var templ_7745c5c3_Var20 string
 					templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.panel.of", "panel", i+1, "total", len(p.Panels)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 58, Col: 81}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 58, Col: 81}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 					if templ_7745c5c3_Err != nil {
@@ -341,7 +341,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 						var templ_7745c5c3_Var21 string
 						templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(" " + pn.AltText)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 60, Col: 30}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 60, Col: 30}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 						if templ_7745c5c3_Err != nil {
@@ -356,7 +356,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 						var templ_7745c5c3_Var22 string
 						templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(" " + bubbleLine(ctx, b))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 63, Col: 38}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 63, Col: 38}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 						if templ_7745c5c3_Err != nil {
@@ -388,7 +388,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.pages", "count", len(v.Pages)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 75, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 75, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 			if templ_7745c5c3_Err != nil {
@@ -401,7 +401,7 @@ func ReaderDocument(c *layout.Chrome, v *readerView) templ.Component {
 			var templ_7745c5c3_Var24 string
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.dir."+v.Prefs.Direction))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 77, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 77, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 			if templ_7745c5c3_Err != nil {
@@ -452,7 +452,7 @@ func readerBar(v *readerView) templ.Component {
 		var templ_7745c5c3_Var26 templ.SafeURL
 		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(v.BackURL))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 88, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 88, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 		if templ_7745c5c3_Err != nil {
@@ -465,7 +465,7 @@ func readerBar(v *readerView) templ.Component {
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "reader.back"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 88, Col: 106}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 88, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 		if templ_7745c5c3_Err != nil {
@@ -486,7 +486,7 @@ func readerBar(v *readerView) templ.Component {
 		var templ_7745c5c3_Var28 string
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(v.Series.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 92, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 92, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 		if templ_7745c5c3_Err != nil {
@@ -499,7 +499,7 @@ func readerBar(v *readerView) templ.Component {
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(v.Label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 93, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 93, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 		if templ_7745c5c3_Err != nil {
@@ -512,7 +512,7 @@ func readerBar(v *readerView) templ.Component {
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "reader.mode"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 96, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 96, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
@@ -530,7 +530,7 @@ func readerBar(v *readerView) templ.Component {
 			var templ_7745c5c3_Var31 string
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(currentMode(v, mode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 98, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 98, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 			if templ_7745c5c3_Err != nil {
@@ -543,7 +543,7 @@ func readerBar(v *readerView) templ.Component {
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.mode."+mode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 98, Col: 106}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 98, Col: 106}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 			if templ_7745c5c3_Err != nil {
@@ -561,7 +561,7 @@ func readerBar(v *readerView) templ.Component {
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "reader.translate.soon"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 101, Col: 128}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 101, Col: 128}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 		if templ_7745c5c3_Err != nil {
@@ -574,7 +574,7 @@ func readerBar(v *readerView) templ.Component {
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "reader.translate.soon"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 101, Col: 175}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 101, Col: 175}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 		if templ_7745c5c3_Err != nil {
@@ -660,7 +660,7 @@ func chapterEnd(v *readerView) templ.Component {
 		var templ_7745c5c3_Var36 string
 		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(v.Label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 131, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 131, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 		if templ_7745c5c3_Err != nil {
@@ -674,7 +674,7 @@ func chapterEnd(v *readerView) templ.Component {
 			var templ_7745c5c3_Var37 string
 			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.end.title.episode"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 134, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 134, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 			if templ_7745c5c3_Err != nil {
@@ -684,7 +684,7 @@ func chapterEnd(v *readerView) templ.Component {
 			var templ_7745c5c3_Var38 string
 			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.end.title"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 136, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 136, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 			if templ_7745c5c3_Err != nil {
@@ -703,7 +703,7 @@ func chapterEnd(v *readerView) templ.Component {
 			var templ_7745c5c3_Var39 string
 			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "reader.end.provenance"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 140, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 140, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 			if templ_7745c5c3_Err != nil {
@@ -744,7 +744,7 @@ func chapterEnd(v *readerView) templ.Component {
 				var templ_7745c5c3_Var41 string
 				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.prev_chapter"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 149, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 149, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 				if templ_7745c5c3_Err != nil {
@@ -773,7 +773,7 @@ func chapterEnd(v *readerView) templ.Component {
 				var templ_7745c5c3_Var43 string
 				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.end.next"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 154, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 154, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 				if templ_7745c5c3_Err != nil {
@@ -793,7 +793,7 @@ func chapterEnd(v *readerView) templ.Component {
 			var templ_7745c5c3_Var44 string
 			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.end.last"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 157, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 157, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 			if templ_7745c5c3_Err != nil {
@@ -820,7 +820,7 @@ func chapterEnd(v *readerView) templ.Component {
 				var templ_7745c5c3_Var46 string
 				templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.end.series"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 161, Col: 39}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 161, Col: 39}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 				if templ_7745c5c3_Err != nil {
@@ -883,7 +883,7 @@ func AgeGateDocument(c *layout.Chrome, g ageGateView) templ.Component {
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "ui.skip_to_content"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 172, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 172, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 			if templ_7745c5c3_Err != nil {
@@ -896,7 +896,7 @@ func AgeGateDocument(c *layout.Chrome, g ageGateView) templ.Component {
 			var templ_7745c5c3_Var50 templ.SafeURL
 			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(g.BackURL))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 175, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 175, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 			if templ_7745c5c3_Err != nil {
@@ -909,7 +909,7 @@ func AgeGateDocument(c *layout.Chrome, g ageGateView) templ.Component {
 			var templ_7745c5c3_Var51 string
 			templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "reader.back"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 175, Col: 108}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 175, Col: 108}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var51)
 			if templ_7745c5c3_Err != nil {
@@ -930,7 +930,7 @@ func AgeGateDocument(c *layout.Chrome, g ageGateView) templ.Component {
 			var templ_7745c5c3_Var52 string
 			templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(g.Series.Title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 179, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 179, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 			if templ_7745c5c3_Err != nil {
@@ -943,7 +943,7 @@ func AgeGateDocument(c *layout.Chrome, g ageGateView) templ.Component {
 			var templ_7745c5c3_Var53 string
 			templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(g.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 180, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 180, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 			if templ_7745c5c3_Err != nil {
@@ -964,7 +964,7 @@ func AgeGateDocument(c *layout.Chrome, g ageGateView) templ.Component {
 			var templ_7745c5c3_Var54 string
 			templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.gate.title."+g.Series.AgeRating))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 186, Col: 113}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 186, Col: 113}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 			if templ_7745c5c3_Err != nil {
@@ -977,7 +977,7 @@ func AgeGateDocument(c *layout.Chrome, g ageGateView) templ.Component {
 			var templ_7745c5c3_Var55 string
 			templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.gate.body", "title", g.Series.Title, "rating", ratingLabel(ctx, g.Series.AgeRating)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 187, Col: 139}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 187, Col: 139}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 			if templ_7745c5c3_Err != nil {
@@ -990,7 +990,7 @@ func AgeGateDocument(c *layout.Chrome, g ageGateView) templ.Component {
 			var templ_7745c5c3_Var56 templ.SafeURL
 			templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(g.Action))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 188, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 188, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 			if templ_7745c5c3_Err != nil {
@@ -1003,7 +1003,7 @@ func AgeGateDocument(c *layout.Chrome, g ageGateView) templ.Component {
 			var templ_7745c5c3_Var57 string
 			templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.ResolveAttributeValue(g.Next)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 189, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 189, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var57)
 			if templ_7745c5c3_Err != nil {
@@ -1028,7 +1028,7 @@ func AgeGateDocument(c *layout.Chrome, g ageGateView) templ.Component {
 				var templ_7745c5c3_Var59 string
 				templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.gate.confirm"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 191, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 191, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
 				if templ_7745c5c3_Err != nil {
@@ -1055,7 +1055,7 @@ func AgeGateDocument(c *layout.Chrome, g ageGateView) templ.Component {
 				var templ_7745c5c3_Var61 string
 				templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.gate.back"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 194, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 194, Col: 40}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 				if templ_7745c5c3_Err != nil {
@@ -1074,7 +1074,7 @@ func AgeGateDocument(c *layout.Chrome, g ageGateView) templ.Component {
 			var templ_7745c5c3_Var62 string
 			templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reader.gate.once"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `reader.templ`, Line: 197, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/reader/reader.templ`, Line: 197, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 			if templ_7745c5c3_Err != nil {
