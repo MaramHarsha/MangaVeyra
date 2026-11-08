@@ -39,7 +39,7 @@ Agents work in separate worktrees from the commit that adds this plan and edit o
 `go.mod`/`go.sum` (agents may run `go get` for the one dependency named in their brief and report the lines),
 `web/package*.json` and `e2e/**`.
 
-1. [ ] **A — Admin.** `internal/admin/**`: G5 tabs, invites and sign-up, report resolution and takedowns, AI-label
+1. [x] **A — Admin.** `internal/admin/**`: G5 tabs, invites and sign-up, report resolution and takedowns, AI-label
    disputes, content rules (with the narrow `publish` enforcement they need), server status, maintenance settings.
 2. [ ] **B — Backup and import.** `internal/backup/**`, `internal/importer/**`: `backup.Service`, archive format,
    schedules, restore, export everything, per-user export, `mangaveyra backup`, G10; CBZ/CBR/PDF/image import.

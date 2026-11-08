@@ -558,3 +558,26 @@ The approved desktop artboards are followed at 1440 × 900; the mobile artboards
   filled pointer with a name label in the member's avatar tone. Pins for open comments are numbered in Open-list
   order, sit at the comment's anchor (the panel's top-left corner by default) and step sideways when several share a
   corner.
+- **G5 Admin · Reports and disputes.** Review opens a review panel under the row (not drawn), built from key-value
+  rows, quote boxes and buttons: the reported thing, reason, reporter, time, the account, the reporter's note, the
+  reported comment and, for AI-label disputes, the per-role labels as provenance badges. A "Note for the log" field
+  sits above only the actions that apply (Ask the creator to review the label, Hide comment, Take chapter down, Take
+  series down, Suspend {name}, Dismiss). A resolved report shows its outcome. Dispute rows add the labels on a mono line.
+  A "Taken down" card lists each takedown with Restore ("Hidden from everyone outside its project. Nothing was deleted;
+  restoring shows it again."). Empty queues use the kit's empty state. The header action reads "Update to {version}"
+  when the update module knows a release, and "Updates" otherwise.
+- **G5 Admin · Users.** Member rows add a mono line "{n} projects · seen {when}". Sign-up is followed by an "Approve
+  open sign-ups" switch; "Waiting for approval · {n}" (Decline / Approve) and "Invites" (read-only link with Copy link,
+  role, who may use it, "{used} / {max} used · expires {date}", Revoke) cards follow the Limits and Roles cards. Invite
+  opens an "Invite someone" dialog (Role, Expires, Uses, Email). The ⋯ menu offers Suspend / Reactivate / Approve, a
+  reset-password link shown once, and Delete account (typing @username to confirm). Limits make the enforced limits
+  editable and add Other running jobs, Upload size (read-only from `MV_MAX_UPLOAD_MB`) and the whole-server remote
+  spend; Storage quota and Projects per member stay Soon until something enforces them.
+- **G5 Admin · Content rules.** The artboard's single "Allow Mature 18+ series" becomes "Allow Mature 17+ series" and
+  "Allow Adult 18+ series", matching the four age ratings (ADR 0012). "Default age rating for new series" and "Licence
+  guard" rows are added. "Require an AI label on every chapter" is an always-on disabled switch. NSFW filter, Auto-hold
+  reported chapters, Comments, Panel comments and "New members need approval before publishing" keep their places in
+  the Soon state showing the real state. "{n} words · edit" opens the list in place. Server rules gets a Save button.
+- **G5 Admin · Server.** The Instance card adds Description; Services adds Job queue and Uptime; Database reads "{name}
+  {version} · OK · {size}". Maintenance mode opens a dialog (message, Turn on / Save message / Turn off) and the card
+  shows a warning notice while it is on. View logs is Soon.
