@@ -92,6 +92,7 @@
 <div class="mv-review" aria-busy={store.busy || store.loading}>
  <div class="mv-review__head">
   <div><strong>{t('collab.review.title', {number: pageNumber})}</strong><span>{data ? t('collab.review.counts', {open: data.counts.open, resolved: data.counts.resolved}) : t('collab.review.loading')}</span></div>
+  {#if viewer?.can_comment && panelID}<button type="button" class="mv-iconlink mv-review__new" aria-pressed={composing === panelID} aria-label={t('collab.comment.new', {panel: panelLabel})} title={t('collab.comment.new', {panel: panelLabel})} onclick={startComment}><i class="ti ti-message-plus" aria-hidden="true"></i></button>{/if}
   <button type="button" class="mv-iconlink" aria-label={t('collab.review.close')} title={t('collab.review.close')} onclick={onClose}><i class="ti ti-x" aria-hidden="true"></i></button>
  </div>
  {#if store.error}
@@ -101,9 +102,6 @@
   <div class="mv-seg mv-seg--full mv-review__filters" role="group" aria-label={t('collab.filter.label')}>
    {#each FILTERS as f}<button type="button" class="mv-seg__item" aria-pressed={filter === f} onclick={() => filter = f}>{t(`collab.filter.${f}`)}</button>{/each}
   </div>
-  {#if viewer?.can_comment && panelID && composing !== panelID}
-   <button type="button" class="mv-review__new" onclick={startComment}><i class="ti ti-message-plus" aria-hidden="true"></i>{t('collab.comment.new', {panel: panelLabel})}</button>
-  {/if}
   {#if composing}
    <form class="mv-review__composer" onsubmit={(e) => { e.preventDefault(); void post(); }}>
     <label class="mv-field"><span class="mv-field__label">{t('collab.comment.label', {panel: data?.comments.find(c => c.panel_id === composing)?.label || panelLabel})}</span><textarea bind:this={composer} class="mv-textarea resize-none" rows="3" maxlength="2000" bind:value={draft} onkeydown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); composing = ''; } if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); void post(); } }}></textarea></label>
@@ -185,7 +183,7 @@
        <div class="mv-review__buttons"><Button small variant="quiet" onclick={() => adding = false}>{t('collab.cancel')}</Button><Button small variant="primary" type="submit" busy={store.busy} disabled={!addName.trim()}>{t('collab.members.add')}</Button></div>
       </form>
      {:else}
-      <button type="button" class="mv-review__new mv-review__add" onclick={() => adding = true}><i class="ti ti-user-plus" aria-hidden="true"></i>{t('collab.members.add')}</button>
+      <button type="button" class="mv-review__add" onclick={() => adding = true}><i class="ti ti-user-plus" aria-hidden="true"></i>{t('collab.members.add')}</button>
      {/if}
     {/if}
    </section>

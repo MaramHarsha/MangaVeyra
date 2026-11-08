@@ -30,12 +30,17 @@ describe('review lists', () => {
     expect(filterComments(list, 'needs_changes').map(c => c.id)).toEqual(['3']);
     expect(filterComments(list, 'approved').map(c => c.id)).toEqual(['1']);
   });
-  it('numbers pins for the open comments in list order, page-relative', () => {
-    expect(pins(list, 520, 735)).toEqual([
+  it('numbers pins for the open comments in list order, page-relative, without covering each other', () => {
+    const spread = [comment('3', 'needs_changes'), comment('2', 'done', {x: 440}), comment('4', 'open', {x: 120, y: 620}), comment('1', 'approved')];
+    expect(pins(spread, 520, 735)).toEqual([
       {id: '3', number: 1, label: '7.3', x: 30 / 520, y: 270 / 735},
-      {id: '2', number: 2, label: '7.2', x: 30 / 520, y: 270 / 735},
-      {id: '4', number: 3, label: '7.4', x: 30 / 520, y: 270 / 735},
+      {id: '2', number: 2, label: '7.2', x: 440 / 520, y: 270 / 735},
+      {id: '4', number: 3, label: '7.4', x: 120 / 520, y: 620 / 735},
     ]);
+    const shared = pins(list, 520, 735).map(p => p.x);
+    expect(shared[0]).toBe(30 / 520);
+    expect(shared[1]).toBeCloseTo(30 / 520 + 0.055);
+    expect(shared[2]).toBeCloseTo(30 / 520 + 0.11);
     expect(pins([comment('9', 'open', {x: 9000, y: -4})], 100, 100)[0]).toMatchObject({x: 1, y: 0});
   });
   it('labels roles, scopes and authors as the D7 drawer does', () => {

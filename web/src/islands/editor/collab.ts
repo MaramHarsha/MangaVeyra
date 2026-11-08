@@ -54,10 +54,20 @@ export function authorLine(p: Person, agent: boolean | undefined, t: T): string 
 
 export interface Pin {id: string; number: number; label: string; x: number; y: number}
 
-/** pins are the canvas markers for comments still open, numbered as the Open list shows them. */
-export function pins(list: ReviewComment[], width: number, height: number): Pin[] {
-  return filterComments(list, 'open').map((c, i) => ({id: c.id, number: i + 1, label: c.label,
-    x: Math.max(0, Math.min(1, c.x / Math.max(1, width))), y: Math.max(0, Math.min(1, c.y / Math.max(1, height)))}));
+/**
+ * pins are the canvas markers for comments still open, numbered as the Open
+ * list shows them. Pins that would cover one another (several comments on a
+ * panel share its corner) step sideways by one pin width.
+ */
+export function pins(list: ReviewComment[], width: number, height: number, step = 0.055): Pin[] {
+  const out: Pin[] = [];
+  for (const [i, c] of filterComments(list, 'open').entries()) {
+    let x = Math.max(0, Math.min(1, c.x / Math.max(1, width)));
+    const y = Math.max(0, Math.min(1, c.y / Math.max(1, height)));
+    while (x < 1 - step && out.some(p => Math.abs(p.x - x) < step * 0.6 && Math.abs(p.y - y) < step * 0.6)) x += step;
+    out.push({id: c.id, number: i + 1, label: c.label, x, y});
+  }
+  return out;
 }
 
 /** scopeFor builds the stored member scope from the roles editor fields. */

@@ -12,7 +12,7 @@
  {/each}
  {#each cursors as c (c.conn)}
   <div class={`mv-marks__cursor mv-marks__cursor--c${c.color}`} style:left={`${(c.x || 0) * 100}%`} style:top={`${(c.y || 0) * 100}%`} aria-hidden="true">
-   <i class="ti ti-pointer-filled"></i><span>{c.name}</span>
+   <i class="mv-marks__pointer"></i><span>{c.name}</span>
   </div>
  {/each}
 </div>
