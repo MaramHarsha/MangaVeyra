@@ -116,6 +116,8 @@ func (s *service) follows() FollowerSource {
 // asked to be notified and may read the chapter (ADR 0012 §10). It claims
 // the publication first, so it runs at most once per publication even when
 // the publish job and the schedule loop race; it never runs for updates.
+// Unlisted chapters are shared by link only, so they notify nobody: the claim
+// records zero notifications.
 func (s *service) notifyFollowers(ctx context.Context, publicationID string) {
 	var info struct {
 		SeriesID    string  `db:"series_id"`
@@ -128,15 +130,18 @@ func (s *service) notifyFollowers(ctx context.Context, publicationID string) {
 	var flags pubFlags
 	claimed := false
 	err := s.db.WithTx(ctx, func(tx *db.Tx) error {
-		var raw string
-		if err := tx.Get(ctx, &raw, `SELECT flags FROM chapter_publications WHERE id = ? AND status = ?`+forUpdate(tx),
+		var row struct {
+			Flags      string `db:"flags"`
+			Visibility string `db:"visibility"`
+		}
+		if err := tx.Get(ctx, &row, `SELECT flags, visibility FROM chapter_publications WHERE id = ? AND status = ?`+forUpdate(tx),
 			publicationID, PublicationPublished); err != nil {
 			if db.IsNotFound(err) {
 				return nil
 			}
 			return err
 		}
-		flags = decodeFlags(raw)
+		flags = decodeFlags(row.Flags)
 		if !flags.Notify || flags.Notified != nil {
 			return nil
 		}
@@ -145,7 +150,10 @@ func (s *service) notifyFollowers(ctx context.Context, publicationID string) {
 		if _, err := tx.Exec(ctx, `UPDATE chapter_publications SET flags = ? WHERE id = ?`, db.MustJSON(flags), publicationID); err != nil {
 			return err
 		}
-		claimed = true
+		claimed = row.Visibility != VisibilityUnlisted
+		if !claimed {
+			return nil
+		}
 		return tx.Get(ctx, &info, `SELECT p.series_id, p.number, p.title, p.lang, s.slug, s.title AS series_title
 			FROM chapter_publications p JOIN series s ON s.id = p.series_id WHERE p.id = ?`, publicationID)
 	})

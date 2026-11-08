@@ -33,7 +33,8 @@ import (
 // readable when its series is, its status is published, its published_at has
 // passed and its own visibility passes the same table (so the effective
 // visibility is the stricter of the two). Listed lists exclude unlisted and
-// private series.
+// private series. Chapter lists (Publications) exclude unlisted chapters for
+// viewers outside the project; such a chapter opens only by its link.
 type access struct {
 	// userID is the active signed-in viewer; "" reads as an anonymous visitor.
 	userID string
@@ -184,4 +185,12 @@ func (a access) publicationReadable() clause {
 			args: []any{PublicationPublished, a.now}},
 		a.visibility("p.visibility", false),
 	)
+}
+
+// publicationListed is the predicate for chapter lists: a readable
+// publication (alias p) that is not unlisted, unless the viewer belongs to
+// the series' project (alias s). Unlisted chapters open only by their link.
+func (a access) publicationListed() clause {
+	return and(a.publicationReadable(),
+		or(clause{sql: "p.visibility <> ?", args: []any{VisibilityUnlisted}}, a.member()))
 }

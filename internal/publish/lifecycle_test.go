@@ -289,3 +289,41 @@ func seriesForm(slug string, extra ...string) url.Values {
 }
 
 func contains(b []byte, s string) bool { return strings.Contains(string(b), s) }
+
+// An unlisted chapter is shared by link only: going live never notifies
+// followers, though they may open it (ADR 0012 §1, §10).
+func TestUnlistedChapterNotifiesNobody(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, pf *publishtest.Fixture) {
+		ctx := context.Background()
+		pf.SetMode(settings.ModePublic)
+		svc := pf.Service()
+		f := newChapter(t, ta, false)
+		reader := ta.CreateUser(t, "", auth.RoleReader)
+		fake := &fakeFollowers{users: map[string][]string{}}
+		publish.SetFollowersForTest(svc, fake)
+		if resp := postForm(f.client, "/studio/p/"+f.project.ID+"/series", seriesForm("tidebreak-courier")); resp.StatusCode != http.StatusSeeOther {
+			t.Fatalf("series save = %d %s", resp.StatusCode, resp.Body)
+		}
+		sid := seriesID(t, ta, f.project.ID)
+		fake.users[sid] = []string{reader.ID}
+		if j := f.publish(t, f.publishForm("en", "visibility", publish.VisibilityUnlisted)); j.State != jobs.StateDone {
+			t.Fatalf("publish unlisted: %+v", j.Error)
+		}
+		rv := publish.Viewer{UserID: reader.ID}
+		pub, _, err := svc.Publication(ctx, rv, sid, 1, "en")
+		if err != nil || !svc.CanRead(ctx, rv, publish.Series{ID: sid}, pub) {
+			t.Fatalf("follower cannot open the unlisted chapter by link: %v", err)
+		}
+		if n := notifications(t, ta, notify.KindChapter)[reader.ID]; n != 0 {
+			t.Fatalf("follower notified %d times for an unlisted chapter", n)
+		}
+		// A second fan-out (the schedule loop's path) never notifies for it either.
+		publish.NotifyFollowersForTest(ctx, svc, pub.ID)
+		if n := notifications(t, ta, notify.KindChapter)[reader.ID]; n != 0 || fake.calls != 0 {
+			t.Fatalf("fan-out for an unlisted chapter: %d notifications, %d follower calls", n, fake.calls)
+		}
+		if live := f.client.Get(f.base + "/published?lang=en"); !contains(live.Body, "0 followers notified") {
+			t.Fatal("published page does not say nobody was notified")
+		}
+	})
+}

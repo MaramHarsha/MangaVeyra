@@ -210,7 +210,7 @@ func (s *service) Publications(ctx context.Context, v Viewer, seriesID, lang str
 			lang = series.OriginalLang
 		}
 		where := and(clause{sql: "p.series_id = ? AND p.lang = ?", args: []any{series.ID, lang}},
-			a.seriesReadable(), a.publicationReadable())
+			a.seriesReadable(), a.publicationListed())
 		var rows []publicationRow
 		if err := tx.Select(ctx, &rows, `SELECT `+publicationCols+` FROM chapter_publications p
 			JOIN series s ON s.id = p.series_id WHERE `+where.sql+` ORDER BY p.number, p.published_at, p.id`, where.args...); err != nil {

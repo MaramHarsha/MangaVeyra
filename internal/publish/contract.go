@@ -180,8 +180,12 @@ type Service interface {
 	ListSeries(ctx context.Context, v Viewer, f SeriesFilter) (list []Series, next string, err error)
 	// Publications lists the readable published chapters of a series in one
 	// language (the series' original language when lang is ""), by number.
+	// Unlisted chapters are left out for viewers who are not members of the
+	// series' project (members see every chapter they may read), so a
+	// chapter that Publication returns may be absent from this list.
 	Publications(ctx context.Context, v Viewer, seriesID, lang string) ([]Publication, error)
-	// Publication returns one readable published chapter and its frozen pages.
+	// Publication returns one readable published chapter and its frozen
+	// pages, including an unlisted chapter opened by its link.
 	Publication(ctx context.Context, v Viewer, seriesID string, number float64, lang string) (Publication, []PublicationPage, error)
 	// PageImageURL returns a short-lived signed URL for a frozen page image the
 	// viewer may read.

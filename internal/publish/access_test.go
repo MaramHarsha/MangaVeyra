@@ -186,7 +186,8 @@ func checkSeries(t *testing.T, ctx context.Context, svc publish.Service, mode st
 	}
 	for _, pc := range c.pubs {
 		readable := want && pc.readable && visibilityAllowed(mode, k, pc.vis)
-		if readable {
+		// Unlisted chapters open by their link but are listed only for project members.
+		if readable && (pc.vis != publish.VisibilityUnlisted || k == projectMember) {
 			wantPubs = append(wantPubs, pc.pub.ID)
 		}
 		what := fmt.Sprintf("%s/%s", c.name, pc.name)
@@ -343,4 +344,47 @@ func upper(s string) string {
 		}
 	}
 	return string(b)
+}
+
+// Unlisted chapters are readable with their link but never listed, except to
+// the project's own members (ADR 0012 §1).
+func TestUnlistedChaptersAreNotListed(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, f *publishtest.Fixture) {
+		ctx := context.Background()
+		svc := f.Service()
+		f.SetMode(settings.ModePublic)
+		s := f.Series(publishtest.SeriesSpec{})
+		one := f.Publish(s, publishtest.PublicationSpec{})
+		two := f.Publish(s, publishtest.PublicationSpec{Visibility: publish.VisibilityUnlisted})
+		three := f.Publish(s, publishtest.PublicationSpec{})
+		reader, colleague := f.User(auth.RoleReader), f.User(auth.RoleReader)
+		f.AddMember(s.ProjectID, colleague.ID, studio.RoleViewer)
+
+		for name, tc := range map[string]struct {
+			v    publish.Viewer
+			want []string
+		}{
+			"anonymous":      {publish.Viewer{}, []string{one.ID, three.ID}},
+			"member":         {publishtest.Viewer(reader), []string{one.ID, three.ID}},
+			"admin":          {publishtest.Viewer(ta.Admin), []string{one.ID, three.ID}},
+			"owner":          {publishtest.Viewer(s.Owner), []string{one.ID, two.ID, three.ID}},
+			"project member": {publishtest.Viewer(colleague), []string{one.ID, two.ID, three.ID}},
+		} {
+			pubs, err := svc.Publications(ctx, tc.v, s.ID, "")
+			var got []string
+			for _, p := range pubs {
+				got = append(got, p.ID)
+			}
+			if err != nil || !slices.Equal(got, tc.want) {
+				t.Errorf("%s: Publications = %v, %v; want %v", name, got, err, tc.want)
+			}
+			// The link still opens it.
+			if p, _, err := svc.Publication(ctx, tc.v, s.ID, two.Number, ""); err != nil || p.ID != two.ID {
+				t.Errorf("%s: unlisted Publication = %v, %v", name, p.ID, err)
+			}
+			if !svc.CanRead(ctx, tc.v, publish.Series{ID: s.ID}, publish.Publication{ID: two.ID}) {
+				t.Errorf("%s: CanRead(unlisted) = false", name)
+			}
+		}
+	})
 }
