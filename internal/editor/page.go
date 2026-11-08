@@ -16,12 +16,15 @@ import (
 )
 
 func editorMessages(ctx context.Context) map[string]string {
-	raw, _ := fs.ReadFile(i18n.Embedded(), "en/editor.json")
-	catalog := map[string]string{}
-	_ = json.Unmarshal(raw, &catalog)
 	out := map[string]string{}
-	for key := range catalog {
-		out[strings.TrimPrefix(key, "editor.")] = i18n.T(ctx, key)
+	for _, file := range []string{"en/editor.json", "en/collab.json"} {
+		raw, _ := fs.ReadFile(i18n.Embedded(), file)
+		catalog := map[string]string{}
+		_ = json.Unmarshal(raw, &catalog)
+		// Editor keys drop their prefix; collaboration keys keep "collab.".
+		for key := range catalog {
+			out[strings.TrimPrefix(key, "editor.")] = i18n.T(ctx, key)
+		}
 	}
 	return out
 }
