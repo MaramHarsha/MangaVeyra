@@ -1,0 +1,80 @@
+/*
+ * F2 Analytics (design file 08, "F2 – Analytics – Desktop"): four stat cards,
+ * the weekly reads chart (SVG bars like the C3 Character Lock chart) and the
+ * drop-off rows built on the kit's .mv-bar. Tokens only.
+ */
+.mv-analytics { display: flex; flex-direction: column; gap: 22px; flex: 1 1 auto; min-height: 0; }
+.mv-analytics__filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.mv-analytics__filters .mv-select-wrap { min-width: 180px; }
+
+.mv-analytics__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.mv-analytics__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  background: var(--mv-surface);
+  border: 1px solid var(--mv-line);
+  min-width: 0;
+}
+.mv-analytics__label { font-size: var(--mv-fs-meta); color: var(--mv-text-2); }
+.mv-analytics__value { font-family: var(--mv-font-display); font-size: 2.5rem; line-height: 1; white-space: nowrap; }
+.mv-analytics__delta { min-height: 1em; font-family: var(--mv-font-mono); font-size: var(--mv-fs-mono); line-height: 1.45; color: var(--mv-text-2); }
+.mv-analytics__delta--success { color: var(--mv-success); }
+.mv-analytics__delta--warning { color: var(--mv-warning); }
+
+.mv-analytics__charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.mv-analytics__box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  background: var(--mv-surface);
+  border: 1px solid var(--mv-line);
+  min-width: 0;
+}
+.mv-analytics__weekly { gap: 14px; }
+.mv-analytics__box-title { font-size: var(--mv-fs-ui); font-weight: 700; }
+.mv-analytics__chart {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 264px;
+  max-height: 520px;
+  border-bottom: 1px solid var(--mv-line);
+}
+.mv-analytics__chart rect { fill: var(--mv-surface-2); stroke: var(--mv-line); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.mv-analytics__chart rect.is-current { fill: var(--mv-accent); }
+.mv-analytics__axis { font-family: var(--mv-font-mono); font-size: var(--mv-fs-mono); color: var(--mv-text-3); text-transform: uppercase; }
+
+.mv-analytics__droprow {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 40px;
+  gap: 10px;
+  align-items: center;
+  font-size: var(--mv-fs-meta);
+}
+.mv-analytics__page { color: var(--mv-text-2); }
+.mv-analytics__pct { font-family: var(--mv-font-mono); }
+.mv-analytics__drop .mv-bar { height: 10px; --mv-bar: var(--mv-text-2); }
+.mv-analytics__drop .mv-bar--warning { --mv-bar: var(--mv-warning); }
+.mv-analytics__note { font-size: var(--mv-fs-meta); color: var(--mv-text-2); }
+.mv-analytics__note--warning { color: var(--mv-warning); }
+.mv-analytics__empty { flex: 1 1 auto; justify-content: center; }
+
+@media (max-width: 1100px) {
+  .mv-analytics__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mv-analytics__charts { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .mv-analytics__value { font-size: 2rem; }
+  .mv-analytics__chart { min-height: 180px; }
+  .mv-analytics__filters, .mv-analytics__filters .mv-select-wrap { width: 100%; }
+}

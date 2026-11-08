@@ -1,0 +1,93 @@
+package analytics
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+	"strconv"
+)
+
+// autoSubmit applies a selector on change (web/src/lib/filters.ts); Apply
+// stays for browsers without JavaScript.
+var autoSubmit = templ.Attributes{"data-autosubmit": true}
+
+// emptyBody is F2 for a member without any series.
+templ emptyBody() {
+	<div class="mv-analytics" data-screen="F2">
+		@ui.PageHead(i18n.T(ctx, "analytics.title"), i18n.T(ctx, "analytics.subtitle"), nil)
+		@ui.State(ui.StateProps{SFX: "SHIIN", Title: i18n.T(ctx, "analytics.empty.title"), Body: i18n.T(ctx, "analytics.empty.body"), Boxed: true}) {
+			@ui.LinkButton("/studio/projects", ui.ButtonProps{Size: ui.SM}) {
+				{ i18n.T(ctx, "analytics.empty.action") }
+			}
+		}
+	</div>
+}
+
+// reportBody is F2 – Analytics – Desktop: header with selectors, four stat
+// cards, the weekly reads chart and where readers stop.
+templ reportBody(v reportView) {
+	<div class="mv-analytics" data-screen="F2">
+		@ui.PageHead(v.Title, v.Subtitle, selectors(v))
+		<div class="mv-analytics__stats">
+			for i, s := range v.Stats {
+				<div class="mv-analytics__stat">
+					<span class="mv-analytics__label">{ s.Label }</span>
+					<span class="mv-analytics__value">{ s.Value }</span>
+					<span class={ "mv-analytics__delta", ui.If(s.Tone != "", "mv-analytics__delta--"+s.Tone) }>{ s.Delta }</span>
+					if i == 1 {
+						<span class="mv-sr-only">{ v.FollowersHistory }</span>
+					}
+				</div>
+			}
+		</div>
+		<div class="mv-analytics__charts">
+			<section class="mv-analytics__box mv-analytics__weekly" aria-labelledby="mv-analytics-weekly">
+				<strong id="mv-analytics-weekly" class="mv-analytics__box-title">{ v.ChartTitle }</strong>
+				if v.HasReads {
+					<svg class="mv-analytics__chart" viewBox={ "0 0 " + strconv.Itoa(chartViewW) + " " + strconv.Itoa(chartH) } preserveAspectRatio="none" role="img" aria-labelledby="mv-analytics-chart-title mv-analytics-chart-desc">
+						<title id="mv-analytics-chart-title">{ v.ChartTitle }</title>
+						<desc id="mv-analytics-chart-desc">{ v.ChartDesc }</desc>
+						for _, b := range v.Bars {
+							<rect x={ b.X } y={ b.Y } width={ strconv.Itoa(chartBarW) } height={ b.H } class={ ui.If(b.Current, "is-current") }>
+								<title>{ b.Title }</title>
+							</rect>
+						}
+					</svg>
+				} else {
+					@ui.State(ui.StateProps{Title: i18n.T(ctx, "analytics.no_reads.title"), Body: i18n.T(ctx, "analytics.no_reads.body"), Class: "mv-analytics__empty"})
+				}
+				<span class="mv-analytics__axis">{ v.Axis }</span>
+			</section>
+			<section class="mv-analytics__box mv-analytics__drop" aria-labelledby="mv-analytics-drop">
+				<strong id="mv-analytics-drop" class="mv-analytics__box-title">{ v.DropTitle }</strong>
+				if len(v.Drops) > 0 {
+					for _, d := range v.Drops {
+						<div class="mv-analytics__droprow">
+							<span class="mv-analytics__page">{ d.Page }</span>
+							@ui.Bar(d.Share, ui.If(d.Warn, "warning"), false, d.Label)
+							<span class="mv-analytics__pct">{ d.Pct }</span>
+						</div>
+					}
+					<span class={ "mv-analytics__note", ui.If(v.DropNoteWarn, "mv-analytics__note--warning") }>{ v.DropNote }</span>
+				} else {
+					@ui.State(ui.StateProps{Title: v.DropEmptyTitle, Body: v.DropEmptyBody, Class: "mv-analytics__empty"})
+				}
+			</section>
+		</div>
+	</div>
+}
+
+templ selectors(v reportView) {
+	<form class="mv-analytics__filters" method="get" action="/studio/analytics" novalidate>
+		if len(v.SeriesOptions) > 0 {
+			<label class="mv-sr-only" for="analytics-series">{ i18n.T(ctx, "analytics.series") }</label>
+			@ui.Select(ui.SelectProps{ID: "analytics-series", Name: "series", Value: v.SeriesID, Options: v.SeriesOptions, Attrs: autoSubmit})
+		} else {
+			<input type="hidden" name="series" value={ v.SeriesID }/>
+		}
+		<label class="mv-sr-only" for="analytics-chapter">{ i18n.T(ctx, "analytics.chapter") }</label>
+		@ui.Select(ui.SelectProps{ID: "analytics-chapter", Name: "chapter", Value: v.Chapter, Options: v.ChapterOptions, Attrs: autoSubmit})
+		@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Ghost, Icon: "filter", Class: "mv-nojs-only"}) {
+			{ i18n.T(ctx, "analytics.apply") }
+		}
+	</form>
+}

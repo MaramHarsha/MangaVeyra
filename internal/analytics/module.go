@@ -50,6 +50,7 @@ func (m *Module) Init(context.Context) error {
 // Routes implements core.Module.
 func (m *Module) Routes(r *core.Router) {
 	r.API("POST /api/v1/analytics/events", m.postEvents)
+	r.Page("GET /studio/analytics", m.page, core.RequireSession)
 }
 
 // Start rolls up old raw events a minute after start and then every six hours.
