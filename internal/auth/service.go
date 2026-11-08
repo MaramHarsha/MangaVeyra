@@ -625,6 +625,12 @@ func (s *Service) DeleteUser(ctx context.Context, userID string) error {
 				return ErrLastAdmin
 			}
 		}
+		// The account's follows go with it (ON DELETE CASCADE); keep each followed
+		// series' denormalised follower_count in step (one follow per series).
+		if _, err := tx.Exec(ctx, `UPDATE series SET follower_count = follower_count - 1
+			WHERE follower_count > 0 AND id IN (SELECT series_id FROM follows WHERE user_id = ?)`, userID); err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, `DELETE FROM users WHERE id = ?`, userID)
 		return err
 	})

@@ -69,6 +69,19 @@
 - **Manga content languages:** projects, lettering and exports in English, Japanese, Korean, Simplified and
   Traditional Chinese, Spanish, French, German, Portuguese and Hindi, with bundled OFL fonts and per-glyph fallback
   (ADR 0008). The interface is English and Japanese.
+- **Phase 3 publishing and reading** ([plan 0010](docs/plans/0010-phase-3-publish-and-read.md),
+  [ADR 0012](docs/decisions/0012-phase-3-publishing-and-reading.md)):
+  - **Publishing:** E1 publishes or schedules a chapter per language by freezing every page through the compose and
+    lettering engines. Alt-text is drafted without a model call, covers are chosen from pages or generated, series
+    settings hold creators and a release note, and followers get one notification per new chapter.
+  - **Reading:** the reader offers paged, spread, guided (with alt-text and read-aloud through on-device voices only)
+    and webtoon views, works without JavaScript, keeps progress, bookmarks and per-series settings, and downloads
+    chapters for offline reading through the service worker. The E7 library lists followed series, history,
+    downloads and bookmarks.
+  - **Community and discovery:** E5 series pages with follows and anchored comments, F1 creator profiles, E6 Explore
+    with the hand-drawn filter, E8 full-text search, and F2 analytics that stay on the server.
+  - **Access:** every reader-facing read goes through one access check, so anything a visitor may not see returns
+    404. The static [project website](site/README.md) and the [install guide](docs/install/README.md) ship with it.
 - **Original demo:** `mangaveyra seed --demo` creates the unpublished Tidebreak Courier project for an existing
   account, with labelled placeholder artwork. Rerunning preserves your edits.
 - **Python AI worker:** deterministic placeholder output, diffusers and ComfyUI adapters, LoRA training, panel and
@@ -80,8 +93,8 @@
 
 ### Not yet an end product
 
-Publishing, reader, application MCP server, backup/update flows, admin UI, named history branches/merging,
-translation, animation, EPUB/video export and the World link remain incomplete or intentional stubs. Their
+The application MCP server, backup/update flows, admin and moderation UI, named history branches/merging,
+translation, living panels, animation, EPUB/video export and the World link remain incomplete or intentional stubs. Their
 designed controls stay visible as disabled **Soon** actions. Optional GPU training and pose quality still need hardware validation;
 remote routes have fake-transport coverage, and direct OpenAI has a recorded basic live check; its extended
 reference/mask/accounting matrix remains pending in ADR 0009. See the
@@ -136,6 +149,8 @@ not a list of shipped behavior.
 
 These commands start the first playable studio for development and evaluation. No provider keys or GPU are required
 for the complete placeholder workflow.
+The [install guide](docs/install/README.md) covers both installs step by step, first-run setup, models, backups and
+upgrades. The project website lives in [`site/`](site/README.md).
 
 ### Docker Compose (PostgreSQL)
 
@@ -145,7 +160,7 @@ cd MangaVeyra
 cp .env.example .env
 # edit .env: POSTGRES_PASSWORD (letters and digits; it goes into MV_DB),
 #            MV_PUBLIC_URL and MV_WORKER_TOKEN
-docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
+docker compose up -d --build
 ```
 
 Open <http://localhost:8080>, follow first-run setup, and either keep the offline placeholder or connect OpenRouter or
@@ -155,9 +170,9 @@ Script jobs run in Go. Configured image workers receive bounded child jobs from 
 
 ```sh
 # NVIDIA GPU worker
-docker compose --env-file .env -f deploy/docker-compose.yml --profile gpu up -d --build
+docker compose --profile gpu up -d --build
 # CPU worker with the deterministic placeholder backend
-docker compose --env-file .env -f deploy/docker-compose.yml --profile worker-cpu up -d --build
+docker compose --profile worker-cpu up -d --build
 ```
 
 See [worker/README.md](worker/README.md) for `mangaveyra-worker check` and local job commands.

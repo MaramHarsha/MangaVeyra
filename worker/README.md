@@ -19,8 +19,8 @@ Hugging Face). There is no telemetry.
 
 ## Install
 
-You need a **worker token** first: in MangaVeyra go to *Admin → Models & providers → Local worker → Add worker*
-(or set the shared `MV_WORKER_TOKEN` in `docker compose`).
+You need a **worker token** first. Today that is the shared `MV_WORKER_TOKEN`: set the same secret for the server
+(in `.env`) and the worker. The admin screen that issues per-worker tokens is not built yet.
 
 ### Docker (recommended)
 

@@ -387,3 +387,138 @@ filmstrip/footer and redundant history shortcut are hidden in these workbenches.
   existing inspector patterns. Generated control images are machine inputs, not a new product illustration style.
 
 Desktop and basic 390×844 evidence is recorded in [the control QA record](../qa/phase-2-control-2026-11-08.md).
+
+## 11. Phase 3 screens
+
+The approved desktop artboards are followed at 1440 × 900. Phones get the responsive version of the desktop design;
+the mobile artboards stay deferred (ADR 0012 §11).
+
+- **A1 Landing (`site/`).** The hero badges add a `Pre-alpha` warning badge. The hero command chip keeps the design's
+  `docker compose up`, which works from the repository root through `compose.yaml`; the self-host terminal adds the
+  required `cp .env.example .env` and spells out the clone URL, with the design's output lines unchanged. The
+  designer note beside the sample page is built as the reveal-and-slash animation it describes (a 120 ms fade
+  without the slash under reduced motion), not shown as text. Step 03 carries a `Publishing soon` tag and the
+  Panel-aware reader card a `Soon` tag until the reader ships. Showcase covers are labelled `Placeholder cover`, with
+  the note "Original sample titles. Covers are placeholders until the first series are published." The first answer
+  adds "MangaVeyra is pre-alpha: the studio and exports work today, and publishing, the reader and the community are
+  being built now."; the four collapsed answers, which the design does not draw, describe shipped behaviour. The
+  footer's Community item is a `Soon` item and Security links to the README's privacy and security section. The page
+  follows the operating-system theme (Gate night by default, Paper when the system prefers light), keeps ink text on
+  the Gate-blue band in both themes, and uses `--mv-acc-text` for large accent text on Paper. Fonts, the icon font and
+  logos are self-hosted with their licences; the page makes no external requests and runs no JavaScript.
+- **E6 Explore.** The featured series is the listed series with the newest public chapter. Its eyebrow reads "New
+  chapter today" (as drawn), "New chapter" within seven days, "Latest chapter" otherwise, and "Featured series" when
+  no chapter is readable. Key art is the banner, else the cover, else the kit screentone labelled "Featured key art".
+  Anonymous visitors are sent to Log in to follow. Rankings use only activity recorded on this server: Rising is the
+  last seven days' growth in reads plus new followers against the seven days before (only growth above zero is
+  ranked), Week is reads in the last seven days and All time is the series view count; with nothing recorded the card
+  reads "No rankings yet". The genre chips and the "Art: any / Hand-drawn only" toggle filter the shelves below them,
+  while the featured series and rankings stay server-wide; hand-drawn means every AI label role is human, and without
+  JavaScript an Apply button submits the toggle. Members with reading history get "Because you read {series}"
+  (shared genres, then tags, then recent reads, without series they read); everyone else gets "New & updated",
+  newest public chapter first. More opens Search with the shelf's genre. "Rising creators · first series" ranks owners
+  with exactly one listed series by follows plus reads in the last 30 days, with an empty note when none qualify.
+  Cards show the cover image or the kit screentone labelled "Cover", and "New ch." marks a public chapter published in
+  the last seven days. A server with nothing listed shows "Nothing to read yet".
+- **E8 Search.** Tabs are Series N, Creators N (creators whose name contains every word, among owners of the
+  results), Chapters in the Soon state, and Tags (the results' tags with their counts, without a tab count as drawn).
+  Words match by prefix and any word may match, ranked so series matching more words come first; creator names and
+  CJK substrings also match. The snippet quotes the synopsis around the first match with matches marked. Filters
+  apply on change (Apply without JavaScript), Clear filters appears once a filter is set, and Has Japanese means a
+  Japanese original or edition. Results page by 20 with Previous/Next. Empty states read "Nothing matches
+  “{query}”", "No series match these filters" or "No published series yet". The search box is not auto-focused.
+- **E6/E8/E5/F1 access.** Anonymous visitors on personal and private servers are sent to Log in (ADR 0012 §1).
+- **F2 Analytics.** A series selector sits beside "All chapters" only when the member has more than one series; F2
+  opens on the most read one. Reads shows its change against the twelve weeks before only when that period had
+  reads; Followers shows followers gained in the window; Completion and "ch. N" describe the selected chapter, or with
+  All chapters the highest-numbered chapter read in the window; Avg. time / chapter is recorded page time per read;
+  missing values read "—". Weekly reads covers twelve Monday-based UTC weeks with an accessible list of the values,
+  and followers per week are given to screen readers on the Followers card, since the artboard draws no followers
+  chart. Drop-off rows fall every ⌈pages/7⌉ pages plus the last page (every page up to eight pages); the largest drop
+  uses the warning tone. The note reads "Biggest drop at p. A–B" without a cause, which the server cannot know, or
+  "No drop so far". Empty states cover no series, no reads and no published chapters. There is no revenue panel, and
+  real counts replace the sample numbers.
+- **Segmented controls** in E5, E6 and F2 use the kit's 13 px labels where the artboards draw 12 px.
+- **E1 Publish flow.** The visibility segment "Followers" is labelled "Members": the `members` visibility means
+  signed-in members of this server (ADR 0012 §1), not followers. AI label rows are selects offering the recorded
+  level and anything above it, so a correction never shows less AI than the project history; the per-role detail
+  ("212 panels, 41 hand-edited", names) is not shown because no per-panel statistics are stored. Tags are a
+  comma-separated field with the chips shown below it, since the in-field chip editor needs script. Schedule uses
+  native Date and Time inputs, shown only while Schedule is chosen, with the user's time zone (UTC when unset) in
+  place of "· local", which the server cannot know without script. "Offer download for offline reading" and "Allow
+  panel comments" are disabled with Soon until publications carry per-chapter flags. "Preview as reader" links to
+  the reader once the chapter is live and is Soon before that. The primary button reads "Publish now" or "Schedule"
+  following the When control, and "Update published chapter" for a live chapter, next to an "Unpublish"
+  danger-outline button. Existing kit components add: notices above the grid (first chapter creates the series;
+  series stricter than the chapter; scheduled; unpublished; publishing progress with polling and Refresh; failure
+  with the public job error), a "Series settings" link under Licence, an in-page grid of rendered pages for "Choose
+  from pages", generated cover candidates with Keep buttons under the cover, an "Alt-text" review section below the
+  grid (one disclosure per page, a textarea per panel, ADR 0012 §5), and language options that show unlettered
+  languages with a bubble count and cannot be chosen. The editor's Publish opens E1 for the owner and editors and is
+  disabled with an explanation for other members.
+- **E1 Published.** "QUEST COMPLETE · +1,200 XP · LEVEL 24 REACHED" becomes "Quests and XP" with a Soon tag (the XP
+  layer is deferred, ADR 0001; no invented numbers). Share is a no-script disclosure showing the chapter link. "Publish
+  in {language}" appears only when another lettered language is ready and not yet live, and the follower count is the
+  real number notified. A "Back to publish settings" link is added; a scheduled chapter shows "Chapter N is scheduled
+  · Goes live {date}". The Japanese UI letters the SFX ドーン！ in the JP SFX face.
+- **Series settings (`/studio/p/{project}/series`, no artboard).** Built from E1's three-column grid and fields:
+  read-only cover on the left; title, address with a `/s/` prefix, synopsis, release note, genres, tags and five
+  support-link rows in the middle; visibility, format, age rating, status, licence, original language, creators (owner
+  first, members with a role and an optional display name) and published-language chips on the right.
+- **E5 Series page.** The creators line credits the series' creators in credit order ("by Jerry Okafor & Jun Sato"),
+  each linked to their F1 profile, followed by the release note (or the status when none is set), format, age rating
+  and licence. AI badges show every stored role (art, script, lettering), sparkles for AI-assisted/AI and the pencil
+  for human. Chapter thumbnails keep the designed screentone placeholder. Rows read "date · N pages" with New for
+  chapters published in the last seven days. The languages stat doubles as the language switch (codes are links; the
+  current one is underlined in the accent). Under the designed comment list, members get a "Write a comment" field
+  with Post and visitors "Log in to comment"; each comment has a "⋯" menu (Edit and Delete for its author, Hide from
+  readers / Show to readers for the series owner, Report for others) that opens inline forms built from the shared
+  field, select and textarea; hidden comments carry a Hidden badge, edited ones an "edited" note, and Newest/Older
+  comments links page after five comments. The support box is omitted when the series has no support links. Mature and
+  adult series show signed-in readers a one-time confirmation step built from the boxed empty-state pattern ("!?",
+  "{title} is rated Mature 17+", "I'm 17 or older", Back to Explore) over the banner; the owner previews without it.
+- **F1 Creator profile.** The sub line is the A5 creator type, the server host and the first line of the bio. The rank
+  line uses the B1 rank badge from users.xp/level, follows the viewer's ranks-and-XP preference and reads "READER" for
+  readers. The avatar colour comes from the account, not the sample yellow. Link buttons are the creator's profile
+  links (up to three) labelled by host. On your own profile Edit profile replaces Follow. Series cards show the release
+  note (or status) and chapter count. Chapters lists the 30 newest chapters across the creator's series with the E5
+  row; About shows the bio, links, @username and join date. A creator without readable series gets the empty state
+  (シーン…, "No series yet", with Open the studio on your own profile or Explore series otherwise). Genre badges show
+  the stored genre words.
+- **E3 Reader.** Reading settings adds Zoom and Brightness as two kit sliders under Background, because the feature
+  plan names both and the artboard has no control for them; Zoom also follows + / − / 0. Play living panels and the
+  top-bar reader-translation icon keep their designed places in the Soon state. Read aloud from script is disabled with
+  "No voice on this device. Read-aloud only uses voices that run on your device, so the chapter text never leaves it."
+  when the browser has no on-device voice (ADR 0012 §6); otherwise the row names the voice. Language lists the
+  languages the chapter is published in. Anonymous readers see "Saved for this series on this device". The panel's close
+  button is visually hidden until it has keyboard focus. Guided view on desktop, drawn only on the mobile artboard,
+  uses its pieces: the panel framed with a 3 px border, the "PANEL n OF m" label and the dimmed surround, then the
+  alt-text line and the back chevron, Single | Guided and next chevron row; the frame stays left of an open settings
+  panel. A chapter-end card (from the research's chapter-end card) shows "End of chapter", the per-role AI-label badges
+  (ADR 0012 §4), Previous chapter, Next chapter and Series page. With Show panel comments on, a Comments button at the
+  stage's bottom left opens a 320 px drawer in the settings panel's place listing the open page's panel comments and
+  the chapter comments (comments whose anchor no longer exists after an update are listed with the chapter); members
+  get a form, others Log in. Offline, a status line under the bar uses the G6 copy. Without JavaScript the bar keeps
+  Back, the titles and the Soon translation icon, and pages stack in a 720 px column with alt-text before the
+  chapter-end card. The age confirmation (not drawn) is a box under the reader bar with the rating badge, "This series
+  is for mature readers" / "This series is for adults only", "{title} is rated {rating}. Confirm that you are old enough
+  to read it.", "I'm old enough · Read", "Go back" and "We remember this for this series only." On phones the bar drops
+  the mode switch and Reading settings opens full width with a Reading mode group at the top.
+- **E4 Webtoon.** Shows the same Download control as E3 (between Bookmark and Settings) so episodes can be read
+  offline. Episodes lists the six latest; "Next episode ↓" appears only when there is one.
+- **E7 Library.** Category is disabled with a Soon tag (user categories are not built) and Auto-download new chapters
+  is disabled Soon. Sort offers New chapters first / Recently read / Title A–Z, with Apply when JavaScript is off.
+  Following shows a count when follows exist and Downloads/Bookmarks only above zero; History has no count, as drawn.
+  History, Downloads and Bookmarks, not drawn on desktop, use the Continue reading card in the same three-column grid.
+  Downloads adds the E7-mobile summary "{n} chapters · {size} on this device", the note "Downloads stay on the device
+  that saved them and expire after 30 days.", a status icon and a remove button; rows saved on another device say "Not
+  on this device". Bookmarks add a remove button and "· panel n". The empty Following tab reads "Nothing followed yet"
+  with Explore series. On phones the H1 is hidden because the mobile header already says Library.
+- **E5 downloads.** Members get each readable chapter's download icon as a link that starts the offline download in
+  the reader; visitors, who cannot download (ADR 0012 §7), see no icon.
+- **E1 conflict states.** Built from the existing Notice component with the alert-triangle icon: a 409 error notice
+  when the chapter or series changed after E1 was opened ("This chapter or its series changed after you opened this
+  page. Nothing was published: review the details below, then publish again."), and a 409 warning notice while a publish
+  of the same chapter and language is running ("This chapter is already being published in {language}. Nothing was
+  changed: publish again once it finishes."), followed by the job progress notice only for the viewer's own job. A
+  scheduled chapter whose scheduler lost the right to publish reuses the unpublished notice.

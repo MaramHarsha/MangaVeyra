@@ -17,3 +17,6 @@ __pycache__/
 /e2e/playwright-report/
 /premium-audit.json
 .DS_Store
+
+# Local Compose overrides (docs/install)
+compose.override.yaml

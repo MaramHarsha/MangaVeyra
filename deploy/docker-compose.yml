@@ -1,9 +1,9 @@
 # MangaVeyra with PostgreSQL, from the repository root:
 #   cp .env.example .env        # set POSTGRES_PASSWORD, MV_PUBLIC_URL, MV_WORKER_TOKEN
-#   docker compose --env-file .env -f deploy/docker-compose.yml up -d
+#   docker compose up -d
 # Optional AI workers (they pair with the server through MV_WORKER_TOKEN):
-#   docker compose --env-file .env -f deploy/docker-compose.yml --profile gpu up -d          # NVIDIA GPU
-#   docker compose --env-file .env -f deploy/docker-compose.yml --profile worker-cpu up -d   # mock backend, no GPU
+#   docker compose --profile gpu up -d          # NVIDIA GPU
+#   docker compose --profile worker-cpu up -d   # mock backend, no GPU
 # Then open http://localhost:8080 and follow the first-run setup.
 
 name: mangaveyra

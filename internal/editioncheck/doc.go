@@ -3,6 +3,7 @@
 // forbidden words (prices, checkout, credits, wallets, tips, subscriptions,
 // payouts, upgrade prompts) appear in UI templates or locale files.
 //
-// The foundation ships a smoke test; the owner of the web layer extends it to
-// scan internal/web templates and every locale catalog.
+// It scans every value of every embedded locale catalog (with a short list of
+// non-payment exceptions such as a book's credits page), the static website in
+// site/ and the install guide in docs/install/.
 package editioncheck

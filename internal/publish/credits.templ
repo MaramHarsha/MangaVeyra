@@ -1,0 +1,37 @@
+package publish
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+	"strconv"
+)
+
+// creditsFieldset credits the owner (always first) and any project member
+// with a role and an optional credit name.
+templ creditsFieldset(v seriesView) {
+	<fieldset class="mv-publish__credits">
+		<legend class="mv-publish__label">{ i18n.T(ctx, "publish.series.field.creators") }</legend>
+		<p class="mv-publish__hint">{ i18n.T(ctx, "publish.series.field.creators_hint") }</p>
+		if v.Errors["creators"] != "" {
+			<p class="mv-publish__error" role="alert">{ errText(ctx, v.Errors["creators"]) }</p>
+		}
+		for i, mb := range v.Members {
+			<div class="mv-publish__credit">
+				<span class="mv-publish__credit-name">{ mb.name() }</span>
+				if mb.UserID == v.Project.OwnerID {
+					<span class="mv-publish__credit-owner">
+						@ui.Badge(ui.ToneMuted, "", i18n.T(ctx, "publish.credit.owner"))
+					</span>
+					<label class="mv-sr-only" for="credit-owner">{ i18n.T(ctx, "publish.series.field.credit_name", "name", mb.name()) }</label>
+					@ui.Input(ui.InputProps{ID: "credit-owner", Name: "owner_credit", Value: v.Form.OwnerCredit, MaxLength: maxCreditName, Placeholder: i18n.T(ctx, "publish.series.field.credit_name_placeholder")})
+				} else {
+					<input type="hidden" name={ "credit_user_" + strconv.Itoa(i) } value={ mb.UserID }/>
+					<label class="mv-sr-only" for={ "credit-role-" + strconv.Itoa(i) }>{ i18n.T(ctx, "publish.series.field.credit_role", "name", mb.name()) }</label>
+					@ui.Select(ui.SelectProps{ID: "credit-role-" + strconv.Itoa(i), Name: "credit_role_" + strconv.Itoa(i), Value: v.credit(mb.UserID).Role, Options: creditOptions(ctx)})
+					<label class="mv-sr-only" for={ "credit-name-" + strconv.Itoa(i) }>{ i18n.T(ctx, "publish.series.field.credit_name", "name", mb.name()) }</label>
+					@ui.Input(ui.InputProps{ID: "credit-name-" + strconv.Itoa(i), Name: "credit_name_" + strconv.Itoa(i), Value: v.credit(mb.UserID).CreditName, MaxLength: maxCreditName, Placeholder: i18n.T(ctx, "publish.series.field.credit_name_placeholder")})
+				}
+			</div>
+		}
+	</fieldset>
+}

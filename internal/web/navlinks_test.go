@@ -107,6 +107,11 @@ func checkBuiltPages(t *testing.T, dialect string) {
 		"accessibility":            "/settings/accessibility",
 		"world":                    "/settings/world",
 		"data":                     "/settings/data",
+		"publish flow":             "/studio/p/" + project.ID + "/chapters/" + chapter.ID + "/publish",
+		"series settings":          "/studio/p/" + project.ID + "/series",
+		"explore":                  "/explore",
+		"search":                   "/search?q=ferry",
+		"analytics":                "/studio/analytics",
 	}
 	editorURL := "/studio/p/" + project.ID + "/chapters/" + chapter.ID + "/edit?page=" + page.ID
 	signedIn["page editor"] = editorURL
@@ -119,7 +124,9 @@ func checkBuiltPages(t *testing.T, dialect string) {
 	check := func(t *testing.T, client *testutil.Client, name, page string) {
 		t.Helper()
 		res := client.Get(page)
-		if strings.HasPrefix(name, "custom provider ") && res.StatusCode != http.StatusOK {
+		mustLoad := strings.HasPrefix(name, "custom provider ") ||
+			name == "publish flow" || name == "series settings" || name == "explore" || name == "search" || name == "analytics"
+		if mustLoad && res.StatusCode != http.StatusOK {
 			t.Fatalf("%s (%s) = %d", name, page, res.StatusCode)
 		}
 		if res.StatusCode >= 500 {

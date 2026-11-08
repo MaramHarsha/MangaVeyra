@@ -79,6 +79,8 @@ templ Base(c *Chrome) {
 			class="mv-body"
 			if c.User != nil {
 				data-user={ c.userID() }
+			} else if c.SignedOut {
+				data-signed-out
 			}
 		>
 			{ children... }

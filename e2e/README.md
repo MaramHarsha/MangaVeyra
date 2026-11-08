@@ -8,6 +8,8 @@ configuration path, master key and SMTP host, supplies a test-only worker token,
 server. It never reads the operator's existing application data or provider keys. The temporary data directory is
 removed after the run. `MV_E2E_BASE_URL` can select another unused loopback port.
 `MV_E2E_BINARY` can select an already-built app executable without replacing another preview's binary.
+The server runs in production mode (no `--dev`) so the service worker and offline reading behave as they do for
+real readers.
 
 The flow completes setup without keys, all five wizard steps, a placeholder script, four character sheets and
 selection, pages from the saved manuscript, an independent character layer, four panel variations and selection,
@@ -51,3 +53,12 @@ Only the reference-rendering context bypasses CSP, because the handoff is author
 screenshots and the test flow retain production CSP. External requests are blocked in the reference renderer too.
 Compare the resulting desktop references alongside the matching app captures. Design notes are maintained in
 `docs/plans/0004-phase-1-qa-fixes-and-content-languages.md` and ADR 0004 §8.
+
+The Phase 3 publish-and-read flow (`publish-read.spec.ts`) switches the server to public mode, seeds the demo with
+`mangaveyra seed --demo` and creates a reader with `mangaveyra user create` against the suite's own data directory.
+The creator publishes chapter 1 from E1 (checking the drafted alt-text), the reader follows from E5, chapter 2 notifies
+the follower, the reader reads chapter 1 in guided mode with alt-text, downloads it and reads it again with the network
+off from the service worker cache. An anonymous visitor reads the public chapter; an edit made through the editor API
+after publishing never reaches readers; members-only and private series return 404 to visitors (and private to a
+non-member reader); a mature series is hidden from visitors and asks the member to confirm their age once.
+

@@ -331,16 +331,23 @@ func (s *Service) Identify(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(httpx.WithIdentity(ctx, httpx.Identity{User: u, Token: tok})))
 			return
 		}
+		// Known anonymous unless a session resolves; a store error leaves the
+		// identity unknown (httpx.IdentityKnown) rather than claiming nobody.
+		known := true
+		ctx = httpx.WithIdentity(ctx, httpx.Identity{})
 		if c, err := r.Cookie(SessionCookie); err == nil && c.Value != "" {
 			u, sess, err := s.ResolveSession(ctx, c.Value)
 			if err == nil {
 				ctx = httpx.WithIdentity(ctx, httpx.Identity{User: u, SessionID: sess.ID})
-				r = r.WithContext(ctx)
 			} else if err == ErrTokenInvalid {
 				s.ClearSessionCookie(w, r)
 			} else {
 				s.log.ErrorContext(ctx, "auth: resolve session", "err", err)
+				known = false
 			}
+		}
+		if known {
+			r = r.WithContext(ctx)
 		}
 		next.ServeHTTP(w, r)
 	})

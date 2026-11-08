@@ -22,6 +22,7 @@
   "editor.preview": "Preview",
   "editor.export": "Export",
   "editor.publish": "Publish",
+  "editor.publish.owner_only": "Only the owner or an editor can publish this chapter.",
   "editor.cancel": "Cancel",
   "editor.confirm": "Confirm",
   "editor.close": "Close",

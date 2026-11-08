@@ -1,6 +1,7 @@
 # systemd unit for a bare-metal install.
 #   sudo useradd --system --home /var/lib/mangaveyra --create-home mangaveyra
 #   sudo install -m 0755 bin/mangaveyra /usr/local/bin/mangaveyra
+#   sudo install -d -m 0750 -o root -g mangaveyra /etc/mangaveyra
 #   sudo install -m 0640 -o root -g mangaveyra .env.example /etc/mangaveyra/mangaveyra.env   # then edit it
 #   sudo cp deploy/mangaveyra.service /etc/systemd/system/ && sudo systemctl enable --now mangaveyra
 [Unit]

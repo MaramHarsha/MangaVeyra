@@ -22,6 +22,7 @@
   "editor.preview": "プレビュー",
   "editor.export": "書き出し",
   "editor.publish": "公開",
+  "editor.publish.owner_only": "この章を公開できるのはオーナーと編集者だけです。",
   "editor.cancel": "キャンセル",
   "editor.confirm": "実行",
   "editor.close": "閉じる",

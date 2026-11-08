@@ -193,6 +193,7 @@ func (u *UI) Chrome(w http.ResponseWriter, r *http.Request, o PageOpts) *layout.
 		if c.User != nil {
 			c.Prefs = core.PrefsFrom(ctx)
 		}
+		c.SignedOut = c.User == nil && httpx.IdentityKnown(ctx)
 	}
 	inst := u.d.Settings.MustInstance(ctx)
 	c.InstanceName = inst.Name
@@ -294,7 +295,7 @@ func pageOptsForPath(p string) PageOpts {
 		o.Section, o.Nav, o.Tab = layout.SectionStudio, layout.NavSettings, layout.TabMe
 	case strings.HasPrefix(p, "/admin"):
 		o.Section, o.Nav = layout.SectionStudio, layout.NavAdmin
-	case strings.HasPrefix(p, "/explore"), strings.HasPrefix(p, "/search"), strings.HasPrefix(p, "/s/"):
+	case strings.HasPrefix(p, "/explore"), strings.HasPrefix(p, "/search"), strings.HasPrefix(p, "/s/"), strings.HasPrefix(p, "/u/"):
 		o.Section, o.Tab, o.NoSidebar = layout.SectionExplore, layout.TabExplore, true
 	case strings.HasPrefix(p, "/library"):
 		o.Section, o.Tab, o.NoSidebar = layout.SectionLibrary, layout.TabLibrary, true

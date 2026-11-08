@@ -664,7 +664,11 @@
    </div>
    <button type="button" class="mv-btn mv-btn--secondary mv-btn--sm mv-ed__preview" aria-pressed={proof} onclick={() => proof = !proof}><i class="ti ti-eye" aria-hidden="true"></i>{t('preview')}</button>
    <a class="mv-btn mv-btn--secondary mv-btn--sm mv-ed__export" href={`/studio/p/${initial.project.id}/chapters/${initial.chapter.id}/export`} onclick={(e) => followLink(e, `/studio/p/${initial.project.id}/chapters/${initial.chapter.id}/export`)}><i class="ti ti-download" aria-hidden="true"></i>{t('export')}</a>
-   <button type="button" class="mv-btn mv-btn--primary mv-btn--sm mv-ed__publish" disabled aria-label={`${t('publish')} · ${t('soon')}`}>{t('publish')}<span class="mv-soon">{t('soon')}</span></button>
+   {#if initial.permissions.lock}
+    <a class="mv-btn mv-btn--primary mv-btn--sm mv-ed__publish" href={`/studio/p/${initial.project.id}/chapters/${initial.chapter.id}/publish`} onclick={(e) => followLink(e, `/studio/p/${initial.project.id}/chapters/${initial.chapter.id}/publish`)}>{t('publish')}</a>
+   {:else}
+    <button type="button" class="mv-btn mv-btn--primary mv-btn--sm mv-ed__publish" disabled title={t('publish.owner_only')}>{t('publish')}</button>
+   {/if}
   </div>
  </header>
 

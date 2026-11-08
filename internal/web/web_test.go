@@ -160,8 +160,8 @@ func TestStaticAndPWA(t *testing.T) {
 	}
 	off := c.Get("/offline")
 	mustContain(t, off, "PUTSUN", "You’re offline")
-	if strings.Contains(body(off), "data-user=") {
-		t.Fatal("the cached offline page must not carry user data")
+	if strings.Contains(body(off), "data-user=") || strings.Contains(body(off), "data-signed-out") {
+		t.Fatal("the cached offline page must not claim who is signed in")
 	}
 	if f := c.Get("/favicon.ico"); f.StatusCode != http.StatusOK || f.Header.Get("Content-Type") != "image/png" {
 		t.Fatalf("favicon: %d", f.StatusCode)
@@ -227,5 +227,23 @@ func TestServerHost(t *testing.T) {
 		if got := web.ServerHost(in...); got != want {
 			t.Errorf("ServerHost(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// Offline chapters belong to the member who downloaded them; client code
+// deletes other members' chapters only on pages that state who is signed in.
+func TestPagesStateWhoIsSignedIn(t *testing.T) {
+	ta := testutil.NewTestApp(t)
+	anon := body(ta.NewClient().Get("/login"))
+	if !strings.Contains(anon, "data-signed-out") || strings.Contains(anon, "data-user=") {
+		t.Fatal("a page for a visitor must say signed out")
+	}
+	signedIn := body(ta.Login(t, ta.Admin.Username).Get("/studio"))
+	if !strings.Contains(signedIn, `data-user="`+ta.Admin.ID+`"`) || strings.Contains(signedIn, "data-signed-out") {
+		t.Fatal("a page for a member must carry data-user and not data-signed-out")
+	}
+	offline := body(ta.Login(t, ta.Admin.Username).Get("/offline"))
+	if strings.Contains(offline, "data-user=") || strings.Contains(offline, "data-signed-out") {
+		t.Fatal("the offline page does not know who is signed in")
 	}
 }

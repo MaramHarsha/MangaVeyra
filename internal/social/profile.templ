@@ -1,0 +1,151 @@
+package social
+
+import (
+	"strconv"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// ProfilePage is F1 – Creator profile – Desktop: speed-line banner, the large
+// avatar, name, rank line and sub line, Follow and the creator's links, stats,
+// the Series / Chapters / About segments and the series grid.
+templ ProfilePage(v profileView) {
+	<div class="mv-profile">
+		<div class="mv-profile__banner" aria-hidden="true">
+			<div class="mv-tex-speedlines mv-profile__lines"></div>
+		</div>
+		<div class="mv-profile__body">
+			<header class="mv-profile__head">
+				@ui.Avatar(ui.AvatarProps{Name: v.Name, Key: v.Key, Class: "mv-profile__avatar"})
+				<div class="mv-profile__who">
+					<h1 class="mv-profile__name">{ v.Name }</h1>
+					if v.ShowRank {
+						<span class="mv-profile__rank">
+							@ui.RankBadge(v.Rank, true)
+							<span class="mv-profile__rankline">{ v.RankLine }</span>
+						</span>
+					}
+					<span class="mv-profile__sub mv-truncate">{ v.Sub }</span>
+				</div>
+				<div class="mv-profile__actions">
+					@profileFollow(v)
+					for _, l := range v.Links {
+						@ui.LinkButton(l.Href, ui.ButtonProps{Variant: ui.Quiet, Icon: "external-link",
+							Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer nofollow ugc"}}) {
+							{ l.Label }
+						}
+					}
+				</div>
+			</header>
+			<div class="mv-profile__stats">
+				<span><strong>{ strconv.Itoa(v.SeriesCount) }</strong> { i18n.T(ctx, "social.profile.series_stat") }</span>
+				<span><strong>{ v.Followers }</strong> { i18n.T(ctx, "social.series.followers") }</span>
+				<span><strong>{ strconv.Itoa(v.ChapterCount) }</strong> { i18n.T(ctx, "social.series.chapters_stat") }</span>
+			</div>
+			@ui.SegmentedLinks(i18n.T(ctx, "social.profile.sections"), v.Tabs)
+			switch v.Tab {
+				case "chapters":
+					if len(v.Chapters) == 0 {
+						@profileEmpty(v)
+					} else {
+						<ol class="mv-list-plain mv-series__rows mv-profile__chapters">
+							for _, row := range v.Chapters {
+								<li>
+									@chapterRowItem(row.chapterRow)
+								</li>
+							}
+						</ol>
+					}
+				case "about":
+					@profileAbout(v)
+				default:
+					if len(v.Series) == 0 {
+						@profileEmpty(v)
+					} else {
+						<ul class="mv-list-plain mv-profile__grid">
+							for _, s := range v.Series {
+								<li>
+									<a class="mv-scard mv-profile__card" href={ templ.URL(s.Href) }>
+										<div class="mv-scard__cover">
+											@seriesCover(s.CoverURL, s.Title, i18n.T(ctx, "social.series.cover"), "mv-profile__cover")
+										</div>
+										<div class="mv-scard__body">
+											<strong class="mv-scard__title">{ s.Title }</strong>
+											<span class="mv-scard__meta">{ s.Meta }</span>
+										</div>
+									</a>
+								</li>
+							}
+						</ul>
+					}
+			}
+		</div>
+	</div>
+}
+
+templ profileFollow(v profileView) {
+	if v.Self {
+		@ui.LinkButton("/settings/account", ui.ButtonProps{Variant: ui.Secondary, Icon: "pencil"}) {
+			{ i18n.T(ctx, "social.profile.edit") }
+		}
+	} else if !v.SignedIn {
+		@ui.LinkButton(v.LoginHref, ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+			{ i18n.T(ctx, "social.follow") }
+		}
+	} else if v.Following {
+		<form method="post" action={ templ.URL(v.Href + "/unfollow") }>
+			@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Icon: "check", Type: "submit", Tip: i18n.T(ctx, "social.unfollow_hint"),
+				Attrs: templ.Attributes{"aria-pressed": "true"}}) {
+				{ i18n.T(ctx, "social.following") }
+			}
+		</form>
+	} else {
+		<form method="post" action={ templ.URL(v.Href + "/follow") }>
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Type: "submit", Attrs: templ.Attributes{"aria-pressed": "false"}}) {
+				{ i18n.T(ctx, "social.follow") }
+			}
+		</form>
+	}
+}
+
+templ profileEmpty(v profileView) {
+	if v.Self {
+		@ui.State(ui.StateProps{SFX: "シーン…", JP: true, Art: "splash", Class: "mv-profile__empty",
+			Title: i18n.T(ctx, "social.profile.empty.title"), Body: i18n.T(ctx, "social.profile.empty.self")}) {
+			@ui.LinkButton("/studio", ui.ButtonProps{Variant: ui.Primary, Icon: "pencil"}) {
+				{ i18n.T(ctx, "social.profile.empty.studio") }
+			}
+		}
+	} else {
+		@ui.State(ui.StateProps{SFX: "シーン…", JP: true, Art: "splash", Class: "mv-profile__empty",
+			Title: i18n.T(ctx, "social.profile.empty.title"), Body: i18n.T(ctx, "social.profile.empty.other", "name", v.Name)}) {
+			@ui.LinkButton("/explore", ui.ButtonProps{Variant: ui.Secondary, Icon: "compass"}) {
+				{ i18n.T(ctx, "social.profile.empty.explore") }
+			}
+		}
+	}
+}
+
+templ profileAbout(v profileView) {
+	<section class="mv-box mv-profile__about" aria-label={ i18n.T(ctx, "social.profile.tab.about") }>
+		if v.Bio != "" {
+			<p class="mv-profile__bio">{ v.Bio }</p>
+		} else {
+			<p class="mv-series__boxtext">{ i18n.T(ctx, "social.profile.no_bio", "name", v.Name) }</p>
+		}
+		if len(v.Links) > 0 {
+			<ul class="mv-list-plain mv-profile__links">
+				for _, l := range v.Links {
+					<li>
+						<a class="mv-link" href={ templ.URL(l.Href) } target="_blank" rel="noopener noreferrer nofollow ugc">
+							@ui.Icon("external-link", 14)
+							{ l.Label }
+						</a>
+					</li>
+				}
+			</ul>
+		}
+		<span class="mv-profile__joined">{ "@" + v.Username } · { v.Joined }</span>
+	</section>
+}

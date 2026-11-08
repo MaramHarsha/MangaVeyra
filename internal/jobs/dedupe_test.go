@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -204,6 +205,44 @@ func TestDedupeKeyRetryAndGuards(t *testing.T) {
 		long := jobs.EnqueueParams{Type: "dedupe.retry", Scope: none, DedupeKey: strings.Repeat("x", jobs.MaxDedupeKeyBytes+1)}
 		if _, err := q.Enqueue(ctx, long); err == nil {
 			t.Fatal("oversized key accepted")
+		}
+	})
+}
+
+// TestNoRetryTypesRefuseManualRetry: a job type marked MarkNoRetry carries a
+// human decision, so neither its owner nor an admin can queue it again by
+// retrying (through the queue or the jobs API); other types still retry.
+func TestNoRetryTypesRefuseManualRetry(t *testing.T) {
+	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx, q := context.Background(), ta.Deps.Jobs
+		q.MarkNoRetry("noretry.decision")
+		owner := ta.CreateUser(t, "", auth.RoleCreator)
+		decision, err := q.Enqueue(ctx, jobs.EnqueueParams{Type: "noretry.decision", UserID: owner.ID, Scope: none})
+		if err != nil {
+			t.Fatal(err)
+		}
+		other, err := q.Enqueue(ctx, jobs.EnqueueParams{Type: "noretry.other", UserID: owner.ID, Scope: none})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, j := range []*jobs.Job{decision, other} {
+			if _, err := q.Cancel(ctx, j.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := q.Retry(ctx, decision.ID); !errors.Is(err, jobs.ErrNoRetry) {
+			t.Fatalf("Retry(no-retry type) = %v, want ErrNoRetry", err)
+		}
+		for name, c := range map[string]*testutil.Client{"owner": ta.Login(t, owner.Username), "admin": ta.Login(t, "admin")} {
+			if got := c.PostJSON("/api/v1/jobs/"+decision.ID+"/retry", nil); got.StatusCode != http.StatusConflict {
+				t.Fatalf("%s API retry of a no-retry job = %d %s", name, got.StatusCode, got.Body)
+			}
+		}
+		if j, _ := q.Get(ctx, decision.ID); j.State != jobs.StateCanceled {
+			t.Fatalf("refused retry changed the job: %s", j.State)
+		}
+		if j, err := q.Retry(ctx, other.ID); err != nil || j.State != jobs.StateQueued {
+			t.Fatalf("other types still retry: %+v %v", j, err)
 		}
 	})
 }

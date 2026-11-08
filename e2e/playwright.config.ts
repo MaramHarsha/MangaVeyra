@@ -24,7 +24,8 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: `${process.env.MV_E2E_BINARY || '../bin/mangaveyra'} serve --dev`,
+    // Production mode (no --dev) so the service worker runs: offline reading is part of the acceptance.
+    command: `${process.env.MV_E2E_BINARY || '../bin/mangaveyra'} serve`,
     url: `${baseURL}/healthz`,
     reuseExistingServer: false,
     timeout: 30_000,

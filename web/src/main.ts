@@ -23,6 +23,7 @@ import { installQueueRefresh } from './lib/queue';
 import { updateUnread } from './lib/unread';
 import './lib/models';
 import { mountIslands, unmountIslands } from './islands/registry';
+import { clearAll as clearOfflineChapters, dropForeignChapters, installLogoutClearing } from './islands/reader/offline';
 
 declare global {
   interface Window {
@@ -171,16 +172,35 @@ document.addEventListener('click', (e) => {
   void persistTheme(theme, btn.dataset.themeToggle || '/settings/theme');
 });
 
-// Clear offline chapter downloads kept by the service worker / reader on this device.
+// Clear offline chapter downloads kept by the service worker / reader on this
+// device, then the member's download records on the server (ADR 0012 §7). A
+// failed server call is not fatal: the library marks rows missing on this device.
 document.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-clear-downloads]');
   if (!btn || !('caches' in window)) return;
   e.preventDefault();
-  void caches.keys().then(async (keys) => {
-    await Promise.all(keys.filter((k) => k.startsWith('mv-offline')).map((k) => caches.delete(k)));
+  void clearOfflineChapters(caches).then(async () => {
+    await fetch('/api/v1/reader/downloads', { method: 'DELETE', credentials: 'same-origin', headers: { Accept: 'application/json' } }).catch(() => undefined);
     showToast({ kind: 'success', title: btn.dataset.done || root.dataset.doneLabel || 'Done' });
   });
 });
+
+// Offline chapters belong to the member who downloaded them, and Cache Storage
+// is shared by everyone using this browser. Signing out deletes them all
+// before the sign-out form is sent (without JavaScript it posts as usual), and
+// a page fresh from the server deletes the chapters of anyone but the member
+// signed in (body[data-user]; every chapter when body[data-signed-out]). Pages
+// that do not know who is asking (the G6 offline page, gates rendered before
+// sign-in is checked) carry neither attribute, and pages a service worker
+// served from a cache (data-offline-copy) are stale, so both are skipped.
+installLogoutClearing(document, () => ('caches' in window ? caches : null));
+{
+  const body = document.body;
+  const knowsViewer = body.hasAttribute('data-user') || body.hasAttribute('data-signed-out');
+  if ('caches' in window && navigator.onLine && knowsViewer && !body.hasAttribute('data-offline-copy')) {
+    void dropForeignChapters(caches, body.dataset.user || '', Date.now() / 1000).catch(() => undefined);
+  }
+}
 
 // ---- form enhancements ---------------------------------------------------------
 

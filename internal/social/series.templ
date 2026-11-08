@@ -1,0 +1,340 @@
+package social
+
+import (
+	"strconv"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// SeriesPage is E5 – Series page – Desktop: banner, cover with Read and
+// Follow, title, creators and meta line, genre and AI badges, synopsis,
+// stats with the language switch, the chapter list and, on the right, the
+// creators' support links and the series comments.
+templ SeriesPage(v seriesView) {
+	if v.AgeGate != nil {
+		@ageGateStep(v)
+	} else {
+		<div class="mv-series">
+			@seriesBanner(v)
+			<div class="mv-series__grid">
+				<div class="mv-series__side">
+					@seriesCover(v.CoverURL, v.Series.Title, i18n.T(ctx, "social.series.cover"), "mv-series__cover")
+					if v.ReadHref != "" {
+						@ui.LinkButton(v.ReadHref, ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Full: true}) {
+							{ v.ReadLabel }
+						}
+					} else {
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.LG, Full: true, Disabled: true}) {
+							{ v.ReadLabel }
+						}
+					}
+					@followControl(v)
+				</div>
+				<div class="mv-series__main">
+					<h1 class="mv-series__title">{ v.Series.Title }</h1>
+					<p class="mv-series__by">
+						if len(v.By) > 0 {
+							{ i18n.T(ctx, "social.series.by") }
+							for i, c := range v.By {
+								{ creditSep(ctx, i, len(v.By)) }
+								if c.Href != "" {
+									<a class="mv-series__creator" href={ templ.URL(c.Href) }>{ c.Name }</a>
+								} else {
+									<span class="mv-series__creator">{ c.Name }</span>
+								}
+							}
+						}
+						for i, part := range v.Meta {
+							if i > 0 || len(v.By) > 0 {
+								{ " · " }
+							}
+							{ part }
+						}
+					</p>
+					if len(v.Genres) > 0 || len(v.AI) > 0 {
+						<div class="mv-series__badges">
+							for _, g := range v.Genres {
+								@ui.Badge(ui.ToneNeutral, "", g)
+							}
+							for _, b := range v.AI {
+								@ui.Badge(b.Tone, b.Icon, b.Text)
+							}
+						</div>
+					}
+					if v.Series.Synopsis != "" {
+						<p class="mv-series__synopsis">{ v.Series.Synopsis }</p>
+					}
+					<div class="mv-series__stats">
+						<span><strong>{ v.Followers }</strong> { i18n.T(ctx, "social.series.followers") }</span>
+						<span><strong>{ strconv.Itoa(v.Chapters) }</strong> { i18n.T(ctx, "social.series.chapters_stat") }</span>
+						<span>
+							<strong class="mv-series__langs">
+								if len(v.Languages) > 1 {
+									<nav class="mv-series__langnav" aria-label={ i18n.T(ctx, "social.series.language_switch") }>
+										for i, l := range v.Languages {
+											if i > 0 {
+												<span aria-hidden="true">·</span>
+											}
+											<a
+												href={ templ.URL(l.Href) }
+												aria-label={ l.Name }
+												if l.Current {
+													aria-current="true"
+												}
+											>{ l.Code }</a>
+										}
+									</nav>
+								} else {
+									for _, l := range v.Languages {
+										{ l.Code }
+									}
+								}
+							</strong>
+							{ i18n.T(ctx, "social.series.languages") }
+						</span>
+					</div>
+					<section class="mv-series__chapters" id="chapters" aria-labelledby="mv-series-chapters">
+						<div class="mv-series__chhead">
+							<h2 class="mv-series__h2" id="mv-series-chapters">{ i18n.T(ctx, "social.series.chapters") }</h2>
+							@ui.SegmentedLinks(i18n.T(ctx, "social.series.order"), v.SortLinks)
+						</div>
+						if len(v.Rows) == 0 {
+							<p class="mv-series__empty">{ i18n.T(ctx, "social.series.no_chapters_body") }</p>
+						} else {
+							<ol class="mv-list-plain mv-series__rows">
+								for _, row := range v.Rows {
+									<li class="mv-series__rowitem">
+										@chapterRowItem(row)
+										if row.Ready && v.SignedIn && ui.Ready(ctx, row.Href) {
+											<a class="mv-series__dl" href={ templ.URL(row.Href + "?download=1") } title={ i18n.T(ctx, "social.series.download") }>
+												@ui.Icon("download", 18)
+												<span class="mv-sr-only">{ i18n.T(ctx, "social.series.download") + " · " + row.Title }</span>
+											</a>
+										}
+									</li>
+								}
+							</ol>
+						}
+					</section>
+				</div>
+				<div class="mv-series__aside">
+					if len(v.Support) > 0 {
+						<section class="mv-box mv-series__box mv-series__support" aria-labelledby="mv-series-support">
+							<h2 class="mv-series__boxtitle" id="mv-series-support">{ i18n.T(ctx, "social.support.title") }</h2>
+							<p class="mv-series__boxtext">{ i18n.T(ctx, "social.support.body") }</p>
+							for _, l := range v.Support {
+								@ui.LinkButton(l.Href, ui.ButtonProps{Variant: ui.Quiet, Icon: "external-link", Full: true,
+									Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer nofollow ugc"}}) {
+									<span class="mv-truncate">{ l.Label }</span>
+								}
+							}
+						</section>
+					}
+					@commentsPanel(v)
+				</div>
+			</div>
+		</div>
+	}
+}
+
+templ seriesBanner(v seriesView) {
+	<div class="mv-series__banner">
+		if v.BannerURL != "" {
+			<img class="mv-series__banner-img" src={ v.BannerURL } alt=""/>
+		} else {
+			@ui.ToneBox(i18n.T(ctx, "social.series.banner"), "", "mv-series__banner-tone")
+		}
+		<div class="mv-series__fade" aria-hidden="true"></div>
+	</div>
+}
+
+// seriesCover is the 3:4 cover (an image, or the labelled screentone placeholder).
+templ seriesCover(src, title, label, class string) {
+	if src != "" {
+		<div class={ ui.Cls("mv-card-image", class) }>
+			<img src={ src } alt={ i18n.T(ctx, "social.series.cover_alt", "title", title) }/>
+		</div>
+	} else {
+		@ui.ToneBox(label, "", class)
+	}
+}
+
+templ followControl(v seriesView) {
+	if !v.SignedIn {
+		@ui.LinkButton(v.LoginHref, ui.ButtonProps{Variant: ui.Secondary, Icon: "plus", Full: true}) {
+			{ i18n.T(ctx, "social.follow") }
+		}
+	} else if v.Following {
+		<form method="post" action={ templ.URL(v.Href + "/unfollow") }>
+			@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Icon: "check", Full: true, Type: "submit",
+				Tip: i18n.T(ctx, "social.unfollow_hint"), Attrs: templ.Attributes{"aria-pressed": "true"}}) {
+				{ i18n.T(ctx, "social.following") }
+			}
+		</form>
+	} else {
+		<form method="post" action={ templ.URL(v.Href + "/follow") }>
+			@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Icon: "plus", Full: true, Type: "submit",
+				Attrs: templ.Attributes{"aria-pressed": "false"}}) {
+				{ i18n.T(ctx, "social.follow") }
+			}
+		</form>
+	}
+}
+
+templ chapterRowItem(row chapterRow) {
+	if row.Ready {
+		<a class={ ui.Cls("mv-series__row", ui.If(row.New, "is-new")) } href={ templ.URL(row.Href) }>
+			@chapterRowBody(row)
+		</a>
+	} else {
+		<div class={ ui.Cls("mv-series__row", "is-soon", ui.If(row.New, "is-new")) } aria-disabled="true" title={ i18n.T(ctx, "ui.soon_hint") }>
+			@chapterRowBody(row)
+		</div>
+	}
+}
+
+templ chapterRowBody(row chapterRow) {
+	<span class="mv-series__num">{ row.Number }</span>
+	<span class="mv-tone mv-series__thumb" aria-hidden="true"></span>
+	<span class="mv-series__rowmain">
+		<strong class="mv-series__rowtitle">{ row.Title }</strong>
+		<span class="mv-series__rowmeta">{ row.Meta }</span>
+	</span>
+	<span class="mv-series__rowaside">
+		if row.New {
+			@ui.Badge(ui.ToneNew, "", i18n.T(ctx, "social.series.new"))
+		}
+		if !row.Ready {
+			@ui.SoonTag()
+		}
+	</span>
+}
+
+templ commentsPanel(v seriesView) {
+	{{ box := v.Comments }}
+	<section class="mv-box mv-series__box mv-series__comments" id="comments" aria-labelledby="mv-series-comments">
+		<h2 class="mv-series__boxtitle" id="mv-series-comments">{ i18n.T(ctx, "social.comments.title", "count", box.Count) }</h2>
+		if len(box.Items) == 0 {
+			<p class="mv-series__boxtext">{ i18n.T(ctx, "social.comments.empty") }</p>
+		} else {
+			<ol class="mv-list-plain mv-series__clist">
+				for _, c := range box.Items {
+					@commentItem(v, c)
+				}
+			</ol>
+		}
+		if box.OlderHref != "" || box.LatestHref != "" {
+			<div class="mv-series__cpager">
+				if box.LatestHref != "" {
+					<a class="mv-link" href={ templ.URL(box.LatestHref) }>{ i18n.T(ctx, "social.comments.latest") }</a>
+				}
+				if box.OlderHref != "" {
+					<a class="mv-link" href={ templ.URL(box.OlderHref) }>{ i18n.T(ctx, "social.comments.older") }</a>
+				}
+			</div>
+		}
+		if box.PostAction != "" {
+			<form class="mv-series__cform" method="post" action={ templ.URL(box.PostAction) }>
+				@ui.Field(ui.FieldProps{ID: "mv-series-comment", Label: i18n.T(ctx, "social.comments.write"), Error: box.Error, Class: "mv-series__cfield"}) {
+					@ui.Textarea(ui.TextareaProps{ID: "mv-series-comment", Name: "body", Value: box.Draft, Rows: 2, MaxLength: MaxCommentRunes,
+						Placeholder: i18n.T(ctx, "social.comments.placeholder"), Required: true, Invalid: box.Error != ""})
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Type: "submit", Icon: "send"}) {
+					{ i18n.T(ctx, "social.comments.post") }
+				}
+			</form>
+		} else {
+			@ui.LinkButton(box.LoginHref, ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Icon: "login"}) {
+				{ i18n.T(ctx, "social.comments.login") }
+			}
+		}
+	</section>
+}
+
+templ commentTrigger() {
+	@ui.Icon("dots", 18)
+	<span class="mv-sr-only">{ i18n.T(ctx, "social.comment.actions") }</span>
+}
+
+templ commentItem(v seriesView, c commentView) {
+	<li class={ ui.Cls("mv-series__comment", ui.If(c.Hidden, "is-hidden")) } id={ "comment-" + c.ID }>
+		@ui.Avatar(ui.AvatarProps{Name: c.Name, Key: c.Key, Size: "sm"})
+		<div class="mv-series__cbody">
+			<div class="mv-series__chead">
+				if c.AuthorHref != "" {
+					<a class="mv-series__cname" href={ templ.URL(c.AuthorHref) }>{ c.Name }</a>
+				} else {
+					<strong class="mv-series__cname">{ c.Name }</strong>
+				}
+				if c.Hidden {
+					@ui.Badge(ui.ToneMuted, "eye-off", i18n.T(ctx, "social.comment.hidden"))
+				}
+				if c.EditedAt != nil {
+					<span class="mv-series__cedited">{ i18n.T(ctx, "social.comment.edited") }</span>
+				}
+			</div>
+			if c.Editing {
+				<form class="mv-series__cform" method="post" action={ templ.URL(c.Base + "/edit") }>
+					@ui.Field(ui.FieldProps{ID: "mv-edit-" + c.ID, Label: i18n.T(ctx, "social.comment.edit_label"), Error: c.Error, Class: "mv-series__cfield"}) {
+						@ui.Textarea(ui.TextareaProps{ID: "mv-edit-" + c.ID, Name: "body", Value: c.Draft, Rows: 3, MaxLength: MaxCommentRunes,
+							Required: true, Invalid: c.Error != ""})
+					}
+					<div class="mv-series__cactions">
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Type: "submit"}) {
+							{ i18n.T(ctx, "social.comment.save") }
+						}
+						@ui.LinkButton(v.Href+"#comment-"+c.ID, ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM}) {
+							{ i18n.T(ctx, "ui.cancel") }
+						}
+					</div>
+				</form>
+			} else {
+				<p class="mv-series__ctext">{ c.Body }</p>
+			}
+			if c.Reporting {
+				<form class="mv-series__cform mv-series__report" method="post" action={ templ.URL(c.Base + "/report") }>
+					<strong class="mv-series__reporttitle">{ i18n.T(ctx, "social.report.title") }</strong>
+					@ui.Field(ui.FieldProps{ID: "mv-report-reason-" + c.ID, Label: i18n.T(ctx, "social.report.reason"), Error: c.Error}) {
+						@ui.Select(ui.SelectProps{ID: "mv-report-reason-" + c.ID, Name: "reason", Value: "spam", Options: v.Comments.Reasons, Invalid: c.Error != ""})
+					}
+					@ui.Field(ui.FieldProps{ID: "mv-report-details-" + c.ID, Label: i18n.T(ctx, "social.report.details"), Aside: i18n.T(ctx, "social.optional")}) {
+						@ui.Textarea(ui.TextareaProps{ID: "mv-report-details-" + c.ID, Name: "details", Rows: 2, MaxLength: MaxReportDetailRunes})
+					}
+					<div class="mv-series__cactions">
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Size: ui.SM, Type: "submit", Icon: "flag"}) {
+							{ i18n.T(ctx, "social.report.send") }
+						}
+						@ui.LinkButton(v.Href+"#comment-"+c.ID, ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM}) {
+							{ i18n.T(ctx, "ui.cancel") }
+						}
+					</div>
+				</form>
+			}
+		</div>
+		if len(c.Menu) > 0 {
+			@ui.Dropdown("mv-series__cmenu", "end", false, commentTrigger(), c.Menu)
+		}
+	</li>
+}
+
+// ageGateStep is the one-time confirmation for mature and adult series
+// (ADR 0012 §1). The reader owns POST /s/{series}/confirm-age.
+templ ageGateStep(v seriesView) {
+	<div class="mv-series mv-series--gate">
+		@seriesBanner(v)
+		@ui.State(ui.StateProps{SFX: "!?", Tone: "warning", Art: "splash", Boxed: true, Class: "mv-series__gate",
+			Title: i18n.T(ctx, "social.age.title", "title", v.AgeGate.Title, "rating", v.AgeGate.Rating),
+			Body: i18n.T(ctx, "social.age.body")}) {
+			<form method="post" action={ templ.URL(v.AgeGate.Action) }>
+				<input type="hidden" name="next" value={ v.AgeGate.Next }/>
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "check"}) {
+					{ i18n.T(ctx, "social.age.confirm", "age", v.AgeGate.Age) }
+				}
+			</form>
+			@ui.LinkButton("/explore", ui.ButtonProps{Variant: ui.Ghost}) {
+				{ i18n.T(ctx, "social.age.back") }
+			}
+		}
+	</div>
+}
