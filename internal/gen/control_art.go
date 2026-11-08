@@ -282,15 +282,22 @@ func (s *service) handleControlArt(ctx context.Context, run *jobs.Run) error {
 	}
 	renders := []imageRender{}
 	defer func() { s.discardRenders(context.WithoutCancel(ctx), renders) }()
-	slot := 0
-	for i, item := range p.Panels {
+	// Steps count every component call across all panels plus the commit, so
+	// the parent's bar is measured across the whole job from the first call.
+	slot, total := 0, slots+1
+	report := func(ctx context.Context, done int) error {
+		return run.Progress(ctx, float64(done)/float64(total), done, total, "Generating selected art")
+	}
+	for _, item := range p.Panels {
 		var rendered imageRender
-		if err := s.renderImage(ctx, run, item, slot, &rendered); err != nil {
+		base := slot
+		progress := func(ctx context.Context, done int) error { return report(ctx, base+done) }
+		if err := s.renderImage(ctx, run, item, slot, progress, &rendered); err != nil {
 			return err
 		}
 		renders = append(renders, rendered)
 		slot += len(item.Components)
-		if err := run.Progress(ctx, float64(i+1)/float64(len(p.Panels)+1), i+1, len(p.Panels), "Generating selected art"); err != nil {
+		if err := report(ctx, slot); err != nil {
 			return mapImageJobError(ctx, err)
 		}
 	}

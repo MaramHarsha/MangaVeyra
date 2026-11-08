@@ -129,7 +129,11 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 		return mapImageJobError(ctx, err)
 	}
 	var rendered imageRender
-	if err := s.renderImage(ctx, run, p, 0, &rendered); err != nil {
+	components := len(p.Components)
+	progress := func(ctx context.Context, done int) error {
+		return run.Progress(ctx, float64(done)/float64(components+1), done, components+1, "Generating art")
+	}
+	if err := s.renderImage(ctx, run, p, 0, progress, &rendered); err != nil {
 		return err
 	}
 	staged, out := rendered.Staged, rendered.Output
@@ -173,9 +177,14 @@ func (s *service) discardRenders(ctx context.Context, all []imageRender) {
 	}
 }
 
+// artProgress reports a render's completed components in its caller's job.
+// The caller maps them onto its own total steps, so a multi-panel job never
+// restarts its bar at each panel and reports its steps before the first call.
+type artProgress func(ctx context.Context, done int) error
+
 // renderImage stages pixels only. Its caller owns the single atomic commit.
 // Page operations reuse this path and commit every panel together.
-func (s *service) renderImage(ctx context.Context, run *jobs.Run, p imagePayload, callOffset int, rendered *imageRender) error {
+func (s *service) renderImage(ctx context.Context, run *jobs.Run, p imagePayload, callOffset int, progress artProgress, rendered *imageRender) error {
 	j := run.Job
 	plan := currentImagePlan(p, j)
 	cost, err := scaleCost(plan.Estimate, imageAttempts*len(p.Components))
@@ -262,7 +271,7 @@ func (s *service) renderImage(ctx context.Context, run *jobs.Run, p imagePayload
 	out := imageOutput{Candidates: make([]Candidate, plan.Needs.Count), PageID: p.PageID, CharacterID: p.CharacterID}
 	previewImages := make([][]image.Image, plan.Needs.Count)
 	for i, c := range p.Components {
-		if err := run.Progress(ctx, float64(i)/float64(len(p.Components)+1), i, len(p.Components)+1, "Generating art"); err != nil {
+		if err := progress(ctx, i); err != nil {
 			return mapImageJobError(ctx, err)
 		}
 		if _, err := s.resolveImageActor(ctx, actor, p.Scope.ProjectID, cost, plan.Remote); err != nil {

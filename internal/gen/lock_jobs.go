@@ -196,6 +196,11 @@ func (s *service) handleLock(ctx context.Context, run *jobs.Run) error {
 	}
 	assessments := []lockAssessment{}
 	total := len(p.Targets)
+	// Report every target as a step before the first worker child exists, so
+	// the first batch's percentage is never shown as the whole assessment's.
+	if err := run.Progress(ctx, 0, 0, total, "Assessing Character Lock"); err != nil {
+		return mapLockJobError(ctx, err)
+	}
 	for i := 0; i < total; i += 8 {
 		end := min(total, i+8)
 		pixels := [][]byte{}
