@@ -1,0 +1,409 @@
+package discover
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+	"strconv"
+)
+
+// autoSubmit applies a filter on change (web/src/lib/filters.ts); the Apply
+// button stays for browsers without JavaScript.
+var autoSubmit = templ.Attributes{"data-autosubmit": true}
+
+// searchFormAttrs tie E8's sidebar filters to the query form above them.
+var searchFormAttrs = templ.Attributes{"data-autosubmit": true, "form": "mv-search-form"}
+
+// maybeLink renders a link only to a page this server serves (series pages
+// arrive with the social module); otherwise the same content without a link.
+templ maybeLink(href, class string) {
+	if ui.Ready(ctx, href) {
+		<a class={ class } href={ templ.URL(href) }>
+			{ children... }
+		</a>
+	} else {
+		<span class={ class }>
+			{ children... }
+		</span>
+	}
+}
+
+// coverArt is a series cover, or the screentone placeholder without one.
+templ coverArt(src, label, class string) {
+	if src != "" {
+		<div class={ ui.Cls("mv-card-image mv-discover__cover", class) }>
+			<img src={ templ.URL(src) } alt="" loading="lazy"/>
+		</div>
+	} else {
+		@ui.ToneBox(label, "3x4", class)
+	}
+}
+
+// seriesCard is the kit's series card (3:4 cover, "New ch." badge, rank).
+templ seriesCard(c cardView) {
+	@maybeLink(c.Href, ui.Cls("mv-scard mv-discover__card", ui.If(c.Rank > 0, "mv-scard--ranked"))) {
+		<span class="mv-scard__cover">
+			@coverArt(c.CoverURL, i18n.T(ctx, "discover.cover"), "")
+			if c.Badge != "" {
+				<span class="mv-scard__badge">
+					@ui.Badge(ui.ToneNew, "", c.Badge)
+				</span>
+			}
+			if c.Rank > 0 {
+				<span class="mv-scard__rank" aria-hidden="true">{ strconv.Itoa(c.Rank) }</span>
+			}
+		</span>
+		<span class="mv-scard__body">
+			<strong class="mv-scard__title">
+				if c.Rank > 0 {
+					<span class="mv-sr-only">{ strconv.Itoa(c.Rank) }. </span>
+				}
+				{ c.Title }
+			</strong>
+			if c.Meta != "" {
+				<span class="mv-scard__meta">{ c.Meta }</span>
+			}
+		</span>
+	}
+}
+
+// followButton posts to the social module's follow route (Soon until it exists).
+templ followButton(f followView, variant ui.Variant, size ui.Size) {
+	if f.LoginHref != "" {
+		@ui.LinkButton(f.LoginHref, ui.ButtonProps{Variant: variant, Size: size, Icon: "plus"}) {
+			{ i18n.T(ctx, "discover.follow") }
+		}
+	} else if f.Following {
+		@ui.LinkButton(f.SeriesHref, ui.ButtonProps{Variant: variant, Size: size, Icon: "check"}) {
+			{ i18n.T(ctx, "discover.following") }
+		}
+	} else if ui.ReadyMethod(ctx, "POST", f.Action) {
+		<form method="post" action={ templ.URL(f.Action) } novalidate>
+			<input type="hidden" name="next" value={ f.Next }/>
+			@ui.Button(ui.ButtonProps{Type: "submit", Variant: variant, Size: size, Icon: "plus"}) {
+				{ i18n.T(ctx, "discover.follow") }
+			}
+		</form>
+	} else {
+		@ui.Button(ui.ButtonProps{Variant: variant, Size: size, Icon: "plus", Disabled: true, Tip: i18n.T(ctx, "ui.soon_hint"), Class: "is-soon"}) {
+			{ i18n.T(ctx, "discover.follow") }
+			@ui.SoonTag()
+		}
+	}
+}
+
+// exploreBody is E6 – Explore – Desktop.
+templ exploreBody(v exploreView) {
+	<div class="mv-explore" data-screen="E6">
+		<h1 class="mv-sr-only">{ i18n.T(ctx, "nav.explore") }</h1>
+		if v.Empty {
+			@ui.State(ui.StateProps{SFX: "SHIIN", Title: i18n.T(ctx, "discover.empty.title"), Body: i18n.T(ctx, "discover.empty.body"), Boxed: true, Art: "speedlines"}) {
+				if v.CanCreate {
+					@ui.LinkButton("/studio", ui.ButtonProps{Size: ui.SM}) {
+						{ i18n.T(ctx, "discover.empty.studio") }
+					}
+				}
+			}
+		} else {
+			<div class="mv-explore__top">
+				if v.Featured != nil {
+					@featured(*v.Featured)
+				}
+				@rankings(v)
+			</div>
+			<div class="mv-explore__filters">
+				<nav class="mv-chips mv-explore__chips" aria-label={ i18n.T(ctx, "discover.genres") }>
+					for _, c := range v.Chips {
+						<a
+							class="mv-chip mv-explore__chip"
+							href={ templ.URL(c.Href) }
+							if c.Current {
+								aria-current="true"
+							}
+						>{ c.Label }</a>
+					}
+				</nav>
+				<form class="mv-explore__art" method="get" action="/explore" novalidate>
+					if v.Rank != RankRising {
+						<input type="hidden" name="rank" value={ v.Rank }/>
+					}
+					if v.Genre != "" {
+						<input type="hidden" name="genre" value={ v.Genre }/>
+					}
+					@ui.Icon("filter", 16)
+					<span>{ v.ArtLabel } ·</span>
+					@ui.Toggle(ui.ToggleProps{ID: "explore-hand", Name: "hand", Value: "1", Checked: v.Hand, Label: i18n.T(ctx, "discover.hand_drawn"), Attrs: autoSubmit})
+					@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Ghost, Size: ui.SM, Class: "mv-nojs-only"}) {
+						{ i18n.T(ctx, "discover.apply") }
+					}
+				</form>
+			</div>
+			@shelf("mv-shelf-first", v.Shelf)
+			@shelf("mv-shelf-rising", v.Rising)
+		}
+	</div>
+}
+
+templ featured(f featuredView) {
+	<section class="mv-explore__hero" aria-labelledby="mv-featured-title">
+		if f.ArtURL != "" {
+			<div class="mv-card-image mv-explore__heroart">
+				<img src={ templ.URL(f.ArtURL) } alt="" loading="lazy"/>
+			</div>
+		} else {
+			@ui.ToneBox(i18n.T(ctx, "discover.key_art"), "", "mv-explore__heroart")
+		}
+		<div class="mv-explore__fade" aria-hidden="true"></div>
+		<div class="mv-explore__herotext">
+			<span class="mv-explore__eyebrow">{ f.Eyebrow }</span>
+			<h2 id="mv-featured-title" class="mv-explore__title">{ f.Title }</h2>
+			if f.Synopsis != "" {
+				<p class="mv-explore__synopsis">{ f.Synopsis }</p>
+			}
+			<div class="mv-explore__actions">
+				if f.ReadHref != "" {
+					@ui.LinkButton(f.ReadHref, ui.ButtonProps{Variant: ui.Primary}) {
+						{ f.ReadLabel }
+					}
+				}
+				@followButton(f.Follow, ui.Secondary, ui.MD)
+			</div>
+		</div>
+	</section>
+}
+
+templ rankings(v exploreView) {
+	<aside class="mv-explore__rankings" aria-labelledby="mv-rankings-title">
+		<div class="mv-explore__rankhead">
+			<strong id="mv-rankings-title">{ i18n.T(ctx, "discover.rankings") }</strong>
+			@ui.SegmentedLinks(i18n.T(ctx, "discover.rankings"), v.RankTabs)
+		</div>
+		if len(v.Rankings) == 0 {
+			<p class="mv-explore__note">{ i18n.T(ctx, "discover.rankings.empty") }</p>
+		} else {
+			<ol class="mv-list-plain mv-explore__ranklist">
+				for _, r := range v.Rankings {
+					<li>
+						@maybeLink(r.Href, "mv-explore__rankrow") {
+							<span class={ "mv-explore__ranknum", ui.If(r.Rank == 1, "is-first") }>{ strconv.Itoa(r.Rank) }</span>
+							if r.CoverURL != "" {
+								<span class="mv-card-image mv-explore__rankcover">
+									<img src={ templ.URL(r.CoverURL) } alt="" loading="lazy"/>
+								</span>
+							} else {
+								<span class="mv-tone mv-explore__rankcover" aria-hidden="true"></span>
+							}
+							<span class="mv-explore__rankname">
+								<strong>{ r.Title }</strong>
+								if r.Genre != "" {
+									<span>{ r.Genre }</span>
+								}
+							</span>
+						}
+					</li>
+				}
+			</ol>
+		}
+	</aside>
+}
+
+templ shelf(id string, s shelfView) {
+	<section class="mv-explore__shelfrow" aria-labelledby={ id }>
+		<div class="mv-section-head">
+			<h2 id={ id } class="mv-section-head__title">{ s.Title }</h2>
+			if s.MoreHref != "" && len(s.Cards) > 0 {
+				<a class="mv-explore__more" href={ templ.URL(s.MoreHref) }>{ i18n.T(ctx, "discover.more") }</a>
+			}
+		</div>
+		if len(s.Cards) == 0 {
+			<p class="mv-explore__note">{ s.Empty }</p>
+		} else {
+			<div class="mv-explore__shelf">
+				for _, c := range s.Cards {
+					@seriesCard(c)
+				}
+			</div>
+		}
+	</section>
+}
+
+// searchBody is E8 – Search – Desktop.
+templ searchBody(v searchView) {
+	<div class="mv-searchpage" data-screen="E8">
+		<h1 class="mv-sr-only">{ i18n.T(ctx, "discover.search.title") }</h1>
+		<div class="mv-searchpage__bar">
+			<form id="mv-search-form" class="mv-searchpage__query" role="search" method="get" action="/search" novalidate>
+				<label class="mv-sr-only" for="search-q">{ i18n.T(ctx, "nav.search_placeholder") }</label>
+				@ui.InputGroup("", false) {
+					@ui.Icon("search", 18)
+					@ui.Input(ui.InputProps{ID: "search-q", Name: "q", Type: "search", Value: v.Params.Q, Placeholder: i18n.T(ctx, "nav.search_placeholder"), MaxLength: MaxQueryRunes, Autocomplete: "off"})
+				}
+				if v.Params.Tab != TabSeries {
+					<input type="hidden" name="tab" value={ v.Params.Tab }/>
+				}
+				if v.Params.Tag != "" {
+					<input type="hidden" name="tag" value={ v.Params.Tag }/>
+				}
+			</form>
+			<nav class="mv-seg mv-searchpage__tabs" aria-label={ i18n.T(ctx, "discover.tab.label") }>
+				for _, t := range v.Tabs {
+					if t.Soon {
+						<span class="mv-seg__item is-soon" aria-disabled="true" title={ i18n.T(ctx, "ui.soon_hint") }>
+							{ t.Label }
+							@ui.SoonTag()
+						</span>
+					} else {
+						<a
+							class="mv-seg__item"
+							href={ templ.URL(t.Href) }
+							if t.Current {
+								aria-current="true"
+							}
+						>{ tabText(t) }</a>
+					}
+				}
+			</nav>
+		</div>
+		<div class="mv-searchpage__grid">
+			@searchFilters(v)
+			<div class="mv-searchpage__results">
+				switch v.Params.Tab {
+					case TabCreators:
+						@creatorList(v)
+					case TabTags:
+						@tagList(v)
+					default:
+						@resultList(v)
+				}
+			</div>
+		</div>
+	</div>
+}
+
+templ searchFilters(v searchView) {
+	<aside class="mv-searchpage__filters" aria-labelledby="mv-filters-title">
+		<strong id="mv-filters-title">{ i18n.T(ctx, "discover.filters") }</strong>
+		@filterSelect("search-genre", "genre", i18n.T(ctx, "discover.filter.genre"), v.Params.Genre, v.GenreOptions)
+		@filterSelect("search-format", "format", i18n.T(ctx, "discover.filter.format"), v.Params.Format, v.FormatOptions)
+		@filterSelect("search-status", "status", i18n.T(ctx, "discover.filter.status"), v.Params.Status, v.StatusOptions)
+		@filterSelect("search-lang", "lang", i18n.T(ctx, "discover.filter.language"), v.Params.Lang, v.LangOptions)
+		@filterSelect("search-rating", "rating", i18n.T(ctx, "discover.filter.rating"), v.Params.Rating, v.RatingOptions)
+		@filterSelect("search-art", "art", i18n.T(ctx, "discover.filter.art"), v.Params.Art, v.ArtOptions)
+		@ui.Checkbox(ui.CheckProps{ID: "search-hand", Name: "hand", Value: "1", Checked: v.Params.Hand, Label: i18n.T(ctx, "discover.hand_drawn"), Attrs: searchFormAttrs})
+		@ui.Checkbox(ui.CheckProps{ID: "search-ja", Name: "ja", Value: "1", Checked: v.Params.JA, Label: i18n.T(ctx, "discover.has_japanese"), Attrs: searchFormAttrs})
+		@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Ghost, Size: ui.SM, Icon: "filter", Class: "mv-nojs-only", Attrs: templ.Attributes{"form": "mv-search-form"}}) {
+			{ i18n.T(ctx, "discover.apply") }
+		}
+		if v.HasFilters {
+			<a class="mv-searchpage__clear" href={ templ.URL(v.ClearHref) }>{ i18n.T(ctx, "discover.clear_filters") }</a>
+		}
+	</aside>
+}
+
+templ filterSelect(id, name, label, value string, opts []ui.Option) {
+	@ui.Field(ui.FieldProps{ID: id, Label: label}) {
+		@ui.Select(ui.SelectProps{ID: id, Name: name, Value: value, Options: opts, Attrs: searchFormAttrs})
+	}
+}
+
+templ searchEmpty(v searchView) {
+	@ui.State(ui.StateProps{SFX: "SHIIN", Title: v.EmptyTitle, Body: v.EmptyBody, Boxed: true}) {
+		if v.HasFilters {
+			@ui.LinkButton(v.ClearHref, ui.ButtonProps{Size: ui.SM}) {
+				{ i18n.T(ctx, "discover.clear_filters") }
+			}
+		} else {
+			@ui.LinkButton("/explore", ui.ButtonProps{Size: ui.SM}) {
+				{ i18n.T(ctx, "nav.explore") }
+			}
+		}
+	}
+}
+
+templ resultList(v searchView) {
+	if len(v.Results) == 0 {
+		@searchEmpty(v)
+	} else {
+		<ol class="mv-list-plain mv-searchpage__list" aria-label={ i18n.T(ctx, "discover.tab.series") }>
+			for _, r := range v.Results {
+				<li class="mv-result">
+					@maybeLink(r.Card.Href, "mv-result__cover") {
+						@coverArt(r.Card.CoverURL, "", "")
+					}
+					<div class="mv-result__text">
+						@maybeLink(r.Card.Href, "mv-result__title") {
+							{ r.Card.Title }
+						}
+						<span class="mv-result__meta">{ r.Meta }</span>
+						if len(r.Snippet) > 0 {
+							<p class="mv-result__snippet">
+								for _, s := range r.Snippet {
+									if s.Mark {
+										<mark>{ s.Text }</mark>
+									} else {
+										{ s.Text }
+									}
+								}
+							</p>
+						}
+					</div>
+					<div class="mv-result__action">
+						@followButton(r.Follow, ui.Quiet, ui.SM)
+					</div>
+				</li>
+			}
+		</ol>
+		@pager(v)
+	}
+}
+
+templ pager(v searchView) {
+	if v.PrevHref != "" || v.NextHref != "" {
+		<nav class="mv-searchpage__pager" aria-label={ i18n.T(ctx, "discover.pages") }>
+			if v.PrevHref != "" {
+				@ui.LinkButton(v.PrevHref, ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Icon: "chevron-left"}) {
+					{ i18n.T(ctx, "discover.previous") }
+				}
+			}
+			if v.NextHref != "" {
+				@ui.LinkButton(v.NextHref, ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Icon: "chevron-right"}) {
+					{ i18n.T(ctx, "discover.next") }
+				}
+			}
+		</nav>
+	}
+}
+
+templ creatorList(v searchView) {
+	if len(v.Creators) == 0 {
+		@searchEmpty(v)
+	} else {
+		<ul class="mv-list-plain mv-searchpage__list" aria-label={ i18n.T(ctx, "discover.tab.creators") }>
+			for _, c := range v.Creators {
+				<li class="mv-result mv-result--creator">
+					@ui.Avatar(ui.AvatarProps{Name: c.Name, Key: c.Key, Size: "lg"})
+					<div class="mv-result__text">
+						@maybeLink(c.Href, "mv-result__title") {
+							{ c.Name }
+						}
+						<span class="mv-result__meta">{ "@" + c.Username } · { c.Meta }</span>
+					</div>
+				</li>
+			}
+		</ul>
+	}
+}
+
+templ tagList(v searchView) {
+	if len(v.Tags) == 0 {
+		@searchEmpty(v)
+	} else {
+		<nav class="mv-chips mv-searchpage__tags" aria-label={ i18n.T(ctx, "discover.tab.tags") }>
+			for _, t := range v.Tags {
+				<a class="mv-chip mv-explore__chip" href={ templ.URL(t.Href) }>
+					{ t.Tag }
+					<span class="mv-searchpage__tagcount">{ t.Count }</span>
+				</a>
+			}
+		</nav>
+	}
+}
