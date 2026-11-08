@@ -62,3 +62,10 @@ off from the service worker cache. An anonymous visitor reads the public chapter
 after publishing never reaches readers; members-only and private series return 404 to visitors (and private to a
 non-member reader); a mature series is hidden from visitors and asks the member to confirm their age once.
 
+The Phase 4 flow (`run-a-server.spec.ts`) seeds the demo, has the admin create an invite in G5 and a new member sign up
+through it, adds the member as a letterer limited to the lettering layer, posts a panel review comment that the owner
+marks Needs changes (the member's art edit is refused), creates an agent token in G13 and calls `/mcp` over JSON-RPC so
+a publish request waits in G13, backs the server up and restores that archive from G10, and checks that a build without
+a release key never checks for updates. Signed installs and rollbacks run against a fake release in
+`internal/update`'s integration tests.
+
