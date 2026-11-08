@@ -104,3 +104,21 @@ stable while creators keep editing. Tagging v1.0.0 remains an owner action after
 - **Comments (§9).** Comments on mature and adult series wait for the reader's age confirmation, like the series page
   and the reader; the owner previews without it.
 - **Search engines.** Series pages and reader pages of anything not public send `X-Robots-Tag: noindex`.
+- **Offline downloads on shared devices (§7).** Each offline chapter's meta entry records the member who downloaded it.
+  Signing out deletes every offline chapter on the device before the sign-out request is sent. A page fresh from the
+  server that states who is signed in (`data-user`, or `data-signed-out` for a known visitor) deletes chapters
+  downloaded by anyone else, chapters without an owner, expired chapters, and every chapter when nobody is signed in;
+  pages that do not know who is asking, and pages the service worker served from a cache (`data-offline-copy`), are
+  skipped. The service worker never serves a chapter without a valid expiry. Without JavaScript, signing out cannot
+  clear offline chapters; they go on the next page load with JavaScript.
+- **Anonymous reading sessions (§8).** The `mv_rs` session is minted and signed by the server (a random ID plus an
+  HMAC under a key derived from the master key); values a client chooses are ignored. Every new anonymous session counts
+  against a per-address limit of 20, then one a minute, kept in memory only; a visitor over the limit still reads but is
+  not counted. The session-hash salt is 32 random bytes per UTC day in `analytics_day_salts` (migration 0403), shared by
+  all server processes and deleted once the day is over, so past hashes cannot be recomputed even with the master key.
+  Opens and completions are stored once per reader, publication and UTC day through a deterministic row ID. F2 is
+  limited to the series owner and project members with a creator role; project viewers see no analytics.
+  `analytics.ReadingSessions` is a contract addition.
+- **Unlisted chapters in the reader (§1).** The reader never lists an unlisted chapter: Episodes, previous/next and the
+  chapter-end card skip it, and the library's new-chapter badge offers the newest listed chapter. A member who read,
+  bookmarked or downloaded an unlisted chapter by its link keeps it in the library.
