@@ -64,11 +64,14 @@ updated.
 takes the first candidate whose route can hold the input and that matches any model pin. A provider pin must match
 its route's model. Dispatch re-resolves the provider and refuses a kind/model mismatch before reserving or sending.
 
-**Connection check.** `GET https://api.openai.com/v1/models/gpt-6-luna`. It is authenticated, generates nothing and
-sends no user content, and it proves the key can use the frozen model:
-- 404 / `model_not_found` → `no_provider`;
-- 401/403 → `provider_auth`;
-- `insufficient_quota` → `provider_auth`, not retried.
+**Connection check.** `GET https://api.openai.com/v1/models`. It is authenticated, generates nothing and sends no
+user content. One response reports the connection's two capabilities: Text (`gpt-6-luna` is listed) and Images (each
+ADR 0009 GPT Image route model, `gpt-image-2.5-sunburst` and `gpt-image-2.5-flare`, is listed). Both are stored with
+the check and shown in G2. The check passes when either capability is ready; a key that lists neither fails as
+`no_provider` and both are shown as unavailable. 401/403 → `provider_auth`; `insufficient_quota` → `provider_auth`,
+not retried. A failed HTTP check records no capability. Text routing skips a connection whose last check did not list
+the text model, and a provider pin to it returns `no_provider`. A connection that was never checked, or whose key was
+replaced, routes as before.
 
 **Strict schema (both routes).** Requests send `strictScriptSchema()`. It is the script schema with
 `minLength`/`maxLength` removed and `const` written as a one-value `enum`. `decodeScriptDocument` still enforces

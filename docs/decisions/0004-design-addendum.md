@@ -161,13 +161,21 @@ nearest designed screen would put it.
   edits · fallback" (image) with cost "None". The fal and Ollama tiles carry short descriptions; Google and xAI keep
   disabled Soon destinations. While members may not add their own providers, Add custom is disabled with the same
   reason as Add provider, and G12 reached directly shows an "Ask an admin to add this provider" state built from the
-  empty-state component.
+  empty-state component. The OpenAI Test connection result, which has no artboard, appears in the row's notice using
+  G12's test-result key/value pattern with status badges: "Text · Ready" and "Images · Ready / Not available for this
+  key / Needs organisation verification"; the no-JavaScript flash from the image tab carries the same line. A row
+  whose route the key cannot use shows the design's warning badge with an alert icon, as "Licence guard" does: "No
+  access", with the full reason in the tooltip and for screen readers, or "Verify org" after GPT Image refused an
+  unverified organisation.
 - **G11 Routing:** the Guards box adds a "Private-network endpoints (local servers such as Ollama)" row, defaulting to
   MV_ALLOW_PRIVATE_PROVIDER_URLS; link-local and metadata addresses stay blocked. The spend row keeps "Monthly remote
   spend limit · $20" with its switch; admins edit the amount inline. With JavaScript guard and mode changes save at
   once with a toast; without it a Save button submits. People who cannot change routing see disabled controls with
   "Only an admin can change the routing mode and guards.", and the add-pin form is shown only to admins and project
-  owners. Recent decisions show task, "model · provider" and the reason in words, including placeholder routes.
+  owners. Recent decisions show the task, "model · provider" with a remote route's per-call estimate in the compute
+  meter's mono format ("~$0.08"), and the reason in words, including placeholder routes and "OpenAI images are not
+  available for this key". After an automatic fallback, a second reason line reads "Switched from GPT Image 2.5
+  Sunburst · OpenAI (rate limited)".
 - **G12 Custom provider:** custom local endpoints use the designed four-step wizard; only explicitly registered
   provider types are served. "Next: test" saves a disabled draft and runs the model-list check (no generation, no
   paid content), so step 2 opens on the designed result (Status, Time, Cost; "Next: describe", or "Test again" after a

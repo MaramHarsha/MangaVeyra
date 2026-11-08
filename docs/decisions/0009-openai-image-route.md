@@ -18,7 +18,7 @@ xhigh/max quality levels are documented for 2.5 only, so moving to 2.6 needs a s
 
 | Provider | Endpoint and model | Request ceiling | Per-call reservation |
 |---|---|---|---|
-| OpenAI (direct; Auto prefers it) | `POST https://api.openai.com/v1/images/generations`, or `POST https://api.openai.com/v1/images/edits` when input images are sent (JSON `images[]`/`mask` data URLs); `gpt-image-2.5-sunburst`, `gpt-image-2.5-flare` | 1–4 outputs; `quality: high`; PNG; `moderation: auto`; `background` `opaque`/`transparent`; one of 15 frozen sizes (1024², 1120×896, 1152×864, 1536×1024, 1536×864, 1536×768, 1536×640, 1536×512 and their transposes) chosen by nearest aspect ratio; composed prompt ≤ 6,144 UTF-8 bytes; ≤ 2 reference images re-encoded at ≤ 1,024 px, plus init and mask | `T(size) × n × $30/M + 6,144 × $5/M + inputs × 6,800 × $8/M`, where inputs = min(refs, 2) + init + mask |
+| OpenAI (direct; Auto prefers it) | `POST https://api.openai.com/v1/images/generations`, or `POST https://api.openai.com/v1/images/edits` when input images are sent (JSON `images[]`/`mask` data URLs); `gpt-image-2.5-sunburst`, `gpt-image-2.5-flare` | 1–4 outputs; `quality: high`; PNG; `moderation: auto`; `background` `opaque`/`transparent`; one of 15 frozen sizes (1024², 1120×896, 1152×864, 1536×1024, 1536×864, 1536×768, 1536×640, 1536×512 and their transposes) chosen by nearest aspect ratio; composed prompt ≤ 6,144 UTF-8 bytes; ≤ 2 reference images (an identity contact sheet counts as one) re-encoded at ≤ 1,024 px, plus init and mask | `T(size) × n × $30/M + 6,144 × $5/M + inputs × 6,800 × $8/M`, where inputs = min(refs, 2) + init + mask |
 | OpenRouter (pin-only) | `POST https://openrouter.ai/api/v1/images`; `openai/gpt-image-2.5-sunburst` | 1–4 outputs; `quality: high`; PNG; `background`; a documented `aspect_ratio`; ≤ 2 refs; init and mask ≤ 1,536 px; `provider.allow_fallbacks: false` | `5,930 × n × $30/M + 6,144 × $5/M + inputs × 6,800 × $8/M` |
 | OpenRouter (pin-only) | same endpoint; `google/gemini-nano-banana-2.1` | exactly 1 output; `resolution: 1K`; a documented `aspect_ratio`; ≤ 6 refs plus init and mask | `1,120 × $30/M + 4,096 × $7.50/M + 6,144 × $1.50/M + inputs × 1,120 × $1.50/M` |
 | OpenRouter (pin-only) | same endpoint; `google/gemini-3-pro-image` | as above | `1,120 × $120/M + 4,096 × $12/M + 6,144 × $2/M + inputs × 560 × $2/M` |
@@ -50,9 +50,16 @@ unknown outcomes charge the estimate. HTTP rejections reconcile at zero (ADR 000
 output or an unknown stage, which charges the estimate. OpenRouter routes keep ADR 0007's usage.cost and failure
 accounting.
 
-Errors map to safe codes: 401, 403 and `insufficient_quota` → provider_auth; 429 → rate_limited (retryable);
+Errors map to safe codes: a 403 whose error has type `invalid_request_error` and no code (OpenAI's
+organisation-verification refusal, detected from status, type and code only) → `provider_verification`, terminal and
+unbilled, with the copy "OpenAI needs your organisation verified for image generation. Verify it in your OpenAI
+account, then test the connection again."; other 401/403 responses and `insufficient_quota` → provider_auth; 429 →
+rate_limited (retryable);
 404/`model_not_found` → no_provider; `moderation_blocked` → provider_refused; other image user errors → bad_input;
-5xx and timeouts → retryable. Provider text, keys and prompts never appear in errors or logs.
+5xx and timeouts → retryable. Provider text, keys and prompts never appear in errors or logs. A
+`provider_verification` refusal is remembered on the connection for the refused key: routing skips its GPT Image
+routes and G2 shows "Verify org" until the next connection test, and queued plans for those routes fail before
+reserving.
 
 Output must be base64; URLs are refused, and the direct route requires PNG. Each image is limited to 24 MiB, 4,096 px
 per side and 16 MP. Redirects are disabled and each call has a 3-minute deadline. Generated images are centre-cropped
@@ -76,11 +83,16 @@ they never raise an unpinned estimate.
 Automatic fallback skips the failed provider kind entirely: a transient OpenAI failure moves to the best OpenRouter
 (or other) route, then to the placeholder. The plan's per-attempt estimate is the most expensive route in that chain,
 with at most one route per approved attempt, and each reroute is checked against its own pinned quote. Pinned plans
-and terminal failures (refusal, auth, bad input, spend limit) never fall back.
+and terminal failures (refusal, auth, organisation verification, bad input, spend limit) never fall back. Auto and
+pins consider a direct OpenAI image model only if the connection's last model-list check listed it; a connection that
+was never checked is unchanged. A skipped model is recorded in `skipped` as `<model>: not available for this key` (or
+`needs organisation verification`), and routing continues in this ADR's order: another listed GPT Image model, the
+other routes, then the placeholder. A plan approved before such a check is refused at dispatch, before reserving.
 
 Each plan decision records the route, its per-call estimate and the fallback chain. A fallback decision also records
 the failed `kind:model` and its error code, and the job event records the switch. The licence guard, monthly caps and
-token approval thresholds apply unchanged.
+token approval thresholds apply unchanged. G11 Recent decisions stores, for each attempt, the per-call estimate of a
+remote route and any switch (the failed `kind:model` and its safe code).
 
 ## Prompts
 
@@ -90,7 +102,13 @@ instruction (a background plate with no people, one character on transparency in
 prompt written by a creator or an agent stays the primary description. Every prompt is at most 4,000 bytes, strips
 control characters, mentions speed lines only when the panel has motion, and ends with fixed rules: no text, speech
 bubbles, lettering or panel borders, and nothing explicit. Each layer has its own avoid list. Character layers carry
-their character's kept sheets first (up to 4 stored; GPT Image sends 2). Backgrounds and effects carry no references.
+up to four kept references first and the pose guide last. When identity references and a control image (a pose
+skeleton or a neighbouring page) exceed a route's MaxRefs, the identity references are packed into one contact sheet:
+ceil(√n) columns in reading order, each reference fitted into a square cell on white with 16 px gutters and no labels,
+at most 1,024 px (1024×504 for two references, 1024² for three or four). A GPT Image call therefore carries [identity
+sheet, pose]. Without a control image the first MaxRefs identity references are sent as before. The GPT Image prompt
+lists the attached images in sending order and gives guidance only for what was sent; Seedream names the pose guide by
+its position. Quotes are unchanged. Backgrounds and effects carry no references.
 
 ## Live verification checklist (owner's key, USD 10 cap)
 
@@ -133,5 +151,6 @@ they do not satisfy the square-image token assertion or the reference/mask/multi
 - Neither OpenAI nor the OpenRouter Image API offers a request-level price guard; a tariff increase requires updating
   this record and the constants in `internal/ai/image_routes.go`.
 - Seedream and Nano Banana return opaque character layers.
-- The OpenAI connection test checks a text model only; an organisation not verified for GPT Image passes it and then
-  fails image jobs with provider_auth (no fallback). A cover-generation entry point does not exist yet.
+- The OpenAI connection test reports Text and Images separately from the model list (ADR 0006). An organisation not
+  verified for GPT Image still lists the models, so the test cannot detect it; the first image job fails with
+  `provider_verification` and is remembered as above.
