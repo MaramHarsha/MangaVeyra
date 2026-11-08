@@ -216,7 +216,10 @@ func TestCancelledContextStopsPageLayout(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("page layout ran to the end: %v", err)
 	}
-	if late := time.Since(cancelled); late > 100*raceSlowdown*time.Millisecond {
+	// The error above proves the layout stopped early; this bounds how promptly.
+	// 250 ms leaves room for scheduling delay when the whole suite runs in
+	// parallel (100 ms flaked under full PostgreSQL runs).
+	if late := time.Since(cancelled); late > 250*raceSlowdown*time.Millisecond {
 		t.Fatalf("stopped %v after cancellation", late)
 	}
 	// A single bubble's size scan stops too.
