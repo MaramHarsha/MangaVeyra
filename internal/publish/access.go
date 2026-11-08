@@ -129,20 +129,14 @@ func (a access) member() clause {
 // membership; listed drops unlisted.
 func (a access) visibilities(listed bool) []string {
 	var out []string
-	switch {
-	case a.signedIn():
-		out = []string{VisibilityPublic, VisibilityUnlisted, VisibilityMembers}
-	case a.anonOK:
-		out = []string{VisibilityPublic, VisibilityUnlisted}
-	}
-	if listed {
-		kept := out[:0:0]
-		for _, v := range out {
-			if v != VisibilityUnlisted {
-				kept = append(kept, v)
-			}
+	if a.signedIn() || a.anonOK {
+		out = append(out, VisibilityPublic)
+		if !listed {
+			out = append(out, VisibilityUnlisted)
 		}
-		out = kept
+	}
+	if a.signedIn() {
+		out = append(out, VisibilityMembers)
 	}
 	return out
 }
