@@ -55,7 +55,7 @@ func TestMigrationsApplyAndAreIdempotent(t *testing.T) {
 			}
 		}
 		// Columns added after the base schema (Phase 3: the series page's release note).
-		for _, col := range []struct{ table, column string }{{"series", "schedule"}} {
+		for _, col := range []struct{ table, column string }{{"series", "schedule"}, {"comments", "assignee_id"}} {
 			var n int
 			if err := d.Get(ctx, &n, "SELECT COUNT("+col.column+") FROM "+col.table); err != nil {
 				t.Errorf("column %s.%s: %v", col.table, col.column, err)
