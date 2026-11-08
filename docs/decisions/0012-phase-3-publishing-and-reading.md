@@ -71,3 +71,19 @@ decided before the modules are built in parallel.
 Reader-facing modules depend only on `publish.Service`, `social.Follows` and `analytics.Recorder`, so they can be
 built in parallel. Frozen publications cost storage per published language but make reading fast, cacheable and
 stable while creators keep editing. Tagging v1.0.0 remains an owner action after the Phase 3 acceptance passes.
+
+## Additions during implementation (2026-11-08)
+
+- `publish.Series` carries `Creators` (from `series_creators`, owner first) and `Schedule`, a creator-written release
+  note (migration 0401), because E5 and F1 credit co-creators and show it.
+- Daily read-event aggregates live in `read_event_days` (migration 0402); the roll-up claims each raw day with
+  `DELETE … RETURNING`, so two server processes never count a day twice and raw events are never deleted without
+  being aggregated.
+- `publish` notifies followers through `publish.FollowerSource`, a one-method view of `social.Follows` that the
+  social module also provides, because publish cannot import social without an import cycle. Every follower is
+  re-checked with `CanRead` and an active account before a notification is sent.
+- The reader owns age confirmations through the leaf package `internal/reader/agegate` (`POST
+  /s/{series}/confirm-age`); the series page and the reader show the step until a confirmation is stored, and the
+  reader's chapter API and writes return 404 until then.
+- Publication IDs stay stable when a published chapter is updated; panel comments and bookmarks anchor to the
+  publication plus page and panel order, and anchors that no longer exist after an update are shown at chapter level.
