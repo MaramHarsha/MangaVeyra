@@ -286,7 +286,9 @@ func (m *Module) saveServer(w http.ResponseWriter, r *http.Request) error {
 		i.Name, i.Description, i.PublicURL, i.Mode = v.Name, v.Description, v.PublicURL, v.Mode
 		return nil
 	}); err != nil {
-		return core.ErrBadRequest("instance")
+		// The stored name is limited to 80 bytes, which a long non-Latin name can exceed.
+		v.Errors["name"] = i18n.T(ctx, "admin.server.error.name")
+		return m.renderServer(w, r, http.StatusUnprocessableEntity, v)
 	}
 	m.audit(ctx, "admin.settings.instance", "instance", "instance", map[string]any{"name": v.Name, "public_url": v.PublicURL, "mode": v.Mode})
 	return done(w, r, "/admin/server")

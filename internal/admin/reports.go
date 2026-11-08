@@ -16,6 +16,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/notify"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
+	"github.com/MaramHarsha/MangaVeyra/internal/social"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
 )
@@ -403,8 +404,10 @@ func (m *Module) apply(ctx context.Context, row reportRow, t target, act, note s
 		status, all = statusDismissed, false
 		auditKind, auditID = "report", row.ID
 	case actHideComment:
-		if err := m.mod.HideComment(ctx, t.Comment.ID, admin.ID); err != nil {
+		if err := m.mod.HideComment(ctx, t.Comment.ID, admin.ID); errors.Is(err, social.ErrNotFound) {
 			return i18n.T(ctx, "admin.error.comment_gone"), nil
+		} else if err != nil {
+			return "", err
 		}
 		auditKind, auditID = "comment", t.Comment.ID
 	case actTakedownChapter, actTakedownSeries:
