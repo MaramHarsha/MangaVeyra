@@ -166,6 +166,9 @@ lookups while keeping imports acyclic.
 * Browser Studio pages and manual retry require a signed-in session. Bearer job reads require `projects:read`,
   bearer cancellation requires `projects:write` plus `generate`, and both per-job access and lists enforce the
   token's project allow-list. Aggregate job stats and manual retry are not bearer-token operations.
+* Job API responses, job events and realtime job summaries never contain progress text, event messages or data, or
+  raw failure messages for any caller; failures carry a public code with localized recovery copy. A child job cannot
+  be retried on its own (409 `child_job` with `parent_id`); canceling a parent cancels its unfinished worker children.
 * Go executor: `jobs.Handler func(ctx, *jobs.Run) error` registered by job type (remote APIs, text LLM, exports,
   compositing). Worker executor: Python workers call `/api/worker/v1` (`register`, `claim`, `progress`, `upload`,
   `complete`, `fail`, `heartbeat`) with a worker token. Progress is broadcast on WS topics `job:{id}`, `user:{id}`,

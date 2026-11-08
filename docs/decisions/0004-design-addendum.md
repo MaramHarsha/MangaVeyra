@@ -257,20 +257,37 @@ worker action and three summary cards. G4 keeps the full-width shell without the
 segments, Mark all read and the compact 760 px notification list. Existing tokens and UI-kit owners are reused.
 
 - **G9 real data:** rows use the actual job type, panel number when available, member, route, state and progress.
-  Admins see server jobs; other members see their own. No GPU means the subtitle identifies server/remote jobs;
-  no hardware name or worker slot count is fabricated. Online worker slots come from registered worker capacity.
+  Members see their own jobs. Admins see their own jobs by default and every member's jobs through an explicit "All
+  users" filter (`?all=1`, URL-restorable), drawn as the existing segmented-link control before the worker button;
+  the This week summary follows the same filter. No registered online or paused worker means the subtitle identifies
+  server/remote jobs; while every worker is paused the subtitle keeps the GPU or worker name and reads "{n} running
+  slot(s) paused". No hardware name or worker slot count is fabricated. Online worker slots come from registered
+  worker capacity.
   Per-user limits distinguish configured GPU/server limits. Night mode uses its configured window and server time.
   This week's summary uses recorded actuals for finished top-level jobs since Monday 00:00 UTC; parent actuals
-  include their child work. These values replace the artboard's sample metrics.
+  include their child work. These values replace the artboard's sample metrics. A worker job started by a parent
+  job (Character Lock assessment or training, local image generation) is part of that job: the queue shows one row
+  whose bar uses the running child's measurement, never ahead of the parent's measured steps; the child's detail link
+  opens the parent, and canceling the parent also stops the child. An unacknowledged cancellation reads Stopping in
+  the warning tone; finished jobs show their final state. Remote spend uses two decimals ("$4.18"), amounts below one
+  cent read "<$0.01", queued estimates read "~3 min"/"~$0.24", and a finished job's time reads "38 s", "2 min" or
+  "1 h 5 m". Character Lock scoring models absent from the routing catalogue are named DINOv2, CCIP, CCIP + outfit
+  and CCIP + outfit views.
 - **G9 action states not drawn in the handoff:** reuse the shared dropdown for View details, Review in Studio and
   cancellation. Retry is reviewed in the original Studio flow so scope, revision and spend approval remain there.
   A selected job expands a shared Box/KV/Notice section below the designed queue and summary, with at most 50
-  sanitized recent event kinds/timestamps. No prompt, payload or raw provider/worker log is shown. A single worker
-  uses the designed Pause/Resume button; multiple workers use the existing dropdown with named actions. No worker
+  sanitized recent event kinds/timestamps. No prompt, payload or raw provider/worker log is shown. A single online or
+  paused worker uses the designed button, labelled and iconed by the action it performs (Pause worker with the pause
+  icon; Resume worker with the play icon when every worker is paused); several use the existing dropdown with named
+  actions. Offline workers are not counted. No worker
   or insufficient role disables the action with its reason. Pause drains new claims and preserves running work.
 - **G4 real data:** titles and bodies are persisted notification content; times, controls and read status follow
   the current interface locale. Notification text retains the language in which it was created. Category filters
-  use the existing segmented-link component; Mark all read covers all categories for the current member.
+  use the existing segmented-link component; Mark all read covers the selected category for the current member and
+  is disabled when that category has nothing unread. Rows are ordered by the time shown, newest first (a regrouped
+  notification moves to the top). Job notification bodies are a summary in the recipient's language — project ·
+  what was made · duration ("Tidebreak Courier · Panel 1.2 · Regenerate · 38 s") — never a job type or worker text;
+  older rows that stored a raw job type show that job's localized label.
   Clicking a row explicitly marks it read and opens an existing local destination. Missing or external destinations
   return to the notification category instead of offering a dead/external link.
 - **Necessary empty, paging and recovery states:** use the existing State, Notice and button components. Cursor
