@@ -34,12 +34,19 @@ templ SeriesPage(v seriesView) {
 				<div class="mv-series__main">
 					<h1 class="mv-series__title">{ v.Series.Title }</h1>
 					<p class="mv-series__by">
-						if v.By != "" {
+						if len(v.By) > 0 {
 							{ i18n.T(ctx, "social.series.by") }
-							<a class="mv-series__creator" href={ templ.URL(v.ByHref) }>{ v.By }</a>
+							for i, c := range v.By {
+								{ creditSep(ctx, i, len(v.By)) }
+								if c.Href != "" {
+									<a class="mv-series__creator" href={ templ.URL(c.Href) }>{ c.Name }</a>
+								} else {
+									<span class="mv-series__creator">{ c.Name }</span>
+								}
+							}
 						}
 						for i, part := range v.Meta {
-							if i > 0 || v.By != "" {
+							if i > 0 || len(v.By) > 0 {
 								{ " · " }
 							}
 							{ part }

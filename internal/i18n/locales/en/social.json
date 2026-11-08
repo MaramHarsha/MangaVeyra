@@ -98,6 +98,8 @@
   "social.report.title": "Report this comment",
   "social.series.banner": "Series banner · key art",
   "social.series.by": "by",
+  "social.series.credit_sep": ", ",
+  "social.series.credit_last": " & ",
   "social.series.chapter": "Chapter {number}",
   "social.series.chapters": "Chapters",
   "social.series.chapters_stat": "chapters",

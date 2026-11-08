@@ -31,17 +31,18 @@ type seriesView struct {
 	Href      string
 	CoverURL  string
 	BannerURL string
-	// By is the creators line's name; ByHref links the owner's F1 profile.
-	By, ByHref string
-	Meta       []string
-	Genres     []string
-	AI         []ui.BadgeSpec
-	Followers  string
-	Chapters   int
-	Languages  []langLink
-	Sort       string
-	SortLinks  []ui.SegLink
-	Rows       []chapterRow
+	// By credits the series' creators in credit order, each linked to their
+	// F1 profile while the account is active.
+	By        []credit
+	Meta      []string
+	Genres    []string
+	AI        []ui.BadgeSpec
+	Followers string
+	Chapters  int
+	Languages []langLink
+	Sort      string
+	SortLinks []ui.SegLink
+	Rows      []chapterRow
 	// Read is the primary action ("Read ch. 1"); ReadHref is "" without chapters.
 	ReadLabel, ReadHref string
 	SignedIn            bool
@@ -163,12 +164,12 @@ func (m *Module) buildSeriesView(ctx context.Context, r *http.Request, s publish
 	if s.BannerAssetID != "" {
 		v.BannerURL = m.assets.URLFor(ctx, s.BannerAssetID, 15*time.Minute)
 	}
-	if owner, err := m.d.Auth.UserByID(ctx, s.OwnerID); err == nil && owner.Status == auth.StatusActive {
-		v.By, v.ByHref = owner.Name(), "/u/"+url.PathEscape(owner.Username)
-	} else if err != nil && !errors.Is(err, auth.ErrUserNotFound) {
+	by, err := m.credits(ctx, s)
+	if err != nil {
 		return v, err
 	}
-	v.Meta = []string{statusLabel(ctx, s.Status), formatLabel(ctx, s.Format), ratingLabel(ctx, s.AgeRating), licenceLabel(ctx, s.Licence)}
+	v.By = by
+	v.Meta = []string{scheduleOrStatus(ctx, s), formatLabel(ctx, s.Format), ratingLabel(ctx, s.AgeRating), licenceLabel(ctx, s.Licence)}
 	for _, g := range s.Genres {
 		if g = genreText(g); g != "" {
 			v.Genres = append(v.Genres, g)
@@ -565,4 +566,57 @@ func (m *Module) reportSeriesComment(w http.ResponseWriter, r *http.Request) err
 	web.Flash(w, r, "success", i18n.T(ctx, "social.report.sent"), i18n.T(ctx, "social.report.sent_body"))
 	m.backToComments(w, r, s, "#comment-"+id)
 	return nil
+}
+
+// credit is one name on E5's creators line.
+type credit struct{ Name, Href string }
+
+// credits lists the series' creators in credit order (publish puts the owner
+// first), one entry per account. A credit name replaces the display name;
+// suspended or deleted accounts keep their credit but lose the profile link.
+func (m *Module) credits(ctx context.Context, s publish.Series) ([]credit, error) {
+	list := s.Creators
+	if len(list) == 0 {
+		list = []publish.Creator{{UserID: s.OwnerID, Role: "owner"}}
+	}
+	var out []credit
+	seen := map[string]bool{}
+	for _, c := range list {
+		if c.UserID == "" || seen[c.UserID] {
+			continue
+		}
+		seen[c.UserID] = true
+		u, err := m.d.Auth.UserByID(ctx, c.UserID)
+		if err != nil {
+			if errors.Is(err, auth.ErrUserNotFound) {
+				if c.CreditName != "" {
+					out = append(out, credit{Name: c.CreditName})
+				}
+				continue
+			}
+			return nil, err
+		}
+		cr := credit{Name: u.Name()}
+		if c.CreditName != "" {
+			cr.Name = c.CreditName
+		}
+		if u.Status == auth.StatusActive {
+			cr.Href = "/u/" + url.PathEscape(u.Username)
+		}
+		out = append(out, cr)
+	}
+	return out, nil
+}
+
+// creditSep is the separator before the i-th of n credits: ", " between
+// names and " & " before the last ("Jerry Okafor & Jun Sato").
+func creditSep(ctx context.Context, i, n int) string {
+	switch {
+	case i == 0:
+		return ""
+	case i == n-1:
+		return i18n.T(ctx, "social.series.credit_last")
+	default:
+		return i18n.T(ctx, "social.series.credit_sep")
+	}
 }

@@ -98,6 +98,8 @@
   "social.report.title": "このコメントを報告",
   "social.series.banner": "シリーズバナー · キーアート",
   "social.series.by": "作者",
+  "social.series.credit_sep": "、",
+  "social.series.credit_last": "、",
   "social.series.chapter": "第{number}話",
   "social.series.chapters": "エピソード",
   "social.series.chapters_stat": "話",

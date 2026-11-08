@@ -178,7 +178,7 @@ func (m *Module) buildProfile(ctx context.Context, r *http.Request, u *auth.User
 		v.ChapterCount += len(pubs)
 		sHref := "/s/" + url.PathEscape(s.Slug)
 		ps := profileSeries{Href: sHref, Title: s.Title,
-			Meta: statusLabel(ctx, s.Status) + " · " + i18n.T(ctx, "social.profile.chapters_short", "count", len(pubs))}
+			Meta: scheduleOrStatus(ctx, s) + " · " + i18n.T(ctx, "social.profile.chapters_short", "count", len(pubs))}
 		if s.CoverAssetID != "" {
 			ps.CoverURL = m.assets.URLFor(ctx, s.CoverAssetID, 15*time.Minute)
 		}

@@ -105,6 +105,15 @@ func ratingLabel(ctx context.Context, rating string) string {
 	return rating
 }
 
+// scheduleOrStatus is the creator's release note ("Weekly, Saturday") when
+// set, else the series status, as E5's meta line and F1's cards show it.
+func scheduleOrStatus(ctx context.Context, s publish.Series) string {
+	if s.Schedule != "" {
+		return s.Schedule
+	}
+	return statusLabel(ctx, s.Status)
+}
+
 func statusLabel(ctx context.Context, status string) string {
 	switch status {
 	case publish.SeriesOngoing, publish.SeriesCompleted, publish.SeriesHiatus, publish.SeriesDraft:

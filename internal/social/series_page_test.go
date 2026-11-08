@@ -264,3 +264,23 @@ func TestCommentBodiesArePlainText(t *testing.T) {
 		}
 	})
 }
+
+// E5 credits every creator in credit order and shows the release note in place
+// of the status ("by Jerry Okafor & Jun Sato · Weekly, Saturday · …"); F1 cards
+// show the release note too.
+func TestSeriesPageCreditsCreatorsAndReleaseNote(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, e *env) {
+		owner, _ := e.user(auth.RoleCreator)
+		letterer, _ := e.user(auth.RoleCreator)
+		s := e.f.Series(publishtest.SeriesSpec{Owner: owner, Schedule: "Weekly, Saturday", OwnerCredit: "Jerry Okafor",
+			Creators: []publish.Creator{{UserID: letterer.ID, Role: "letterer", CreditName: "Jun Sato"}}})
+		e.f.Publish(s, publishtest.PublicationSpec{})
+		// Browsers collapse the template's whitespace runs, so compare collapsed text.
+		html := strings.Join(strings.Fields(string(e.ta.NewClient().Get("/s/"+s.Slug).Body)), " ")
+		mustContain(t, "E5 credits", html,
+			`by <a class="mv-series__creator" href="/u/`+owner.Username+`">Jerry Okafor</a> &amp; <a class="mv-series__creator" href="/u/`+letterer.Username+`">Jun Sato</a> · Weekly, Saturday · Manga (RTL)`)
+		mustNotContain(t, "E5 status replaced by the release note", html, "Ongoing · ")
+		profile := string(e.ta.NewClient().Get("/u/" + owner.Username).Body)
+		mustContain(t, "F1 card", profile, "Weekly, Saturday · ")
+	})
+}
