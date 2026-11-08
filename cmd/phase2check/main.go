@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -68,7 +67,7 @@ func main() {
 	}
 }
 func run() error {
-	stage := flag.String("stage", "report", "init, references, curate, chapter, plates, benchmark, benchmark-framed, outfit-dataset, outfit-extra, outfit-validation, repair, repair-drift, assess, region, report, serve")
+	stage := flag.String("stage", "report", "init, references, curate, chapter, plates, benchmark, benchmark-framed, outfit-dataset, outfit-extra, outfit-validation, repair, repair-drift, assess, region, report, serve, cleanup")
 	root := flag.String("data", "", "new isolated temporary data directory")
 	source := flag.String("source", "", "read-only source data directory (init only)")
 	provider := flag.String("provider", "", "saved OpenAI provider ID (init only)")
@@ -91,8 +90,17 @@ func run() error {
 		return errors.New("explicit owner approval is required (MV_PHASE2_LIVE_APPROVED=1)")
 	}
 	*root = filepath.Clean(*root)
-	if !filepath.IsAbs(*root) || (!strings.HasPrefix(*root, "/private/tmp/mv-phase2-") && !strings.HasPrefix(*root, "/tmp/mv-phase2-")) {
-		return errors.New("data must be a new mv-phase2- directory under the temporary directory")
+	if !approvedRoot(*root) {
+		return errors.New("data must be an mv-phase2- directory directly under the temporary directory")
+	}
+	if *stage == "cleanup" {
+		// Securely removes the isolated database, throwaway key, worker token
+		// and login once the approved run is finished; nothing else is opened.
+		if err := cleanupRoot(*root); err != nil {
+			return err
+		}
+		fmt.Println("Removed isolated acceptance data:", *root)
+		return nil
 	}
 	if *stage == "init" {
 		if _, err := os.Stat(*root); !os.IsNotExist(err) {
@@ -104,18 +112,14 @@ func run() error {
 		if err := os.Mkdir(*root, 0700); err != nil {
 			return err
 		}
-		key, err := os.ReadFile(filepath.Join(*source, "secret.key"))
-		if err != nil {
-			return errors.New("cannot read the saved encryption key file")
-		}
-		if err = os.WriteFile(filepath.Join(*root, "secret.key"), key, 0600); err != nil {
-			return err
-		}
+		// The production master key is never copied: the isolated instance
+		// generates its own throwaway secret.key on first start, and init
+		// re-encrypts the one saved provider key under it (copyConnection).
 		buf := make([]byte, 32)
-		if _, err = rand.Read(buf); err != nil {
+		if _, err := rand.Read(buf); err != nil {
 			return err
 		}
-		if err = os.WriteFile(filepath.Join(*root, "worker-token"), []byte(base64.RawURLEncoding.EncodeToString(buf)), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(*root, "worker-token"), []byte(base64.RawURLEncoding.EncodeToString(buf)), 0600); err != nil {
 			return err
 		}
 	}
@@ -137,7 +141,7 @@ func run() error {
 	defer a.Close()
 	h := &harness{ctx: ctx, a: a, root: *root, studio: core.MustUse[studio.Service](a.Deps), pages: core.MustUse[pagestore.Service](a.Deps), gen: core.MustUse[gen.Service](a.Deps), control: core.MustUse[gen.ControlService](a.Deps)}
 	if *stage == "init" {
-		if err = copyConnection(ctx, a.Deps.DB, *source, *user, *provider); err != nil {
+		if err = copyConnection(ctx, a.Deps.DB, a.Deps.Secrets, *source, *root, *user, *provider); err != nil {
 			return err
 		}
 		h.s = state{ApprovedCap: capUSD, UserID: *user, ProviderID: *provider, Jobs: map[string]string{}}
@@ -157,6 +161,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// These settings change only the isolated temporary instance: the approved
+	// live run needs its saved OpenAI route, so local-only is off here alone.
 	_, err = a.Deps.Settings.UpdateInstance(ctx, h.s.UserID, func(i *settings.Instance) error {
 		i.Name = "MangaVeyra · Phase 2 live acceptance"
 		i.Mode = settings.ModePersonal
@@ -358,7 +364,7 @@ func run() error {
 		err = h.region(*regionLabel)
 	case "report":
 	case "serve":
-		fmt.Println("Isolated live preview:", cfg.PublicURL)
+		fmt.Println("Isolated live preview:", cfg.PublicURL, "· throwaway login:", filepath.Join(*root, throwawayLogin))
 		<-ctx.Done()
 	default:
 		return errors.New("unknown stage")
@@ -369,56 +375,6 @@ func run() error {
 	return h.report()
 }
 
-func copyConnection(ctx context.Context, target *db.DB, source, user, provider string) error {
-	src, err := sql.Open("sqlite", "file:"+filepath.Join(source, "mangaveyra.db")+"?mode=ro")
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-	var kind string
-	var enabled bool
-	if err = src.QueryRowContext(ctx, `SELECT kind,enabled FROM providers WHERE id=?`, provider).Scan(&kind, &enabled); err != nil {
-		return err
-	}
-	if kind != "openai" || !enabled {
-		return errors.New("source must be an enabled saved OpenAI connection")
-	}
-	return target.WithTx(ctx, func(tx *db.Tx) error {
-		for _, row := range []struct{ table, id string }{{"users", user}, {"providers", provider}} {
-			r, err := src.QueryContext(ctx, "SELECT * FROM "+row.table+" WHERE id=?", row.id)
-			if err != nil {
-				return err
-			}
-			cols, err := r.Columns()
-			if err != nil {
-				r.Close()
-				return err
-			}
-			if !r.Next() {
-				r.Close()
-				return errors.New("saved connection/account not found")
-			}
-			values := make([]any, len(cols))
-			ptrs := make([]any, len(cols))
-			for i := range values {
-				ptrs[i] = &values[i]
-			}
-			if err = r.Scan(ptrs...); err != nil {
-				r.Close()
-				return err
-			}
-			r.Close()
-			marks := make([]string, len(cols))
-			for i := range marks {
-				marks[i] = "?"
-			}
-			if _, err = tx.Exec(ctx, "INSERT INTO "+row.table+" ("+strings.Join(cols, ",")+") VALUES ("+strings.Join(marks, ",")+")", values...); err != nil {
-				return errors.New("cannot copy sealed connection/account into isolated database")
-			}
-		}
-		return nil
-	})
-}
 func (h *harness) save() error {
 	b, err := json.MarshalIndent(h.s, "", "  ")
 	if err != nil {
