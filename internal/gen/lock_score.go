@@ -51,7 +51,7 @@ func LockPercent(score float64) int {
 	}
 	return percent
 }
-func (s *service) assessPixels(ctx context.Context, run *jobs.Run, c studio.Character, hash string, ids []string, pixels [][]byte, scope jobs.Scope, slot, selectedModel string) ([]lockAssessment, error) {
+func (s *service) assessPixels(ctx context.Context, run *jobs.Run, c studio.Character, hash string, ids []string, pixels [][]byte, scope jobs.Scope, slot, selectedModel string, progress lockProgress) ([]lockAssessment, error) {
 	if len(ids) == 0 || len(ids) != len(pixels) || len(ids) > 8 || len(c.Refs) == 0 {
 		return nil, studio.ErrInvalid
 	}
@@ -93,7 +93,7 @@ func (s *service) assessPixels(ctx context.Context, run *jobs.Run, c studio.Char
 	for i, data := range pixels {
 		files[fmtIndex("candidate_", i)] = data
 	}
-	child, err := s.runLockWorker(ctx, run, "character.score", model, slot, scope, map[string]any{"threshold": LockThreshold}, files)
+	child, err := s.runLockWorker(ctx, run, "character.score", model, slot, scope, map[string]any{"threshold": LockThreshold}, files, progress)
 	if child != nil {
 		run.AddActual(child.Actual)
 	}
@@ -102,32 +102,32 @@ func (s *service) assessPixels(ctx context.Context, run *jobs.Run, c studio.Char
 	}
 	var out lockWorkerOutput
 	if json.Unmarshal(child.Output, &out) != nil || !validLockMethod(out.Method) || !strings.HasPrefix(out.Method, lockMethodForModel(model)+":") || len(out.Scores) != len(ids) || len(out.Outfits) != len(ids) {
-		return nil, studio.ErrInvalid
+		return nil, errLockOutput
 	}
 	if model == lockOutfitModel {
 		if !validLockMethod(out.IdentityMethod) || !strings.HasPrefix(out.IdentityMethod, lockCCIPMethod+":") || out.FeatureMethods["ccip"] != out.IdentityMethod || !validFeatureMethod(out.FeatureMethods["fashion"], "fashion-clip-v1") || len(out.OutfitFeatures) != len(ids) {
-			return nil, studio.ErrInvalid
+			return nil, errLockOutput
 		}
 		for i, features := range out.OutfitFeatures {
 			if out.Outfits[i] == nil {
 				if len(features) != 0 {
-					return nil, studio.ErrInvalid
+					return nil, errLockOutput
 				}
 				continue
 			}
 			if len(features) != 2 {
-				return nil, studio.ErrInvalid
+				return nil, errLockOutput
 			}
 			for _, value := range features {
 				if math.IsNaN(value) || math.IsInf(value, 0) || value < -1.00001 || value > 1.00001 {
-					return nil, studio.ErrInvalid
+					return nil, errLockOutput
 				}
 			}
 		}
 	}
 	if model == lockMultiviewModel {
 		if !validMultiviewOutput(out, len(outfitIDs)) {
-			return nil, studio.ErrInvalid
+			return nil, errLockOutput
 		}
 	}
 	found := make([]lockAssessment, 0, len(ids))
@@ -135,7 +135,7 @@ func (s *service) assessPixels(ctx context.Context, run *jobs.Run, c studio.Char
 		outfit := out.Outfits[i]
 		identityMismatch := (model == lockOutfitModel || model == lockMultiviewModel) && identity < LockThreshold
 		if !finiteScore(identity) || outfit != nil && !finiteScore(*outfit) || files["outfit_0"] != nil && outfit == nil && !identityMismatch || files["outfit_0"] == nil && outfit != nil || identityMismatch && outfit != nil {
-			return nil, studio.ErrInvalid
+			return nil, errLockOutput
 		}
 		found = append(found, lockAssessment{ProjectID: c.ProjectID, CharacterID: c.ID, AssetID: ids[i], ReferenceHash: hash, Method: out.Method, JobID: run.Job.ID, Identity: identity, Outfit: outfit})
 	}

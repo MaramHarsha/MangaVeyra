@@ -6,10 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sort"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/ai"
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
@@ -18,10 +18,29 @@ import (
 
 var errLockChildExists = errors.New("lock child exists")
 
+// errLockOutput is a completed worker result that fails validation.
+var errLockOutput = errors.New("gen: invalid Character Lock worker result")
+
+// errLockArtifact is a training result that is not an owned, real, compatible
+// LoRA for the current references and base model.
+var errLockArtifact = errors.New("gen: rejected Character Lock training artifact")
+
+// lockChildError is a worker child that finished without completing. Its
+// state and safe protocol code decide the parent's outcome (mapLockJobError);
+// the worker's own message is never copied to the parent.
+type lockChildError struct{ State, Code string }
+
+func (e lockChildError) Error() string {
+	return "gen: Character Lock worker " + e.State + " (" + e.Code + ")"
+}
+
+// lockProgress mirrors a running worker child onto its parent job.
+type lockProgress func(context.Context, *jobs.Job) error
+
 // runLockWorker bridges to an explicitly configured worker. Inputs are private,
 // short lived, owned assets. The parent lease, permission, local-only setting
 // and exact target locks remain authoritative throughout the bridge.
-func (s *service) runLockWorker(ctx context.Context, run *jobs.Run, kind, model, slot string, scope jobs.Scope, input map[string]any, data map[string][]byte) (*jobs.Job, error) {
+func (s *service) runLockWorker(ctx context.Context, run *jobs.Run, kind, model, slot string, scope jobs.Scope, input map[string]any, data map[string][]byte, progress lockProgress) (*jobs.Job, error) {
 	total := 0
 	for _, v := range data {
 		total += len(v)
@@ -131,6 +150,7 @@ func (s *service) runLockWorker(ctx context.Context, run *jobs.Run, kind, model,
 	defer cancel()
 	tick := time.NewTicker(250 * time.Millisecond)
 	defer tick.Stop()
+	mirrored := -1.0
 	for !child.Finished() {
 		select {
 		case <-wait.Done():
@@ -146,16 +166,61 @@ func (s *service) runLockWorker(ctx context.Context, run *jobs.Run, kind, model,
 		if err != nil || parent.State != jobs.StateRunning || parent.CancelRequested || parent.Attempts != run.Job.Attempts {
 			return child, jobs.ErrLeaseLost
 		}
-		if kind == "character.train" {
-			if err := run.Progress(wait, child.Progress, child.Step, child.Steps, "Training Character Lock"); err != nil {
+		if progress != nil && !child.Finished() && child.Progress != mirrored {
+			if err := progress(wait, child); err != nil {
 				return child, err
 			}
+			mirrored = child.Progress
 		}
 	}
 	if child.State != jobs.StateDone {
-		return child, fmt.Errorf("%w: worker did not complete", studio.ErrInvalid)
+		code := ""
+		if child.Error != nil {
+			code = child.Error.Code
+		}
+		return child, lockChildError{State: child.State, Code: code}
 	}
 	return child, nil
+}
+
+// ErrCodeArtifactRejected is the job error code of a training job whose
+// worker returned an artifact that cannot become a ready Character Lock.
+const ErrCodeArtifactRejected = "artifact_rejected"
+
+// mapLockJobError maps Character Lock assessment/training failures to safe job
+// errors. A canceled worker child cancels the parent (no failure notice); a
+// worker failure keeps its own code instead of claiming the target changed.
+func mapLockJobError(ctx context.Context, err error) error {
+	var child lockChildError
+	switch {
+	case errors.Is(err, jobs.ErrLeaseLost):
+		return jobs.ErrLeaseLost
+	case ctx.Err() != nil || errors.Is(err, jobs.ErrCanceled):
+		return jobs.Permanent(jobs.ErrCodeCanceled, errors.New("Character Lock job canceled."))
+	case errors.As(err, &child):
+		switch {
+		case child.State == jobs.StateCanceled || child.Code == jobs.ErrCodeCanceled:
+			return jobs.Permanent(jobs.ErrCodeCanceled, errors.New("The worker job was canceled."))
+		case child.Code == jobs.ErrCodeTimeout:
+			return jobs.Retryable(jobs.ErrCodeTimeout, errors.New("The Character Lock worker timed out."))
+		case child.Code == jobs.ErrCodeOOM:
+			return jobs.Retryable(jobs.ErrCodeOOM, errors.New("The Character Lock worker ran out of memory."))
+		case child.Code == jobs.ErrCodeSafety:
+			return jobs.Permanent(jobs.ErrCodeSafety, errors.New("The Character Lock worker declined these images."))
+		case child.Code == jobs.ErrCodeBadInput:
+			return jobs.Permanent(jobs.ErrCodeBadInput, errors.New("The Character Lock worker could not read these images."))
+		}
+		return jobs.Permanent(ai.CodeUpstream, errors.New("The Character Lock worker could not complete this job."))
+	case errors.Is(err, context.DeadlineExceeded):
+		return jobs.Retryable(jobs.ErrCodeTimeout, errors.New("The Character Lock worker did not finish in time."))
+	case errors.Is(err, errLockOutput):
+		return jobs.Permanent(ai.CodeBadOutput, errors.New("The worker returned an invalid Character Lock result."))
+	case errors.Is(err, errLockArtifact):
+		return jobs.Permanent(ErrCodeArtifactRejected, errors.New("The worker's training artifact was rejected: it is not a real LoRA for this character's current references and base model."))
+	case errors.Is(err, ErrDeferredFeature):
+		return jobs.Permanent(ai.CodeNoProvider, errors.New("No compatible Character Lock worker is available."))
+	}
+	return mapImageJobError(ctx, err)
 }
 func storedToken(raw json.RawMessage) string {
 	var p struct {

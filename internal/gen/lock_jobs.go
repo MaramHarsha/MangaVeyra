@@ -189,34 +189,43 @@ func (s *service) handleLock(ctx context.Context, run *jobs.Run) error {
 	}
 	var c studio.Character
 	if err := s.db.WithTx(ctx, func(tx *db.Tx) error { var err error; c, err = s.checkLockTx(ctx, tx, p); return err }); err != nil {
-		return mapImageJobError(ctx, err)
+		return mapLockJobError(ctx, err)
 	}
 	if j.Type == JobTrain {
 		return s.trainCharacter(ctx, run, p, c)
 	}
 	assessments := []lockAssessment{}
-	for i := 0; i < len(p.Targets); i += 8 {
-		end := min(len(p.Targets), i+8)
+	total := len(p.Targets)
+	for i := 0; i < total; i += 8 {
+		end := min(total, i+8)
 		pixels := [][]byte{}
 		ids := []string{}
 		for _, target := range p.Targets[i:end] {
 			data, _, err := s.readOwned(ctx, p.ProjectID, target.AssetID)
 			if err != nil {
-				return mapImageJobError(ctx, err)
+				return mapLockJobError(ctx, err)
 			}
 			pixels = append(pixels, data)
 			ids = append(ids, target.AssetID)
 		}
-		found, err := s.assessPixels(ctx, run, c, p.ReferenceHash, ids, pixels, j.Scope, "score-"+p.Targets[i].LayerID, p.Model)
+		// The parent mirrors the running worker batch, so the queue and C3
+		// show the worker's real progress rather than 0% until a batch ends.
+		batch, done := end-i, i
+		mirror := func(ctx context.Context, child *jobs.Job) error {
+			share := max(0, min(1, child.Progress))
+			return run.Progress(ctx, (float64(done)+share*float64(batch))/float64(total), done+int(share*float64(batch)), total, "Assessing Character Lock")
+		}
+		found, err := s.assessPixels(ctx, run, c, p.ReferenceHash, ids, pixels, j.Scope, "score-"+p.Targets[i].LayerID, p.Model, mirror)
 		if err != nil {
-			return mapImageJobError(ctx, err)
+			return mapLockJobError(ctx, err)
 		}
 		if len(assessments) > 0 && found[0].Method != assessments[0].Method {
-			return mapImageJobError(ctx, studio.ErrConflict)
+			// The batches of one assessment never mix scoring methods.
+			return mapLockJobError(ctx, errLockOutput)
 		}
 		assessments = append(assessments, found...)
-		if err := run.Progress(ctx, float64(end)/float64(len(p.Targets)), end, len(p.Targets), "Assessing Character Lock"); err != nil {
-			return mapImageJobError(ctx, err)
+		if err := run.Progress(ctx, float64(end)/float64(total), end, total, "Assessing Character Lock"); err != nil {
+			return mapLockJobError(ctx, err)
 		}
 	}
 	err := run.CommitSideEffect(ctx, func(ctx context.Context, tx *db.Tx) (any, error) {
@@ -229,7 +238,7 @@ func (s *service) handleLock(ctx context.Context, run *jobs.Run) error {
 		return map[string]any{"character_id": c.ID, "assessed": len(assessments), "method": assessments[0].Method}, nil
 	})
 	if err != nil {
-		return mapImageJobError(ctx, err)
+		return mapLockJobError(ctx, err)
 	}
 	return nil
 }
@@ -242,7 +251,7 @@ func (s *service) trainCharacter(ctx context.Context, run *jobs.Run, p lockPaylo
 		}
 		data, asset, err := s.readOwned(ctx, p.ProjectID, r.AssetID)
 		if err != nil {
-			return mapImageJobError(ctx, err)
+			return mapLockJobError(ctx, err)
 		}
 		if seenRefs[asset.SHA256] {
 			continue
@@ -251,28 +260,39 @@ func (s *service) trainCharacter(ctx context.Context, run *jobs.Run, p lockPaylo
 		files[fmtIndex("ref_", len(files))] = data
 	}
 	trigger := "mv_" + strings.ToLower(c.ID[:10])
-	child, err := s.runLockWorker(ctx, run, "character.train", p.Model, "train", run.Job.Scope, map[string]any{"trigger": trigger, "steps": 1000, "rank": 16, "base_model": p.Model, "seed": seedFor(run.Job.ID, 0)}, files)
+	train := func(ctx context.Context, child *jobs.Job) error {
+		return run.Progress(ctx, child.Progress, child.Step, child.Steps, "Training Character Lock")
+	}
+	child, err := s.runLockWorker(ctx, run, "character.train", p.Model, "train", run.Job.Scope, map[string]any{"trigger": trigger, "steps": 1000, "rank": 16, "base_model": p.Model, "seed": seedFor(run.Job.ID, 0)}, files, train)
 	if child != nil {
 		run.AddActual(child.Actual)
 	}
 	if err != nil {
-		return mapImageJobError(ctx, err)
+		return mapLockJobError(ctx, err)
 	}
+	// Every artifact check below fails as a rejected artifact: the worker
+	// finished, but its result cannot become a ready Character Lock.
 	var out struct {
 		LoRA struct {
 			Key string `json:"key"`
 		} `json:"lora"`
 	}
 	if json.Unmarshal(child.Output, &out) != nil || !strings.HasPrefix(out.LoRA.Key, "jobs/"+child.ID+"/") {
-		return mapImageJobError(ctx, studio.ErrInvalid)
+		return mapLockJobError(ctx, errLockArtifact)
 	}
 	var assetID string
 	if err := s.db.Get(ctx, &assetID, `SELECT id FROM assets WHERE key=? AND owner_id=? AND project_id=? AND source='worker'`, out.LoRA.Key, run.Job.UserID, p.ProjectID); err != nil {
-		return mapImageJobError(ctx, err)
+		if db.IsNotFound(err) {
+			err = errLockArtifact
+		}
+		return mapLockJobError(ctx, err)
 	}
 	data, a, err := s.assets.Read(ctx, assetID, assets.MaxBytes)
-	if err != nil || !realLoRA(data) {
-		return mapImageJobError(ctx, studio.ErrInvalid)
+	if err != nil {
+		return mapLockJobError(ctx, err)
+	}
+	if !realLoRA(data) {
+		return mapLockJobError(ctx, errLockArtifact)
 	}
 	var meta struct {
 		Model       string `json:"base_model"`
@@ -280,11 +300,11 @@ func (s *service) trainCharacter(ctx context.Context, run *jobs.Run, p lockPaylo
 		Placeholder bool   `json:"placeholder"`
 	}
 	if json.Unmarshal(a.Meta, &meta) != nil || meta.Model != p.Model || meta.Placeholder || meta.Trainer != "peft-sdxl" && meta.Trainer != "external" {
-		return mapImageJobError(ctx, studio.ErrInvalid)
+		return mapLockJobError(ctx, errLockArtifact)
 	}
 	staged, err := s.assets.Stage(ctx, assets.SaveParams{OwnerID: run.Job.UserID, ProjectID: p.ProjectID, Kind: "character_lora", Source: assets.SourceAI, Data: data, ContentType: "application/octet-stream", Meta: map[string]any{"reference_hash": p.ReferenceHash, "base_model": p.Model, "trigger": trigger, "trainer": meta.Trainer}})
 	if err != nil {
-		return mapImageJobError(ctx, err)
+		return mapLockJobError(ctx, err)
 	}
 	defer s.assets.DiscardStaged(context.WithoutCancel(ctx), staged)
 	err = run.CommitSideEffect(ctx, func(ctx context.Context, tx *db.Tx) (any, error) {
@@ -299,7 +319,7 @@ func (s *service) trainCharacter(ctx context.Context, run *jobs.Run, p lockPaylo
 		return map[string]string{"character_id": c.ID, "lora_asset_id": a.ID, "base_model": p.Model}, err
 	})
 	if err != nil {
-		return mapImageJobError(ctx, err)
+		return mapLockJobError(ctx, err)
 	}
 	return nil
 }
