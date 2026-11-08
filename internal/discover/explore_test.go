@@ -124,6 +124,27 @@ func TestExploreRanksRecordedActivityOnly(t *testing.T) {
 	})
 }
 
+func TestCoversAreSignedImages(t *testing.T) {
+	ta := testutil.NewTestApp(t)
+	f := publishtest.New(t, ta)
+	f.SetMode(settings.ModePublic)
+	s := f.Series(publishtest.SeriesSpec{Title: "Kettle Knight", Cover: true, Synopsis: "A knight in a teapot."})
+	f.Publish(s, publishtest.PublicationSpec{})
+	anon := ta.NewClient()
+	for _, path := range []string{"/explore", "/search?q=kettle"} {
+		body := get(t, anon, path)
+		i := strings.Index(body, `<img src="/media/`)
+		if i < 0 {
+			t.Fatalf("%s: no signed cover image", path)
+		}
+		src := body[i+len(`<img src="`):]
+		src = strings.ReplaceAll(src[:strings.IndexByte(src, '"')], "&amp;", "&")
+		if resp := anon.Get(src); resp.StatusCode != 200 || !strings.HasPrefix(resp.Header.Get("Content-Type"), "image/") {
+			t.Errorf("%s: cover %s: %d %s", path, src, resp.StatusCode, resp.Header.Get("Content-Type"))
+		}
+	}
+}
+
 func TestExploreWithoutSeries(t *testing.T) {
 	ta := testutil.NewTestApp(t)
 	publishtest.New(t, ta).SetMode(settings.ModePublic)
