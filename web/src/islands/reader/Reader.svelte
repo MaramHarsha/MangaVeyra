@@ -531,7 +531,7 @@
   signedIn={p.signed_in} loginUrl={p.login_url} {t} onclose={() => (commentsOpen = false)} />
 {:else if settingsOpen}
  <SettingsPanel {settings} {t} {webtoon} langs={p.langs} signedIn={p.signed_in} commentsReady={p.comments} {voiceReady} {voiceName}
-  onchange={change} onclose={toggleSettings} />
+  {modes} {mode} onmode={setMode} onchange={change} onclose={toggleSettings} />
 {/if}
 
 <footer class={['mv-rd__progress', mode === 'webtoon' && 'mv-rd__progress--strip']}>

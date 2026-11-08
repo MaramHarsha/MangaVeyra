@@ -1,12 +1,14 @@
 <script lang="ts">
- import type { LangLink, T } from './types';
+ import type { LangLink, Mode, T } from './types';
  import type { ReaderSettings } from './prefs';
 
+ type Shown = Exclude<Mode, 'auto'>;
  let {
-  settings, t, webtoon, langs, signedIn, commentsReady, voiceReady, voiceName, onchange, onclose,
+  settings, t, webtoon, langs, signedIn, commentsReady, voiceReady, voiceName, modes, mode, onmode, onchange, onclose,
  }: {
   settings: ReaderSettings; t: T; webtoon: boolean; langs: LangLink[]; signedIn: boolean; commentsReady: boolean;
-  voiceReady: boolean; voiceName: string; onchange: (patch: Partial<ReaderSettings>) => void; onclose: () => void;
+  voiceReady: boolean; voiceName: string; modes: Shown[]; mode: Shown; onmode: (m: Shown) => void;
+  onchange: (patch: Partial<ReaderSettings>) => void; onclose: () => void;
  } = $props();
 
  const dirs = [['rtl', 'settings.rtl'], ['ltr', 'settings.ltr']] as const;
@@ -20,6 +22,15 @@
   <button type="button" class="mv-btn mv-btn--bare mv-btn--sm mv-rd-set__close" aria-label={t('settings.close')} title={t('settings.close')} onclick={onclose}>
    <i class="ti ti-x" aria-hidden="true"></i>
   </button>
+ </div>
+ <!-- Phones: the bar has no room for the mode switch, so it opens the panel. -->
+ <div class="mv-rd-set__group mv-rd-set__modes" role="group" aria-labelledby="mv-rd-set-mode">
+  <span class="mv-rd-set__label" id="mv-rd-set-mode">{t('mode')}</span>
+  <div class="mv-seg mv-seg--full mv-rd-seg">
+   {#each modes as m}
+    <button type="button" class="mv-seg__item" aria-pressed={mode === m} onclick={() => onmode(m)}>{t(`mode.${m}`)}</button>
+   {/each}
+  </div>
  </div>
  {#if !webtoon}
   <div class="mv-rd-set__group" role="group" aria-labelledby="mv-rd-set-dir">

@@ -270,6 +270,7 @@ html[data-motion="reduce"] .mv-rd[data-turn="on"] .mv-rd__spread { animation: mv
 .mv-rd-set__stack { display: flex; flex-direction: column; gap: 6px; }
 .mv-rd-set__hint { font-size: .75rem; line-height: 1.45; color: var(--mv-text-3); }
 .mv-rd-set__saved { margin-top: auto; font-size: .75rem; color: var(--mv-text-3); }
+.mv-rd-set__modes { display: none; }
 
 /* ---- guided (E3 guided state) ---------------------------------------------- */
 
@@ -368,6 +369,8 @@ html[data-motion="reduce"] .mv-rd[data-turn="on"] .mv-rd__spread { animation: mv
   .mv-rd__bar { gap: 8px; padding: 0 10px; }
   .mv-rd__tools { gap: 4px; }
   .mv-rd__modes { display: none; }
+  .mv-rd-set__modes { display: flex; }
+  .mv-rd-guided__stage { padding: 16px; }
   .mv-rd[data-settings="open"] .mv-rd__stage { right: 0; }
   .mv-rd[data-settings="open"] .mv-rd__progress { right: 24px; }
   .mv-rd-set, .mv-rd-comments { width: 100%; border-left: 0; }
