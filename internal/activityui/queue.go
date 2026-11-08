@@ -412,10 +412,7 @@ func costText(ctx context.Context, c jobs.Cost) string {
 	return i18n.T(ctx, "activity.queue.no_remote_spend")
 }
 
+// jobError is the same safe recovery copy the job API returns for a code.
 func jobError(ctx context.Context, code string) string {
-	switch code {
-	case "provider_auth", "no_provider", "rate_limited", "timeout", "oom", "scope_locked", "stale", "conflict", "spend_limit", "provider_refused", "safety", "bad_input", "canceled":
-		return i18n.T(ctx, "activity.error."+code)
-	}
-	return i18n.T(ctx, "activity.error.job")
+	return i18n.T(ctx, jobs.PublicErrorKey(code))
 }

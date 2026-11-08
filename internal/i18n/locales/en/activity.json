@@ -115,5 +115,6 @@
   "activity.job.page": "Page art",
   "activity.job.repair": "Character repair",
   "activity.job.train": "Character Lock training",
-  "activity.job.score": "Character assessment"
+  "activity.job.score": "Character assessment",
+  "activity.error.local_only": "Local only mode kept this job on the server. Choose a local model in Studio."
 }

@@ -141,23 +141,6 @@ func (q *Queue) MarkPrivateInput(types ...string) {
 	}
 }
 
-// PublicView returns j as the jobs API may show it: a copy without the input
-// when the job type's input is private.
-func (q *Queue) PublicView(j *Job) *Job {
-	if j == nil {
-		return nil
-	}
-	q.mu.RLock()
-	private := q.privateInput[j.Type]
-	q.mu.RUnlock()
-	if !private {
-		return j
-	}
-	c := *j
-	c.Input = nil
-	return &c
-}
-
 // SetPublisher sets the realtime publisher (wiring creates the hub after the queue).
 func (q *Queue) SetPublisher(p Publisher) {
 	q.mu.Lock()
