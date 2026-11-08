@@ -45,9 +45,9 @@ Agents work in separate worktrees from the commit that adds this plan and edit o
    schedules, restore, export everything, per-user export, `mangaveyra backup`, G10; CBZ/CBR/PDF/image import.
 3. [ ] **U — Update.** `internal/update/**`: signed manifests, opt-in checks, G14 states, member banner, binary
    self-update with backup/migrate/health/rollback, container guidance, opt-in patch auto-update.
-4. [ ] **M — Agents and MCP.** `internal/mcp/**`: G13, agent tokens UI, `/mcp`, tools, approvals, agent labels and
+4. [x] **M — Agents and MCP.** `internal/mcp/**`: G13, agent tokens UI, `/mcp`, tools, approvals, agent labels and
    undo, `mcp-stdio`.
-5. [ ] **C — Collaboration.** Editor review drawer (D7), internal panel comments and statuses, live cursors, scoped
+5. [x] **C — Collaboration.** Editor review drawer (D7), internal panel comments and statuses, live cursors, scoped
    roles.
 6. [ ] **P — Providers.** Google, xAI, Replicate, Together, Runware, Hugging Face, generic HTTP, ComfyUI adapters with
    fake-transport tests.

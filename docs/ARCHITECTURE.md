@@ -44,7 +44,7 @@ talks to it through the small public World API documented in `sdk/api/`.
 | Data | PostgreSQL 18 (16+ works) or SQLite (modernc.org/sqlite, pure Go) through `database/sql` + `sqlx`. Job queue and search live in the database — no Redis, no search server |
 | Files | Local disk or any S3-compatible store (minio-go) behind `storage.Store` |
 | Media | FFmpeg (optional binary on PATH) for animate clips and living-panel loops; `pdftoppm` (optional) for PDF import |
-| Agents | MCP server built into the binary (official Go SDK `github.com/modelcontextprotocol/go-sdk`), streamable HTTP at `/mcp` + `mangaveyra mcp-stdio` bridge |
+| Agents | MCP server built into the binary (official Go SDK `github.com/modelcontextprotocol/go-sdk`), stateless streamable HTTP at `/mcp` + `mangaveyra mcp-stdio` (an HTTP bridge); agent changes and requests in `agent_actions` (migration 0700) |
 | Mobile | Installable PWA (manifest + service worker, offline chapters) |
 | Icons & fonts | Tabler Icons webfont (MIT) and Anton, Hanken Grotesk, IBM Plex Mono, Comic Neue, Bangers, Noto Sans JP (OFL) — all self-hosted via npm packages, never loaded from a CDN |
 
@@ -205,6 +205,9 @@ lookups while keeping imports acyclic.
 Client connects to `/ws`, sends `{"op":"sub","topic":"job:01H..."}`. Server pushes `{"topic","type","data"}`.
 Page documents use topic `doc:page:{id}` carrying Yjs sync/awareness messages (binary frames), relayed to peers and
 appended to `page_doc_updates`; clients send a compacted snapshot periodically.
+`doc:page:{id}` is authorized by `internal/collab` for project readers (Yjs writes need art or lettering rights on that
+page under the member's scope); besides Yjs frames it carries presence (a page-relative cursor and colour; the hub adds
+the member's name) and `collab.changed` review events (IDs only).
 
 ### Frontend
 * Tokens are CSS variables (`--mv-*`, see *Design system*) shared by templ pages and Svelte islands. Theme via

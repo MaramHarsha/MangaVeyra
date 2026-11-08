@@ -522,3 +522,39 @@ the mobile artboards stay deferred (ADR 0012 §11).
   of the same chapter and language is running ("This chapter is already being published in {language}. Nothing was
   changed: publish again once it finishes."), followed by the job progress notice only for the viewer's own job. A
   scheduled chapter whose scheduler lost the right to publish reuses the unpublished notice.
+
+## 12. Phase 4 screens
+
+The approved desktop artboards are followed at 1440 × 900; the mobile artboards stay deferred (ADR 0013 §10).
+
+- **G13 Agents & MCP.** The header switch is the member's "Allow AI agents (MCP)" setting (accessible name from the
+  mobile artboard; a Save button without JavaScript); when it is off a warning notice reads "AI agents are off. Your
+  tokens are kept, but every agent request is refused until you turn this back on." Connect an assistant shows the
+  server's own `/mcp` address. Create token opens a dialog built from the kit's modal and fields (Name; Projects: all or
+  a checklist; Access: Read always on, "Edit scripts and characters", "Generate with your models"; an approval threshold
+  with a `$` prefix, default 0.50, empty never asks; Expires: 30 days, 90 days, 1 year, Never); without JavaScript it
+  renders open under Connect an assistant. After creation a success box shows the secret once with the
+  `mangaveyra mcp-stdio --url … --token …` command. Token rows keep the three drawn lines ("Approve over $0.50", "No
+  approval needed" or "—"; "Expired" in the warning colour). Recent agent actions lists real rows newest first (every
+  waiting request plus the latest ten others) with Undo where version history supports a revert and, on a waiting
+  request, the kit's small Approve and Decline buttons for the token owner and the project owner; Approve on a
+  human-only request opens its real screen (E1, the editor) and is disabled with Soon while that screen does not exist
+  (project deletion, sharing, roles). Empty states describe where items appear. MCP client (v2) keeps its card with
+  Connect a server in the Soon state.
+- **D7 Collaboration & review.** `?panel=review` replaces the inspector with the 340 px review drawer and gives the
+  editor D7's workbench layout (the left rail, footer, undo/redo, history, zoom, Preview, Export and the presence
+  avatars give way; the page sits at the artboard's 60 / 30 px offset). The drawer header adds the inspector's close (×)
+  and a "Comment on panel N.M" button (the D1 panel toolbar's Comment opens the same composer: a textarea, an optional
+  "Assign to" member select, Cancel / Post). A status chip the viewer may change carries a chevron opening the allowed
+  statuses (Reopen, Needs changes, Mark done, Approve). Open lists every comment not yet approved; the header counts
+  those as open and approved ones as resolved. Each roles row shows the member's one project role with its limit
+  ("Letterer · lettering layer only", "Artist · pages 1–20"); the artboard's "Owner · Writer" has no equivalent because
+  a member holds one role. Owners see a pencil per member (Role, "Can change": everything the role allows / lettering
+  layer only / only some pages, Remove from project) and an "Add member" row. "Approve page N" is disabled for members
+  who do not review and while the current version is approved; "Approved by {name} · {time}" (or "· changed since")
+  sits above it. Below 768 px the drawer stacks under the page.
+- **D1 presence and pins.** The disabled collaboration control becomes the designed avatar stack (people on the page
+  first with the online ring, then other members, up to four and "+N"), opening the review drawer. Cursors are the
+  filled pointer with a name label in the member's avatar tone. Pins for open comments are numbered in Open-list
+  order, sit at the comment's anchor (the panel's top-left corner by default) and step sideways when several share a
+  corner.
