@@ -43,7 +43,7 @@ Agents work in separate worktrees from the commit that adds this plan and edit o
    disputes, content rules (with the narrow `publish` enforcement they need), server status, maintenance settings.
 2. [ ] **B — Backup and import.** `internal/backup/**`, `internal/importer/**`: `backup.Service`, archive format,
    schedules, restore, export everything, per-user export, `mangaveyra backup`, G10; CBZ/CBR/PDF/image import.
-3. [ ] **U — Update.** `internal/update/**`: signed manifests, opt-in checks, G14 states, member banner, binary
+3. [x] **U — Update.** `internal/update/**`: signed manifests, opt-in checks, G14 states, member banner, binary
    self-update with backup/migrate/health/rollback, container guidance, opt-in patch auto-update.
 4. [x] **M — Agents and MCP.** `internal/mcp/**`: G13, agent tokens UI, `/mcp`, tools, approvals, agent labels and
    undo, `mcp-stdio`.

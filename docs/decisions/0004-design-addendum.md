@@ -595,3 +595,25 @@ The approved desktop artboards are followed at 1440 × 900; the mobile artboards
   reads "Local GPU". Hugging Face and HTTP step 1 (no artboard) use the existing fields, segmented controls and textarea.
   Step 3 for image types (no artboard) asks for the largest width and height, images per run, and "Its model licence
   allows commercial use" (off by default). Free only is disabled for Hugging Face in step 4.
+- **G14 Update available.** The third badge shows the signed download size ("46.8 MB download") instead of "~3 min ·
+  no downtime for readers": no duration is measured and readers see G6 Maintenance while an update runs. A minor
+  release shows "Minor · new features" (info), a major one "Major · read the notes" (warning), and a release with a
+  security fix adds "Security fix". Step 1 reads "Database, settings and projects · last backup {size}" (omitted when
+  none); the destination is not shown. Step 4 reads "App, database and storage tested", the checks `/readyz` makes.
+  "Full changelog" appears only when the manifest has `notes_url`. Without a backup service, a trusted key or a download
+  for this platform, a warning notice explains why and "Back up and update" is disabled; in a container a notice says the
+  backup is taken and the host commands follow. The close button leads back to Admin.
+- **G14 Updating / Done / Failed, restored.** Updating's subtitle reads "Don’t close this tab. The studio is paused;
+  members see the maintenance page."; the footer shows "Started {time}" without a remaining-time estimate; step details
+  use measured values and only the download shows a percentage; without JavaScript the page refreshes every 3 s (8 s
+  while restarting). Done's footer note is a link to the plain-text log; step 4 adds "· {n} workers online" when any is
+  online and says the backup is kept for 7 days when chosen. Failed names the failed step or migration (UPD-MIGRATE-0602)
+  with a short cause and advice for that failure; a failure before the backup reads "Nothing was changed. Your server is
+  still on {version}."; a failed restore keeps maintenance on and gives the restore command. Copy log opens the log
+  without JavaScript and copies it with JavaScript.
+- **G14 states without artboards** are built from G14's window: Update settings ("Check for updates", release address,
+  channel, the 7-day and 03:00 toggles, last update, Check now, Save), Container ("Update to {version} on the host", the
+  backup step and the exact Compose commands), and the members' banner (a kit info notice: "Update {version} available.
+  Only an admin can install it on {host}; you don’t need to do anything."). The window uses `--mv-glow-status` and the
+  backdrop `--mv-scrim`. G6 Maintenance shows the update's progress line ("Started 21:04 · step 3 of 5 · migrating
+  database") while an update runs.
