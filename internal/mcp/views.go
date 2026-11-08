@@ -45,6 +45,9 @@ type tokenView struct {
 type actionView struct {
 	ID, Text, Status, Title string
 	Pending, Undo           bool
+	// EditedSince marks a finished agent generation that cannot be undone
+	// because the page changed otherwise since the job's first version.
+	EditedSince bool
 	// ApproveSoon marks a human-only request whose screen is not built yet.
 	ApproveSoon bool
 }
@@ -185,6 +188,13 @@ func (m *Module) actionRows(ctx context.Context, u *httpx.User, now time.Time) (
 		}
 		v := actionView{ID: r.ID, Text: describe(ctx, r), Status: statusText(ctx, r, j, now),
 			Title: r.TokenName, Pending: r.Status == statusPending, Undo: undoable(r, j)}
+		if v.Undo && r.Kind == kindGenerate {
+			// Undo reverts page history: offer it only when nobody else
+			// changed the page since the job's first version, and say why not.
+			h, err := m.generationHistory(ctx, r)
+			v.Undo = err == nil && !h.editedSince
+			v.EditedSince = err == nil && h.editedSince
+		}
 		if r.Detail.V.Note != "" {
 			v.Title = r.TokenName + " · " + r.Detail.V.Note
 		}
@@ -325,7 +335,9 @@ func (m *Module) createToken(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	v.Created = &createdView{Name: info.Name, Secret: raw, Command: "mangaveyra mcp-stdio --url " + m.baseURL(r) + " --token " + raw}
+	// The token goes in the environment, never on the command line, where
+	// other users of the machine can read it in the process list.
+	v.Created = &createdView{Name: info.Name, Secret: raw, Command: "MV_AGENT_TOKEN=" + raw + " mangaveyra mcp-stdio --url " + m.baseURL(r)}
 	// The secret is shown once and must not be cached anywhere.
 	w.Header().Set("Cache-Control", "no-store")
 	return m.render(w, r, http.StatusCreated, v)
@@ -350,6 +362,13 @@ func (m *Module) revokeToken(w http.ResponseWriter, r *http.Request) error {
 func (m *Module) approveAction(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	d, err := m.approve(ctx, sessionUser(r), r.PathValue("id"))
+	var rose *estimateRoseError
+	if errors.As(err, &rose) {
+		// Nothing ran; the request waits with the new estimate shown.
+		web.Flash(w, r, "error", i18n.T(ctx, "agents.error.estimate_rose", "amount", spend(rose.Estimate.USD)), "")
+		core.Redirect(w, r, "/agents")
+		return nil
+	}
 	if errors.Is(err, studio.ErrConflict) || errors.Is(err, pagestore.ErrVersion) {
 		// The target changed since the agent asked; the request still waits.
 		web.Flash(w, r, "error", i18n.T(ctx, "agents.error.stale"), "")

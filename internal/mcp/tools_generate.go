@@ -83,23 +83,65 @@ func captureQuote(ctx context.Context, p *jobs.EnqueueParams) error {
 	return errQuoteOnly
 }
 
-// dryRunQuote plans the request as the token's owner (the agent's checks have
-// already passed) and stops at the enqueue, so nothing is stored or spent.
-func (m *Module) dryRunQuote(ctx context.Context, a *agent, req genRequest) (quoteResult, error) {
-	owner, err := m.studio.ActorFromUser(ctx, a.user.ID)
+type ceilingKey struct{}
+
+// estimateCeiling is the estimate a person approved. Inside an approval's
+// enqueue, a job whose planned estimate is above it (beyond the tolerance)
+// is refused and its estimate recorded, so the work never starts above what
+// the person saw.
+type estimateCeiling struct {
+	shownUSD float64
+	rose     bool
+	got      jobs.Cost
+}
+
+var errEstimateRose = errors.New("mcp: the estimate rose since the request was shown")
+
+// enforceCeiling is the enqueue validator behind approvals.
+func enforceCeiling(ctx context.Context, p *jobs.EnqueueParams) error {
+	c, ok := ctx.Value(ceilingKey{}).(*estimateCeiling)
+	if !ok || c == nil || withinShown(p.Estimate.USD, c.shownUSD) {
+		return nil
+	}
+	c.rose, c.got = true, p.Estimate
+	return errEstimateRose
+}
+
+// approvalTolerance is how far an estimate may differ from the one a person
+// approved and still run: 1%, never more than one cent. It absorbs per-token
+// tariffs rounded up to whole microdollars and a re-plan landing one digit
+// higher, never a price change.
+func approvalTolerance(shownUSD float64) float64 { return math.Min(shownUSD*0.01, 0.01) }
+
+// withinShown reports an estimate at or below the shown one (plus the
+// tolerance), in whole microdollars like the threshold rule.
+func withinShown(estimateUSD, shownUSD float64) bool {
+	if math.IsNaN(shownUSD) || math.IsInf(shownUSD, 0) || shownUSD < 0 {
+		return false
+	}
+	return !exceeds(estimateUSD, shownUSD+approvalTolerance(shownUSD))
+}
+
+// planQuote plans the request as userID (the agent's owner, or the person
+// approving it) and stops at the enqueue, so nothing is stored or spent. It
+// returns the service's own errors (a stale revision is studio.ErrConflict).
+func (m *Module) planQuote(ctx context.Context, userID string, req genRequest) (quoteResult, error) {
+	actor, err := m.studio.ActorFromUser(ctx, userID)
 	if err != nil {
-		return quoteResult{}, toolError(err)
+		return quoteResult{}, err
 	}
 	c := &quoteCapture{}
-	j, err := m.enqueue(context.WithValue(ctx, quoteKey{}, c), owner, req)
+	j, err := m.enqueue(context.WithValue(ctx, quoteKey{}, c), actor, req)
 	switch {
 	case c.ok:
 		return c.res, nil
 	case err == nil && j != nil:
 		// An identical active job already exists; its estimate stands.
 		return quoteResult{Estimate: j.Estimate, ModelID: j.ModelID, ProviderID: j.ProviderID}, nil
+	case err == nil:
+		return quoteResult{}, studio.ErrInvalid
 	}
-	return quoteResult{}, toolError(err)
+	return quoteResult{}, err
 }
 
 // enqueue runs a generation request through the generation service as actor.
@@ -274,9 +316,9 @@ func (m *Module) queueGeneration(ctx context.Context, req *mcpsdk.CallToolReques
 			_ = m.assets.Delete(context.WithoutCancel(ctx), greq.MaskAssetID)
 		}
 	}()
-	q, err := m.quote(ctx, a, greq)
+	q, err := m.quote(ctx, a.user.ID, greq)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, toolError(err)
 	}
 	threshold := a.tok.ApproveOverUSD
 	needs := threshold != nil && exceeds(q.Estimate.USD, *threshold)

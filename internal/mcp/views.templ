@@ -110,6 +110,9 @@ templ actionItem(a actionView) {
 		<span class="mv-agents__action-text" title={ a.Title }>{ a.Text }</span>
 		<span class="mv-agents__action-status">
 			{ a.Status }
+			if a.EditedSince {
+				{ " · " + i18n.T(ctx, "agents.recent.edited_since") }
+			}
 			if a.Undo {
 				{ " · " }
 				<form method="post" action={ templ.URL("/agents/actions/" + a.ID + "/undo") } class="mv-agents__inline">

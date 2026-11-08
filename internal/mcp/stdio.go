@@ -19,7 +19,9 @@ type StdioOptions struct {
 	// URL is the server's address (MV_PUBLIC_URL); "/mcp" is added unless it
 	// is already the endpoint.
 	URL string
-	// Token is the agent token (mva_...).
+	// Token is the agent token (mva_...). Pass it in MV_AGENT_TOKEN (or the
+	// desktop app's MCP "env" setting): a --token argument is visible to
+	// other users of the machine in the process list.
 	Token string
 	// HTTPClient sends the requests (nil uses a client without a timeout,
 	// since a tool call may take a while).
@@ -27,20 +29,33 @@ type StdioOptions struct {
 }
 
 // ErrStdioConfig explains a bridge that cannot start.
-var ErrStdioConfig = errors.New("mcp-stdio needs an agent token (--token or MV_AGENT_TOKEN, mva_...) and the server URL (--url or MV_PUBLIC_URL)")
+var ErrStdioConfig = errors.New("mcp-stdio needs an agent token (MV_AGENT_TOKEN, mva_...; --token also works but shows the token in the process list) and the server URL (--url or MV_PUBLIC_URL)")
 
-// bearer adds the agent token to every request of the bridge.
+// bearer adds the agent token to the bridge's requests to the server's own
+// origin (scheme, host and port of the endpoint) and to no other.
 type bearer struct {
-	token string
-	next  http.RoundTripper
+	token  string
+	origin *url.URL
+	next   http.RoundTripper
 }
 
 func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 	r = r.Clone(r.Context())
-	r.Header.Set("Authorization", "Bearer "+b.token)
+	r.Header.Del("Authorization")
+	if sameOrigin(r.URL, b.origin) {
+		r.Header.Set("Authorization", "Bearer "+b.token)
+	}
 	r.Header.Set("User-Agent", "mangaveyra-mcp-stdio")
 	return b.next.RoundTrip(r)
 }
+
+func sameOrigin(a, b *url.URL) bool {
+	return a != nil && b != nil && strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host)
+}
+
+// errForeignRedirect stops a redirect away from the server's origin: the
+// bridge never follows one (the token stays with the server it was made for).
+var errForeignRedirect = errors.New("mcp-stdio: the server redirected to another address; set --url to the server's own address")
 
 type nopWriteCloser struct{ io.Writer }
 
@@ -65,8 +80,22 @@ func RunStdio(ctx context.Context, opts StdioOptions, in io.Reader, out io.Write
 	if next == nil {
 		next = http.DefaultTransport
 	}
+	origin, _ := url.Parse(endpoint)
 	client := *hc
-	client.Transport = bearer{token: token, next: next}
+	client.Transport = bearer{token: token, origin: origin, next: next}
+	check := hc.CheckRedirect
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if !sameOrigin(req.URL, origin) {
+			return errForeignRedirect
+		}
+		if check != nil {
+			return check(req, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("mcp-stdio: too many redirects")
+		}
+		return nil
+	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

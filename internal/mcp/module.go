@@ -25,9 +25,10 @@ type Module struct {
 	pages   pagestore.Service
 	assets  *assets.Service
 
-	// quote estimates a generation request; tests replace it to simulate a
-	// remote route without a network call.
-	quote func(ctx context.Context, a *agent, req genRequest) (quoteResult, error)
+	// quote estimates a generation request as a user (the agent's owner, or
+	// the person approving it); tests replace it to simulate a remote route
+	// without a network call.
+	quote func(ctx context.Context, userID string, req genRequest) (quoteResult, error)
 
 	servers  sync.Map // scope set → *mcpsdk.Server
 	requests *core.Limiter
@@ -42,7 +43,7 @@ func New(d *core.Deps) *Module {
 		requests: core.NewLimiter(5, 60),
 		writes:   core.NewLimiter(1, 20),
 	}
-	m.quote = m.dryRunQuote
+	m.quote = m.planQuote
 	return m
 }
 
@@ -50,7 +51,8 @@ func New(d *core.Deps) *Module {
 func (m *Module) Name() string { return "mcp" }
 
 // Init resolves the services the tools act through (the same ones the UI
-// uses) and installs the enqueue hook behind generation estimates.
+// uses) and installs the enqueue hooks behind generation estimates and the
+// approved-estimate ceiling.
 func (m *Module) Init(context.Context) error {
 	m.ui = web.From(m.d)
 	m.studio = core.MustUse[studio.Service](m.d)
@@ -60,7 +62,10 @@ func (m *Module) Init(context.Context) error {
 	m.pages = core.MustUse[pagestore.Service](m.d)
 	m.assets = core.MustUse[*assets.Service](m.d)
 	m.d.Jobs.AddValidator(func(ctx context.Context, p *jobs.EnqueueParams) error {
-		return captureQuote(ctx, p)
+		if err := captureQuote(ctx, p); err != nil {
+			return err
+		}
+		return enforceCeiling(ctx, p)
 	})
 	return nil
 }

@@ -262,6 +262,17 @@ func (m *Module) approve(ctx context.Context, u *httpx.User, id string) (decisio
 	if g == nil {
 		return decision{}, errDecided
 	}
+	// The work runs as the approving person at today's prices. It runs only
+	// within the estimate the person was shown (approvalTolerance): a higher
+	// one keeps the request waiting, now showing the new estimate.
+	shown := row.Estimate.V
+	q, err := m.quote(ctx, u.ID, *g)
+	if err != nil {
+		return decision{}, err
+	}
+	if !withinShown(q.Estimate.USD, shown.USD) {
+		return decision{}, m.estimateRose(ctx, row, q.Estimate)
+	}
 	// Claim first so two people (or tabs) cannot both start the work.
 	ok, err := m.transition(ctx, m.d.DB, row.ID, statusPending, statusApproved, u.ID, "")
 	if err != nil {
@@ -272,13 +283,19 @@ func (m *Module) approve(ctx context.Context, u *httpx.User, id string) (decisio
 	}
 	actor, err := m.studio.ActorFromUser(ctx, u.ID)
 	var j *jobs.Job
+	ceiling := &estimateCeiling{shownUSD: shown.USD}
 	if err == nil {
-		j, err = m.enqueue(ctx, actor, *g)
+		// The enqueue itself refuses a job planned above the shown estimate,
+		// so a price change after the check above cannot start either.
+		j, err = m.enqueue(context.WithValue(ctx, ceilingKey{}, ceiling), actor, *g)
 	}
 	if err != nil {
 		if _, rerr := m.d.DB.Exec(context.WithoutCancel(ctx), `UPDATE agent_actions SET status = ?, decided_by = NULL, decided_at = NULL, updated_at = ? WHERE id = ? AND status = ?`,
 			statusPending, db.Now(), row.ID, statusApproved); rerr != nil {
 			m.d.Log.ErrorContext(ctx, "mcp: reopen request", "action", row.ID, "err", rerr)
+		}
+		if ceiling.rose {
+			return decision{}, m.estimateRose(ctx, row, ceiling.got)
 		}
 		return decision{}, err
 	}
@@ -293,6 +310,23 @@ func (m *Module) approve(ctx context.Context, u *httpx.User, id string) (decisio
 }
 
 var errNoScreen = errors.New("mcp: that screen is not available yet")
+
+// estimateRoseError keeps a generation request waiting because its estimate
+// rose above the one the person was shown; G13 now shows Estimate.
+type estimateRoseError struct{ Estimate jobs.Cost }
+
+func (e *estimateRoseError) Error() string { return errEstimateRose.Error() }
+func (e *estimateRoseError) Unwrap() error { return errEstimateRose }
+
+// estimateRose stores the new estimate on the waiting request (so G13 shows
+// it and the next approval is measured against it) and reports it.
+func (m *Module) estimateRose(ctx context.Context, row actionRow, estimate jobs.Cost) error {
+	if _, err := m.d.DB.Exec(context.WithoutCancel(ctx), `UPDATE agent_actions SET estimate = ?, updated_at = ? WHERE id = ? AND status = ?`,
+		db.MustJSON(estimate), db.Now(), row.ID, statusPending); err != nil {
+		return err
+	}
+	return &estimateRoseError{Estimate: estimate}
+}
 
 // decline refuses a pending request; nothing runs.
 func (m *Module) decline(ctx context.Context, u *httpx.User, id string) error {
@@ -340,6 +374,15 @@ func (m *Module) undo(ctx context.Context, u *httpx.User, id string) error {
 	}
 	if row.Status != statusDone {
 		return errDecided
+	}
+	// The same rule G13 shows: a generation is undone only once its job has
+	// finished, and never over a page someone else changed meanwhile.
+	var job *jobs.Job
+	if row.JobID.Valid {
+		job, _ = m.d.Jobs.Get(ctx, row.JobID.String)
+	}
+	if !undoable(row, job) {
+		return errNoUndo
 	}
 	actor, err := m.studio.ActorFromUser(ctx, u.ID)
 	if err != nil {
@@ -442,54 +485,78 @@ func (m *Module) undoCharacter(ctx context.Context, actor studio.Actor, row acti
 	return err
 }
 
-// undoGenerate reverts the page to the version before the job's change, if
-// the job's version is still the latest.
-func (m *Module) undoGenerate(ctx context.Context, actor studio.Actor, row actionRow) error {
+// genHistory is what page history says about an agent generation: the page,
+// the first and last versions its job wrote, the version before them, and
+// whether any other change (a person's edit, another job) landed between
+// its first version and now.
+type genHistory struct {
+	page        pagedoc.Page
+	first, last int
+	base        *pagestore.Version
+	editedSince bool
+}
+
+func (m *Module) generationHistory(ctx context.Context, row actionRow) (genHistory, error) {
+	var h genHistory
 	var u struct {
 		PageID string `json:"page_id"`
 	}
 	if err := json.Unmarshal(row.Undo.V, &u); err != nil || u.PageID == "" || !row.JobID.Valid {
-		return errNoUndo
+		return h, errNoUndo
 	}
 	page, err := m.pages.GetPage(ctx, u.PageID)
 	if err != nil || !row.ProjectID.Valid || page.ProjectID != row.ProjectID.String {
-		return errNoUndo
-	}
-	// Reverting art is an art edit for the person doing it.
-	if err := m.studio.Authorize(ctx, actor, page.ProjectID, studio.ActEditArt); err != nil {
-		return err
+		return h, errNoUndo
 	}
 	versions, err := m.pages.Versions(ctx, page.ID, 500)
 	if err != nil {
-		return err
+		return h, err
 	}
-	first, last := 0, 0
+	h.page = page
 	for _, v := range versions {
 		if v.JobID == row.JobID.String {
-			if first == 0 || v.Number < first {
-				first = v.Number
+			if h.first == 0 || v.Number < h.first {
+				h.first = v.Number
 			}
-			last = max(last, v.Number)
+			h.last = max(h.last, v.Number)
 		}
 	}
-	if first == 0 {
-		return errNoUndo
+	if h.first == 0 {
+		return h, errNoUndo
 	}
-	if page.Version != last {
-		return errChanged
-	}
-	var base *pagestore.Version
+	h.editedSince = page.Version != h.last
 	for i := range versions {
 		v := &versions[i]
-		if v.Number < first && (base == nil || v.Number > base.Number) {
-			base = v
+		if v.Number > h.first && v.Number < h.last && v.JobID != row.JobID.String {
+			h.editedSince = true
+		}
+		if v.Number < h.first && (h.base == nil || v.Number > h.base.Number) {
+			h.base = v
 		}
 	}
-	if base == nil {
-		return errNoUndo
+	if h.base == nil {
+		return h, errNoUndo
 	}
-	_, err = m.pages.Revert(ctx, page.ID, base.ID, pagestore.Change{ActorKind: "user", ActorID: actor.UserID, Action: "revert",
-		Summary: "Undo agent change · " + row.TokenName, ExpectedVersion: page.Version})
+	return h, nil
+}
+
+// undoGenerate reverts the page to the version before the job's change, if
+// nothing but the job changed the page since its first version (reverting
+// would otherwise wipe a person's edit made while the job ran).
+func (m *Module) undoGenerate(ctx context.Context, actor studio.Actor, row actionRow) error {
+	h, err := m.generationHistory(ctx, row)
+	if err != nil {
+		return err
+	}
+	// Reverting art is an art edit for the person doing it.
+	if err := m.studio.Authorize(ctx, actor, h.page.ProjectID, studio.ActEditArt); err != nil {
+		return err
+	}
+	if h.editedSince {
+		return errChanged
+	}
+	_, err = m.pages.Revert(ctx, h.page.ID, h.base.ID, pagestore.Change{ActorKind: "user", ActorID: actor.UserID, Action: "revert",
+		Summary: "Undo agent change · " + row.TokenName, ExpectedVersion: h.page.Version})
 	if errors.Is(err, pagestore.ErrVersion) {
 		return errChanged
 	}

@@ -9,8 +9,8 @@ import (
 // SetQuoteForTest makes every generation estimate usd on a remote route, so
 // approval thresholds can be tested without a remote provider or network.
 func SetQuoteForTest(m *Module, usd float64) {
-	m.quote = func(ctx context.Context, a *agent, req genRequest) (quoteResult, error) {
-		if _, err := m.dryRunQuote(ctx, a, req); err != nil {
+	m.quote = func(ctx context.Context, userID string, req genRequest) (quoteResult, error) {
+		if _, err := m.planQuote(ctx, userID, req); err != nil {
 			return quoteResult{}, err
 		}
 		return quoteResult{Estimate: jobs.Cost{USD: usd}, ProviderID: "test-remote", ModelID: "test-remote"}, nil
@@ -18,4 +18,4 @@ func SetQuoteForTest(m *Module, usd float64) {
 }
 
 // ResetQuoteForTest restores the real dry-run estimate.
-func ResetQuoteForTest(m *Module) { m.quote = m.dryRunQuote }
+func ResetQuoteForTest(m *Module) { m.quote = m.planQuote }
