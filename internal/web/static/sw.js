@@ -8,10 +8,14 @@
  *   reader's offline chapters (ADR 0012 §7): the reader island stores a
  *   downloaded chapter in its own cache "mv-offline-<publication id>" (the
  *   reader page, its guided data and the frozen page images, plus a meta entry
- *   with the expiry). While the network works every request still goes to the
- *   server, so revoked access is respected; only when the network fails are
- *   those requests answered from a chapter cache that has not expired.
- *   "Clear offline downloads" deletes every "mv-offline" cache.
+ *   with the expiry and the member who downloaded it). While the network works
+ *   every request still goes to the server, so revoked access is respected;
+ *   only when the network fails are those requests answered from a chapter
+ *   cache that has not expired (one without a valid expiry never answers).
+ *   Pages served from a cache are marked data-offline-copy. "Clear offline
+ *   downloads" and signing out delete every "mv-offline" cache, and a page
+ *   fresh from the server deletes the chapters of anyone but the member signed
+ *   in (all of them when signed out); see web/src/islands/reader/offline.ts.
  */
 const VERSION = 'mv-v1';
 const STATIC_CACHE = `${VERSION}-static`;
@@ -35,18 +39,24 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-/** liveChapterCache opens an offline chapter cache unless it expired (then it is deleted). */
+/**
+ * liveChapterCache opens an offline chapter cache that has not expired. Downloads
+ * always expire (ADR 0012 §7): a chapter whose meta entry has no valid expiry, or
+ * whose expiry has passed, is deleted and never answers. A cache without a meta
+ * entry is a download still being saved and does not answer either.
+ */
 async function liveChapterCache(name) {
   const cache = await caches.open(name);
   const meta = await cache.match(OFFLINE_META + name.slice(OFFLINE_PREFIX.length));
   if (!meta) return null;
-  let info = null;
+  let expires = NaN;
   try {
-    info = await meta.json();
+    const info = await meta.json();
+    expires = info && typeof info === 'object' && typeof info.expires_at === 'number' ? info.expires_at : NaN;
   } catch {
-    return null;
+    /* unreadable meta: treated as expired */
   }
-  if (info && info.expires_at && info.expires_at * 1000 <= Date.now()) {
+  if (!(expires > 0) || expires * 1000 <= Date.now()) {
     await caches.delete(name);
     return null;
   }
@@ -65,9 +75,24 @@ async function fromChapters(req, ignoreSearch) {
   return undefined;
 }
 
+/**
+ * offlineCopy marks a page served from a cache with data-offline-copy on <body>.
+ * Its data-user is whoever was signed in when it was saved, so the page script
+ * never takes it for the current user (it deletes other members' offline
+ * chapters only on pages fresh from the server).
+ */
+async function offlineCopy(res) {
+  if (!res || !(res.headers.get('Content-Type') || '').includes('text/html')) return res;
+  const html = await res.text();
+  return new Response(html.replace(/<body\b/i, '<body data-offline-copy'), { status: res.status, statusText: res.statusText, headers: res.headers });
+}
+
 /** networkThenChapters goes to the network and falls back to an offline chapter only when it fails. */
 function networkThenChapters(req, ignoreSearch, fallback) {
-  return fetch(req).catch(async () => (await fromChapters(req, ignoreSearch)) || (fallback ? fallback() : Response.error()));
+  return fetch(req).catch(async () => {
+    const hit = (await fromChapters(req, ignoreSearch)) || (fallback ? await fallback() : Response.error());
+    return req.mode === 'navigate' ? offlineCopy(hit) : hit;
+  });
 }
 
 self.addEventListener('fetch', (event) => {
@@ -106,6 +131,6 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(networkThenChapters(req, false, () => caches.match(OFFLINE_URL)));
       return;
     }
-    event.respondWith(fetch(req).catch(() => caches.match(OFFLINE_URL)));
+    event.respondWith(fetch(req).catch(async () => offlineCopy(await caches.match(OFFLINE_URL))));
   }
 });

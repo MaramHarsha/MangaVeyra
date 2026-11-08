@@ -5,7 +5,7 @@
  import { effectiveMode, keyStep, progressFraction, progressText, singles, spreads, viewIndexOf, viewOrder, zoneStep, type Step } from './direction';
  import { orderedPanels, sequence, spokenText, stepIndex } from './guided';
  import { browserReadAloud } from './readaloud';
- import { builtAssets, expired, readMeta, removeChapter, saveChapter, type Manifest } from './offline';
+ import { builtAssets, expired, ownedBy, readMeta, removeChapter, saveChapter, type Manifest } from './offline';
  import { clampZoom, loadLocal, localRow, merge, saveLocal, serverRow, storage, type ReaderSettings } from './prefs';
  import { beaconSend, ReadingEvents } from './events';
  import { call, rememberPending, takePending, type ProgressBody } from './api';
@@ -412,7 +412,8 @@
   }
   if (typeof caches !== 'undefined') {
    void readMeta(caches, p.publication.id).then((meta) => {
-    onDevice = !!meta && !expired(meta, Date.now() / 1000) && download?.status !== 'expired';
+    // Another member's copy on a shared device is not this reader's download.
+    onDevice = !!meta && ownedBy(meta, root.ownerDocument.body.dataset.user || '') && !expired(meta, Date.now() / 1000) && download?.status !== 'expired';
     if (askDownload && !onDevice) void toggleDownload();
    }).catch(() => undefined);
   } else if (askDownload) void toggleDownload();

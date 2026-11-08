@@ -217,7 +217,7 @@ func TestReaderRowsAreScopedToTheirOwner(t *testing.T) {
 		ch := e.f.Publish(s, publishtest.PublicationSpec{Pages: 4})
 		private := e.f.Series(publishtest.SeriesSpec{Visibility: publish.VisibilityPrivate})
 		privCh := e.f.Publish(private, publishtest.PublicationSpec{})
-		_, a := e.member()
+		ua, a := e.member()
 		_, b := e.member()
 
 		// Progress.
@@ -292,6 +292,7 @@ func TestReaderRowsAreScopedToTheirOwner(t *testing.T) {
 				Status    string `json:"status"`
 				ExpiresAt int64  `json:"expires_at"`
 			} `json:"download"`
+			Owner string `json:"owner"`
 			Cache string `json:"cache"`
 			Pages []struct {
 				Src string `json:"src"`
@@ -299,7 +300,7 @@ func TestReaderRowsAreScopedToTheirOwner(t *testing.T) {
 			ReaderURL string `json:"reader_url"`
 		}
 		start.JSON(t, &man)
-		if man.Cache != "mv-offline-"+ch.ID || man.Download.Status != "pending" || len(man.Pages) != 4 || man.ReaderURL != chapterPath(s, ch) || man.Download.ExpiresAt == 0 {
+		if man.Owner != ua.ID || man.Cache != "mv-offline-"+ch.ID || man.Download.Status != "pending" || len(man.Pages) != 4 || man.ReaderURL != chapterPath(s, ch) || man.Download.ExpiresAt == 0 {
 			t.Fatalf("download manifest = %+v", man)
 		}
 		did := man.Download.ID

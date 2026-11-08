@@ -213,11 +213,14 @@ func (m *Module) apiDeleteBookmark(w http.ResponseWriter, r *http.Request) error
 
 // downloadManifest tells the island what to cache for offline reading.
 type downloadManifest struct {
-	Download  downloadProps `json:"download"`
-	Cache     string        `json:"cache"`
-	ReaderURL string        `json:"reader_url"`
-	DataURL   string        `json:"data_url"`
-	Pages     []pageView    `json:"pages"`
+	Download downloadProps `json:"download"`
+	// Owner is the member downloading; the island records it in the cache's
+	// meta entry so the chapter is deleted when someone else uses the device.
+	Owner     string     `json:"owner"`
+	Cache     string     `json:"cache"`
+	ReaderURL string     `json:"reader_url"`
+	DataURL   string     `json:"data_url"`
+	Pages     []pageView `json:"pages"`
 }
 
 // OfflineCacheName is the service-worker cache of a publication (ADR 0012 §7).
@@ -257,7 +260,7 @@ func (m *Module) apiStartDownload(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return err
 	}
-	core.JSON(w, http.StatusOK, downloadManifest{Download: *toDownloadProps(&d), Cache: OfflineCacheName(pub.ID),
+	core.JSON(w, http.StatusOK, downloadManifest{Download: *toDownloadProps(&d), Owner: v.UserID, Cache: OfflineCacheName(pub.ID),
 		ReaderURL: chapterURL(s, pub.Number, pub.Lang),
 		DataURL:   "/api/v1/reader/series/" + s.ID + "/chapters/" + numberText(pub.Number) + "?lang=" + pub.Lang,
 		Pages:     pv})

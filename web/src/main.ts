@@ -23,6 +23,7 @@ import { installQueueRefresh } from './lib/queue';
 import { updateUnread } from './lib/unread';
 import './lib/models';
 import { mountIslands, unmountIslands } from './islands/registry';
+import { clearAll as clearOfflineChapters, dropForeignChapters, installLogoutClearing } from './islands/reader/offline';
 
 declare global {
   interface Window {
@@ -178,12 +179,23 @@ document.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-clear-downloads]');
   if (!btn || !('caches' in window)) return;
   e.preventDefault();
-  void caches.keys().then(async (keys) => {
-    await Promise.all(keys.filter((k) => k.startsWith('mv-offline')).map((k) => caches.delete(k)));
+  void clearOfflineChapters(caches).then(async () => {
     await fetch('/api/v1/reader/downloads', { method: 'DELETE', credentials: 'same-origin', headers: { Accept: 'application/json' } }).catch(() => undefined);
     showToast({ kind: 'success', title: btn.dataset.done || root.dataset.doneLabel || 'Done' });
   });
 });
+
+// Offline chapters belong to the member who downloaded them, and Cache Storage
+// is shared by everyone using this browser. Signing out deletes them all
+// before the sign-out form is sent (without JavaScript it posts as usual), and
+// a page fresh from the server deletes the chapters of anyone but the member
+// signed in (body[data-user]; every chapter when signed out). Pages a service
+// worker served from a cache (data-offline-copy) and the anonymous G6 offline
+// page say nothing about who is signed in now, so they are skipped.
+installLogoutClearing(document, () => ('caches' in window ? caches : null));
+if ('caches' in window && navigator.onLine && !document.body.hasAttribute('data-offline-copy') && location.pathname !== '/offline') {
+  void dropForeignChapters(caches, document.body.dataset.user || '', Date.now() / 1000).catch(() => undefined);
+}
 
 // ---- form enhancements ---------------------------------------------------------
 

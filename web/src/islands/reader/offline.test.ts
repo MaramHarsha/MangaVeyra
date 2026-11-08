@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { builtAssets, cacheName, clearAll, expired, isOfflineCache, metaKey, offlineChapters, readMeta, removeChapter, saveChapter, sizeLabel, urlsFor, type Manifest } from './offline';
+import { describe, expect, it, vi } from 'vitest';
+import { builtAssets, cacheName, clearAll, dropForeignChapters, expired, installLogoutClearing, isOfflineCache, metaKey, offlineChapters, readMeta, removeChapter, saveChapter, sizeLabel, urlsFor, type Manifest } from './offline';
 
 /** A minimal in-memory CacheStorage. */
 class FakeCache {
@@ -70,6 +70,9 @@ describe('saveChapter', () => {
     expect(expired(meta, 1_900_000_000)).toBe(false);
     expect(expired(meta, 2_000_000_000)).toBe(true);
     expect(expired(null, 0)).toBe(true);
+    // A chapter without an expiry is never kept (ADR 0012 §7: downloads expire).
+    expect(expired({ ...meta!, expires_at: 0 }, 1)).toBe(true);
+    expect(expired({ ...meta!, expires_at: Number.NaN }, 1)).toBe(true);
   });
   it('removes a partial cache when a page fails', async () => {
     const caches = new FakeCaches();
@@ -91,6 +94,83 @@ describe('removing and clearing', () => {
     expect(await offlineChapters(caches as unknown as CacheStorage)).toEqual(['01b']);
     expect(await clearAll(caches as unknown as CacheStorage)).toBe(1);
     expect(await caches.keys()).toEqual(['mv-v1-static']);
+  });
+});
+
+describe('owned offline chapters', () => {
+  const saveFor = async (caches: FakeCaches, id: string, owner: string, expires = 2_000_000_000) => {
+    const m = { ...manifest(id), owner };
+    m.download = { ...m.download, expires_at: expires };
+    await saveChapter(m, caches as unknown as CacheStorage, okFetch);
+  };
+  it('records the member who downloaded the chapter', async () => {
+    const caches = new FakeCaches();
+    await saveFor(caches, '01a', '01hzrin');
+    expect(await readMeta(caches as unknown as CacheStorage, '01a')).toMatchObject({ owner: '01hzrin' });
+  });
+  it("deletes other members' and unattributed chapters, and every chapter when signed out", async () => {
+    const caches = new FakeCaches();
+    await saveFor(caches, '01mine', '01hzrin');
+    await saveFor(caches, '01theirs', '01hzkai');
+    await saveFor(caches, '01legacy', '');
+    await saveFor(caches, '01old', '01hzrin', 1_000);
+    await caches.open('mv-offline-01partial'); // a download still in progress: no meta yet
+    await caches.open('mv-v1-static');
+    const store = caches as unknown as CacheStorage;
+    expect(await dropForeignChapters(store, '01hzrin', 1_700_000_000)).toBe(3);
+    expect((await caches.keys()).sort()).toEqual(['mv-offline-01mine', 'mv-offline-01partial', 'mv-v1-static']);
+    expect(await dropForeignChapters(store, '', 1_700_000_000)).toBe(2);
+    expect(await caches.keys()).toEqual(['mv-v1-static']);
+  });
+});
+
+describe('signing out', () => {
+  const logoutForm = () => {
+    document.body.innerHTML = `<form method="post" action="/logout"><button type="submit">Log out</button></form>
+      <form method="post" action="/settings/theme"><button type="submit">Theme</button></form>`;
+    const [logout, other] = Array.from(document.querySelectorAll('form'));
+    logout.submit = vi.fn();
+    other.submit = vi.fn();
+    return { logout, other };
+  };
+  it('deletes every offline chapter before the logout form is sent', async () => {
+    const caches = new FakeCaches();
+    await saveChapter({ ...manifest('01a'), owner: '01hzrin' }, caches as unknown as CacheStorage, okFetch);
+    await caches.open('mv-v1-static');
+    const { logout, other } = logoutForm();
+    const stop = installLogoutClearing(document, () => caches as unknown as CacheStorage);
+    const ev = new Event('submit', { bubbles: true, cancelable: true });
+    logout.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(logout.submit).toHaveBeenCalledTimes(1));
+    expect(await caches.keys()).toEqual(['mv-v1-static']);
+    // Other forms are untouched.
+    const ev2 = new Event('submit', { bubbles: true, cancelable: true });
+    other.dispatchEvent(ev2);
+    expect(ev2.defaultPrevented).toBe(false);
+    stop();
+  });
+  it('still signs out when the caches cannot be cleared', async () => {
+    const { logout } = logoutForm();
+    const broken = { keys: () => new Promise<string[]>(() => undefined) } as unknown as CacheStorage;
+    const stop = installLogoutClearing(document, () => broken, 20);
+    logout.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(logout.submit).toHaveBeenCalledTimes(1));
+    stop();
+    const failing = { keys: () => Promise.reject(new Error('denied')) } as unknown as CacheStorage;
+    const { logout: again } = logoutForm();
+    const stop2 = installLogoutClearing(document, () => failing, 20);
+    again.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(again.submit).toHaveBeenCalledTimes(1));
+    stop2();
+  });
+  it('leaves the form alone without Cache Storage', () => {
+    const { logout } = logoutForm();
+    const stop = installLogoutClearing(document, () => null);
+    const ev = new Event('submit', { bubbles: true, cancelable: true });
+    logout.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
+    stop();
   });
 });
 

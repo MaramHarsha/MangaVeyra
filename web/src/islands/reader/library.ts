@@ -7,7 +7,7 @@
  */
 import type { LibraryProps } from './types';
 import { translator } from './types';
-import { cacheName, readMeta, expired, removeChapter, sizeLabel } from './offline';
+import { cacheName, readMeta, expired, ownedBy, removeChapter, sizeLabel } from './offline';
 import { call } from './api';
 import { showToast } from '../../lib/toast';
 
@@ -26,11 +26,13 @@ export async function reconcile(doc: Document, island: HTMLElement, store: Cache
   let local = 0;
   let bytes = 0;
   const now = Date.now() / 1000;
+  const user = doc.body.dataset.user || '';
   for (const r of rows(doc)) {
     const meta = await readMeta(store, r.publicationId);
     const status = r.el.querySelector<HTMLElement>('[data-status]');
     const ready = status?.dataset.status === 'ready';
-    if (meta && (expired(meta, now) || status?.dataset.status === 'expired')) {
+    // Another member's copy on a shared device is not on this device for this member.
+    if (meta && (expired(meta, now) || status?.dataset.status === 'expired' || !ownedBy(meta, user))) {
       await store.delete(cacheName(r.publicationId));
     } else if (meta && ready) {
       local += 1;
