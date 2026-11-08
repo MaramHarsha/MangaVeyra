@@ -90,12 +90,12 @@ func (m *Module) finishRestarted(ctx context.Context, rec *Record, run Run, runn
 		rec.Status, rec.Error = StatusFailed, "restarted on "+running.String()
 		now := db.Now()
 		rec.FinishedAt = &now
-		m.putBackMaintenance(ctx, run.Maintenance)
+		m.endHold(ctx, run)
 		return m.saveRun(ctx, rec, run)
 	}
 	run.logf(fmt.Sprintf("Version %s started.", rec.ToVersion))
 	m.cleanup(ctx, rec, &run)
-	m.putBackMaintenance(ctx, run.Maintenance)
+	m.endHold(ctx, run)
 	run.logf("Maintenance mode off. Update finished.")
 	if err := m.saveRun(ctx, rec, run); err != nil {
 		return err
@@ -183,6 +183,23 @@ func (m *Module) recoverInterrupted(ctx context.Context, rec *Record, run Run) e
 	if rec.StartedBy != nil {
 		actor = *rec.StartedBy
 	}
-	m.fail(ctx, rec, &run, step, "UPD-INTERRUPTED", errors.New("the server stopped while the update was running"), svc, actor, "")
+	// Take the interrupted install's hold over (it may still look live after a
+	// quick restart), so the restore runs with maintenance owned and nothing
+	// else holding the backup lease. If other backup work holds the server,
+	// the next tick tries again; maintenance stays on meanwhile.
+	var lease backup.Lease
+	if h, ok := svc.(backup.Holder); ok {
+		l, err := h.Hold(ctx, backup.HoldRequest{What: backup.HoldUpdate, Message: m.maintenanceMessage(ctx, rec.ToVersion), ActorID: actor,
+			Resume: run.HoldID})
+		if err != nil {
+			return fmt.Errorf("update: hold the server to recover the interrupted update: %w", err)
+		}
+		lease = l
+		if run.Maintenance == nil {
+			before := l.Info().Before
+			run.Maintenance = &before
+		}
+	}
+	m.fail(ctx, rec, &run, step, "UPD-INTERRUPTED", errors.New("the server stopped while the update was running"), svc, lease, actor, "")
 	return nil
 }

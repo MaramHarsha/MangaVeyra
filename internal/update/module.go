@@ -48,6 +48,8 @@ type hooks struct {
 	Restart       func(exe string)
 	// Download replaces the download timeouts (zero fields keep the defaults).
 	Download downloadLimits
+	// BackupWait replaces how long an install waits for running backup work.
+	BackupWait time.Duration
 }
 
 // New creates the module and provides update.Status and the G5 header's
@@ -150,6 +152,16 @@ func (m *Module) autoPatch(ctx context.Context, cfg Config, state CheckState, no
 	to, err := ParseSemver(offer.ToVersion)
 	if err != nil || to.Prerelease() || o.Kind != KindPatch || !o.AllPatch || o.Asset == nil {
 		return
+	}
+	// 03:00 is also the default backup hour: let a running backup, or the
+	// scheduled one that is due, go first (this runs again every minute of the hour).
+	if svc, ok := m.backups(); ok {
+		if h, ok := svc.(backup.Holder); ok {
+			if what, busy := h.Pending(ctx, now); busy {
+				m.d.Log.Info("update: the automatic patch install waits for backup work", "work", what)
+				return
+			}
+		}
 	}
 	state.AutoDay = day
 	m.saveCheckState(ctx, state)

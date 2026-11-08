@@ -94,6 +94,9 @@ func (m *Module) Install(ctx context.Context, offerID, actorID string, opt Insta
 	if !ok {
 		return nil, ErrNoBackups
 	}
+	if _, ok := svc.(backup.Holder); !ok {
+		return nil, ErrNoBackups // the install holds the server through the backup module
+	}
 	mode := ModeBinary
 	if m.ContainerMode() {
 		mode = ModeContainer
@@ -168,10 +171,27 @@ func (m *Module) Install(ctx context.Context, offerID, actorID string, opt Insta
 	return rec, nil
 }
 
-// runInstall is the binary install flow (ADR 0013 §6): maintenance on →
+// backupWait is how long an install waits for a running backup or restore
+// before it starts (the scheduled 03:00 backup, "Back up now").
+const backupWait = 30 * time.Minute
+
+func (m *Module) backupWait() time.Duration {
+	if m.hooks.BackupWait > 0 {
+		return m.hooks.BackupWait
+	}
+	return backupWait
+}
+
+// runInstall is the binary install flow (ADR 0013 §6): hold the server →
 // pre-update backup → download and verify → the new binary's migrations →
 // the new binary's health check on a loopback port → atomic swap → restart.
 // Any failure before the swap restores the backup and keeps the old binary.
+//
+// The hold (backup.Holder) is taken first and kept until the end: maintenance
+// mode is on and owned by the install (the G5 toggle refuses to turn it off),
+// no other backup or restore can take the backup lease, and the job queue
+// claims no new work. So nothing can block the rollback restore or write
+// data the rollback would lose.
 func (m *Module) runInstall(ctx context.Context, rec *Record, run Run, plan installPlan, lock lockValue, svc backup.Service) {
 	hctx, stopHold := context.WithCancel(ctx)
 	go m.holdLock(hctx, lock)
@@ -191,28 +211,37 @@ func (m *Module) runInstall(ctx context.Context, rec *Record, run Run, plan inst
 			m.d.Log.Warn("update: save progress", "err", err)
 		}
 	}
+	var lease backup.Lease
 	fail := func(step, code string, err error) {
-		m.fail(ctx, rec, &run, step, code, err, svc, actor, plan.exe)
+		m.fail(ctx, rec, &run, step, code, err, svc, lease, actor, plan.exe)
 		// A restore keeps the update.* settings, so the lease is still ours;
 		// renew it until the deferred release all the same.
 		_, _ = m.renewLock(ctx, lock)
 	}
 
-	if err := m.setMaintenance(ctx, rec.ToVersion); err != nil {
-		fail(StepBackup, "UPD-MAINTENANCE", err)
-		return
-	}
-	run.logf("Maintenance mode on: members see the maintenance page.")
-
-	// 1. Automatic backup.
+	// 1. Hold the server, then the automatic backup.
 	rec.Status = StatusBackingUp
 	run.setStep(StepBackup, StateRunning, "")
 	save()
+	lease, err := svc.(backup.Holder).Hold(ctx, backup.HoldRequest{What: backup.HoldUpdate, Message: m.maintenanceMessage(ctx, rec.ToVersion),
+		ActorID: actor, Wait: m.backupWait(), Log: func(line string) { run.logf(line); save() }})
+	if err != nil {
+		if errors.Is(err, backup.ErrBusy) {
+			err = fmt.Errorf("another backup or restore was still running after %s: %w", m.backupWait(), err)
+		}
+		fail(StepBackup, "UPD-BACKUP", err)
+		return
+	}
+	before := lease.Info().Before
+	run.Maintenance, run.HoldID = &before, lease.Info().ID
+	run.logf("Maintenance mode on: members see the maintenance page; no new jobs start until the update ends.")
+	save()
+	held := lease.Context(ctx)
 	var keep time.Duration
 	if run.Keep {
 		keep = KeepFor
 	}
-	b, err := svc.Create(ctx, backup.Request{Kind: backup.KindPreUpdate, CreatedBy: actor, KeepFor: keep})
+	b, err := svc.Create(held, backup.Request{Kind: backup.KindPreUpdate, CreatedBy: actor, KeepFor: keep})
 	if err != nil {
 		fail(StepBackup, "UPD-BACKUP", err)
 		return
@@ -226,7 +255,9 @@ func (m *Module) runInstall(ctx context.Context, rec *Record, run Run, plan inst
 	if run.Mode == ModeContainer {
 		// A container cannot replace its own image: keep the backup and show
 		// the host commands. The update finishes when the new version starts.
-		m.putBackMaintenance(ctx, run.Maintenance)
+		if err := lease.Release(ctx, run.Maintenance); err != nil {
+			m.d.Log.Error("update: put maintenance back", "err", err)
+		}
 		run.logf("Container install: run the update commands on the host; the backup is kept until the new version starts.")
 		rec.Status = StatusAvailable
 		save()
@@ -306,6 +337,9 @@ func (m *Module) runInstall(ctx context.Context, rec *Record, run Run, plan inst
 	run.Phase = PhaseRestarting
 	run.logf(fmt.Sprintf("Replaced %s (the previous binary is kept as %s.prev); restarting.", plan.exe, plan.exe))
 	save()
+	// The restarted server ends the hold (finishRestarted); until then
+	// maintenance stays on and owned by this update.
+	lease.Detach()
 	_ = os.RemoveAll(dir)
 	if ok, err := m.swapLock(ctx, lock.encode(), lockValue{UpdateID: rec.ID, Owner: restartOwner}); err == nil && ok {
 		handedOff = true
@@ -327,8 +361,12 @@ func firstLine(out string, err error) string {
 }
 
 // fail records the failed step, restores the pre-update backup when one was
-// taken, keeps the old binary and puts maintenance back (G14 failed, restored).
-func (m *Module) fail(ctx context.Context, rec *Record, run *Run, step, code string, cause error, svc backup.Service, actor, exe string) {
+// taken, keeps the old binary and ends the hold, putting maintenance back (G14
+// failed, restored). The restore runs under the hold, so no other backup work
+// and no maintenance change can stand in its way. Without a hold (it could
+// not be taken) nothing changed and maintenance is left alone.
+func (m *Module) fail(ctx context.Context, rec *Record, run *Run, step, code string, cause error, svc backup.Service, lease backup.Lease,
+	actor, exe string) {
 	m.d.Log.Error("update failed", "update", rec.ID, "step", step, "code", code, "err", redact(cause.Error()))
 	run.setStep(step, StateFailed, truncate(redact(cause.Error()), 500))
 	run.Code = code
@@ -338,7 +376,11 @@ func (m *Module) fail(ctx context.Context, rec *Record, run *Run, step, code str
 		run.setStep(StepRestore, StateRunning, "")
 		_ = m.saveRun(ctx, rec, *run)
 		run.logf("Restoring backup " + id + ".")
-		err := svc.Restore(ctx, id, actor)
+		rctx := ctx
+		if lease != nil {
+			rctx = lease.Context(ctx)
+		}
+		err := svc.Restore(rctx, id, actor)
 		m.d.Settings.Invalidate()
 		if err != nil {
 			run.RestoreFailed = true
@@ -356,12 +398,19 @@ func (m *Module) fail(ctx context.Context, rec *Record, run *Run, step, code str
 	}
 	now := db.Now()
 	rec.FinishedAt = &now
-	if run.RestoreFailed {
+	switch {
+	case lease == nil:
+	case run.RestoreFailed:
 		// The data may be half-migrated: members stay on the maintenance page
 		// until an admin restores the backup from G10 or the command line.
 		run.logf("Maintenance mode stays on until the backup is restored.")
-	} else {
-		m.putBackMaintenance(ctx, run.Maintenance)
+		if err := lease.Release(ctx, nil); err != nil {
+			m.d.Log.Error("update: end the hold", "err", err)
+		}
+	default:
+		if err := lease.Release(ctx, run.Maintenance); err != nil {
+			m.d.Log.Error("update: put maintenance back", "err", err)
+		}
 	}
 	_ = os.RemoveAll(m.updatesDir(rec.ToVersion))
 	if exe != "" {
@@ -388,21 +437,33 @@ func (m *Module) reoffer(ctx context.Context, rec *Record) {
 	}
 }
 
-// setMaintenance turns maintenance mode on with the update message in the
+// maintenanceMessage is the maintenance page's update message in the
 // instance's default language.
-func (m *Module) setMaintenance(ctx context.Context, version string) error {
-	m.d.Settings.Invalidate()
-	inst, err := m.d.Settings.Instance(ctx)
-	if err != nil {
-		return err
-	}
+func (m *Module) maintenanceMessage(ctx context.Context, version string) string {
+	inst := m.d.Settings.MustInstance(ctx)
 	lctx := i18n.WithLocale(ctx, i18n.Negotiate(m.d.I18n.Languages(), inst.DefaultLocale, "", "", ""))
-	msg := i18n.T(lctx, "update.maintenance.message", "version", version)
-	_, err = m.d.Settings.UpdateInstance(ctx, "", func(i *settings.Instance) error {
-		i.Maintenance = settings.Maintenance{Enabled: true, Message: msg}
-		return nil
-	})
-	return err
+	return i18n.T(lctx, "update.maintenance.message", "version", version)
+}
+
+// endHold ends the install's hold from the restarted server and puts the
+// admin's maintenance setting back.
+func (m *Module) endHold(ctx context.Context, run Run) {
+	if svc, ok := m.backups(); ok && run.HoldID != "" {
+		if h, ok := svc.(backup.Holder); ok {
+			if err := h.EndHold(ctx, run.HoldID, maintenanceOrOff(run.Maintenance)); err != nil {
+				m.d.Log.Error("update: end the hold", "err", err)
+			}
+			return
+		}
+	}
+	m.putBackMaintenance(ctx, run.Maintenance)
+}
+
+func maintenanceOrOff(prev *settings.Maintenance) *settings.Maintenance {
+	if prev == nil {
+		return &settings.Maintenance{}
+	}
+	return prev
 }
 
 // putBackMaintenance restores the admin's maintenance setting from before the update.

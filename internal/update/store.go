@@ -123,7 +123,10 @@ type Run struct {
 	Auto bool `json:"auto,omitempty"`
 	// Maintenance is the admin's maintenance setting before the update, put back afterwards.
 	Maintenance *settings.Maintenance `json:"maintenance_before,omitempty"`
-	Phase       string                `json:"phase,omitempty"`
+	// HoldID is the backup module's hold on the server (maintenance mode and
+	// the backup lease) for this install; the restarted server ends it.
+	HoldID string `json:"hold_id,omitempty"`
+	Phase  string `json:"phase,omitempty"`
 	// Code is the public error code (UPD-MIGRATE-0602...).
 	Code string `json:"code,omitempty"`
 	// Restored reports that the pre-update backup was restored.

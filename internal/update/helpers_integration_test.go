@@ -24,6 +24,7 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/backup"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 	"github.com/MaramHarsha/MangaVeyra/internal/update"
 )
@@ -172,6 +173,7 @@ func (e *env) publish(o publishOpts) update.Manifest {
 // the updates table is kept too), and removes the fake migration's marker.
 type fakeBackups struct {
 	d           *db.DB
+	st          *settings.Service
 	dataDir     string
 	mu          sync.Mutex
 	created     []backup.Request
@@ -180,6 +182,72 @@ type fakeBackups struct {
 	failCreate  error
 	failRestore error
 	snapshot    map[string]snap
+	// holds records the holds taken (What) and ended (EndHold ids).
+	holds, ended []string
+	// pending is what Pending reports ("" for nothing).
+	pending string
+}
+
+// Hold implements backup.Holder like the real service does for the update:
+// maintenance on with the request's message, and put back on Release.
+func (f *fakeBackups) Hold(ctx context.Context, req backup.HoldRequest) (backup.Lease, error) {
+	f.st.Invalidate()
+	before := f.st.MustInstance(ctx).Maintenance
+	if err := f.setMaintenance(ctx, settings.Maintenance{Enabled: true, Message: req.Message}); err != nil {
+		return nil, err
+	}
+	f.mu.Lock()
+	f.holds = append(f.holds, req.What)
+	f.mu.Unlock()
+	id := req.Resume
+	if id == "" {
+		id = db.NewID()
+	}
+	return &fakeLease{f: f, info: backup.HoldInfo{ID: id, What: req.What, Since: db.Now(), Before: before}}, nil
+}
+
+func (f *fakeBackups) EndHold(ctx context.Context, id string, m *settings.Maintenance) error {
+	f.mu.Lock()
+	f.ended = append(f.ended, id)
+	f.mu.Unlock()
+	if m == nil {
+		return nil
+	}
+	return f.setMaintenance(ctx, *m)
+}
+
+func (f *fakeBackups) Pending(ctx context.Context, now time.Time) (string, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.pending, f.pending != ""
+}
+
+func (f *fakeBackups) setMaintenance(ctx context.Context, m settings.Maintenance) error {
+	_, err := f.st.UpdateInstance(ctx, "", func(i *settings.Instance) error {
+		i.Maintenance = m
+		return nil
+	})
+	return err
+}
+
+type fakeLease struct {
+	f    *fakeBackups
+	info backup.HoldInfo
+	done bool
+}
+
+func (l *fakeLease) Info() backup.HoldInfo                       { return l.info }
+func (l *fakeLease) Context(ctx context.Context) context.Context { return ctx }
+func (l *fakeLease) Detach()                                     { l.done = true }
+func (l *fakeLease) Release(ctx context.Context, m *settings.Maintenance) error {
+	if l.done {
+		return nil
+	}
+	l.done = true
+	if m == nil {
+		return nil
+	}
+	return l.f.setMaintenance(ctx, *m)
 }
 
 type snap struct {
@@ -288,7 +356,7 @@ func newEnv(t *testing.T, dialect string, opts ...envOpt) *env {
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	e := &env{t: t, ta: ta, m: m, ctx: context.Background(), release: newReleaseServer(t), priv: priv, pub: pub,
 		restarted: make(chan string, 1)}
-	e.backups = &fakeBackups{d: ta.Deps.DB, dataDir: ta.Deps.Cfg.DataDir}
+	e.backups = &fakeBackups{d: ta.Deps.DB, st: ta.Deps.Settings, dataDir: ta.Deps.Cfg.DataDir}
 	binDir := t.TempDir()
 	e.exe = filepath.Join(binDir, "mangaveyra")
 	if err := os.WriteFile(e.exe, []byte("old binary 1.0.0"), 0o755); err != nil {
