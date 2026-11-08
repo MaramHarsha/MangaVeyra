@@ -532,7 +532,6 @@
 .mv-themecard:has(> input:checked) .mv-themecard__swatch { outline: 2px solid var(--mv-accent); outline-offset: 3px; }
 .mv-themecard:has(> input:focus-visible) .mv-themecard__swatch { outline: var(--mv-focus-width) solid var(--mv-focus); outline-offset: 5px; }
 
-.mv-admin__tabs { margin-bottom: 4px; }
 
 @media (max-width: 768px) {
   .mv-settings { grid-template-columns: minmax(0, 1fr); gap: 0; }

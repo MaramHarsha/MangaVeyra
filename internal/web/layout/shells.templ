@@ -200,17 +200,6 @@ templ SettingsLayout(c *Chrome, title string, nav []SettingsNavItem, current str
 	}
 }
 
-// AdminLayout renders admin pages inside the app shell with section tabs.
-templ AdminLayout(c *Chrome, title, sub string, tabs []ui.Tab) {
-	@AppShell(c) {
-		@ui.PageHead(title, sub, nil)
-		<div class="mv-admin__tabs">
-			@ui.Tabs(title, tabs)
-		</div>
-		{ children... }
-	}
-}
-
 // ReaderShell renders the distraction-free reader frame: slim bar and a canvas stage.
 templ ReaderShell(c *Chrome, title, backURL string) {
 	@Base(c) {

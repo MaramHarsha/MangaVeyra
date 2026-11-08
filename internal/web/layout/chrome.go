@@ -1,6 +1,6 @@
 // Package layout holds the page frames every MangaVeyra screen renders in:
 // Base (the HTML document), AppShell (top bar, studio sidebar, mobile bottom
-// nav), AuthShell, SetupShell, OnboardingShell, SettingsLayout, AdminLayout,
+// nav), AuthShell, SetupShell, OnboardingShell, SettingsLayout,
 // ReaderShell, EditorShell and PlainShell.
 //
 // Layouts are pure templates: the web package collects the request-dependent
