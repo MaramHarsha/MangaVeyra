@@ -103,7 +103,7 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 		}
 		// The connection's last test (or a GPT Image refusal) showed the key
 		// cannot use this model, so routing skips it: say so in the row.
-		if routed != nil && routed.Kind == providerKindOpenAI && !inst.LocalOnly && !routed.Test.imageModelAvailable(model.ID) {
+		if routed != nil && capabilityKind(routed.Kind) && !inst.LocalOnly && !routed.Test.imageModelAvailable(model.ID) {
 			row.Ready, row.Warning = false, true
 			row.Status, row.Detail = i18n.T(ctx, "models.status.no_access"), i18n.T(ctx, "models.test.unavailable")
 			if routed.Test.Images == capabilityVerification {

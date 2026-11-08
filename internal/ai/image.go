@@ -38,6 +38,12 @@ type imageService struct {
 	spend      *textService
 	doer       httpDoer
 	workerWait time.Duration
+	// localDoer reaches ComfyUI and HTTP servers on this machine or network
+	// (the private-network client of ADR 0007); hfDoer the Hugging Face
+	// hosts. pollEvery overrides customImagePoll in tests.
+	localDoer httpDoer
+	hfDoer    httpDoer
+	pollEvery time.Duration
 }
 
 var _ ImageService = (*imageService)(nil)
@@ -238,7 +244,7 @@ func (s *imageService) planImage(ctx context.Context, req ImagePlanRequest, excl
 			}
 			// The connection's last model-list check (or a GPT Image refusal)
 			// showed this key cannot use the model: route around it.
-			if p.Kind == providerKindOpenAI && !p.Test.imageModelAvailable(m.ID) {
+			if capabilityKind(p.Kind) && !p.Test.imageModelAvailable(m.ID) {
 				reason := skipImagesUnavailable
 				if p.Test.Images == capabilityVerification {
 					reason = skipImagesVerification
@@ -306,6 +312,7 @@ func (s *imageService) planImage(ctx context.Context, req ImagePlanRequest, excl
 			}
 		}
 	}
+	candidates = append(candidates, customImageCandidates(providers, req, n, req.PublicSeries && inst.Content.LicenceGuard, exclude, &skipped)...)
 	if len(candidates) == 0 {
 		return zero, imageError(CodeNoProvider, false, jobs.Cost{})
 	}
@@ -534,6 +541,18 @@ func (s *imageService) GenerateImage(ctx context.Context, req ImageGenerateReque
 	}
 	if err := s.recordDecision(ctx, req); err != nil {
 		return zero, imageError(CodeUpstream, false, jobs.Cost{})
+	}
+	if strings.HasPrefix(req.Plan.ModelID, customModelPrefix) {
+		result, err := s.customImage(ctx, req, n)
+		if err != nil {
+			return zero, err
+		}
+		if req.Mask != nil {
+			if err := preserveMaskedImages(&result, req); err != nil {
+				return zero, imageError(CodeBadOutput, false, result.Actual)
+			}
+		}
+		return result, nil
 	}
 	m, err := s.catalog.lookup(ctx, req.Plan.ModelID)
 	if err != nil || !modelSupports(m, n) {

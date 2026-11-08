@@ -49,11 +49,14 @@ type providerCreate struct {
 	Kind    string
 	BaseURL string
 	Local   localTextConfig
-	Draft   bool
-	Name    string
-	Key     string
-	Scope   string
-	Model   string
+	// Config is the G12 description of a Hugging Face, HTTP or ComfyUI
+	// connection (validated by validateCustomConfig before it is stored).
+	Config any
+	Draft  bool
+	Name   string
+	Key    string
+	Scope  string
+	Model  string
 }
 
 // providerUpdate is an ordinary metadata update. Key is accepted only so form
@@ -109,7 +112,7 @@ func (t providerTestState) textAvailable() bool { return t.Text != capabilityUna
 
 // sanitizeCapabilities drops capability values the store never writes, so a
 // tampered or stale row cannot widen routing or reach the page.
-func (t *providerTestState) sanitizeCapabilities() {
+func (t *providerTestState) sanitizeCapabilities(kind string) {
 	if t.Text != capabilityReady && t.Text != capabilityUnavailable {
 		t.Text = ""
 	}
@@ -119,7 +122,7 @@ func (t *providerTestState) sanitizeCapabilities() {
 	models := []string{}
 	if t.Images == capabilityReady {
 		for _, r := range imageRoutes {
-			if r.Kind == providerKindOpenAI && slices.Contains(t.ImageModels, r.Model) {
+			if r.Kind == kind && slices.Contains(t.ImageModels, r.Model) {
 				models = append(models, r.Model)
 			}
 		}
@@ -170,11 +173,15 @@ type providerRecord struct {
 type providerCandidate struct {
 	ID    string
 	Kind  string
+	Name  string
 	Scope string
 	Model string
 	// Test is the connection's last check, which can rule out OpenAI text or
 	// image routes the key cannot use.
 	Test providerTestState
+	// Config is a custom connection's stored description (G12), "{}" for
+	// fixed kinds. It never holds a key.
+	Config string
 }
 
 type dispatchProvider struct {
@@ -188,6 +195,7 @@ type dispatchProvider struct {
 	Enabled bool
 	BaseURL string
 	Local   localTextConfig
+	Config  string
 }
 
 type providerStore struct {
@@ -217,17 +225,24 @@ func (s *providerStore) Create(ctx context.Context, actor providerActor, in prov
 	if in.Kind == "" {
 		in.Kind = providerKindOpenRouter
 	}
-	if !validProviderKind(in.Kind) || !validProviderName(in.Name) || (in.Kind != providerKindLocalText && !validProviderKey(in.Key)) || (in.Key != "" && !validProviderKey(in.Key)) {
+	if !validProviderKind(in.Kind) || !validProviderName(in.Name) || (!keylessKind(in.Kind) && !validProviderKey(in.Key)) || (in.Key != "" && !validProviderKey(in.Key)) {
 		return zero, errProviderInvalid
 	}
 	config := "{}"
-	if in.Kind == providerKindLocalText {
+	switch {
+	case in.Kind == providerKindLocalText:
 		if validateLocalTextConfig(in.BaseURL, in.Local) != nil {
 			return zero, errProviderInvalid
 		}
 		raw, _ := json.Marshal(in.Local)
 		config = string(raw)
-	} else if in.BaseURL != "" {
+	case customKind(in.Kind):
+		raw, err := json.Marshal(in.Config)
+		if err != nil || in.Config == nil || validateCustomConfig(in.Kind, in.BaseURL, string(raw)) != nil {
+			return zero, errProviderInvalid
+		}
+		config = string(raw)
+	case in.BaseURL != "" || in.Config != nil:
 		return zero, errProviderInvalid
 	}
 	owner, err := s.ownerForCreate(ctx, actor, in.Scope)
@@ -374,8 +389,8 @@ func (s *providerStore) ListManageable(ctx context.Context, actor providerActor)
 	if s == nil || s.db == nil || strings.TrimSpace(actor.UserID) == "" {
 		return nil, errProviderUnavailable
 	}
-	query := `SELECT ` + providerColumns + ` FROM providers WHERE kind IN (?, ?, ?, ?) AND `
-	args := []any{providerKindOpenRouter, providerKindOpenAI, providerKindFal, providerKindLocalText}
+	in, args := kindPlaceholders(managedProviderKinds)
+	query := `SELECT ` + providerColumns + ` FROM providers WHERE kind IN (` + in + `) AND `
 	if actor.Admin {
 		query += `((scope = 'server' AND owner_id IS NULL) OR (scope = 'user' AND owner_id = ?))`
 		args = append(args, actor.UserID)
@@ -406,17 +421,20 @@ func (s *providerStore) Candidates(ctx context.Context, actorID string) ([]provi
 		return nil, errProviderUnavailable
 	}
 	var rows []providerRecord
+	in, args := kindPlaceholders(managedProviderKinds)
+	keyless, keylessArgs := kindPlaceholders([]string{providerKindLocalText, providerKindHTTP, providerKindComfyUI})
+	args = append(append(args, keylessArgs...), actorID)
 	err := s.db.Select(ctx, &rows, `SELECT `+providerColumns+` FROM providers
-		WHERE kind IN (?, ?, ?, ?) AND enabled = TRUE AND (key_enc <> '' OR kind = 'openai-compatible-local')
+		WHERE kind IN (`+in+`) AND enabled = TRUE AND (key_enc <> '' OR kind IN (`+keyless+`))
 			AND ((scope = 'user' AND owner_id = ?) OR (scope = 'server' AND owner_id IS NULL))
-		ORDER BY CASE WHEN scope = 'user' THEN 0 ELSE 1 END, id`, providerKindOpenRouter, providerKindOpenAI, providerKindFal, providerKindLocalText, actorID)
+		ORDER BY CASE WHEN scope = 'user' THEN 0 ELSE 1 END, id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("ai: list providers: %w", err)
 	}
 	out := make([]providerCandidate, 0, len(rows))
 	for _, r := range rows {
 		if validateProviderRecord(r) == nil {
-			out = append(out, providerCandidate{ID: r.ID, Kind: r.Kind, Scope: r.Scope, Model: r.localConfig().Model, Test: r.lastTest()})
+			out = append(out, r.candidate())
 		}
 	}
 	return out, nil
@@ -431,13 +449,23 @@ func (s *providerStore) Candidate(ctx context.Context, actorID, id string) (prov
 	if err != nil {
 		return zero, errProviderUnavailable
 	}
-	if err := validateProviderRecord(r); err != nil || !r.Enabled || (r.Kind != providerKindLocalText && strings.TrimSpace(r.KeyEnc) == "") {
+	if err := validateProviderRecord(r); err != nil || !r.Enabled || (!keylessKind(r.Kind) && strings.TrimSpace(r.KeyEnc) == "") {
 		return zero, errProviderUnavailable
 	}
 	if r.Scope == providerScopeUser && (!r.OwnerID.Valid || r.OwnerID.String != actorID) {
 		return zero, errProviderUnavailable
 	}
-	return providerCandidate{ID: r.ID, Kind: r.Kind, Scope: r.Scope, Model: r.localConfig().Model, Test: r.lastTest()}, nil
+	return r.candidate(), nil
+}
+
+// candidate is the routing view of a valid row: no key, no ciphertext.
+func (r providerRecord) candidate() providerCandidate {
+	c := providerCandidate{ID: r.ID, Kind: r.Kind, Name: r.Name, Scope: r.Scope, Model: r.localConfig().Model, Test: r.lastTest(), Config: "{}"}
+	if customKind(r.Kind) && r.Kind != providerKindLocalText {
+		c.Config = r.Config
+		c.Model = customModelID(r.Kind, r.ID, r.Config)
+	}
+	return c
 }
 
 func (s *providerStore) ResolveDispatch(ctx context.Context, actorID, id string) (dispatchProvider, error) {
@@ -446,7 +474,7 @@ func (s *providerStore) ResolveDispatch(ctx context.Context, actorID, id string)
 		return zero, errProviderUnavailable
 	}
 	r, err := providerByID(ctx, s.db, id, false)
-	if err != nil || validateProviderRecord(r) != nil || !r.Enabled || (r.Kind != providerKindLocalText && strings.TrimSpace(r.KeyEnc) == "") {
+	if err != nil || validateProviderRecord(r) != nil || !r.Enabled || (!keylessKind(r.Kind) && strings.TrimSpace(r.KeyEnc) == "") {
 		return zero, errProviderUnavailable
 	}
 	if r.Scope == providerScopeUser && r.OwnerID.String != actorID {
@@ -458,7 +486,7 @@ func (s *providerStore) ResolveDispatch(ctx context.Context, actorID, id string)
 			return zero, errProviderKeyUnreadable
 		}
 	}
-	if r.Kind != providerKindLocalText && strings.TrimSpace(key) == "" {
+	if !keylessKind(r.Kind) && strings.TrimSpace(key) == "" {
 		return zero, errProviderUnavailable
 	}
 	owner := ""
@@ -466,22 +494,26 @@ func (s *providerStore) ResolveDispatch(ctx context.Context, actorID, id string)
 		owner = r.OwnerID.String
 	}
 	return dispatchProvider{ID: r.ID, Kind: r.Kind, Scope: r.Scope, OwnerID: owner, Key: key,
-		KeyEnc: r.KeyEnc, KeyHint: r.KeyHint, Enabled: r.Enabled, BaseURL: r.BaseURL, Local: r.localConfig()}, nil
+		KeyEnc: r.KeyEnc, KeyHint: r.KeyHint, Enabled: r.Enabled, BaseURL: r.BaseURL, Local: r.localConfig(), Config: r.Config}, nil
 }
 
 func (s *providerStore) recordTest(ctx context.Context, providerID, expectedKeyEnc, state, requestID string) error {
-	return s.recordTestResult(ctx, providerID, expectedKeyEnc, providerTestState{State: state, RequestID: requestID})
+	return s.recordTestResult(ctx, providerID, "", expectedKeyEnc, providerTestState{State: state, RequestID: requestID})
 }
 
-// recordTestResult stores a connection check, including the capabilities an
-// OpenAI model-list check found, for the key that was checked only.
-func (s *providerStore) recordTestResult(ctx context.Context, providerID, expectedKeyEnc string, test providerTestState) error {
+// recordTestResult stores a connection check, including the capabilities a
+// model-list check of a capability kind found, for the key that was checked
+// only.
+func (s *providerStore) recordTestResult(ctx context.Context, providerID, kind, expectedKeyEnc string, test providerTestState) error {
 	if test.State != "ok" && test.State != "error" {
 		return errProviderInvalid
 	}
 	test = providerTestState{State: test.State, Time: s.timeNow(), RequestID: sanitizeRequestID(test.RequestID),
 		Text: test.Text, Images: test.Images, ImageModels: test.ImageModels}
-	test.sanitizeCapabilities()
+	if !capabilityKind(kind) {
+		test.Text, test.Images, test.ImageModels = "", "", nil
+	}
+	test.sanitizeCapabilities(kind)
 	raw, err := json.Marshal(test)
 	if err != nil {
 		return err
@@ -590,10 +622,13 @@ func providerByID(ctx context.Context, q db.Querier, id string, lock bool) (prov
 }
 
 func validateProviderRecord(r providerRecord) error {
-	if !db.ValidID(r.ID) || !validProviderKind(r.Kind) || !validProviderName(r.Name) || (r.Kind != providerKindLocalText && (r.BaseURL != "" || r.Config != "{}")) {
+	if !db.ValidID(r.ID) || !validProviderKind(r.Kind) || !validProviderName(r.Name) || (!customKind(r.Kind) && (r.BaseURL != "" || r.Config != "{}")) {
 		return errProviderInvalid
 	}
 	if r.Kind == providerKindLocalText && validateLocalTextConfig(r.BaseURL, r.localConfig()) != nil {
+		return errProviderInvalid
+	}
+	if customKind(r.Kind) && r.Kind != providerKindLocalText && validateCustomConfig(r.Kind, r.BaseURL, r.Config) != nil {
 		return errProviderInvalid
 	}
 	switch r.Scope {
@@ -642,10 +677,10 @@ func (r providerRecord) lastTest() providerTestState {
 		last.RequestID = sanitizeRequestID(last.RequestID)
 		last.Time = last.Time.UTC()
 	}
-	if r.Kind != providerKindOpenAI {
+	if !capabilityKind(r.Kind) {
 		last.Text, last.Images, last.ImageModels = "", "", nil
 	}
-	last.sanitizeCapabilities()
+	last.sanitizeCapabilities(r.Kind)
 	return last
 }
 

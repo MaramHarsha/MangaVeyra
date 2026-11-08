@@ -376,12 +376,12 @@ func TestModelsPageMatchesDesignedLayout(t *testing.T) {
 
 		// Capability tabs in design order; this request selects Text.
 		mustAppearInOrder(t, body, `<nav class="mv-seg" aria-label="Capabilities">`,
-			`href="/models?cap=image">Image 15</a>`, `href="/models?cap=text" aria-current="true">Text 1</a>`,
+			`href="/models?cap=image">Image 21</a>`, `href="/models?cap=text" aria-current="true">Text 1</a>`,
 			`href="/models?cap=video">Video 0</a>`, `href="/models?cap=voice">Voice 0</a>`, `href="/models?cap=ocr">OCR 0</a>`)
 		// The designed G2 opens on Image, with only the two designed header
 		// actions (G11 is reached from the subtitle's "auto-routing").
 		landing := mainOf(t, admin.Get("/models"))
-		mustContain(t, landing, `href="/models?cap=image" aria-current="true">Image 15</a>`,
+		mustContain(t, landing, `href="/models?cap=image" aria-current="true">Image 21</a>`,
 			`<caption class="mv-sr-only">Image models auto-routing can use</caption>`)
 		mustNotContain(t, landing, "Text models auto-routing can use", `href="/models/routing" class="mv-btn`)
 
@@ -431,7 +431,7 @@ func TestModelsPageSoonItemsNeverLink(t *testing.T) {
 		}
 		// Unknown tabs fall back to the designed default, Image.
 		mustContain(t, mainOf(t, ta.Login(t, ta.Admin.Username).Get("/models?cap=bogus")),
-			`href="/models?cap=image" aria-current="true">Image 15</a>`, "Placeholder art")
+			`href="/models?cap=image" aria-current="true">Image 21</a>`, "Placeholder art")
 	})
 }
 

@@ -577,6 +577,18 @@ func providerKindName(kind string) string {
 	if route, ok := routeForKind(kind); ok {
 		return route.Label
 	}
+	switch kind {
+	case providerKindReplicate:
+		return "Replicate"
+	case providerKindRunware:
+		return "Runware"
+	case providerKindHuggingFace:
+		return "Hugging Face"
+	case providerKindHTTP:
+		return "HTTP"
+	case providerKindComfyUI:
+		return "ComfyUI"
+	}
 	return kind
 }
 

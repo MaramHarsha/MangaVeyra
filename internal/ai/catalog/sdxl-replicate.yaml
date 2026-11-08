@@ -1,0 +1,21 @@
+# SDXL through a Replicate connection, pinned to version 7762fd07…9bdc
+# (ADR 0013 §9). Time-billed, so the route is pin-only. Native masked
+# inpainting (white = edit). Fake-transport tested, not live-verified.
+id: stability-ai/sdxl
+name: SDXL (Replicate)
+maker: Stability AI
+kind: image
+licence: openrail++
+commercial: true
+providers: [replicate]
+references: 0
+text_in_art: false
+bw: true
+edit: true
+mask: true
+max_width: 1024
+max_height: 1024
+max_count: 4
+quality: 65
+speed: 50
+gpu_seconds: 0

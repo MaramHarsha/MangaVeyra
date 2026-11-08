@@ -54,7 +54,7 @@ func (s *imageService) remoteImage(ctx context.Context, req ImageGenerateRequest
 	// A plan made before the connection's check (or an earlier job) showed
 	// the key cannot use this GPT Image model is refused before reserving, so
 	// a queued batch does not repeat a request OpenAI will reject.
-	if provider.Kind == providerKindOpenAI {
+	if capabilityKind(provider.Kind) {
 		if c, err := s.providers.Candidate(ctx, req.ActorID, provider.ID); err == nil && !c.Test.imageModelAvailable(req.Plan.ModelID) {
 			code := CodeNoProvider
 			if c.Test.Images == capabilityVerification {
@@ -134,9 +134,26 @@ func (s *imageService) remoteImage(ctx context.Context, req ImageGenerateRequest
 	case providerKindOpenRouter:
 		call, err := s.openRouterImage(ctx, provider.Key, req)
 		return closeReservation(call, err)
+	case providerKindFal:
+		call, err := s.falImage(ctx, provider.Key, req)
+		return closeReservation(call, err)
+	case providerKindGoogle:
+		call, err := s.googleImage(ctx, provider.Key, req)
+		return closeReservation(call, err)
+	case providerKindXAI:
+		call, err := s.xaiImage(ctx, provider.Key, req)
+		return closeReservation(call, err)
+	case providerKindTogether:
+		call, err := s.togetherImage(ctx, provider.Key, req)
+		return closeReservation(call, err)
+	case providerKindReplicate:
+		call, err := s.replicateImage(ctx, provider.Key, req)
+		return closeReservation(call, err)
+	case providerKindRunware:
+		call, err := s.runwareImage(ctx, provider.Key, req)
+		return closeReservation(call, err)
 	}
-	call, err := s.falImage(ctx, provider.Key, req)
-	return closeReservation(call, err)
+	return closeReservation(imageCall{}, imageError(CodeNoProvider, false, jobs.Cost{}))
 }
 
 // validateRouteRequest applies the ADR 0009 per-call ceilings. ADR 0007
@@ -145,6 +162,9 @@ func validateRouteRequest(kind string, req ImageGenerateRequest) error {
 	route, ok := imageRouteFor(kind, req.Plan.ModelID)
 	if !ok {
 		return nil
+	}
+	if route.validate != nil {
+		return route.validate(req)
 	}
 	return validateGPTImageRequest(req, kind == providerKindOpenAI, route.MaxRefs)
 }
@@ -163,7 +183,9 @@ func (s *imageService) postImage(ctx context.Context, endpoint, authorization st
 		return nil, 0, false, badInputAdapterError()
 	}
 	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("Authorization", authorization)
+	if authorization != "" {
+		r.Header.Set("Authorization", authorization)
+	}
 	r.Header.Set("Accept", "application/json")
 	for k, v := range headers {
 		r.Header.Set(k, v)

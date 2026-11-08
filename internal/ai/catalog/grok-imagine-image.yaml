@@ -1,0 +1,21 @@
+# xAI Grok Imagine Image through a direct xAI connection (ADR 0013 §9).
+# Generation only: the edit API takes source images but no mask.
+# Fake-transport tested, not live-verified.
+id: grok-imagine-image
+name: Grok Imagine Image
+maker: xAI
+kind: image
+licence: provider-commercial
+commercial: true
+providers: [xai]
+references: 0
+text_in_art: false
+bw: true
+edit: false
+mask: false
+max_width: 4096
+max_height: 4096
+max_count: 4
+quality: 80
+speed: 80
+gpu_seconds: 0

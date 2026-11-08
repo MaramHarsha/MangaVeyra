@@ -40,7 +40,11 @@ func newModule(d *core.Deps, doer httpDoer, now func() time.Time) *Module {
 	openai := newOpenAIClient(doer)
 	spend := NewSpendStore(d.DB, d.Settings)
 	spend.Now = now
-	text := newTextService(d.DB, d.Settings, providers, client, spend, now).withClient(providerKindOpenAI, openai)
+	text := newTextService(d.DB, d.Settings, providers, client, spend, now).withClient(providerKindOpenAI, openai).
+		withClient(providerKindGoogle, newGoogleTextClient(doer)).
+		withClient(providerKindXAI, newXAITextClient(doer)).
+		withClient(providerKindTogether, newTogetherTextClient(doer))
+	text.hfDoer = doer
 	private := &privateEndpointPolicy{fallback: d.Cfg != nil && d.Cfg.AllowPrivateProviderURLs}
 	if d.Settings != nil {
 		private.keys = d.Settings
@@ -60,9 +64,14 @@ func newModule(d *core.Deps, doer httpDoer, now func() time.Time) *Module {
 		clone.Timeout = imageHTTPTimeout
 		imageDoer = &clone
 	}
-	images := &imageService{d: d, providers: providers, catalog: catalog, spend: text, doer: imageDoer}
+	images := &imageService{d: d, providers: providers, catalog: catalog, spend: text, doer: imageDoer,
+		localDoer: text.localDoer, hfDoer: imageDoer}
 	m := &Module{d: d, image: images, catalog: catalog, providers: providers, providerAPI: &providerService{store: providers, settings: d.Settings, client: client,
-		testers: map[string]remoteKeyTester{providerKindOpenAI: openai, providerKindFal: falKeyTester{doer: doer}}, localDoer: text.localDoer},
+		testers: map[string]remoteKeyTester{providerKindOpenAI: openai, providerKindFal: falKeyTester{doer: doer},
+			providerKindGoogle: googleKeyTester{doer: doer}, providerKindXAI: xaiKeyTester{doer: doer},
+			providerKindTogether: togetherKeyTester{doer: doer}, providerKindReplicate: replicateKeyTester{doer: doer},
+			providerKindRunware: runwareKeyTester{doer: doer}},
+		localDoer: text.localDoer, hfDoer: doer},
 		text: text, spend: spend, private: private, now: now, repairEvery: time.Minute, repairBatch: 1000}
 	core.Provide[TextService](d, text)
 	core.Provide[ImageService](d, images)
