@@ -17,25 +17,14 @@ const (
 	// maxDaysPerRun bounds one roll-up pass so a long backlog is spread over
 	// several runs.
 	maxDaysPerRun = 31
-	// aggregateTable holds the daily aggregates (proposed migration 0500, see
-	// testdata/0500_read_event_days.sql).
+	// aggregateTable holds the daily aggregates (migration 0402).
 	aggregateTable = "read_event_days"
 )
 
 // RollUpResult reports one roll-up pass.
 type RollUpResult struct {
-	// Skipped is true when the aggregates table does not exist yet; raw
-	// events are then kept (never deleted without being aggregated).
-	Skipped bool
-	Days    int
-	Events  int
-}
-
-// hasAggregates reports whether the aggregates table exists. The probe runs
-// outside any transaction so a missing table cannot abort one on Postgres.
-func hasAggregates(ctx context.Context, d *db.DB) bool {
-	var n int
-	return d.Get(ctx, &n, `SELECT COUNT(*) FROM `+aggregateTable+` WHERE 1 = 0`) == nil
+	Days   int
+	Events int
 }
 
 // RollUp moves raw events older than RawRetentionDays (whole UTC days before
@@ -44,10 +33,6 @@ func hasAggregates(ctx context.Context, d *db.DB) bool {
 // server processes never count a day twice and a failure keeps the raw rows.
 func RollUp(ctx context.Context, d *db.DB, now time.Time) (RollUpResult, error) {
 	var res RollUpResult
-	if !hasAggregates(ctx, d) {
-		res.Skipped = true
-		return res, nil
-	}
 	cutoff := dayStart(now).AddDate(0, 0, -RawRetentionDays)
 	for res.Days < maxDaysPerRun {
 		// A plain column (not MIN()) keeps its TIMESTAMP type on SQLite.
@@ -166,7 +151,6 @@ func readerKey(user sql.NullString, session string) string {
 func (m *Module) rollUpLoop(ctx context.Context, first, interval time.Duration) error {
 	t := time.NewTimer(first)
 	defer t.Stop()
-	warned := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -177,9 +161,6 @@ func (m *Module) rollUpLoop(ctx context.Context, first, interval time.Duration) 
 		switch {
 		case err != nil:
 			m.d.Log.Warn("analytics: roll up read events", "err", err)
-		case res.Skipped && !warned:
-			warned = true
-			m.d.Log.Info("analytics: daily aggregates table missing; raw read events are kept")
 		case res.Events > 0:
 			m.d.Log.Info("analytics: rolled up read events", "days", res.Days, "events", res.Events)
 		}

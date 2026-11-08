@@ -10,8 +10,8 @@
 //   - POST /api/v1/analytics/events (events_api.go) takes batches from the
 //     reader island and sets the first-party mv_rs session cookie.
 //   - RollUp (aggregate.go) folds raw events older than 90 days into daily
-//     aggregates and deletes them; it waits for the read_event_days table
-//     (proposed migration in testdata/) and never deletes without aggregating.
+//     aggregates in read_event_days (migration 0402) and deletes them in the
+//     same transaction, so raw events are never deleted without aggregating.
 //   - F2 /studio/analytics (page.go, views.templ) shows creators the reads,
 //     completion, drop-off by page and followers of their own series.
 //

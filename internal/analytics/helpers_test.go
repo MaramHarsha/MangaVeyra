@@ -2,7 +2,6 @@ package analytics_test
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -33,33 +32,6 @@ func forEachDialect(t *testing.T, fn func(t *testing.T, ta *testutil.TestApp, f 
 
 func recorderOf(ta *testutil.TestApp) analytics.Recorder {
 	return core.MustUse[analytics.Recorder](ta.Deps)
-}
-
-// createAggregates applies the proposed migration 0500 (testdata), unless the
-// table already exists because the migration has landed.
-func createAggregates(t *testing.T, ta *testutil.TestApp) {
-	t.Helper()
-	ctx := context.Background()
-	var n int
-	if ta.Deps.DB.Get(ctx, &n, `SELECT COUNT(*) FROM read_event_days WHERE 1 = 0`) == nil {
-		return
-	}
-	b, err := os.ReadFile("testdata/0500_read_event_days.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	stmts, err := db.SplitStatements(string(b))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, s := range stmts {
-		if strings.TrimSpace(s) == "" {
-			continue
-		}
-		if _, err := ta.Deps.DB.Exec(ctx, s); err != nil {
-			t.Fatalf("create aggregates: %v", err)
-		}
-	}
 }
 
 // rawEvent inserts a read event directly (bypassing Record) at a given time.

@@ -102,8 +102,6 @@ func BuildReport(ctx context.Context, d *db.DB, now time.Time, s publish.Series,
 	if chapter != nil {
 		scope.pubs = chapter.PublicationIDs
 	}
-	aggregates := hasAggregates(ctx, d)
-
 	var err error
 	for i := range ReportWeeks {
 		from := r.Start.AddDate(0, 0, 7*i)
@@ -122,7 +120,7 @@ func BuildReport(ctx context.Context, d *db.DB, now time.Time, s publish.Series,
 		r.NewFollowers += w.NewFollowers
 		r.Weeks = append(r.Weeks, w)
 	}
-	if r.PrevReads, err = countReads(ctx, d, scope, r.Start.AddDate(0, 0, -7*ReportWeeks), r.Start, aggregates); err != nil {
+	if r.PrevReads, err = countReads(ctx, d, scope, r.Start.AddDate(0, 0, -7*ReportWeeks), r.Start, true); err != nil {
 		return r, err
 	}
 	r.PrevKnown = r.PrevReads > 0

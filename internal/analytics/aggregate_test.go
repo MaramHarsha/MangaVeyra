@@ -11,30 +11,9 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 )
 
-func TestRollUpKeepsRawEventsWithoutAggregatesTable(t *testing.T) {
-	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, f *publishtest.Fixture) {
-		var n int
-		if ta.Deps.DB.Get(context.Background(), &n, `SELECT COUNT(*) FROM read_event_days WHERE 1 = 0`) == nil {
-			t.Skip("migration 0500 has landed")
-		}
-		s := f.Series(publishtest.SeriesSpec{})
-		ch := f.Publish(s, publishtest.PublicationSpec{})
-		now := time.Now().UTC()
-		insertEvents(t, ta, rawEvent{Series: s.ID, Publication: ch.ID, Session: "h", Kind: "open", Page: 1, At: now.AddDate(0, 0, -200)})
-		res, err := analytics.RollUp(context.Background(), ta.Deps.DB, now)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !res.Skipped || count(t, ta, `SELECT COUNT(*) FROM read_events`) != 1 {
-			t.Fatalf("without the aggregates table raw events must stay: %+v", res)
-		}
-	})
-}
-
 func TestRollUpAggregatesAndDeletesOldEvents(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, f *publishtest.Fixture) {
 		ctx := context.Background()
-		createAggregates(t, ta)
 		s := f.Series(publishtest.SeriesSpec{})
 		ch1 := f.Publish(s, publishtest.PublicationSpec{Pages: 4})
 		ch2 := f.Publish(s, publishtest.PublicationSpec{Pages: 4})
@@ -56,7 +35,7 @@ func TestRollUpAggregatesAndDeletesOldEvents(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if res.Skipped || res.Days != 2 || res.Events != 6 {
+		if res.Days != 2 || res.Events != 6 {
 			t.Fatalf("roll up = %+v, want 2 days and 6 events", res)
 		}
 		if n := count(t, ta, `SELECT COUNT(*) FROM read_events`); n != 1 {

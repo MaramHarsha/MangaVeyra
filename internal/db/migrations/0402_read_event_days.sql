@@ -1,6 +1,6 @@
--- 0500 analytics: daily aggregates of raw read events older than 90 days (ADR 0012 §8).
--- Proposed migration (root-owned); portable SQL for SQLite and PostgreSQL.
--- One row per UTC day, series, publication, kind and page. readers counts the
+-- Daily aggregates of raw read events older than 90 days (ADR 0012 §8). The
+-- analytics roll-up claims each raw day with DELETE … RETURNING and upserts one
+-- row per UTC day, series, publication, kind and page. readers counts the
 -- distinct reader keys (member user or anonymous daily session hash) that day.
 CREATE TABLE read_event_days (
     day            TIMESTAMP NOT NULL,

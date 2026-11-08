@@ -47,7 +47,7 @@ func TestMigrationsApplyAndAreIdempotent(t *testing.T) {
 			"read_progress", "reader_prefs", "bookmarks", "downloads", "read_events", "reports", "notifications",
 			"notification_prefs", "push_subscriptions", "xp_events", "world_links", "world_server",
 			"world_submissions", "world_library", "packs", "plugins", "backups", "updates", "imports",
-			"page_doc_updates", "age_confirmations",
+			"page_doc_updates", "age_confirmations", "read_event_days",
 		} {
 			var n int
 			if err := d.Get(ctx, &n, "SELECT COUNT(*) FROM "+table); err != nil {
