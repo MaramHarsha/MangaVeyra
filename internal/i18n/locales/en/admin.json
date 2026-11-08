@@ -271,6 +271,8 @@
   "admin.maintenance.turn_on": "Turn on maintenance mode",
   "admin.maintenance.turn_off": "Turn off maintenance mode",
   "admin.maintenance.error.long": "Messages can be up to 500 characters.",
+  "admin.maintenance.error.held.update": "An update is running. Maintenance mode stays on until it finishes or rolls back.",
+  "admin.maintenance.error.held.restore": "A restore is running. Maintenance mode stays on until it finishes.",
   "admin.time.now": "just now",
   "admin.time.minutes": "{count} min ago",
   "admin.time.hours": "{count} h ago",

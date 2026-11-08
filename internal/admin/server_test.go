@@ -1,12 +1,15 @@
 package admin_test
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
+	"github.com/MaramHarsha/MangaVeyra/internal/backup"
+	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 )
 
@@ -76,6 +79,38 @@ func TestMaintenanceToggle(t *testing.T) {
 		wantStatus(t, "member after maintenance", memberC.Get("/studio"), http.StatusOK)
 		if e.count(`SELECT COUNT(*) FROM audit_log WHERE action IN ('admin.maintenance.on', 'admin.maintenance.off')`) != 2 {
 			t.Fatal("maintenance changes not audited")
+		}
+	})
+}
+
+// While an update (or a restore) owns maintenance mode, the G5 toggle refuses
+// to change it and says which operation runs; members stay out until it ends.
+func TestMaintenanceToggleRefusedWhileAnUpdateRuns(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, e *env) {
+		ctx := context.Background()
+		_, memberC := e.user(auth.RoleCreator)
+		l, err := core.MustUse[backup.Holder](e.ta.Deps).Hold(ctx, backup.HoldRequest{What: backup.HoldUpdate, Message: "Updating to 1.0.2"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := postForm(e.admin, "/admin/maintenance", url.Values{"enabled": {"0"}, "message": {""}})
+		wantStatus(t, "turn off during an update", r, http.StatusConflict)
+		wantBody(t, "refusal", r, "An update is running", `id="maintenance-dialog"`)
+		if !e.instance().Maintenance.Enabled {
+			t.Fatal("maintenance was turned off during the update")
+		}
+		wantStatus(t, "member during the update", memberC.Get("/studio"), http.StatusServiceUnavailable)
+		r = postForm(e.admin, "/admin/maintenance", url.Values{"enabled": {"1"}, "message": {"Something else"}})
+		wantStatus(t, "change the message during an update", r, http.StatusConflict)
+		if e.count(`SELECT COUNT(*) FROM audit_log WHERE action IN ('admin.maintenance.on', 'admin.maintenance.off')`) != 0 {
+			t.Fatal("a refused change was audited")
+		}
+		if err := l.Release(ctx, &settings.Maintenance{}); err != nil {
+			t.Fatal(err)
+		}
+		wantSaved(t, "after the update", postForm(e.admin, "/admin/maintenance", url.Values{"enabled": {"1"}, "message": {"Moving disks"}}), "/admin/server")
+		if inst := e.instance(); !inst.Maintenance.Enabled || inst.Maintenance.Message != "Moving disks" {
+			t.Fatalf("maintenance %+v", inst.Maintenance)
 		}
 	})
 }

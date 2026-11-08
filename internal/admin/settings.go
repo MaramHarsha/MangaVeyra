@@ -304,6 +304,20 @@ func validPublicURL(raw string) bool {
 		u.RawQuery == "" && u.Fragment == "" && !strings.ContainsAny(raw, " \t\n")
 }
 
+// setMaintenance stores the admin's maintenance setting through the backup
+// module's guard, which refuses (in the same transaction) while an update or a
+// restore owns maintenance mode; without it the setting is stored directly.
+func (m *Module) setMaintenance(ctx context.Context, mt settings.Maintenance) error {
+	if g, ok := core.Use[adminapi.MaintenanceGuard](m.d); ok {
+		return g.SetMaintenance(ctx, core.UserFrom(ctx).ID, mt)
+	}
+	_, err := m.d.Settings.UpdateInstance(ctx, core.UserFrom(ctx).ID, func(i *settings.Instance) error {
+		i.Maintenance = mt
+		return nil
+	})
+	return err
+}
+
 // POST /admin/maintenance (enabled = 1 | 0, message)
 func (m *Module) saveMaintenance(w http.ResponseWriter, r *http.Request) error {
 	if err := web.ParseForm(w, r); err != nil {
@@ -317,11 +331,15 @@ func (m *Module) saveMaintenance(w http.ResponseWriter, r *http.Request) error {
 		v.Dialog, v.MaintDraft, v.MaintError = true, msg, i18n.T(ctx, "admin.maintenance.error.long")
 		return m.renderServer(w, r, http.StatusUnprocessableEntity, v)
 	}
-	if _, err := m.d.Settings.UpdateInstance(ctx, core.UserFrom(ctx).ID, func(i *settings.Instance) error {
-		i.Maintenance = settings.Maintenance{Enabled: on, Message: msg}
-		return nil
-	}); err != nil {
-		return err
+	if err := m.setMaintenance(ctx, settings.Maintenance{Enabled: on, Message: msg}); err != nil {
+		var held *adminapi.MaintenanceHeldError
+		if !errors.As(err, &held) {
+			return err
+		}
+		// An update or a restore owns maintenance mode until it finishes.
+		v := m.serverView(ctx)
+		v.Dialog, v.MaintDraft, v.MaintError = true, msg, i18n.T(ctx, "admin.maintenance.error.held."+held.What)
+		return m.renderServer(w, r, http.StatusConflict, v)
 	}
 	action := "admin.maintenance.off"
 	if on {

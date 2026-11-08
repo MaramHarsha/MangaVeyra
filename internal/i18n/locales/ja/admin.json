@@ -266,6 +266,8 @@
   "admin.maintenance.turn_on": "メンテナンスモードをオン",
   "admin.maintenance.turn_off": "メンテナンスモードをオフ",
   "admin.maintenance.error.long": "メッセージは500文字までです。",
+  "admin.maintenance.error.held.update": "アップデートの実行中です。完了するかロールバックされるまでメンテナンスモードはオンのままです。",
+  "admin.maintenance.error.held.restore": "復元の実行中です。完了するまでメンテナンスモードはオンのままです。",
   "admin.time.now": "たった今",
   "admin.time.minutes": "{count}分前",
   "admin.time.hours": "{count}時間前",
