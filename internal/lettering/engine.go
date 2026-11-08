@@ -146,7 +146,7 @@ func (e *engine) layout(ctx context.Context, b pagedoc.Bubble, lang string) (Bub
 		l.TextStrokeWidth = textStrokeWidth(size)
 	}
 	stats.lines = set.texts
-	l.TextPath = set.path.ToSVG()
+	l.TextPath = pathSVG(set.path)
 	return l, stats, nil
 }
 
@@ -276,7 +276,7 @@ func bubblePath(b pagedoc.Bubble) (string, error) {
 			}
 		}
 	}
-	return p.ToSVG(), nil
+	return pathSVG(p), nil
 }
 func (e *engine) LayoutPage(p pagedoc.Page, lang string) ([]BubbleLayout, error) {
 	return e.layoutPage(context.Background(), p, lang)
