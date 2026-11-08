@@ -82,6 +82,22 @@
     with the hand-drawn filter, E8 full-text search, and F2 analytics that stay on the server.
   - **Access:** every reader-facing read goes through one access check, so anything a visitor may not see returns
     404. The static [project website](site/README.md) and the [install guide](docs/install/README.md) ship with it.
+- **Phase 4 running a server for others** ([plan 0011](docs/plans/0011-phase-4-run-a-server-for-others.md),
+  [ADR 0013](docs/decisions/0013-phase-4-server-operations.md)):
+  - **Admin and moderation (G5):** reports and AI-label disputes, reversible takedowns, member roles, invites, sign-up
+    approval, content rules (mature/adult, blocked words, default rating), server settings and maintenance mode.
+  - **Backups and import (G10):** dialect-independent `.mvbackup` archives without the master key, schedules,
+    all-or-nothing restore (also across SQLite and PostgreSQL), export everything, per-member export,
+    `mangaveyra backup`; CBZ, CBR, PDF (with `pdftoppm`) and image imports into private projects.
+  - **Updates (G14):** opt-in checks of Ed25519-signed releases, a pre-update backup, verification, migration and a
+    loopback health check before the binary is swapped, with automatic rollback; see [release signing](docs/admin/releases.md).
+  - **Agents (G13):** an MCP server at `/mcp` and `mangaveyra mcp-stdio` with scoped agent tokens; publishing,
+    deleting, sharing, unlocking and generation above the token's threshold wait for a person; agent changes are
+    labelled and can be undone.
+  - **Collaboration (D7):** panel review comments with statuses and page approval, live cursors, and roles limited to
+    the lettering layer or a page range.
+  - **More providers:** Google, xAI, Replicate, Together, Runware, Hugging Face, generic HTTP and ComfyUI, tested
+    against fake transports only (not live-verified).
 - **Original demo:** `mangaveyra seed --demo` creates the unpublished Tidebreak Courier project for an existing
   account, with labelled placeholder artwork. Rerunning preserves your edits.
 - **Python AI worker:** deterministic placeholder output, diffusers and ComfyUI adapters, LoRA training, panel and
@@ -93,8 +109,9 @@
 
 ### Not yet an end product
 
-The application MCP server, backup/update flows, admin and moderation UI, named history branches/merging,
-translation, living panels, animation, EPUB/video export and the World link remain incomplete or intentional stubs. Their
+Named history branches/merging, translation, living panels, animation, EPUB/video export, the MCP client, the plugin
+directory and the World link remain incomplete or intentional stubs. No signed release has been published yet, so
+servers still update from the repository. Their
 designed controls stay visible as disabled **Soon** actions. Optional GPU training and pose quality still need hardware validation;
 remote routes have fake-transport coverage, and direct OpenAI has a recorded basic live check; its extended
 reference/mask/accounting matrix remains pending in ADR 0009. See the
