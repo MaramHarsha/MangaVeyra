@@ -158,6 +158,10 @@ func (s *service) checkLockTx(ctx context.Context, tx *db.Tx, p lockPayload) (st
 	if hash != p.ReferenceHash {
 		return c, studio.ErrConflict
 	}
+	// Assessment is read-only with respect to artwork (ADR 0011): it checks
+	// membership, the target version and the exact asset, never write locks,
+	// so approved locked art can be re-assessed without unlocking it. Repair
+	// and generation keep their lock checks on their own write paths.
 	for _, target := range p.Targets {
 		page, err := s.pages.GetPageTx(ctx, tx, target.PageID)
 		if err != nil {
@@ -173,9 +177,6 @@ func (s *service) checkLockTx(ctx context.Context, tx *db.Tx, p lockPayload) (st
 		l := pn.Layer(target.LayerID)
 		if l == nil || l.Kind != pagedoc.LayerCharacter || l.CharacterID != p.CharacterID || l.Asset == nil || l.Asset.ID != target.AssetID {
 			return c, studio.ErrConflict
-		}
-		if err := s.studio.CheckScopeWritableTx(ctx, tx, jobs.Scope{Kind: jobs.ScopeLayer, ProjectID: p.ProjectID, PanelID: pn.ID, LayerID: l.ID}); err != nil {
-			return c, err
 		}
 	}
 	return c, nil
