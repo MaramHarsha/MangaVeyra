@@ -15,6 +15,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/admin/adminapi"
 	"github.com/MaramHarsha/MangaVeyra/internal/backup"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
+	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
@@ -307,4 +308,28 @@ func TestBackupTempFilesAreSwept(t *testing.T) {
 			t.Errorf("%s was removed", p)
 		}
 	}
+}
+
+// While an update or a restore holds the server, the job queue hands out no
+// new work (backup registers its claim gate with the queue); the job waits and
+// is claimed once the hold ends.
+func TestHoldStopsJobClaims(t *testing.T) {
+	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx, q := context.Background(), ta.Deps.Jobs
+		job, err := q.Enqueue(ctx, jobs.EnqueueParams{Type: "hold.claim", UserID: ta.Admin.ID, Scope: jobs.Scope{Kind: jobs.ScopeNone}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		l, err := core.MustUse[backup.Holder](ta.Deps).Hold(ctx, backup.HoldRequest{What: backup.HoldRestore, Message: "Restoring", ActorID: ta.Admin.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if j, err := q.Claim(ctx, jobs.ClaimParams{Executor: jobs.ExecutorGo, Types: []string{"hold.claim"}}); err != nil || j != nil {
+			t.Fatalf("claim under a hold = %v, %v", j, err)
+		}
+		l.Release(ctx, nil)
+		if j, err := q.Claim(ctx, jobs.ClaimParams{Executor: jobs.ExecutorGo, Types: []string{"hold.claim"}}); err != nil || j == nil || j.ID != job.ID {
+			t.Fatalf("claim after the hold = %v, %v", j, err)
+		}
+	})
 }

@@ -142,6 +142,10 @@ type Queue struct {
 	privateInput map[string]bool
 	// noRetry lists job types that Retry refuses (MarkNoRetry).
 	noRetry map[string]bool
+	// claimGates may refuse every claim, checked inside the claim transaction
+	// (AddClaimGate): the backup module refuses them while an update or a
+	// restore holds the server.
+	claimGates []func(ctx context.Context, tx *db.Tx) (bool, error)
 
 	wakeMu sync.Mutex
 	wake   chan struct{}
@@ -179,6 +183,14 @@ func (q *Queue) MarkPrivateInput(types ...string) {
 	for _, t := range types {
 		q.privateInput[t] = true
 	}
+}
+
+// AddClaimGate registers g; while any gate returns false, Claim hands out no
+// job to the Go executor or to workers (queued jobs simply wait).
+func (q *Queue) AddClaimGate(g func(ctx context.Context, tx *db.Tx) (bool, error)) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.claimGates = append(q.claimGates, g)
 }
 
 // ErrNoRetry rejects a manual retry of a job type marked with MarkNoRetry.
@@ -708,6 +720,18 @@ func (q *Queue) Claim(ctx context.Context, p ClaimParams) (*Job, error) {
 			// Serialise claimers so per-user running limits cannot be overshot by concurrent claims.
 			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(7468326820)`); err != nil {
 				return err
+			}
+		}
+		q.mu.RLock()
+		gates := append([]func(context.Context, *db.Tx) (bool, error)(nil), q.claimGates...)
+		q.mu.RUnlock()
+		for _, gate := range gates {
+			ok, err := gate(ctx, tx)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return nil
 			}
 		}
 		if p.Executor == ExecutorWorker {
