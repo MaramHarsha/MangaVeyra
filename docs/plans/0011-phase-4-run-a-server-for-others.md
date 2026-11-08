@@ -51,7 +51,7 @@ Agents work in separate worktrees from the commit that adds this plan and edit o
    roles.
 6. [x] **P — Providers.** Google, xAI, Replicate, Together, Runware, Hugging Face, generic HTTP, ComfyUI adapters with
    fake-transport tests.
-7. [ ] **Root integration.** Navigation, contracts, migrations, e2e (invite → collaborate → back up → update with
+7. [x] **Root integration.** Navigation, contracts, migrations, e2e (invite → collaborate → back up → update with
    rollback), ADR 0004 records, README, full gates on SQLite and PostgreSQL, design comparison, independent review.
 
 ## Acceptance and verification
