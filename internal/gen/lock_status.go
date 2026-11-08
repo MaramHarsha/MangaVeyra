@@ -246,6 +246,24 @@ func (s *service) lockStatus(ctx context.Context, actor studio.Actor, projectID,
 	return out, nil
 }
 
+// LockModelLabelKey is the catalogue key of a Character Lock scoring model's
+// display name (DINOv2, CCIP, CCIP + outfit, CCIP + outfit views), or "" for
+// any other model. The routing catalogue does not list these worker models,
+// so screens use it instead of showing their internal IDs.
+func LockModelLabelKey(model string) string {
+	switch model {
+	case lockModel:
+		return "bible.lock.model.dinov2"
+	case lockCCIPModel:
+		return "bible.lock.model.ccip"
+	case lockOutfitModel:
+		return "bible.lock.model.ccip_outfit"
+	case lockMultiviewModel:
+		return "bible.lock.model.ccip_views"
+	}
+	return ""
+}
+
 func validLockMethod(method string) bool {
 	for _, prefix := range []string{lockMethod, lockCCIPMethod, lockOutfitMethod, lockMultiviewMethod} {
 		if validFeatureMethod(method, prefix) {

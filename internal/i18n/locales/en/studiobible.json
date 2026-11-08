@@ -221,5 +221,9 @@
   "bible.lock.training_hint": "Keep references, then optionally train Character Lock from the character detail. API models use your kept sheets. You can keep working while training runs.",
   "bible.lock.target_locked": "A target panel or layer is locked. Unlock it explicitly before assessing.",
   "bible.lock.changed": "The character or artwork changed. Reload and review before starting again.",
-  "bible.lock.not_ready": "Keep references and generate character art before assessing."
+  "bible.lock.not_ready": "Keep references and generate character art before assessing.",
+  "bible.lock.model.dinov2": "DINOv2",
+  "bible.lock.model.ccip": "CCIP",
+  "bible.lock.model.ccip_outfit": "CCIP + outfit",
+  "bible.lock.model.ccip_views": "CCIP + outfit views"
 }

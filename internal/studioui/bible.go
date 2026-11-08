@@ -1028,6 +1028,11 @@ func (m *Module) routePick(ctx context.Context, job *jobs.Job) string {
 	if namer, ok := core.Use[ai.RouteNamer](m.d); ok {
 		model, provider = namer.RouteNames(ctx, job.ModelID, job.ProviderID)
 	}
+	// Character Lock scorers are worker models the routing catalogue does not
+	// list; show their display names, never internal IDs.
+	if key := gen.LockModelLabelKey(job.ModelID); key != "" {
+		model = i18n.T(ctx, key)
+	}
 	parts := []string{model, provider}
 	switch {
 	case job.Estimate.USD > 0:
