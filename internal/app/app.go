@@ -194,8 +194,11 @@ func jobNotifier(d *core.Deps) func(context.Context, *jobs.Job) {
 		body := j.Type
 		// Raw worker/provider errors may contain private prompts or credentials.
 		// Notifications carry a stable job link; the queue maps safe error codes.
-		locale := d.Settings.MustInstance(ctx).DefaultLocale
-		_ = d.DB.Get(ctx, &locale, `SELECT locale FROM users WHERE id = ?`, j.UserID)
+		// Same order as page requests: the user's own language when set and
+		// supported, otherwise the instance default (users.locale defaults to '').
+		var userLocale string
+		_ = d.DB.Get(ctx, &userLocale, `SELECT locale FROM users WHERE id = ?`, j.UserID)
+		locale := i18n.Negotiate(d.I18n.Languages(), d.Settings.MustInstance(ctx).DefaultLocale, userLocale, "", "")
 		titleCtx := i18n.WithLocale(ctx, locale)
 		link := "/queue?job=" + j.ID
 		if kind == notify.KindLockTraining {
