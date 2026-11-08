@@ -47,6 +47,15 @@ templ CustomProviderPage(v customProviderView) {
 					{ i18n.T(ctx, "aiimage.custom.blocked_back") }
 				}
 			}
+		} else if v.AdminOnly {
+			<div class="mv-aicustom__fields">
+				@customTypeSwitch(v)
+				@ui.State(ui.StateProps{Title: i18n.T(ctx, "aiimage.custom.admin_only_title"), Body: i18n.T(ctx, "aiimage.custom.admin_only_body"), Boxed: true}) {
+					@ui.LinkButton("/models", ui.ButtonProps{Variant: ui.Secondary, Icon: "arrow-left"}) {
+						{ i18n.T(ctx, "aiimage.custom.blocked_back") }
+					}
+				}
+			</div>
 		} else {
 		<form
 			method="post"
@@ -179,7 +188,10 @@ templ customKeyAndScope(v customProviderView, label string) {
 	@ui.Field(ui.FieldProps{ID: "custom-key", Label: label, Error: v.Errors["key"], Hint: customKeyHint(ctx, v)}) {
 		@ui.Input(ui.InputProps{ID: "custom-key", Name: "key", Type: "password", Autocomplete: "off", MaxLength: maxProviderKeyBytes, Described: true, Invalid: v.Errors["key"] != ""})
 	}
-	if v.Admin {
+	if adminOnlyKind(customTypeKind(v.Type)) {
+		// A ComfyUI or HTTP server is always shared with everyone (ADR 0013 §9).
+		<input type="hidden" name="scope" value={ providerScopeServer }/>
+	} else if v.Admin {
 		@ui.Field(ui.FieldProps{ID: "custom-scope", Label: i18n.T(ctx, "models.form.scope"), Error: v.Errors["scope"]}) {
 			@ui.Select(ui.SelectProps{ID: "custom-scope", Name: "scope", Value: v.Scope, Options: providerScopeOptions(ctx)})
 		}

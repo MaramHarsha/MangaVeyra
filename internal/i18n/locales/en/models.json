@@ -97,6 +97,7 @@
   "models.toggle.label": "Use {name}",
   "models.toggle.placeholder": "The built-in placeholder is always on",
   "models.toggle.save": "Save",
+  "models.toggle.untested": "Test this connection before turning it on. It runs only after its last test passed for its current address, key and settings.",
   "models.use.scripts": "Scripts",
   "models.use.scripts_fallback": "Scripts · fallback",
   "models.fal.connect": "Connect fal",

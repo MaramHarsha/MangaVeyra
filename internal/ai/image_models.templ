@@ -73,5 +73,5 @@ func imageToggleIcon(enabled bool) string {
 	return "toggle-left"
 }
 func imageProviderMenu(ctx context.Context, p *providerView, blocked bool) []ui.MenuItem {
-	return []ui.MenuItem{{Post: true, Href: providerPath(p.ID, "test") + "?cap=image", Label: i18n.T(ctx, "models.test.action"), Icon: "plug-connected", Attrs: templ.Attributes{"disabled": blocked || !p.Enabled}}, {Href: "#" + providerKeyDialogID(p.ID), Label: i18n.T(ctx, "models.key.replace"), Icon: "key", Attrs: templ.Attributes{"data-dialog-open": providerKeyDialogID(p.ID)}}}
+	return []ui.MenuItem{{Post: true, Href: providerPath(p.ID, "test") + "?cap=image", Label: i18n.T(ctx, "models.test.action"), Icon: "plug-connected", Attrs: templ.Attributes{"disabled": blocked || !testable(*p)}}, {Href: "#" + providerKeyDialogID(p.ID), Label: i18n.T(ctx, "models.key.replace"), Icon: "key", Attrs: templ.Attributes{"data-dialog-open": providerKeyDialogID(p.ID)}}}
 }

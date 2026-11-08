@@ -372,6 +372,11 @@ func TestPhase4GenericHTTPTemplatesSyncAndPoll(t *testing.T) {
 				input["seed"] != float64(42) || input["note"] != `seed 42 for `+req.Prompt {
 				t.Fatalf("rendered body = %v", input)
 			}
+			// The server connection is shared with everyone: remove it before
+			// the next round's fixture routes.
+			if _, err := d.Exec(ctx, `DELETE FROM providers WHERE id = ?`, view.ID); err != nil {
+				t.Fatal(err)
+			}
 		}
 	})
 }

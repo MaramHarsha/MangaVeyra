@@ -125,6 +125,8 @@
   "aiimage.custom.blocked_title": "このプロバイダーの追加は管理者に依頼してください",
   "aiimage.custom.blocked_body": "このサーバーではメンバーが自分のプロバイダーを追加できません。管理者が全員向けに接続するか、モデルルーティングでメンバーによる追加を許可できます。",
   "aiimage.custom.blocked_back": "モデルに戻る",
+  "aiimage.custom.admin_only_title": "このサーバーは管理者が接続します",
+  "aiimage.custom.admin_only_body": "ComfyUIワークフローとHTTP画像サーバーは、このサーバーのネットワーク上のマシンで動くため、管理者だけが全員向けに接続できます。管理者が接続すると、ほかのサーバープロバイダーと同じようにルーティングであなたの作業にも使われます。",
   "aiimage.custom.comfyui": "ComfyUIワークフロー",
   "aiimage.custom.comfy_server": "ComfyUIサーバー",
   "aiimage.custom.comfy_server_hint": "このマシンまたはネットワーク上のComfyUIサーバーのアドレス（例：http://192.168.1.40:8188）。",

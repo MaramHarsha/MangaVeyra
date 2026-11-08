@@ -397,14 +397,21 @@ func providerNoticeIcon(tone ui.Tone) string {
 	return "circle-check"
 }
 
+// testable reports a connection whose Test connection action works: an
+// enabled one, or a custom connection that is off (it turns on only after a
+// passed test). A personal ComfyUI or HTTP connection is never tested.
+func testable(p providerView) bool {
+	return (p.Enabled || customKind(p.Kind)) && !(adminOnlyKind(p.Kind) && p.Scope != providerScopeServer)
+}
+
 // providerMenuItems are the row actions: test the connection (the existing
-// POST, disabled while Local only is on or the connection is off) and open
+// POST, disabled while Local only is on or the connection cannot be tested) and open
 // the replace-key dialog. Without JavaScript the dialog link falls back to
 // the dialog's :target styling.
 func providerMenuItems(ctx context.Context, v providerRowView) []ui.MenuItem {
 	id := v.Provider.ID
 	test := templ.Attributes{"hx-post": providerPath(id, "test"), "hx-target": "#" + providerRowsID(id), "hx-swap": "outerHTML"}
-	if v.LocalOnly || !v.Provider.Enabled {
+	if v.LocalOnly || !testable(v.Provider) {
 		test["disabled"] = true
 	}
 	return []ui.MenuItem{

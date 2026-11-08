@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -38,7 +39,10 @@ type customProviderView struct {
 	// Blocked is a member reaching the wizard while personal providers are
 	// off: the page explains who can connect one instead of the form.
 	Blocked bool
-	Errors  web.FormErrors
+	// AdminOnly is a member choosing ComfyUI or HTTP, which only an admin
+	// connects (for everyone): the page says so instead of the form.
+	AdminOnly bool
+	Errors    web.FormErrors
 	customTypedView
 }
 
@@ -110,6 +114,10 @@ func (m *Module) customPage(w http.ResponseWriter, r *http.Request) error {
 		}
 		v.withRecord(r.Context(), record)
 	} else if v.Type = customTypeFromQuery(r.URL.Query().Get("type")); v.Type != customTypeCompatible {
+		if adminOnlyKind(customTypeKind(v.Type)) && !actor.Admin {
+			v.AdminOnly = true
+			return m.renderCustom(w, r, http.StatusForbidden, v)
+		}
 		v.typeDefaults(r.Context())
 	}
 	return m.renderCustom(w, r, http.StatusOK, v)
@@ -117,7 +125,8 @@ func (m *Module) customPage(w http.ResponseWriter, r *http.Request) error {
 
 func (m *Module) customRecord(ctx context.Context, actor providerActor, id string) (providerRecord, error) {
 	r, err := providerByID(ctx, m.d.DB, id, false)
-	if err != nil || !customKind(r.Kind) || r.Enabled || authorizeProvider(actor, r) != nil || validateProviderRecord(r) != nil || r.view().LastTest.Step == "" {
+	if err != nil || !customKind(r.Kind) || r.Enabled || authorizeProvider(actor, r) != nil || validateProviderRecord(r) != nil || r.view().LastTest.Step == "" ||
+		(adminOnlyKind(r.Kind) && r.Scope != providerScopeServer) {
 		return providerRecord{}, errProviderUnavailable
 	}
 	return r, nil
@@ -157,7 +166,7 @@ func (m *Module) customPost(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return core.ErrNotFound()
 	}
-	last := record.view().LastTest
+	last := record.lastTest()
 	if customStepNumber(step) > customStepNumber(last.Step) {
 		return core.ErrForbidden(i18n.T(r.Context(), "aiimage.custom.complete_previous"))
 	}
@@ -167,7 +176,7 @@ func (m *Module) customPost(w http.ResponseWriter, r *http.Request) error {
 	case "test":
 		// A passed test moves on; otherwise this is "Test again".
 		if web.FormValue(r, "action") == "next" && last.State == "ok" {
-			if err := m.setCustomStage(r.Context(), record.ID, "describe", "ok", last.DurationMS); err != nil {
+			if err := m.setCustomStage(r.Context(), record.ID, "describe", "ok", last.DurationMS, last.Fingerprint); err != nil {
 				return err
 			}
 			core.Redirect(w, r, customURL("describe", record.ID))
@@ -205,7 +214,7 @@ func (m *Module) customPost(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		if err := m.setCustomStage(r.Context(), record.ID, "route", last.State, last.DurationMS); err != nil {
+		if err := m.setCustomStage(r.Context(), record.ID, "route", last.State, last.DurationMS, last.Fingerprint); err != nil {
 			return err
 		}
 		core.Redirect(w, r, customURL("route", record.ID))
@@ -236,9 +245,17 @@ func (m *Module) customPost(w http.ResponseWriter, r *http.Request) error {
 			}
 		}
 		if _, err := m.providers.SetEnabled(r.Context(), actor, record.ID, true); err != nil {
+			if errors.Is(err, errProviderUntested) {
+				// The connection changed since its test (or the test was
+				// cleared): test it again before routing.
+				if err := m.setCustomStage(r.Context(), record.ID, "test", "", 0, ""); err != nil {
+					return err
+				}
+				return core.ErrForbidden(i18n.T(r.Context(), "aiimage.custom.complete_previous"))
+			}
 			return err
 		}
-		if err := m.setCustomStage(r.Context(), record.ID, "", "ok", last.DurationMS); err != nil {
+		if err := m.setCustomStage(r.Context(), record.ID, "", "ok", last.DurationMS, last.Fingerprint); err != nil {
 			return err
 		}
 		web.Flash(w, r, "success", i18n.T(r.Context(), "models.flash.connected"), "")
@@ -325,7 +342,7 @@ func (m *Module) customConnect(w http.ResponseWriter, r *http.Request, actor pro
 		}
 		id = draft.ID
 	}
-	if err := m.setCustomStage(ctx, id, "test", "", 0); err != nil {
+	if err := m.setCustomStage(ctx, id, "test", "", 0, ""); err != nil {
 		return err
 	}
 	if !inst.LocalOnly {
@@ -395,7 +412,7 @@ func (m *Module) runCustomTest(ctx context.Context, record providerRecord) error
 			cancel()
 		}
 	}
-	return m.setCustomStage(context.WithoutCancel(ctx), record.ID, stage, state, time.Since(started).Milliseconds())
+	return m.setCustomStage(context.WithoutCancel(ctx), record.ID, stage, state, time.Since(started).Milliseconds(), record.fingerprint())
 }
 
 // normalizeFormModes keeps known modes in G11 order.
@@ -412,11 +429,17 @@ func normalizeFormModes(values []string) []string {
 	return out
 }
 
-func (m *Module) setCustomStage(ctx context.Context, id, stage, state string, durationMS int64) error {
+// setCustomStage stores a draft's wizard step and test state. fingerprint is
+// what a passed test covered (customFingerprint): a new result passes the
+// tested record's, a step change keeps the stored one, and a reset passes "".
+func (m *Module) setCustomStage(ctx context.Context, id, stage, state string, durationMS int64, fingerprint string) error {
 	if durationMS < 0 {
 		durationMS = 0
 	}
-	raw, _ := json.Marshal(providerTestState{Step: stage, State: state, Time: db.Now(), DurationMS: durationMS})
+	if state != "ok" {
+		fingerprint = ""
+	}
+	raw, _ := json.Marshal(providerTestState{Step: stage, State: state, Time: db.Now(), DurationMS: durationMS, Fingerprint: fingerprint})
 	_, err := m.d.DB.Exec(ctx, `UPDATE providers SET last_test = ?, updated_at = ? WHERE id = ?`, string(raw), db.Now(), id)
 	return err
 }

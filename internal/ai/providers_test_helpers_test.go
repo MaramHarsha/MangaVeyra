@@ -131,11 +131,19 @@ func usd(v *float64) string {
 // createConfiguredProvider saves a custom connection with a description.
 func (f *aiDBFixture) createConfiguredProvider(t *testing.T, store *providerStore, kind, base, key string, cfg any) providerView {
 	t.Helper()
+	// ComfyUI and HTTP servers are always shared server connections; the
+	// fixture user (a creator) reaches them through routing.
+	scope := providerScopeUser
+	if adminOnlyKind(kind) {
+		scope = providerScopeServer
+	}
 	view, err := store.Create(context.Background(), providerActor{UserID: f.userID, Admin: true}, providerCreate{
-		Kind: kind, Name: kind + " test", Key: key, Scope: providerScopeUser, BaseURL: base, Config: cfg,
+		Kind: kind, Name: kind + " test", Key: key, Scope: scope, BaseURL: base, Config: cfg,
 	})
 	if err != nil {
 		t.Fatalf("create %s: %v", kind, err)
 	}
+	// It runs only after a passed test of what it is now.
+	passCustomTest(t, store, view.ID)
 	return view
 }

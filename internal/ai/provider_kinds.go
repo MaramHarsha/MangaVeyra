@@ -59,6 +59,19 @@ func keylessKind(kind string) bool {
 // spend reservation and are blocked by local_only like custom text.
 func privateServerKind(kind string) bool { return keylessKind(kind) }
 
+// adminOnlyKind connections are a server the admin names (ADR 0013 §9): a
+// ComfyUI workflow or a generic HTTP endpoint sends an arbitrary path and
+// JSON body (or arbitrary custom nodes) to a machine on the server's
+// network, so only an admin connects one, always for everyone (server
+// scope). Members use them through routing like any server provider.
+func adminOnlyKind(kind string) bool { return kind == providerKindHTTP || kind == providerKindComfyUI }
+
+// testedKind connections run only after a passed connection test for their
+// current endpoint, key and description (G12 step 2, G2 Test connection).
+func testedKind(kind string) bool {
+	return kind == providerKindHuggingFace || kind == providerKindHTTP || kind == providerKindComfyUI
+}
+
 // imageOnlyKind connections have no text route; the text table omits them.
 func imageOnlyKind(kind string) bool {
 	switch kind {

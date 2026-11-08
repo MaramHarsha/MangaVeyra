@@ -308,19 +308,26 @@ func readWorkflowUpload(r *http.Request) ([]byte, string, bool) {
 // and runs the non-generating test, so step 2 opens on its result.
 func (m *Module) customConnectTyped(w http.ResponseWriter, r *http.Request, actor providerActor, inst settings.Instance, typ string, draft *providerRecord) error {
 	ctx := r.Context()
+	kind := customTypeKind(typ)
+	if adminOnlyKind(kind) && !actor.Admin {
+		// A server the admin names (ADR 0013 §9): nothing is saved or dialled.
+		return core.ErrNotFound()
+	}
 	v := m.customBase(r, actor, "connect", inst)
 	v.Type = typ
 	v.typeDefaults(ctx)
 	v.Name, v.Scope = web.FormValue(r, "name"), web.FormValue(r, "scope")
 	v.Endpoint = strings.TrimRight(web.FormValue(r, "endpoint"), "/")
 	v.AllowPrivate = web.FormValue(r, "allow_private") == "true"
-	kind := customTypeKind(typ)
 	var prior any
 	if draft != nil {
 		v.withRecord(ctx, *draft)
 		v.Name, v.Scope = web.FormValue(r, "name"), web.FormValue(r, "scope")
 		v.Endpoint = strings.TrimRight(web.FormValue(r, "endpoint"), "/")
 		v.ID, v.HasKey = draft.ID, draft.KeyEnc != ""
+	}
+	if adminOnlyKind(kind) {
+		v.Scope = providerScopeServer // always shared; the form offers no choice
 	}
 	if !actor.Admin && v.Scope != providerScopeUser {
 		return core.ErrForbidden("")
@@ -469,7 +476,7 @@ func (m *Module) customConnectTyped(w http.ResponseWriter, r *http.Request, acto
 		}
 		id = draft.ID
 	}
-	if err := m.setCustomStage(ctx, id, "test", "", 0); err != nil {
+	if err := m.setCustomStage(ctx, id, "test", "", 0, ""); err != nil {
 		return err
 	}
 	if !inst.LocalOnly {
@@ -491,6 +498,9 @@ func (m *Module) updateTypedDraft(ctx context.Context, actor providerActor, draf
 	raw, err := json.Marshal(cfg)
 	if err != nil || !validProviderName(name) || validateCustomConfig(draft.Kind, base, string(raw)) != nil || key != "" && !validProviderKey(key) {
 		return errProviderInvalid
+	}
+	if adminOnlyKind(draft.Kind) && scope != providerScopeServer {
+		return errProviderForbidden
 	}
 	owner, err := m.providers.ownerForCreate(ctx, actor, scope)
 	if err != nil {
@@ -541,7 +551,7 @@ func (m *Module) runTypedTest(ctx context.Context, record providerRecord) error 
 			}
 		}
 	}
-	return m.setCustomStage(context.WithoutCancel(ctx), record.ID, stage, state, time.Since(started).Milliseconds())
+	return m.setCustomStage(context.WithoutCancel(ctx), record.ID, stage, state, time.Since(started).Milliseconds(), record.fingerprint())
 }
 
 // customDescribeTyped is step 3 of a typed connection: the name, and either
@@ -596,7 +606,7 @@ func (m *Module) customDescribeTyped(w http.ResponseWriter, r *http.Request, v c
 	}
 	// A changed token budget changes a serverless bound: test again before
 	// routing (the tariff stays frozen from the passed test).
-	if err := m.setCustomStage(ctx, record.ID, "route", last.State, last.DurationMS); err != nil {
+	if err := m.setCustomStage(ctx, record.ID, "route", last.State, last.DurationMS, last.Fingerprint); err != nil {
 		return err
 	}
 	core.Redirect(w, r, customURL("route", record.ID))

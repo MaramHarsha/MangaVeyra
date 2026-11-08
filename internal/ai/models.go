@@ -409,12 +409,28 @@ func (m *Module) setProviderEnabled(w http.ResponseWriter, r *http.Request) erro
 		return core.ErrBadRequest(i18n.T(r.Context(), "models.error.enabled"))
 	}
 	view, err := m.providers.SetEnabled(ctx, actor, id, enabled)
+	inst, settingsErr := loadRemoteSettings(ctx, m.d.Settings)
+	if errors.Is(err, errProviderUntested) && settingsErr == nil {
+		// A custom connection turns on only after a passed test of what it
+		// is now (G12 step 2 or Test connection).
+		view, err = m.providers.GetManageable(ctx, actor, id)
+		if err != nil {
+			return m.providerPageError(r.Context(), err)
+		}
+		notice := i18n.T(ctx, "models.toggle.untested")
+		if core.IsHTMX(r) {
+			return web.Render(w, r, http.StatusUnprocessableEntity, ProviderRows(providerRowView{Provider: view, LocalOnly: inst.LocalOnly,
+				Tone: ui.ToneError, Notice: notice}), nil)
+		}
+		web.Flash(w, r, "error", notice, "")
+		core.Redirect(w, r, modelsReturnURL(r))
+		return nil
+	}
 	if err != nil {
 		return m.providerPageError(r.Context(), err)
 	}
-	inst, err := loadRemoteSettings(ctx, m.d.Settings)
-	if err != nil {
-		return err
+	if settingsErr != nil {
+		return settingsErr
 	}
 	message := i18n.T(ctx, "models.flash.disabled")
 	if enabled {

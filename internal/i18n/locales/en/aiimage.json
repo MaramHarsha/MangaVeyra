@@ -125,6 +125,8 @@
   "aiimage.custom.blocked_title": "Ask an admin to add this provider",
   "aiimage.custom.blocked_body": "Members can't add their own providers on this server. An admin can connect it for everyone, or allow members to add their own in Model routing.",
   "aiimage.custom.blocked_back": "Back to models",
+  "aiimage.custom.admin_only_title": "An admin connects this server",
+  "aiimage.custom.admin_only_body": "ComfyUI workflows and HTTP image servers run on a machine on this server's network, so only an admin can connect one, for everyone. Once an admin has, routing can use it for your work like any server provider.",
   "aiimage.custom.comfyui": "ComfyUI workflow",
   "aiimage.custom.comfy_server": "ComfyUI server",
   "aiimage.custom.comfy_server_hint": "The address of a ComfyUI server on this machine or your network, such as http://192.168.1.40:8188.",

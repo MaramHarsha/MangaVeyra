@@ -28,6 +28,9 @@ var (
 	errProviderForbidden   = errors.New("ai: provider access denied")
 	errProviderInvalid     = errors.New("ai: invalid provider")
 	errProviderUnavailable = errors.New("ai: provider unavailable")
+	// errProviderUntested refuses turning on a custom connection whose last
+	// test did not pass for its current endpoint, key and description.
+	errProviderUntested = errors.New("ai: provider connection test has not passed")
 	// errProviderKeyUnreadable marks a saved key this server cannot decrypt, such
 	// as after secret.key was replaced or lost; the admin must replace the key.
 	errProviderKeyUnreadable = fmt.Errorf("%w: the saved key cannot be read with this server's secret key", errProviderUnavailable)
@@ -74,6 +77,9 @@ type providerTestState struct {
 	RequestID string    `json:"request_id,omitempty"`
 	// DurationMS is how long the last custom connection test took (G12).
 	DurationMS int64 `json:"duration_ms,omitempty"`
+	// Fingerprint is what a passed custom connection test covered
+	// (customFingerprint): the connection runs only while it still matches.
+	Fingerprint string `json:"fingerprint,omitempty"`
 	// Text and Images are what the last OpenAI model-list check found for the
 	// frozen text model and the GPT Image routes (capabilityReady or
 	// capabilityUnavailable). Images becomes capabilityVerification when GPT
@@ -234,6 +240,10 @@ func (s *providerStore) Create(ctx context.Context, actor providerActor, in prov
 	if !validProviderKind(in.Kind) || !validProviderName(in.Name) || (!keylessKind(in.Kind) && !validProviderKey(in.Key)) || (in.Key != "" && !validProviderKey(in.Key)) {
 		return zero, errProviderInvalid
 	}
+	if adminOnlyKind(in.Kind) && in.Scope != providerScopeServer {
+		// A server the admin names: never a personal connection.
+		return zero, errProviderForbidden
+	}
 	config := "{}"
 	switch {
 	case in.Kind == providerKindLocalText:
@@ -340,6 +350,12 @@ func (s *providerStore) SetEnabled(ctx context.Context, actor providerActor, id 
 		if err := validateProviderRecord(r); err != nil {
 			return err
 		}
+		if enabled && adminOnlyKind(r.Kind) && r.Scope != providerScopeServer {
+			return errProviderForbidden
+		}
+		if enabled && customKind(r.Kind) && !r.enableReady() {
+			return errProviderUntested
+		}
 		_, err = tx.Exec(ctx, `UPDATE providers SET enabled = ?, updated_at = ? WHERE id = ?`, enabled, s.timeNow(), id)
 		return err
 	})
@@ -439,7 +455,7 @@ func (s *providerStore) Candidates(ctx context.Context, actorID string) ([]provi
 	}
 	out := make([]providerCandidate, 0, len(rows))
 	for _, r := range rows {
-		if validateProviderRecord(r) == nil {
+		if validateProviderRecord(r) == nil && r.runnable() {
 			out = append(out, r.candidate())
 		}
 	}
@@ -455,7 +471,7 @@ func (s *providerStore) Candidate(ctx context.Context, actorID, id string) (prov
 	if err != nil {
 		return zero, errProviderUnavailable
 	}
-	if err := validateProviderRecord(r); err != nil || !r.Enabled || (!keylessKind(r.Kind) && strings.TrimSpace(r.KeyEnc) == "") {
+	if err := validateProviderRecord(r); err != nil || !r.Enabled || !r.runnable() || (!keylessKind(r.Kind) && strings.TrimSpace(r.KeyEnc) == "") {
 		return zero, errProviderUnavailable
 	}
 	if r.Scope == providerScopeUser && (!r.OwnerID.Valid || r.OwnerID.String != actorID) {
@@ -480,12 +496,38 @@ func (s *providerStore) ResolveDispatch(ctx context.Context, actorID, id string)
 		return zero, errProviderUnavailable
 	}
 	r, err := providerByID(ctx, s.db, id, false)
-	if err != nil || validateProviderRecord(r) != nil || !r.Enabled || (!keylessKind(r.Kind) && strings.TrimSpace(r.KeyEnc) == "") {
+	if err != nil || validateProviderRecord(r) != nil || !r.Enabled || !r.runnable() || (!keylessKind(r.Kind) && strings.TrimSpace(r.KeyEnc) == "") {
 		return zero, errProviderUnavailable
 	}
 	if r.Scope == providerScopeUser && r.OwnerID.String != actorID {
 		return zero, errProviderUnavailable
 	}
+	return s.openDispatch(r)
+}
+
+// resolveForTest opens a connection the actor manages for its connection
+// test. A custom connection may be tested while it is off (a draft, or one
+// whose last test failed), since it can be turned on only after a passed
+// test; other kinds keep needing to be on. An admin-only kind saved as a
+// personal connection is never tested.
+func (s *providerStore) resolveForTest(ctx context.Context, actor providerActor, id string) (dispatchProvider, error) {
+	var zero dispatchProvider
+	if s == nil || s.box == nil {
+		return zero, errProviderUnavailable
+	}
+	r, err := providerByID(ctx, s.db, id, false)
+	if err != nil || validateProviderRecord(r) != nil || authorizeProvider(actor, r) != nil ||
+		(!r.Enabled && !customKind(r.Kind)) || (adminOnlyKind(r.Kind) && r.Scope != providerScopeServer) ||
+		(!keylessKind(r.Kind) && strings.TrimSpace(r.KeyEnc) == "") {
+		return zero, errProviderUnavailable
+	}
+	return s.openDispatch(r)
+}
+
+// openDispatch decrypts a checked row's key into the dispatch view.
+func (s *providerStore) openDispatch(r providerRecord) (dispatchProvider, error) {
+	var zero dispatchProvider
+	var err error
 	key := ""
 	if r.KeyEnc != "" {
 		if key, err = s.box.OpenString(r.KeyEnc, providerKeyAAD(r.ID)); err != nil {
@@ -692,6 +734,7 @@ func (r providerRecord) lastTest() providerTestState {
 
 func (r providerRecord) view() providerView {
 	last := r.lastTest()
+	last.Fingerprint = "" // derived from the sealed key: never shown
 	owner := ""
 	if r.OwnerID.Valid {
 		owner = r.OwnerID.String
@@ -736,7 +779,7 @@ func sanitizeProviderStoreError(op string, err error) error {
 		return nil
 	}
 	if errors.Is(err, errProviderNotFound) || errors.Is(err, errProviderForbidden) ||
-		errors.Is(err, errProviderInvalid) || errors.Is(err, errProviderUnavailable) {
+		errors.Is(err, errProviderInvalid) || errors.Is(err, errProviderUnavailable) || errors.Is(err, errProviderUntested) {
 		return err
 	}
 	return fmt.Errorf("ai: provider %s failed: %w", op, err)

@@ -1272,14 +1272,21 @@ func providerNoticeIcon(tone ui.Tone) string {
 	return "circle-check"
 }
 
+// testable reports a connection whose Test connection action works: an
+// enabled one, or a custom connection that is off (it turns on only after a
+// passed test). A personal ComfyUI or HTTP connection is never tested.
+func testable(p providerView) bool {
+	return (p.Enabled || customKind(p.Kind)) && !(adminOnlyKind(p.Kind) && p.Scope != providerScopeServer)
+}
+
 // providerMenuItems are the row actions: test the connection (the existing
-// POST, disabled while Local only is on or the connection is off) and open
+// POST, disabled while Local only is on or the connection cannot be tested) and open
 // the replace-key dialog. Without JavaScript the dialog link falls back to
 // the dialog's :target styling.
 func providerMenuItems(ctx context.Context, v providerRowView) []ui.MenuItem {
 	id := v.Provider.ID
 	test := templ.Attributes{"hx-post": providerPath(id, "test"), "hx-target": "#" + providerRowsID(id), "hx-swap": "outerHTML"}
-	if v.LocalOnly || !v.Provider.Enabled {
+	if v.LocalOnly || !testable(v.Provider) {
 		test["disabled"] = true
 	}
 	return []ui.MenuItem{
@@ -1325,7 +1332,7 @@ func providerMenuTrigger(name string) templ.Component {
 		var templ_7745c5c3_Var57 string
 		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "models.row.actions", "name", name))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 420, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 427, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 		if templ_7745c5c3_Err != nil {
@@ -1370,7 +1377,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var59 string
 		templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(providerRowsID(v.Provider.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 428, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 435, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 		if templ_7745c5c3_Err != nil {
@@ -1383,7 +1390,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var60 string
 		templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "models.col.model"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 430, Col: 82}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 437, Col: 82}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 		if templ_7745c5c3_Err != nil {
@@ -1396,7 +1403,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var61 string
 		templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(providerRowModel(v.Provider))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 431, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 438, Col: 42}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 		if templ_7745c5c3_Err != nil {
@@ -1417,7 +1424,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var62 string
 		templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "models.col.provider"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 434, Col: 85}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 441, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var62)
 		if templ_7745c5c3_Err != nil {
@@ -1430,7 +1437,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var63 string
 		templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(providerKindName(v.Provider.Kind))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 435, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 442, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 		if templ_7745c5c3_Err != nil {
@@ -1443,7 +1450,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var64 string
 		templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(v.Provider.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 435, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 442, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 		if templ_7745c5c3_Err != nil {
@@ -1456,7 +1463,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var65 string
 		templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.JoinStringErrs(providerScopeLabel(ctx, v.Provider.Scope))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 436, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 443, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 		if templ_7745c5c3_Err != nil {
@@ -1469,7 +1476,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var66 string
 		templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "models.col.use"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 438, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 445, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var66)
 		if templ_7745c5c3_Err != nil {
@@ -1482,7 +1489,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var67 string
 		templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "models.use.scripts"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 439, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 446, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 		if templ_7745c5c3_Err != nil {
@@ -1495,7 +1502,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var68 string
 		templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "models.col.status"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 443, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 450, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var68)
 		if templ_7745c5c3_Err != nil {
@@ -1513,7 +1520,7 @@ func ProviderRows(v providerRowView) templ.Component {
 			var templ_7745c5c3_Var69 string
 			templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.ResolveAttributeValue(title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 445, Col: 18}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 452, Col: 18}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var69)
 			if templ_7745c5c3_Err != nil {
@@ -1539,7 +1546,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var70 string
 		templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "models.col.cost"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 450, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 457, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var70)
 		if templ_7745c5c3_Err != nil {
@@ -1552,7 +1559,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var71 string
 		templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(providerRowCost(ctx, v.Provider))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 451, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 458, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 		if templ_7745c5c3_Err != nil {
@@ -1565,7 +1572,7 @@ func ProviderRows(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var72 string
 		templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "models.col.on"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 453, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 460, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var72)
 		if templ_7745c5c3_Err != nil {
@@ -1615,7 +1622,7 @@ func ProviderRows(v providerRowView) templ.Component {
 				var templ_7745c5c3_Var74 string
 				templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.JoinStringErrs(v.Notice)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 465, Col: 16}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 472, Col: 16}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var74))
 				if templ_7745c5c3_Err != nil {
@@ -1681,7 +1688,7 @@ func verificationMeta(state string) templ.Component {
 			var templ_7745c5c3_Var76 string
 			templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "models.verification.fake"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 480, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 487, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
 			if templ_7745c5c3_Err != nil {
@@ -1727,7 +1734,7 @@ func providerEnabledForm(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var78 templ.SafeURL
 		templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(providerPath(v.Provider.ID, "enabled")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 491, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 498, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
 		if templ_7745c5c3_Err != nil {
@@ -1740,7 +1747,7 @@ func providerEnabledForm(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var79 string
 		templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.ResolveAttributeValue(providerPath(v.Provider.ID, "enabled"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 493, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 500, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var79)
 		if templ_7745c5c3_Err != nil {
@@ -1753,7 +1760,7 @@ func providerEnabledForm(v providerRowView) templ.Component {
 		var templ_7745c5c3_Var80 string
 		templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.ResolveAttributeValue("#" + providerRowsID(v.Provider.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 495, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 502, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var80)
 		if templ_7745c5c3_Err != nil {
@@ -1787,7 +1794,7 @@ func providerEnabledForm(v providerRowView) templ.Component {
 			var templ_7745c5c3_Var82 string
 			templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "models.toggle.save"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 503, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 510, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 			if templ_7745c5c3_Err != nil {
@@ -1849,7 +1856,7 @@ func providerKeyDialog(v providerRowView) templ.Component {
 			var templ_7745c5c3_Var85 templ.SafeURL
 			templ_7745c5c3_Var85, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(providerPath(v.Provider.ID, "key")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 516, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 523, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var85))
 			if templ_7745c5c3_Err != nil {
@@ -1862,7 +1869,7 @@ func providerKeyDialog(v providerRowView) templ.Component {
 			var templ_7745c5c3_Var86 string
 			templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.ResolveAttributeValue(providerPath(v.Provider.ID, "key"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 517, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 524, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var86)
 			if templ_7745c5c3_Err != nil {
@@ -1875,7 +1882,7 @@ func providerKeyDialog(v providerRowView) templ.Component {
 			var templ_7745c5c3_Var87 string
 			templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.ResolveAttributeValue("#" + providerRowsID(v.Provider.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 518, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 525, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var87)
 			if templ_7745c5c3_Err != nil {
@@ -1904,7 +1911,7 @@ func providerKeyDialog(v providerRowView) templ.Component {
 				var templ_7745c5c3_Var89 string
 				templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "models.key.current", "hint", v.Provider.KeyHint))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 523, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 530, Col: 70}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var89))
 				if templ_7745c5c3_Err != nil {
@@ -1972,7 +1979,7 @@ func providerKeyDialog(v providerRowView) templ.Component {
 					var templ_7745c5c3_Var93 string
 					templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "ui.cancel"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 534, Col: 31}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 541, Col: 31}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var93))
 					if templ_7745c5c3_Err != nil {
@@ -2004,7 +2011,7 @@ func providerKeyDialog(v providerRowView) templ.Component {
 					var templ_7745c5c3_Var95 string
 					templ_7745c5c3_Var95, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "models.key.submit"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 537, Col: 39}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 544, Col: 39}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var95))
 					if templ_7745c5c3_Err != nil {
@@ -2094,7 +2101,7 @@ func ProviderFormPage(v providerFormView) templ.Component {
 				var templ_7745c5c3_Var98 string
 				templ_7745c5c3_Var98, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "models.local_only.title"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 557, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 564, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var98))
 				if templ_7745c5c3_Err != nil {
@@ -2107,7 +2114,7 @@ func ProviderFormPage(v providerFormView) templ.Component {
 				var templ_7745c5c3_Var99 string
 				templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "models.local_only.connect_body"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 558, Col: 54}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 565, Col: 54}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var99))
 				if templ_7745c5c3_Err != nil {
@@ -2131,7 +2138,7 @@ func ProviderFormPage(v providerFormView) templ.Component {
 		var templ_7745c5c3_Var100 string
 		templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Next)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 562, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 569, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var100)
 		if templ_7745c5c3_Err != nil {
@@ -2144,7 +2151,7 @@ func ProviderFormPage(v providerFormView) templ.Component {
 		var templ_7745c5c3_Var101 string
 		templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Kind)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 563, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 570, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var101)
 		if templ_7745c5c3_Err != nil {
@@ -2170,7 +2177,7 @@ func ProviderFormPage(v providerFormView) templ.Component {
 				var templ_7745c5c3_Var103 string
 				templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.JoinStringErrs(v.Errors.Form())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 566, Col: 22}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 573, Col: 22}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var103))
 				if templ_7745c5c3_Err != nil {
@@ -2240,7 +2247,7 @@ func ProviderFormPage(v providerFormView) templ.Component {
 			var templ_7745c5c3_Var106 string
 			templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "models.form.scope"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 582, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 589, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
 			if templ_7745c5c3_Err != nil {
@@ -2263,7 +2270,7 @@ func ProviderFormPage(v providerFormView) templ.Component {
 				var templ_7745c5c3_Var107 string
 				templ_7745c5c3_Var107, templ_7745c5c3_Err = templ.JoinStringErrs(v.Errors["scope"])
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 586, Col: 68}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 593, Col: 68}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var107))
 				if templ_7745c5c3_Err != nil {
@@ -2281,7 +2288,7 @@ func ProviderFormPage(v providerFormView) templ.Component {
 				var templ_7745c5c3_Var108 string
 				templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "models.form.scope_hint"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 588, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 595, Col: 74}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var108))
 				if templ_7745c5c3_Err != nil {
@@ -2304,7 +2311,7 @@ func ProviderFormPage(v providerFormView) templ.Component {
 			var templ_7745c5c3_Var109 string
 			templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.ResolveAttributeValue(providerScopeUser)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 592, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 599, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var109)
 			if templ_7745c5c3_Err != nil {
@@ -2329,7 +2336,7 @@ func ProviderFormPage(v providerFormView) templ.Component {
 				var templ_7745c5c3_Var111 string
 				templ_7745c5c3_Var111, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "models.form.personal_only"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 594, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 601, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var111))
 				if templ_7745c5c3_Err != nil {
@@ -2361,7 +2368,7 @@ func ProviderFormPage(v providerFormView) templ.Component {
 			var templ_7745c5c3_Var113 string
 			templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "ui.cancel"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 599, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 606, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var113))
 			if templ_7745c5c3_Err != nil {
@@ -2388,7 +2395,7 @@ func ProviderFormPage(v providerFormView) templ.Component {
 			var templ_7745c5c3_Var115 string
 			templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "models."+v.Kind+".connect"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 602, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/models.templ`, Line: 609, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var115))
 			if templ_7745c5c3_Err != nil {
