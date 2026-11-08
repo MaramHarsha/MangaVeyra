@@ -152,3 +152,11 @@ func TestFileDropAndVariationCaption(t *testing.T) {
 		t.Errorf("variation captions: %s", picker)
 	}
 }
+
+func TestCharacterCardLockPercentNeverRoundsFailIntoPass(t *testing.T) {
+	for v, want := range map[float64]string{0.895: "89%", 0.8999: "89%", 0.9: "90%", 0.9049: "90%", 0.956: "95%", 1: "100%", 0: "0%"} {
+		if got := lockPercent(v); got != want {
+			t.Errorf("lockPercent(%v) = %q, want %q", v, got, want)
+		}
+	}
+}
