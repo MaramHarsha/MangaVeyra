@@ -734,6 +734,11 @@ func (r providerRecord) lastTest() providerTestState {
 
 func (r providerRecord) view() providerView {
 	last := r.lastTest()
+	if testedKind(r.Kind) && last.State == "ok" && !r.testPassed() {
+		// A passed test of what the connection was before a change: it
+		// neither routes nor turns on, so the pages say it is unchecked.
+		last.State = ""
+	}
 	last.Fingerprint = "" // derived from the sealed key: never shown
 	owner := ""
 	if r.OwnerID.Valid {

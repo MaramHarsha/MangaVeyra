@@ -211,6 +211,9 @@ func TestReviewCustomConnectionsRunOnlyAfterAPassedTest(t *testing.T) {
 		if routes() {
 			t.Fatal("a changed endpoint routes on the old test")
 		}
+		if v, err := m.providers.GetManageable(ctx, admin, view.ID); err != nil || v.LastTest.State != "" {
+			t.Fatalf("G2 shows the old test as current: %+v %v", v.LastTest, err)
+		}
 		if _, err := m.providers.SetEnabled(ctx, admin, view.ID, false); err != nil {
 			t.Fatal(err)
 		}
