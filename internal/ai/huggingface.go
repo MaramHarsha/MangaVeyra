@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -320,6 +321,24 @@ func plainImagePromptNoAvoid(req ImageGenerateRequest) string {
 		return req.Prompt + "\nStyle: " + req.Style
 	}
 	return req.Prompt
+}
+
+// Cost markers a Hugging Face connection's view carries for G2 (never a
+// price the provider set: a per-call bound, or how it is billed).
+const (
+	hfCostHourly   = "hourly"
+	hfCostUnpriced = "unpriced"
+)
+
+func hfCostLabel(c hfConfig) string {
+	if c.Endpoint == hfDedicated {
+		return hfCostHourly
+	}
+	route, ok := hfTextRoute(c)
+	if !ok {
+		return hfCostUnpriced
+	}
+	return strconv.FormatFloat(route.ReserveUSD, 'f', 6, 64)
 }
 
 // hfManifest describes a dedicated image endpoint for the router.

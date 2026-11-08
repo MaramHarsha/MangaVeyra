@@ -102,5 +102,18 @@
   "models.fal.connect": "Connect fal",
   "models.fal.form_subtitle": "Connect your own fal key for bounded image generation.",
   "models.subtitle.routing": "auto-routing",
-  "models.table.image_caption": "Image models auto-routing can use"
+  "models.table.image_caption": "Image models auto-routing can use",
+  "models.cost.endpoint_hours": "Billed per endpoint hour",
+  "models.cost.listed": "Listed rate at the test",
+  "models.verification.fake": "Fake-transport tested · not live-verified",
+  "models.google.connect": "Connect Google",
+  "models.google.form_subtitle": "Add one encrypted Gemini API key for structured script generation and Nano Banana images.",
+  "models.xai.connect": "Connect xAI",
+  "models.xai.form_subtitle": "Add one encrypted xAI key for structured script generation and Grok Imagine images. xAI keeps API requests for 30 days unless your team turns on zero data retention.",
+  "models.together.connect": "Connect Together",
+  "models.together.form_subtitle": "Add one encrypted Together AI key for structured script generation and FLUX1.1 [pro] images.",
+  "models.replicate.connect": "Connect Replicate",
+  "models.replicate.form_subtitle": "Add one encrypted Replicate token for FLUX.1 schnell images and the pinned SDXL version.",
+  "models.runware.connect": "Connect Runware",
+  "models.runware.form_subtitle": "Add one encrypted Runware key for FLUX.1 schnell images and masked edits."
 }

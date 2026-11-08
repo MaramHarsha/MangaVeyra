@@ -92,13 +92,18 @@ templ addProviderTrigger() {
 	</span>
 }
 
-// addProviderItems lists the providers in G8 order. OpenRouter and OpenAI
-// open the existing connection form; the others are designed but not built,
-// so ui.Menu renders them disabled with a Soon tag.
+// addProviderItems lists the providers in G8 order: hosted aggregators
+// (OpenRouter, fal, then the Phase 4 Replicate, Together and Runware, which
+// have no designed place; ADR 0004), direct vendor keys and Ollama. Every
+// entry opens its connection form; ui.Menu would render an unserved one as
+// Soon.
 func addProviderItems() []ui.MenuItem {
 	return []ui.MenuItem{
 		{Href: "/models/providers/new?kind=" + providerKindOpenRouter, Label: providerKindName(providerKindOpenRouter), Icon: "route"},
 		{Href: falConnectHref, Label: "fal", Icon: "bolt"},
+		{Href: replicateConnectHref, Label: providerKindName(providerKindReplicate), Icon: "box-multiple"},
+		{Href: togetherConnectHref, Label: providerKindName(providerKindTogether), Icon: "users-group"},
+		{Href: runwareConnectHref, Label: providerKindName(providerKindRunware), Icon: "run"},
 		{Href: "/models/providers/new?kind=" + providerKindOpenAI, Label: providerKindName(providerKindOpenAI), Icon: "brand-openai"},
 		{Href: googleConnectHref, Label: "Google", Icon: "brand-google"},
 		{Href: xaiConnectHref, Label: "xAI", Icon: "brand-x"},
@@ -206,7 +211,7 @@ templ modelsTable(v modelsPageView) {
 		</thead>
 		@placeholderRows()
 		for _, provider := range v.Providers {
-			if provider.Kind != providerKindFal {
+			if !provider.ImageOnly {
 				@ProviderRows(providerRowView{Provider: provider, LocalOnly: v.LocalOnly})
 			}
 		}
@@ -424,6 +429,7 @@ templ ProviderRows(v providerRowView) {
 		<tr class="mv-models-table__row">
 			<td class="mv-models-table__model" data-label={ i18n.T(ctx, "models.col.model") }>
 				<strong>{ providerRowModel(v.Provider) }</strong>
+				@verificationMeta(providerVerification(v.Provider.Kind))
 			</td>
 			<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.provider") }>
 				<span class="mv-models-table__provider">{ providerKindName(v.Provider.Kind) } · { v.Provider.Name }</span>
@@ -442,7 +448,7 @@ templ ProviderRows(v providerRowView) {
 				@providerRowStatus(v.Provider)
 			</td>
 			<td class="mv-models-table__cost" data-label={ i18n.T(ctx, "models.col.cost") }>
-				{ providerCostLabel(ctx, v.Provider.Kind) }
+				{ providerRowCost(ctx, v.Provider) }
 			</td>
 			<td class="mv-models-table__on" data-label={ i18n.T(ctx, "models.col.on") }>
 				<div class="mv-models-table__controls">
@@ -465,6 +471,14 @@ templ ProviderRows(v providerRowView) {
 			</tr>
 		}
 	</tbody>
+}
+
+// verificationMeta says honestly how a route has been verified: the Phase 4
+// adapters are tested against fake transports only (ADR 0013 §9).
+templ verificationMeta(state string) {
+	if state == verifiedFake {
+		<span class="mv-models-table__meta">{ i18n.T(ctx, "models.verification.fake") }</span>
+	}
 }
 
 // providerEnabledForm is the ON switch. The checkbox comes before the hidden

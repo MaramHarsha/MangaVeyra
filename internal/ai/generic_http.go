@@ -33,6 +33,15 @@ const (
 // placeholder is replaced by its text.
 var httpPlaceholders = []string{"prompt", "negative", "width", "height", "seed", "count"}
 
+// httpPlaceholderList is the placeholders as a template writes them.
+func httpPlaceholderList() string {
+	out := make([]string, len(httpPlaceholders))
+	for i, p := range httpPlaceholders {
+		out[i] = "{{" + p + "}}"
+	}
+	return strings.Join(out, ", ")
+}
+
 var httpPlaceholderRE = regexp.MustCompile(`\{\{\s*([a-z_]+)\s*\}\}`)
 
 type httpConfig struct {

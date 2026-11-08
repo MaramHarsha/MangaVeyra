@@ -149,9 +149,15 @@ type providerView struct {
 	OwnerID    string            `json:"owner_id,omitempty"`
 	LastTest   providerTestState `json:"last_test"`
 	LocalModel string            `json:"local_model,omitempty"`
-	Endpoint   string            `json:"endpoint,omitempty"`
-	CreatedAt  time.Time         `json:"created_at"`
-	UpdatedAt  time.Time         `json:"updated_at"`
+	// TextModel is a Hugging Face text connection's model; ImageOnly marks
+	// connections with no text route (G2's text table omits them).
+	TextModel string `json:"text_model,omitempty"`
+	ImageOnly bool   `json:"image_only,omitempty"`
+	// Cost is a Hugging Face connection's per-call bound or billing marker.
+	Cost      string    `json:"cost,omitempty"`
+	Endpoint  string    `json:"endpoint,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type providerRecord struct {
@@ -690,8 +696,19 @@ func (r providerRecord) view() providerView {
 	if r.OwnerID.Valid {
 		owner = r.OwnerID.String
 	}
-	return providerView{ID: r.ID, Kind: r.Kind, Name: r.Name, KeyHint: r.KeyHint, Enabled: r.Enabled,
-		Scope: r.Scope, OwnerID: owner, LastTest: last, LocalModel: r.localConfig().Model, Endpoint: r.BaseURL, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	v := providerView{ID: r.ID, Kind: r.Kind, Name: r.Name, KeyHint: r.KeyHint, Enabled: r.Enabled,
+		Scope: r.Scope, OwnerID: owner, LastTest: last, LocalModel: r.localConfig().Model, Endpoint: r.BaseURL, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		ImageOnly: imageOnlyKind(r.Kind)}
+	if r.Kind == providerKindHuggingFace {
+		if cfg, err := decodeHFConfig(r.Config); err == nil {
+			v.ImageOnly = cfg.Task != hfTaskText
+			if !v.ImageOnly {
+				v.TextModel = cfg.Model
+			}
+			v.Cost = hfCostLabel(cfg)
+		}
+	}
+	return v
 }
 
 // validProviderKey accepts a non-empty key of visible ASCII only. A key with

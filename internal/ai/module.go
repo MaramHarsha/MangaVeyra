@@ -145,6 +145,15 @@ func (m *Module) Routes(r *core.Router) {
 		r.URL.RawQuery = q.Encode()
 		return m.newProviderPage(w, r)
 	}, core.RequireSession)
+	// Phase 4 key-form providers (ADR 0013 §9) use the same one-page form.
+	for _, kind := range []string{providerKindGoogle, providerKindXAI, providerKindReplicate, providerKindTogether, providerKindRunware} {
+		r.Page("GET /models/providers/new/"+kind, func(w http.ResponseWriter, r *http.Request) error {
+			q := r.URL.Query()
+			q.Set("kind", kind)
+			r.URL.RawQuery = q.Encode()
+			return m.newProviderPage(w, r)
+		}, core.RequireSession)
+	}
 	r.Page("GET /models/providers/new/ollama", func(w http.ResponseWriter, r *http.Request) error {
 		core.Redirect(w, r, customURL("connect", ""))
 		return nil

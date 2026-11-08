@@ -39,6 +39,7 @@ type customProviderView struct {
 	// off: the page explains who can connect one instead of the form.
 	Blocked bool
 	Errors  web.FormErrors
+	customTypedView
 }
 
 var customSteps = []string{"connect", "test", "describe", "route"}
@@ -63,7 +64,8 @@ func customURL(step, id string) string {
 func (m *Module) customBase(r *http.Request, actor providerActor, step string, inst settings.Instance) customProviderView {
 	v := customProviderView{Step: step, Name: "Ollama", Endpoint: "http://localhost:11434/v1", Scope: providerScopeUser,
 		Context: 32768, Output: 4096, Admin: actor.Admin, LocalOnly: inst.LocalOnly, ServerMode: inst.RoutingMode,
-		PrivateAllowed: m.private.Allowed(r.Context()), AllowPrivate: true, Modes: defaultLocalModes, Errors: web.FormErrors{}}
+		PrivateAllowed: m.private.Allowed(r.Context()), AllowPrivate: true, Modes: defaultLocalModes, Errors: web.FormErrors{},
+		customTypedView: customTypedView{Type: customTypeCompatible}}
 	if actor.Admin {
 		v.Scope = providerScopeServer
 	}
@@ -71,12 +73,16 @@ func (m *Module) customBase(r *http.Request, actor providerActor, step string, i
 }
 
 // withRecord fills a view from a stored draft.
-func (v *customProviderView) withRecord(record providerRecord) {
-	cfg := record.localConfig()
+func (v *customProviderView) withRecord(ctx context.Context, record providerRecord) {
 	last := record.view().LastTest
 	v.ID, v.Name, v.Endpoint, v.Scope = record.ID, record.Name, record.BaseURL, record.Scope
-	v.Model, v.Context, v.Output, v.Modes = cfg.Model, cfg.ContextTokens, cfg.OutputTokens, cfg.routeModes()
 	v.TestState, v.DurationMS, v.HasKey = last.State, last.DurationMS, record.KeyEnc != ""
+	if record.Kind != providerKindLocalText {
+		v.withTypedRecord(ctx, record)
+		return
+	}
+	cfg := record.localConfig()
+	v.Model, v.Context, v.Output, v.Modes = cfg.Model, cfg.ContextTokens, cfg.OutputTokens, cfg.routeModes()
 }
 
 func (m *Module) customPage(w http.ResponseWriter, r *http.Request) error {
@@ -102,14 +108,16 @@ func (m *Module) customPage(w http.ResponseWriter, r *http.Request) error {
 		if customStepNumber(step) > customStepNumber(record.view().LastTest.Step) {
 			return core.ErrForbidden(i18n.T(r.Context(), "aiimage.custom.complete_previous"))
 		}
-		v.withRecord(record)
+		v.withRecord(r.Context(), record)
+	} else if v.Type = customTypeFromQuery(r.URL.Query().Get("type")); v.Type != customTypeCompatible {
+		v.typeDefaults(r.Context())
 	}
 	return m.renderCustom(w, r, http.StatusOK, v)
 }
 
 func (m *Module) customRecord(ctx context.Context, actor providerActor, id string) (providerRecord, error) {
 	r, err := providerByID(ctx, m.d.DB, id, false)
-	if err != nil || r.Kind != providerKindLocalText || r.Enabled || authorizeProvider(actor, r) != nil || validateProviderRecord(r) != nil || r.view().LastTest.Step == "" {
+	if err != nil || !customKind(r.Kind) || r.Enabled || authorizeProvider(actor, r) != nil || validateProviderRecord(r) != nil || r.view().LastTest.Step == "" {
 		return providerRecord{}, errProviderUnavailable
 	}
 	return r, nil
@@ -132,6 +140,17 @@ func (m *Module) customPost(w http.ResponseWriter, r *http.Request) error {
 		return core.ErrForbidden(i18n.T(r.Context(), "models.error.personal_disabled"))
 	}
 	if step == "connect" {
+		if id := web.FormValue(r, "id"); id != "" {
+			record, err := m.customRecord(r.Context(), actor, id)
+			if err != nil {
+				return core.ErrNotFound()
+			}
+			if record.Kind != providerKindLocalText {
+				return m.customConnectTyped(w, r, actor, inst, customKindType(record.Kind), &record)
+			}
+		} else if typ := customTypeFromQuery(web.FormValue(r, "type")); typ != customTypeCompatible {
+			return m.customConnectTyped(w, r, actor, inst, typ, nil)
+		}
 		return m.customConnect(w, r, actor, inst)
 	}
 	record, err := m.customRecord(r.Context(), actor, web.FormValue(r, "id"))
@@ -143,7 +162,7 @@ func (m *Module) customPost(w http.ResponseWriter, r *http.Request) error {
 		return core.ErrForbidden(i18n.T(r.Context(), "aiimage.custom.complete_previous"))
 	}
 	v := m.customBase(r, actor, step, inst)
-	v.withRecord(record)
+	v.withRecord(r.Context(), record)
 	switch step {
 	case "test":
 		// A passed test moves on; otherwise this is "Test again".
@@ -164,6 +183,9 @@ func (m *Module) customPost(w http.ResponseWriter, r *http.Request) error {
 		core.Redirect(w, r, customURL("test", record.ID))
 		return nil
 	case "describe":
+		if record.Kind != providerKindLocalText {
+			return m.customDescribeTyped(w, r, v, record, last)
+		}
 		v.Name = web.FormValue(r, "name")
 		v.Context, _ = strconv.Atoi(web.FormValue(r, "context"))
 		v.Output, _ = strconv.Atoi(web.FormValue(r, "output"))
@@ -194,15 +216,24 @@ func (m *Module) customPost(w http.ResponseWriter, r *http.Request) error {
 		}
 		modes := normalizeFormModes(r.PostForm["modes"])
 		v.Modes = modes
-		cfg := record.localConfig()
-		cfg.Modes = modes
-		if len(modes) == 0 || validateLocalTextConfig(record.BaseURL, cfg) != nil {
-			v.Errors.Add("modes", i18n.T(r.Context(), "aiimage.custom.modes_invalid"))
-			return m.renderCustom(w, r, http.StatusUnprocessableEntity, v)
-		}
-		raw, _ := json.Marshal(cfg)
-		if _, err := m.d.DB.Exec(r.Context(), `UPDATE providers SET config = ?, updated_at = ? WHERE id = ? AND enabled = FALSE`, string(raw), db.Now(), record.ID); err != nil {
-			return err
+		capability := capText
+		if record.Kind != providerKindLocalText {
+			var err error
+			if capability, err = m.customRouteTyped(r, record, modes); err != nil {
+				v.Errors.Add("modes", i18n.T(r.Context(), "aiimage.custom.modes_invalid"))
+				return m.renderCustom(w, r, http.StatusUnprocessableEntity, v)
+			}
+		} else {
+			cfg := record.localConfig()
+			cfg.Modes = modes
+			if len(modes) == 0 || validateLocalTextConfig(record.BaseURL, cfg) != nil {
+				v.Errors.Add("modes", i18n.T(r.Context(), "aiimage.custom.modes_invalid"))
+				return m.renderCustom(w, r, http.StatusUnprocessableEntity, v)
+			}
+			raw, _ := json.Marshal(cfg)
+			if _, err := m.d.DB.Exec(r.Context(), `UPDATE providers SET config = ?, updated_at = ? WHERE id = ? AND enabled = FALSE`, string(raw), db.Now(), record.ID); err != nil {
+				return err
+			}
 		}
 		if _, err := m.providers.SetEnabled(r.Context(), actor, record.ID, true); err != nil {
 			return err
@@ -211,7 +242,7 @@ func (m *Module) customPost(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		web.Flash(w, r, "success", i18n.T(r.Context(), "models.flash.connected"), "")
-		core.Redirect(w, r, "/models?cap=text")
+		core.Redirect(w, r, "/models?cap="+capability)
 		return nil
 	}
 	return core.ErrNotFound()
@@ -343,6 +374,9 @@ func (m *Module) updateCustomDraft(ctx context.Context, actor providerActor, id,
 // local client under the live private-endpoint policy, and stores the result
 // and its duration. Only a passed test unlocks step 3.
 func (m *Module) runCustomTest(ctx context.Context, record providerRecord) error {
+	if record.Kind != providerKindLocalText {
+		return m.runTypedTest(ctx, record)
+	}
 	state, stage := "error", "test"
 	started := time.Now()
 	if _, err := m.private.netPolicy(ctx).CheckURL(ctx, record.BaseURL, nil); err == nil {

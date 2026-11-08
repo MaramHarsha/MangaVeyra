@@ -100,5 +100,18 @@
   "models.fal.connect": "falを接続",
   "models.fal.form_subtitle": "ご自身のfalキーを接続して画像を生成します。",
   "models.subtitle.routing": "自動ルーティング",
-  "models.table.image_caption": "自動ルーティングで使える画像モデル"
+  "models.table.image_caption": "自動ルーティングで使える画像モデル",
+  "models.cost.endpoint_hours": "エンドポイントの時間単位で請求",
+  "models.cost.listed": "テスト時の公開レート",
+  "models.verification.fake": "模擬通信でテスト済み · 実接続は未検証",
+  "models.google.connect": "Googleを接続",
+  "models.google.form_subtitle": "構造化された脚本生成とNano Banana画像のために、暗号化したGemini APIキーを1つ追加します。",
+  "models.xai.connect": "xAIを接続",
+  "models.xai.form_subtitle": "構造化された脚本生成とGrok Imagine画像のために、暗号化したxAIキーを1つ追加します。チームでデータ非保持を有効にしない限り、xAIはAPIリクエストを30日間保存します。",
+  "models.together.connect": "Togetherを接続",
+  "models.together.form_subtitle": "構造化された脚本生成とFLUX1.1 [pro]画像のために、暗号化したTogether AIキーを1つ追加します。",
+  "models.replicate.connect": "Replicateを接続",
+  "models.replicate.form_subtitle": "FLUX.1 schnell画像と固定バージョンのSDXLのために、暗号化したReplicateトークンを1つ追加します。",
+  "models.runware.connect": "Runwareを接続",
+  "models.runware.form_subtitle": "FLUX.1 schnell画像とマスク編集のために、暗号化したRunwareキーを1つ追加します。"
 }

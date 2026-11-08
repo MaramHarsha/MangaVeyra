@@ -399,11 +399,13 @@ func TestModelsPageMatchesDesignedLayout(t *testing.T) {
 func TestModelsPageSoonItemsNeverLink(t *testing.T) {
 	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
 		body := mainOf(t, ta.Login(t, ta.Admin.Username).Get("/models?cap=text"))
-		for _, path := range []string{"/models/providers/new/google", "/models/providers/new/xai"} {
-			if ta.Router.Serves(http.MethodGet, path) {
-				t.Fatalf("%s is served now; update the Soon expectations", path)
+		// ADR 0013 §9: Google and xAI are built, so their designed menu
+		// entries are links now; G12's types are no longer Soon either.
+		for _, path := range []string{"/models/providers/new/google", "/models/providers/new/xai", "/models/providers/new/replicate",
+			"/models/providers/new/together", "/models/providers/new/runware"} {
+			if !ta.Router.Serves(http.MethodGet, path) {
+				t.Fatalf("%s is not served", path)
 			}
-			mustNotContain(t, body, `href="`+path)
 		}
 		// Built connection flows and routing are now real destinations.
 		mustContain(t, body, `href="/models/providers/custom"`, `href="/models/routing"`)
@@ -412,14 +414,20 @@ func TestModelsPageSoonItemsNeverLink(t *testing.T) {
 				t.Fatalf("missing built route %s", path)
 			}
 		}
-		// "Add provider" lists OpenRouter and OpenAI as links, the rest as Soon.
+		// "Add provider" lists every provider as a link: the aggregators
+		// (with Replicate, Together and Runware after fal), then vendor keys.
 		mustAppearInOrder(t, body, `<details class="mv-dropdown mv-dropdown--end mv-models__add">`,
 			`href="/models/providers/new?kind=openrouter" role="menuitem"`, "<span>OpenRouter</span>",
 			`href="/models/providers/new/fal" role="menuitem"`, "<span>fal</span>",
+			`href="/models/providers/new/replicate" role="menuitem"`, "<span>Replicate</span>",
+			`href="/models/providers/new/together" role="menuitem"`, "<span>Together</span>",
+			`href="/models/providers/new/runware" role="menuitem"`, "<span>Runware</span>",
 			`href="/models/providers/new?kind=openai" role="menuitem"`, "<span>OpenAI</span>",
-			`class="mv-menu__item is-soon"`, "<span>Google</span>", `<span class="mv-soon">Soon</span>`,
-			`class="mv-menu__item is-soon"`, "<span>xAI</span>", `<span class="mv-soon">Soon</span>`,
+			`href="/models/providers/new/google" role="menuitem"`, "<span>Google</span>",
+			`href="/models/providers/new/xai" role="menuitem"`, "<span>xAI</span>",
 			`href="/models/providers/new/ollama" role="menuitem"`, "<span>Ollama</span>", "</details>")
+		menu := body[strings.Index(body, `mv-models__add`):]
+		mustNotContain(t, menu[:strings.Index(menu, "</details>")], "is-soon")
 
 		// Empty capability tabs use the designed empty state with a Soon tag.
 		for capability, title := range map[string]string{"video": "No video models yet",
