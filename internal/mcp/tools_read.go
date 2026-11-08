@@ -282,9 +282,6 @@ func (m *Module) listRecent(ctx context.Context, req *mcpsdk.CallToolRequest, in
 		in.Limit = 20
 	}
 	out := []map[string]any{}
-	if !m.ready(ctx) {
-		return nil, map[string]any{"actions": out}, nil
-	}
 	rows, err := m.tokenActions(ctx, a.tok.ID, in.Limit)
 	if err != nil {
 		return nil, nil, toolError(err)

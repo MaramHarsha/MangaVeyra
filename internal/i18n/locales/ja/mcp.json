@@ -4,7 +4,6 @@
   "agents.allow": "AIエージェント（MCP）を許可",
   "agents.allow_save": "保存",
   "agents.off_notice": "AIエージェントはオフです。トークンは残りますが、オンに戻すまでエージェントからのリクエストはすべて拒否されます。",
-  "agents.unavailable": "エージェントの操作には、このサーバーのデータベース更新が必要です。エージェントが変更や承認依頼をする前に、管理者が最新のマイグレーションを実行してください。",
   "agents.connect.title": "アシスタントを接続",
   "agents.connect.hint": "Claude、ChatGPT、Gemini、ローカルエージェントで使えます。デスクトップアプリは stdio ブリッジを使えます。",
   "agents.create": "トークンを作成",

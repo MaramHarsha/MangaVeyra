@@ -1,7 +1,6 @@
 package mcp_test
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
-	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 )
 
 // TestG13AuthorizationAndTokenForm: G13 is session-only, decisions belong to
@@ -135,30 +133,6 @@ func TestG13AuthorizationAndTokenForm(t *testing.T) {
 			}
 		}
 	})
-}
-
-// TestAgentWritesWaitForTheMigration: until migration 0700 lands, agent
-// writes are refused instead of running unlabelled.
-func TestAgentWritesWaitForTheMigration(t *testing.T) {
-	ta := testutil.NewTestApp(t)
-	if agentTableExists(ta) {
-		t.Skip("migration 0700 has landed")
-	}
-	ctx := context.Background()
-	owner, browser := ta.UserClient(t, auth.RoleCreator)
-	f := &fixture{t: t, ta: ta, ctx: ctx, owner: owner, browser: browser}
-	raw, _ := f.token("early", scopesGenerate, nil, nil)
-	s := f.connect(raw)
-	r := call(t, s, "create_character", map[string]any{"project_id": "01JZZZZZZZZZZZZZZZZZZZZZZZ", "name": "x"})
-	if !r.Err || !strings.Contains(r.Text, "not available") {
-		t.Fatalf("write without the table: %+v", r)
-	}
-	if r := call(t, s, "list_recent_actions", nil); r.Err {
-		t.Fatalf("read without the table: %s", r.Text)
-	}
-	if page := browser.Get("/agents"); !strings.Contains(string(page.Body), "need a database update") {
-		t.Fatalf("G13 does not explain the missing migration: %d %.400s", page.StatusCode, page.Body)
-	}
 }
 
 // TestLocaleKeysExistInEnglishAndJapanese checks every agents.* key the

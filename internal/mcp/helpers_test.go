@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
-	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/mcp"
 	"github.com/MaramHarsha/MangaVeyra/internal/pagestore"
 	"github.com/MaramHarsha/MangaVeyra/internal/seed"
@@ -53,7 +51,6 @@ func forEachDialect(t *testing.T, fn func(t *testing.T, f *fixture)) {
 func newFixture(t *testing.T, dialect string) *fixture {
 	t.Helper()
 	ta := testutil.NewTestApp(t, testutil.WithDialect(dialect), testutil.WithBackground())
-	applyAgentMigration(t, ta)
 	ctx := context.Background()
 	owner, browser := ta.UserClient(t, auth.RoleCreator)
 	if err := seed.Run(ctx, ta.Deps, seed.Options{Demo: true, OwnerUsername: owner.Username}); err != nil {
@@ -80,37 +77,6 @@ func newFixture(t *testing.T, dialect string) *fixture {
 		t.Fatal("mcp module not wired")
 	}
 	return f
-}
-
-// agentTableExists reports whether migration 0700 (agent_actions) is applied.
-func agentTableExists(ta *testutil.TestApp) bool {
-	var n int
-	return ta.Deps.DB.Get(context.Background(), &n, `SELECT COUNT(*) FROM agent_actions WHERE 1 = 0`) == nil
-}
-
-// applyAgentMigration applies the proposed migration 0700 (testdata) unless
-// the table already exists because the migration has landed.
-func applyAgentMigration(t *testing.T, ta *testutil.TestApp) {
-	t.Helper()
-	if agentTableExists(ta) {
-		return
-	}
-	b, err := os.ReadFile("testdata/0700_agent_actions.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	stmts, err := db.SplitStatements(string(b))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, s := range stmts {
-		if strings.TrimSpace(s) == "" {
-			continue
-		}
-		if _, err := ta.Deps.DB.Exec(context.Background(), s); err != nil {
-			t.Fatalf("apply 0700: %v", err)
-		}
-	}
 }
 
 // token creates an agent token for the owner.

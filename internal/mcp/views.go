@@ -35,8 +35,6 @@ type pageView struct {
 	// or a form with errors).
 	FormOpen bool
 	Created  *createdView
-	// Unavailable is set while the agent_actions migration is missing.
-	Unavailable bool
 }
 
 type tokenView struct {
@@ -121,10 +119,6 @@ func (m *Module) load(r *http.Request, form tokenForm) (pageView, error) {
 	now := time.Now()
 	for _, t := range tokens {
 		v.Tokens = append(v.Tokens, tokenRow(ctx, t, titles, now))
-	}
-	if !m.ready(ctx) {
-		v.Unavailable = true
-		return v, nil
 	}
 	v.Actions, err = m.actionRows(ctx, u, now)
 	return v, err
@@ -355,9 +349,6 @@ func (m *Module) revokeToken(w http.ResponseWriter, r *http.Request) error {
 
 func (m *Module) approveAction(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	if !m.ready(ctx) {
-		return core.ErrNotFound()
-	}
 	d, err := m.approve(ctx, sessionUser(r), r.PathValue("id"))
 	if errors.Is(err, studio.ErrConflict) || errors.Is(err, pagestore.ErrVersion) {
 		// The target changed since the agent asked; the request still waits.
@@ -379,9 +370,6 @@ func (m *Module) approveAction(w http.ResponseWriter, r *http.Request) error {
 
 func (m *Module) declineAction(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	if !m.ready(ctx) {
-		return core.ErrNotFound()
-	}
 	if err := m.decline(ctx, sessionUser(r), r.PathValue("id")); err != nil {
 		return m.decisionError(w, r, err)
 	}
@@ -392,9 +380,6 @@ func (m *Module) declineAction(w http.ResponseWriter, r *http.Request) error {
 
 func (m *Module) undoAction(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	if !m.ready(ctx) {
-		return core.ErrNotFound()
-	}
 	if err := m.undo(ctx, sessionUser(r), r.PathValue("id")); err != nil {
 		return m.decisionError(w, r, err)
 	}

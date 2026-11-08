@@ -255,9 +255,6 @@ func (m *Module) queueGeneration(ctx context.Context, req *mcpsdk.CallToolReques
 	if err != nil {
 		return nil, nil, err
 	}
-	if !m.ready(ctx) {
-		return nil, nil, errUnavailable
-	}
 	p, err := m.project(ctx, a, in.ProjectID, studio.ActGenerate)
 	if err != nil {
 		return nil, nil, err

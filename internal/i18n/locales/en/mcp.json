@@ -4,7 +4,6 @@
   "agents.allow": "Allow AI agents (MCP)",
   "agents.allow_save": "Save",
   "agents.off_notice": "AI agents are off. Your tokens are kept, but every agent request is refused until you turn this back on.",
-  "agents.unavailable": "Agent actions need a database update on this server. An admin must run the latest migration before agents can make changes or ask for approval.",
   "agents.connect.title": "Connect an assistant",
   "agents.connect.hint": "Works with Claude, ChatGPT, Gemini and local agents. Desktop apps can use the stdio bridge.",
   "agents.create": "Create token",

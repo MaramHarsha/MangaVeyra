@@ -39,9 +39,6 @@ func (m *Module) requestHuman(ctx context.Context, req *mcpsdk.CallToolRequest, 
 	if err != nil {
 		return nil, nil, err
 	}
-	if !m.ready(ctx) {
-		return nil, nil, errUnavailable
-	}
 	action := strings.TrimSpace(in.Action)
 	if !isHumanAction(action) {
 		return nil, nil, errors.New("action must be publish, schedule, delete_page, delete_project, share, change_role or unlock; anything else you can do with your own tools")

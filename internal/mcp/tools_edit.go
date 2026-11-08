@@ -182,9 +182,6 @@ func (m *Module) editScript(ctx context.Context, req *mcpsdk.CallToolRequest, in
 	if err != nil {
 		return nil, nil, err
 	}
-	if !m.ready(ctx) {
-		return nil, nil, errUnavailable
-	}
 	p, err := m.project(ctx, a, in.ProjectID, studio.ActEditScript)
 	if err != nil {
 		return nil, nil, err
@@ -356,9 +353,6 @@ func (m *Module) createCharacter(ctx context.Context, req *mcpsdk.CallToolReques
 	if err != nil {
 		return nil, nil, err
 	}
-	if !m.ready(ctx) {
-		return nil, nil, errUnavailable
-	}
 	p, err := m.project(ctx, a, in.ProjectID, studio.ActEditScript)
 	if err != nil {
 		return nil, nil, err
@@ -426,9 +420,6 @@ func (m *Module) editCharacter(ctx context.Context, req *mcpsdk.CallToolRequest,
 	a, err := m.agentFor(ctx, req, scopeRead, scopeWrite)
 	if err != nil {
 		return nil, nil, err
-	}
-	if !m.ready(ctx) {
-		return nil, nil, errUnavailable
 	}
 	p, err := m.project(ctx, a, in.ProjectID, studio.ActEditScript)
 	if err != nil {

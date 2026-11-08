@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
@@ -30,7 +29,6 @@ type Module struct {
 	// remote route without a network call.
 	quote func(ctx context.Context, a *agent, req genRequest) (quoteResult, error)
 
-	tableOK  atomic.Bool
 	servers  sync.Map // scope set → *mcpsdk.Server
 	requests *core.Limiter
 	writes   *core.Limiter

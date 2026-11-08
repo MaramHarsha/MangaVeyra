@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"strings"
 	"time"
 
@@ -49,11 +48,6 @@ var humanActions = []string{reqPublish, reqSchedule, reqDeletePage, reqDeletePro
 
 // maxPendingPerToken bounds how many requests one token can leave waiting.
 const maxPendingPerToken = 20
-
-// errUnavailable is returned while the agent_actions table is missing
-// (migration 0700 not applied yet): agent writes are refused rather than left
-// unlabelled and impossible to undo.
-var errUnavailable = errors.New("agent actions are not available on this server yet: an admin must apply the database migration that adds them")
 
 // genRequest is a generation request exactly as an agent asked for it. A
 // pending request stores it so a person approves precisely this work, on the
@@ -126,21 +120,6 @@ type newAction struct {
 	Undo                                  any
 	JobID                                 string
 	Estimate                              jobs.Cost
-}
-
-// ready reports whether the agent_actions table exists. A positive answer is
-// cached; the probe runs outside any transaction so a missing table cannot
-// abort one on PostgreSQL.
-func (m *Module) ready(ctx context.Context) bool {
-	if m.tableOK.Load() {
-		return true
-	}
-	var n int
-	if m.d.DB.Get(ctx, &n, `SELECT COUNT(*) FROM agent_actions WHERE 1 = 0`) != nil {
-		return false
-	}
-	m.tableOK.Store(true)
-	return true
 }
 
 func (m *Module) insertAction(ctx context.Context, q db.Querier, in newAction) (actionRow, error) {
