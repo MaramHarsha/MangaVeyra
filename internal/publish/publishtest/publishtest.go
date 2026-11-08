@@ -106,6 +106,8 @@ func In(d time.Duration) *time.Time { t := db.Now().Add(d); return &t }
 
 // SeriesSpec describes a series. Zero fields take the documented defaults.
 type SeriesSpec struct {
+	// ID overrides the generated series ID (a db.NewID value), e.g. to test ordering.
+	ID string
 	// Owner must be able to create projects (creator or admin); nil creates a creator.
 	Owner *auth.User
 	// Title defaults to "Glass Orchard <n>"; Slug to a unique slug of the title.
@@ -190,7 +192,10 @@ func (f *Fixture) Series(spec SeriesSpec) Series {
 	if err != nil {
 		f.t.Fatalf("publishtest: create project: %v", err)
 	}
-	out := Series{ID: db.NewID(), Slug: spec.Slug, ProjectID: project.ID, Title: spec.Title,
+	if spec.ID == "" {
+		spec.ID = db.NewID()
+	}
+	out := Series{ID: spec.ID, Slug: spec.Slug, ProjectID: project.ID, Title: spec.Title,
 		OriginalLang: spec.OriginalLang, Owner: spec.Owner, PublishedAt: publishedAt}
 	if spec.Cover {
 		out.CoverAssetID = f.png(project.ID, spec.Owner.ID, "series_cover", 90, 120, 0).ID
