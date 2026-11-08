@@ -1052,7 +1052,6 @@ func errChildJob(parentID string) error {
 	return e
 }
 
-
 // errStateChanged means a job changed state between reading and writing it.
 var errStateChanged = errors.New("jobs: state changed concurrently")
 
