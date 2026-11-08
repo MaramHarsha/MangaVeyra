@@ -148,10 +148,10 @@ func TestAnalyticsPage(t *testing.T) {
 			"Avg. time / chapter", "Weekly reads", "Where readers stop · ch. 1", ">p. 10<", "Biggest drop at p.",
 			`name="series"`, "Low Tide Radio", `aria-current="page"`, "/studio/analytics")
 		mustNotContain(t, body, "Revenue", "Earnings", "revenue", "earnings")
-		// Without ?series the newest series is shown; with an unknown chapter
-		// the page falls back to all chapters.
+		// Without ?series the most read series is shown (not the newer Low
+		// Tide Radio); an unknown chapter falls back to all chapters.
 		if resp := oc.Get("/studio/analytics?chapter=99"); resp.StatusCode != http.StatusOK ||
-			!strings.Contains(string(resp.Body), "Analytics · Low Tide Radio") {
+			!strings.Contains(string(resp.Body), "Analytics · Tidebreak Courier") {
 			t.Errorf("default series: %d", resp.StatusCode)
 		}
 		if resp := oc.Get("/studio/analytics?series=" + other.ID); !strings.Contains(string(resp.Body), "No reads yet") {

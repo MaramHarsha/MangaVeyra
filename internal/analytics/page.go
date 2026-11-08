@@ -79,9 +79,14 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request) error {
 	}
 	opts := web.PageOpts{Title: i18n.T(ctx, "analytics.title"), Nav: layout.NavAnalytics, Tab: layout.TabHome}
 	want := strings.TrimSpace(r.URL.Query().Get("series"))
+	if want == "" && len(list) > 0 {
+		if want, err = m.mostRead(ctx, list); err != nil {
+			return err
+		}
+	}
 	var cur *publish.Series
 	for i := range list {
-		if list[i].ID == want || (want == "" && i == 0) {
+		if list[i].ID == want {
 			cur = &list[i]
 			break
 		}
@@ -112,6 +117,27 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request) error {
 	view := buildView(ctx, list, *cur, chapters, chapter, rep)
 	opts.Title = view.Title
 	return m.ui.Page(w, r, http.StatusOK, opts, reportBody(view))
+}
+
+// mostRead picks the series F2 opens on without ?series=: the one with the
+// most reads in the report window (the newest on a tie or without reads).
+func (m *Module) mostRead(ctx context.Context, list []publish.Series) (string, error) {
+	ids := make([]string, len(list))
+	for i, s := range list {
+		ids[i] = s.ID
+	}
+	now := m.rec.now()
+	reads, err := SeriesReads(ctx, m.d.DB, ids, WeekStart(now).AddDate(0, 0, -7*(ReportWeeks-1)), now)
+	if err != nil {
+		return "", err
+	}
+	best := list[0].ID
+	for _, id := range ids {
+		if reads[id] > reads[best] {
+			best = id
+		}
+	}
+	return best, nil
 }
 
 // ---- view model ------------------------------------------------------------

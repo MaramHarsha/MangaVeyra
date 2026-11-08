@@ -5,7 +5,7 @@
  */
 .mv-analytics { display: flex; flex-direction: column; gap: 22px; flex: 1 1 auto; min-height: 0; }
 .mv-analytics__filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.mv-analytics__filters .mv-select-wrap { min-width: 180px; }
+.mv-analytics__filters .mv-select-wrap { min-width: 140px; max-width: 280px; }
 
 .mv-analytics__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .mv-analytics__stat {
@@ -41,12 +41,13 @@
 }
 .mv-analytics__weekly { gap: 14px; }
 .mv-analytics__box-title { font-size: var(--mv-fs-ui); font-weight: 700; }
+/* The plot keeps the artboard's 264 px bar height at the bottom of the card. */
 .mv-analytics__chart {
   display: block;
-  flex: 1 1 auto;
+  flex: none;
   width: 100%;
-  min-height: 264px;
-  max-height: 520px;
+  height: 264px;
+  margin-top: auto;
   border-bottom: 1px solid var(--mv-line);
 }
 .mv-analytics__chart rect { fill: var(--mv-surface-2); stroke: var(--mv-line); stroke-width: 1px; vector-effect: non-scaling-stroke; }
@@ -75,6 +76,6 @@
 
 @media (max-width: 768px) {
   .mv-analytics__value { font-size: 2rem; }
-  .mv-analytics__chart { min-height: 180px; }
+  .mv-analytics__chart { height: 180px; }
   .mv-analytics__filters, .mv-analytics__filters .mv-select-wrap { width: 100%; }
 }
