@@ -86,7 +86,8 @@ func TestJobFailureNotifiesOwner(t *testing.T) {
 	q.Claim(ctx, jobs.ClaimParams{Executor: jobs.ExecutorGo, Types: []string{"t"}})
 	q.Fail(ctx, j.ID, "", jobs.JobError{Code: "oom", Message: "PRIVATE_WORKER_PROMPT_MUST_NOT_LEAVE_JOB"}, jobs.Cost{})
 	list, err := ta.Deps.Notify.List(ctx, u.ID, notifyListAll())
-	if err != nil || len(list) != 1 || list[0].Kind != "job_failed" || list[0].Body != "t" || list[0].Link != "/queue?job="+j.ID {
+	if err != nil || len(list) != 1 || list[0].Kind != "job_failed" || !strings.HasPrefix(list[0].Body, "Job") ||
+		strings.Contains(list[0].Body, "PRIVATE") || list[0].Link != "/queue?job="+j.ID {
 		t.Fatalf("notifications: %+v %v", list, err)
 	}
 }
@@ -112,7 +113,8 @@ func TestJobNotificationUsesRecipientLocale(t *testing.T) {
 				t.Fatal(err)
 			}
 			notices, err := ta.Deps.Notify.List(ctx, u.ID, notifyListAll())
-			if err != nil || len(notices) != 1 || notices[0].Title != "生成に失敗しました" || notices[0].Body != j.Type {
+			if err != nil || len(notices) != 1 || notices[0].Title != "生成に失敗しました" || !strings.HasPrefix(notices[0].Body, "ジョブ") ||
+				strings.Contains(notices[0].Body, j.Type) || strings.Contains(notices[0].Body, "private") {
 				t.Fatalf("recipient locale or safe body missing: %+v %v", notices, err)
 			}
 		})

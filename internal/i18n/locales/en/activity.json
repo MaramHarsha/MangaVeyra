@@ -137,5 +137,6 @@
   "activity.model.lock_dinov2": "DINOv2",
   "activity.model.lock_ccip": "CCIP",
   "activity.model.lock_ccip_outfit": "CCIP + outfit",
-  "activity.model.lock_ccip_views": "CCIP + outfit views"
+  "activity.model.lock_ccip_views": "CCIP + outfit views",
+  "activity.notifications.read_category_done": "{category} notifications marked as read"
 }

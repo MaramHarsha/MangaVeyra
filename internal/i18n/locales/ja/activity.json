@@ -137,5 +137,6 @@
   "activity.model.lock_dinov2": "DINOv2",
   "activity.model.lock_ccip": "CCIP",
   "activity.model.lock_ccip_outfit": "CCIP + 衣装",
-  "activity.model.lock_ccip_views": "CCIP + 衣装ビュー"
+  "activity.model.lock_ccip_views": "CCIP + 衣装ビュー",
+  "activity.notifications.read_category_done": "{category}の通知を既読にしました"
 }

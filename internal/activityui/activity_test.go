@@ -176,11 +176,26 @@ func TestNotificationCategoriesExplicitReadAndSafeLinks(t *testing.T) {
 				t.Fatalf("unsafe or unbuilt notification link %q -> %d %q", link, got.StatusCode, got.Header.Get("Location"))
 			}
 		}
-		if got := form(client, "/notifications/read", url.Values{"category": {"reading"}}); got.StatusCode != http.StatusSeeOther {
+		unread, _ := ta.Deps.Notify.UnreadCount(ctx, owner.ID)
+		if got := form(client, "/notifications/read", url.Values{"category": {"reading"}}); got.StatusCode != http.StatusSeeOther ||
+			got.Header.Get("Location") != "/notifications?category=reading" {
 			t.Fatal("read all failed")
 		}
+		if n, _ := ta.Deps.Notify.UnreadCount(ctx, owner.ID); n != unread-1 {
+			t.Fatalf("mark all on Reading read %d other notifications", unread-1-n)
+		}
+		readAll := regexp.MustCompile(`<button[^>]*type="submit"[^>]*>\s*Mark all read`)
+		if b := readAll.Find(client.Get("/notifications?category=reading").Body); b == nil || !strings.Contains(string(b), "disabled") {
+			t.Fatal("Mark all read is enabled on a category with nothing unread")
+		}
+		if b := readAll.Find(client.Get("/notifications?category=system").Body); b == nil || strings.Contains(string(b), "disabled") {
+			t.Fatal("Mark all read is disabled on a category with unread notifications")
+		}
+		if got := form(client, "/notifications/read", nil); got.StatusCode != http.StatusSeeOther {
+			t.Fatal("read all categories failed")
+		}
 		if n, _ := ta.Deps.Notify.UnreadCount(ctx, owner.ID); n != 0 {
-			t.Fatal("mark all was incorrectly limited to the selected category")
+			t.Fatal("mark all on All left unread notifications")
 		}
 		if n, _ := ta.Deps.Notify.UnreadCount(ctx, other.ID); n != 1 {
 			t.Fatal("read all modified another member")

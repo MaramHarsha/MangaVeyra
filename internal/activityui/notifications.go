@@ -42,6 +42,20 @@ func category(s string) string {
 	return "all"
 }
 
+// categoryKinds selects one G4 category: the kinds it includes (any when
+// empty) and the kinds it excludes (System is everything else).
+func categoryKinds(cat string) (kinds, notKinds []string) {
+	switch cat {
+	case "studio":
+		return studioKinds, nil
+	case "reading":
+		return readingKinds, nil
+	case "system":
+		return nil, append(append([]string{}, studioKinds...), readingKinds...)
+	}
+	return nil, nil
+}
+
 func notificationsURL(cat, cursor string) string {
 	q := url.Values{}
 	if cat != "all" {
@@ -63,14 +77,7 @@ func (m *Module) notificationsPage(w http.ResponseWriter, r *http.Request) error
 		return core.ErrBadRequest(i18n.T(ctx, "activity.error.cursor"))
 	}
 	o := notify.ListOptions{Before: cursor, Limit: listLimit + 1}
-	switch cat {
-	case "studio":
-		o.Kinds = studioKinds
-	case "reading":
-		o.Kinds = readingKinds
-	case "system":
-		o.NotKinds = append(append([]string{}, studioKinds...), readingKinds...)
-	}
+	o.Kinds, o.NotKinds = categoryKinds(cat)
 	uid := core.UserFrom(ctx).ID
 	items, err := m.d.Notify.List(ctx, uid, o)
 	if err != nil {
@@ -81,16 +88,14 @@ func (m *Module) notificationsPage(w http.ResponseWriter, r *http.Request) error
 		items = items[:listLimit]
 		v.NextURL = notificationsURL(cat, items[len(items)-1].ID)
 	}
-	v.Unread, err = m.d.Notify.UnreadCount(ctx, uid)
+	// Mark all read covers the selected category, so it is enabled only when
+	// that category has unread notifications.
+	v.Unread, err = m.d.Notify.UnreadCountKinds(ctx, uid, o.Kinds, o.NotKinds)
 	if err != nil {
 		return err
 	}
 	for _, n := range items {
-		if n.Kind == notify.KindJobFailed {
-			// Older records may contain raw worker errors from before G4 existed.
-			// Details are reviewed through the queue's safe error-code mapping.
-			n.Body = i18n.T(ctx, "activity.error.job")
-		}
+		n.Body = notificationBody(ctx, n)
 		icon, tone := notificationIcon(n.Kind)
 		action := i18n.T(ctx, "activity.notifications.mark_read")
 		if safeNotificationLink(ctx, n.Link) != "" {
@@ -108,11 +113,17 @@ func (m *Module) readAll(w http.ResponseWriter, r *http.Request) error {
 	if err := parseForm(w, r); err != nil {
 		return core.ErrBadRequest(i18n.T(r.Context(), "activity.error.form"))
 	}
-	if _, err := m.d.Notify.MarkRead(r.Context(), core.UserFrom(r.Context()).ID, nil); err != nil {
+	cat := category(r.PostForm.Get("category"))
+	kinds, notKinds := categoryKinds(cat)
+	if _, err := m.d.Notify.MarkKindsRead(r.Context(), core.UserFrom(r.Context()).ID, kinds, notKinds); err != nil {
 		return err
 	}
-	web.Flash(w, r, "success", i18n.T(r.Context(), "activity.notifications.read_all_done"), "")
-	core.Redirect(w, r, notificationsURL(category(r.PostForm.Get("category")), ""))
+	done := i18n.T(r.Context(), "activity.notifications.read_all_done")
+	if cat != "all" {
+		done = i18n.T(r.Context(), "activity.notifications.read_category_done", "category", i18n.T(r.Context(), "activity.notifications."+cat))
+	}
+	web.Flash(w, r, "success", done, "")
+	core.Redirect(w, r, notificationsURL(cat, ""))
 	return nil
 }
 
