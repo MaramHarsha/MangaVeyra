@@ -126,3 +126,25 @@ server will not hear about updates until the admin turns checks on; the Server t
   ComfyUI and HTTP connections turn on, route and dispatch only while their last test passed for their current endpoint,
   key and description; local text connections turn on only after a passed test. A queued job whose route now costs more
   than its approved estimate fails as `approval_required` before any reservation.
+- **Maintenance ownership (§3).** An update or a restore holds the server while it runs: maintenance mode on and owned by
+  it (G5's toggle answers "An update is running" or "A restore is running" and changes nothing), the backup lease held,
+  and no new job claims for the Go executor or workers (`jobs.Queue` claim gates). The previous setting is put back when
+  it ends; a failed rollback restore leaves maintenance on.
+- **Backups (§4), after review.** A restore keeps the `update.*` settings and the `updates` table and merges
+  `audit_log`, `spend_ledger` and `spend_reservations` (the archive's rows plus every live row, live winning), so audit
+  history and spend are never rolled back. Backups and restores act only on objects under `projects/`, `assets/`,
+  `jobs/`, `imports/` or referenced by the database; a shared store's other keys are never archived, overwritten or
+  deleted. Archives registered from elsewhere are never pruned, and deleting a record removes only a file the module
+  wrote. Archives whose table of contents exceeds 400,000 entries or 48 MiB are refused before parsing. The member export
+  reads one snapshot without the server-wide lease: one per member at a time, a new one at most hourly (the newest is
+  served again in between), only the newest kept, and only media of the member's own projects. Scheduled backups wait
+  up to 2 h for running work.
+- **Import (§5), after review.** Zips are refused from their end record when they declare more than 4096 entries or a
+  larger table of contents; PDFs render page by page and stop at the first page over a limit; an oversized image in a
+  folder is skipped with a note; temporary files older than a day are removed.
+- **Updates (§6), after review.** The install holds the server from before the pre-update backup until it ends: it waits
+  up to 30 min for running backup work (logged), and its rollback restore runs under the hold, so no backup, export or
+  maintenance change can stand in its way; the restarted server ends the hold. The 03:00 patch install waits while a
+  backup runs or that hour's scheduled backup has not started. Downloads must send headers within 30 s, never pause over
+  60 s and finish within 2 min plus the signed size at 64 KiB/s; a stalled download restores like any failure. Manifest
+  versions are compared parsed (v1.0.2 = 1.0.2+build.7), and an update lease is taken over only while still expired.
