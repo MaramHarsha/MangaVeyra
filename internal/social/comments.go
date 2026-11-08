@@ -221,7 +221,7 @@ type NewComment struct {
 }
 
 const commentCols = `c.id, c.series_id, c.target_kind, c.target_id, c.anchor, c.parent_id, c.body, c.author_id,
-	c.created_at, c.edited_at, c.resolved_at, u.username AS author_username, u.display_name AS author_display_name`
+	c.created_at, c.edited_at, c.resolved_at, c.resolved_by, u.username AS author_username, u.display_name AS author_display_name`
 
 const commentFrom = ` FROM comments c LEFT JOIN users u ON u.id = c.author_id`
 
@@ -237,6 +237,7 @@ type commentRow struct {
 	CreatedAt         time.Time      `db:"created_at"`
 	EditedAt          sql.NullTime   `db:"edited_at"`
 	ResolvedAt        sql.NullTime   `db:"resolved_at"`
+	ResolvedBy        sql.NullString `db:"resolved_by"`
 	AuthorUsername    sql.NullString `db:"author_username"`
 	AuthorDisplayName sql.NullString `db:"author_display_name"`
 }
@@ -259,9 +260,16 @@ func (r commentRow) comment(viewerID, ownerID string) Comment {
 	signedIn := viewerID != ""
 	mine := signedIn && r.AuthorID.Valid && r.AuthorID.String == viewerID
 	c.CanEdit, c.CanDelete = mine, mine
-	c.CanHide = signedIn && viewerID == ownerID
+	// A comment an admin hid stays hidden: the series owner cannot show it again.
+	c.CanHide = signedIn && viewerID == ownerID && !r.hiddenByOther(ownerID)
 	c.CanReport = signedIn && !mine && !c.Hidden
 	return c
+}
+
+// hiddenByOther reports whether someone other than the series owner (an
+// admin, ADR 0013 §1) hid the comment.
+func (r commentRow) hiddenByOther(ownerID string) bool {
+	return r.ResolvedAt.Valid && r.ResolvedBy.Valid && r.ResolvedBy.String != ownerID
 }
 
 // visibleClause keeps deleted comments out and hidden ones visible only to
@@ -294,6 +302,9 @@ func (s *service) createComment(ctx context.Context, v publish.Viewer, in NewCom
 	body, err := cleanBody(in.Body)
 	if err != nil {
 		return Comment{}, err
+	}
+	if s.blocked(ctx, body) {
+		return Comment{}, invalid("body", "social.error.blocked")
 	}
 	targetID := t.series.ID
 	if t.pub != nil {
@@ -457,6 +468,9 @@ func (s *service) editComment(ctx context.Context, v publish.Viewer, id, body st
 	if err != nil {
 		return Comment{}, err
 	}
+	if s.blocked(ctx, clean) {
+		return Comment{}, invalid("body", "social.error.blocked")
+	}
 	now := s.now()
 	if _, err := s.db.Exec(ctx, `UPDATE comments SET body = ?, edited_at = ?, updated_at = ? WHERE id = ? AND author_id = ?
 		AND deleted_at IS NULL`, clean, now, now, row.ID, v.UserID); err != nil {
@@ -493,7 +507,7 @@ func (s *service) setHidden(ctx context.Context, v publish.Viewer, id string, hi
 	if err != nil {
 		return Comment{}, err
 	}
-	if v.UserID == "" || v.UserID != t.ownerID() {
+	if v.UserID == "" || v.UserID != t.ownerID() || row.hiddenByOther(t.ownerID()) {
 		return Comment{}, ErrForbidden
 	}
 	now := s.now()

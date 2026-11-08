@@ -51,6 +51,9 @@ type seriesView struct {
 	Support             []supportLink
 	Comments            commentsBox
 	AgeGate             *ageGate
+	// Moderation is shown to project members when readers outside the
+	// project cannot see the series or one of its chapters (ADR 0013 §1–§2).
+	Moderation string
 }
 
 type langLink struct {
@@ -222,6 +225,7 @@ func (m *Module) buildSeriesView(ctx context.Context, r *http.Request, s publish
 		return v, accessErr(err)
 	}
 	v.Chapters = len(pubs)
+	v.Moderation = m.moderationNotice(ctx, s, pubs)
 	now := m.svc.now()
 	if len(pubs) > 0 {
 		first := pubs[0]

@@ -32,6 +32,11 @@ templ SeriesPage(v seriesView) {
 					@followControl(v)
 				</div>
 				<div class="mv-series__main">
+					if v.Moderation != "" {
+						@ui.Notice(ui.ToneWarning, "eye-off") {
+							<p>{ v.Moderation }</p>
+						}
+					}
 					<h1 class="mv-series__title">{ v.Series.Title }</h1>
 					<p class="mv-series__by">
 						if len(v.By) > 0 {
