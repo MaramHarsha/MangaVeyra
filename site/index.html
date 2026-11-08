@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#070A12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#E8EEFF" media="(prefers-color-scheme: light)">
+<title>MangaVeyra · open-source, self-hosted AI manga studio</title>
+<meta name="description" content="MangaVeyra is an open-source, self-hosted AI manga studio in pre-alpha. Write a premise, keep characters on-model, fix exactly the part you want and export the chapter. One Go binary, your own models, no telemetry.">
+<link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/brand/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/brand/favicon-180.png">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body id="top">
+<a class="mv-skip-link" href="#main">Skip to content</a>
+
+<header class="lp-top">
+  <a class="lp-logo" href="#top">
+    <img class="lp-logo--dark" src="assets/brand/lockup-color-on-dark.svg" alt="MangaVeyra" width="114" height="26">
+    <img class="lp-logo--light" src="assets/brand/lockup-color-on-light.svg" alt="MangaVeyra" width="114" height="26">
+  </a>
+  <nav class="lp-nav" aria-label="Sections">
+    <a href="#how">How it works</a>
+    <a href="#features">Features</a>
+    <a href="#showcase">Showcase</a>
+    <a href="#self-host">Self-host</a>
+    <a href="https://github.com/MaramHarsha/MangaVeyra/tree/main/docs">Docs</a>
+  </nav>
+  <div class="lp-top__actions">
+    <a class="mv-btn mv-btn--ghost lp-top__github" href="https://github.com/MaramHarsha/MangaVeyra"><i class="ti ti-brand-github" aria-hidden="true"></i><span>GitHub</span></a>
+    <a class="mv-btn mv-btn--primary" href="https://github.com/MaramHarsha/MangaVeyra/blob/main/docs/install/README.md#try-the-demo-project">Try the demo</a>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="lp-hero" aria-labelledby="hero-title">
+    <div class="lp-hero__speed" aria-hidden="true"></div>
+
+    <div class="lp-hero__copy">
+      <p class="lp-hero__badges">
+        <span class="mv-badge"><i class="ti ti-brand-open-source" aria-hidden="true"></i>Open source · AGPL-3.0</span>
+        <span class="mv-badge"><i class="ti ti-server" aria-hidden="true"></i>Self-hosted</span>
+        <span class="mv-badge mv-badge--warning"><i class="ti ti-alert-triangle" aria-hidden="true"></i>Pre-alpha</span>
+      </p>
+      <h1 class="lp-hero__title" id="hero-title">Your story.<br><span class="lp-outline">Every</span> <span class="lp-accent">panel.</span></h1>
+      <p class="lp-hero__lead">Write a premise. MangaVeyra drafts the script, keeps your characters on-model, lays out the pages and letters them. Then you fix exactly the part you want and publish.</p>
+      <div class="lp-hero__ctas">
+        <a class="mv-btn mv-btn--lg mv-btn--primary" href="https://github.com/MaramHarsha/MangaVeyra/blob/main/docs/install/README.md#try-the-demo-project"><i class="ti ti-player-play" aria-hidden="true"></i>Try the demo</a>
+        <a class="mv-btn mv-btn--lg mv-btn--secondary" href="https://github.com/MaramHarsha/MangaVeyra/blob/main/docs/install/README.md"><i class="ti ti-terminal-2" aria-hidden="true"></i>Install on your server</a>
+      </div>
+      <code class="lp-chip">$ docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
+<span class="lp-chip__note"># app + database, add a GPU worker later</span></code>
+    </div>
+
+    <figure class="lp-hero__art">
+      <div class="lp-sample" role="img" aria-label="Sample page 7 of Tidebreak Courier: five placeholder panels, panel 7.3 selected, with the speech bubble “Then I’ll take the roof!”">
+        <svg width="360" height="509" viewBox="0 0 360 509" aria-hidden="true" focusable="false">
+          <defs>
+            <pattern id="lp-dots" width="6" height="6" patternUnits="userSpaceOnUse">
+              <circle cx="3" cy="3" r="1.05" fill="#070A12" fill-opacity=".45"/>
+            </pattern>
+          </defs>
+          <rect width="360" height="509" fill="#E8EEFF"/>
+          <g class="lp-sample__panel">
+            <polygon points="22.0,22.0 338.0,22.0 338.0,156.8 22.0,175.5" fill="#DCE3F3"/>
+            <polygon points="22.0,22.0 338.0,22.0 338.0,156.8 22.0,175.5" fill="url(#lp-dots)"/>
+            <polygon points="22.0,22.0 338.0,22.0 338.0,156.8 22.0,175.5" fill="none" stroke="#070A12" stroke-width="1.5"/>
+            <text x="35.48" y="36.6" font-family="IBM Plex Mono, monospace" font-size="8" fill="#3E4A66">7.1 · SALT CITY AT DUSK · WIDE</text>
+          </g>
+          <g class="lp-sample__panel">
+            <polygon points="186.3,187.1 338.0,168.5 338.0,310.3 186.3,310.3" fill="#DCE3F3"/>
+            <polygon points="186.3,187.1 338.0,168.5 338.0,310.3 186.3,310.3" fill="url(#lp-dots)"/>
+            <polygon points="186.3,187.1 338.0,168.5 338.0,310.3 186.3,310.3" fill="none" stroke="#070A12" stroke-width="1.5"/>
+            <text x="199.8" y="287.7" font-family="IBM Plex Mono, monospace" font-size="8" fill="#3E4A66">7.2 · KAITO · CLOSE</text>
+          </g>
+          <g class="lp-sample__panel">
+            <polygon points="22.0,189.4 176.8,187.5 176.8,310.3 22.0,310.3" fill="#DCE3F3"/>
+            <polygon points="22.0,189.4 176.8,187.5 176.8,310.3 22.0,310.3" fill="url(#lp-dots)"/>
+            <polygon points="22.0,189.4 176.8,187.5 176.8,310.3 22.0,310.3" fill="none" stroke="#070A12" stroke-width="1.5"/>
+            <polygon points="22.0,189.4 176.8,187.5 176.8,310.3 22.0,310.3" fill="none" stroke="#3D8BFF" stroke-width="3"/>
+            <text x="35.48" y="287.7" font-family="IBM Plex Mono, monospace" font-size="8" fill="#3E4A66">7.3 · RIN VAULTS · LOW</text>
+          </g>
+          <g class="lp-sample__panel">
+            <polygon points="22.0,324.3 211.6,324.3 186.3,487.0 22.0,487.0" fill="#DCE3F3"/>
+            <polygon points="22.0,324.3 211.6,324.3 186.3,487.0 22.0,487.0" fill="url(#lp-dots)"/>
+            <polygon points="22.0,324.3 211.6,324.3 186.3,487.0 22.0,487.0" fill="none" stroke="#070A12" stroke-width="1.5"/>
+            <text x="35.48" y="464.4" font-family="IBM Plex Mono, monospace" font-size="8" fill="#3E4A66">7.4 · THE LIGHTHOUSE</text>
+          </g>
+          <g class="lp-sample__panel">
+            <polygon points="221.1,324.3 338.0,324.3 338.0,487.0 195.8,487.0" fill="#DCE3F3"/>
+            <polygon points="221.1,324.3 338.0,324.3 338.0,487.0 195.8,487.0" fill="url(#lp-dots)"/>
+            <polygon points="221.1,324.3 338.0,324.3 338.0,487.0 195.8,487.0" fill="none" stroke="#070A12" stroke-width="1.5"/>
+            <text x="215.6" y="464.4" font-family="IBM Plex Mono, monospace" font-size="8" fill="#3E4A66">7.5 · KAITO REACTS</text>
+          </g>
+        </svg>
+        <p class="lp-bubble lp-sample__bubble" aria-hidden="true">Then I’ll take the roof!</p>
+        <span class="lp-sample__slash" aria-hidden="true"></span>
+      </div>
+      <span class="lp-sfx" aria-hidden="true">WHOOSH</span>
+    </figure>
+  </section>
+
+  <section class="lp-section lp-section--rule" id="how" aria-labelledby="how-title">
+    <h2 class="lp-h2" id="how-title">How it works</h2>
+    <ol class="lp-steps" role="list">
+      <li class="lp-step lp-step--1">
+        <div class="lp-tone" aria-hidden="true"><span class="lp-tag">Panel 1</span></div>
+        <div class="lp-step__head">
+          <span class="lp-step__num" aria-hidden="true">01</span>
+          <h3 class="lp-step__title">Write the premise</h3>
+        </div>
+        <p class="lp-bubble lp-step__bubble">A courier who can’t read maps. A city built on salt.</p>
+      </li>
+      <li class="lp-step lp-step--2">
+        <div class="lp-tone" aria-hidden="true"><span class="lp-tag">Panel 2</span></div>
+        <div class="lp-step__head">
+          <span class="lp-step__num" aria-hidden="true">02</span>
+          <h3 class="lp-step__title">Generate &amp; fix</h3>
+        </div>
+        <p class="lp-bubble lp-step__bubble">Only her hand changes. Nothing else moves.</p>
+      </li>
+      <li class="lp-step lp-step--3">
+        <div class="lp-tone" aria-hidden="true"><span class="lp-tag">Panel 3</span></div>
+        <div class="lp-step__head">
+          <span class="lp-step__num" aria-hidden="true">03</span>
+          <h3 class="lp-step__title">Publish or export</h3>
+          <span class="mv-soon">Publishing soon</span>
+        </div>
+        <p class="lp-bubble lp-step__bubble">Chapter 8 is live!</p>
+      </li>
+    </ol>
+  </section>
+
+  <section class="lp-section" id="features" aria-labelledby="features-title">
+    <div class="lp-section__head">
+      <h2 class="lp-h2" id="features-title">What only<br>MangaVeyra does</h2>
+      <p class="lp-section__aside">Every panel is structured data, not a flat picture. That is what makes these possible.</p>
+    </div>
+    <ul class="lp-features" role="list">
+      <li class="lp-feature lp-feature--wide">
+        <span class="lp-feature__speed" aria-hidden="true"></span>
+        <p class="lp-feature__kicker">Consistency</p>
+        <h3 class="lp-feature__title">Character Lock</h3>
+        <p class="lp-feature__body">Train a character once. Every panel gets a score; drifted faces are flagged and fixed by regenerating just that character.</p>
+      </li>
+      <li class="lp-feature">
+        <p class="lp-feature__kicker">Editing</p>
+        <h3 class="lp-feature__title">Fix one part</h3>
+        <p class="lp-feature__body">Change a hand, a sign or one panel. Everything outside your selection stays pixel-for-pixel the same.</p>
+      </li>
+      <li class="lp-feature">
+        <p class="lp-feature__kicker">Models</p>
+        <h3 class="lp-feature__title">Auto-routing</h3>
+        <p class="lp-feature__body">Each job goes to the best model you have: local GPU, OpenRouter, fal or a direct key. The reason is always shown.</p>
+      </li>
+      <li class="lp-feature">
+        <p class="lp-feature__kicker">Layers</p>
+        <h3 class="lp-feature__title">Layered panels</h3>
+        <p class="lp-feature__body">Background, each character, effects and lettering regenerate separately.</p>
+      </li>
+      <li class="lp-feature">
+        <p class="lp-feature__kicker">Reading <span class="mv-soon">Soon</span></p>
+        <h3 class="lp-feature__title">Panel-aware reader</h3>
+        <p class="lp-feature__body">Guided panel-by-panel view on phones, with alt-text and read-aloud written from the script.</p>
+      </li>
+    </ul>
+  </section>
+
+  <section class="lp-section lp-section--rule lp-section--showcase" id="showcase" aria-labelledby="showcase-title">
+    <div class="lp-section__head">
+      <h2 class="lp-h2" id="showcase-title">Made with MangaVeyra</h2>
+      <p class="lp-section__aside">Original sample titles. Covers are placeholders until the first series are published.</p>
+    </div>
+    <ul class="lp-covers" role="list">
+      <li class="lp-cover">
+        <div class="lp-cover__art lp-tone"><span class="lp-tag">Placeholder cover</span></div>
+        <strong class="lp-cover__title">Lanterns of Oru</strong>
+        <span class="lp-cover__genre">Fantasy</span>
+      </li>
+      <li class="lp-cover">
+        <div class="lp-cover__art lp-tone"><span class="lp-tag">Placeholder cover</span></div>
+        <strong class="lp-cover__title">Tidebreak Courier</strong>
+        <span class="lp-cover__genre">Adventure</span>
+      </li>
+      <li class="lp-cover">
+        <div class="lp-cover__art lp-tone"><span class="lp-tag">Placeholder cover</span></div>
+        <strong class="lp-cover__title">Glass Orchard</strong>
+        <span class="lp-cover__genre">Mystery</span>
+      </li>
+      <li class="lp-cover">
+        <div class="lp-cover__art lp-tone"><span class="lp-tag">Placeholder cover</span></div>
+        <strong class="lp-cover__title">Ninth Bell</strong>
+        <span class="lp-cover__genre">Horror</span>
+      </li>
+      <li class="lp-cover">
+        <div class="lp-cover__art lp-tone"><span class="lp-tag">Placeholder cover</span></div>
+        <strong class="lp-cover__title">Low Tide Radio</strong>
+        <span class="lp-cover__genre">Slice of life</span>
+      </li>
+      <li class="lp-cover">
+        <div class="lp-cover__art lp-tone"><span class="lp-tag">Placeholder cover</span></div>
+        <strong class="lp-cover__title">Paper Crows</strong>
+        <span class="lp-cover__genre">Action</span>
+      </li>
+    </ul>
+  </section>
+
+  <section class="lp-cta" id="self-host" aria-labelledby="cta-title">
+    <div class="lp-cta__tone" aria-hidden="true"></div>
+    <div class="lp-cta__copy">
+      <p class="lp-cta__kicker">Free · open source · yours</p>
+      <h2 class="lp-cta__title" id="cta-title">Run it on<br>your own GPU</h2>
+      <p class="lp-cta__lead">One Go binary and a database. Bring your own models and keys, or stay fully local. No account with us, no usage tracking, no paywall.</p>
+      <div class="lp-cta__actions">
+        <a class="lp-cta__btn lp-cta__btn--outline" href="https://github.com/MaramHarsha/MangaVeyra/blob/main/docs/install/README.md">Read the install guide</a>
+        <a class="lp-cta__btn" href="https://github.com/MaramHarsha/MangaVeyra"><i class="ti ti-brand-github" aria-hidden="true"></i>View on GitHub</a>
+      </div>
+    </div>
+    <pre class="lp-term" aria-label="Install with Docker Compose"><code>$ git clone https://github.com/MaramHarsha/MangaVeyra.git
+$ cd MangaVeyra &amp;&amp; cp .env.example .env
+$ docker compose --env-file .env \
+    -f deploy/docker-compose.yml up -d --build
+<span class="lp-term__out">✓ app      :8080</span>
+<span class="lp-term__out">✓ postgres ready</span>
+<span class="lp-term__ok">→ open http://localhost:8080/setup</span></code></pre>
+  </section>
+
+  <section class="lp-faq" aria-labelledby="faq-title">
+    <h2 class="lp-h2" id="faq-title">Questions</h2>
+    <div class="lp-faq__list">
+      <details class="lp-faq__item" open>
+        <summary>Is it really free?<i class="ti" aria-hidden="true"></i></summary>
+        <p class="lp-faq__answer">Yes. The open-source edition is the full studio, reader and community under AGPL-3.0. A hosted option may come later through World; it will not remove anything from the free one.</p>
+        <p class="lp-faq__answer">MangaVeyra is pre-alpha: the studio and exports work today, and publishing, the reader and the community are being built now.</p>
+      </details>
+      <details class="lp-faq__item">
+        <summary>Do I need a GPU?<i class="ti" aria-hidden="true"></i></summary>
+        <p class="lp-faq__answer">No. Every flow works without one: the built-in placeholder model makes labelled placeholder art, and you can connect OpenAI, OpenRouter or fal with your own keys. A GPU worker is optional; it runs local image models and optional character training on your own hardware.</p>
+      </details>
+      <details class="lp-faq__item">
+        <summary>Which AI models does it support?<i class="ti" aria-hidden="true"></i></summary>
+        <p class="lp-faq__answer">For scripts: OpenAI, OpenRouter, or a local OpenAI-compatible server such as Ollama or LM Studio. For art: OpenAI GPT Image, OpenRouter and fal, or diffusers and ComfyUI models on your own GPU worker. Auto-routing picks a model for each job and shows why. Local only mode guarantees that no prompt or image leaves your server.</p>
+      </details>
+      <details class="lp-faq__item">
+        <summary>Who owns what I make?<i class="ti" aria-hidden="true"></i></summary>
+        <p class="lp-faq__answer">You do. Your projects live in your own database and storage, and MangaVeyra claims no rights over them: the AGPL-3.0 covers the software, not your stories. The licences of the models you connect still apply, and the licence guard can keep models without commercial permission off public series.</p>
+      </details>
+      <details class="lp-faq__item">
+        <summary>How are AI-made pages labelled for readers?<i class="ti" aria-hidden="true"></i></summary>
+        <p class="lp-faq__answer">Every chapter carries a label for each role, script, art and lettering: human, AI-assisted or AI. When publishing arrives (it is being built now), each published chapter keeps those labels, and readers see them on the series page and in the reader.</p>
+      </details>
+    </div>
+  </section>
+
+</main>
+
+<footer class="lp-foot">
+  <a class="lp-logo" href="#top">
+    <img class="lp-logo--dark" src="assets/brand/lockup-color-on-dark.svg" alt="MangaVeyra" width="97" height="22">
+    <img class="lp-logo--light" src="assets/brand/lockup-color-on-light.svg" alt="MangaVeyra" width="97" height="22">
+  </a>
+  <nav class="lp-foot__links" aria-label="Project">
+    <a href="https://github.com/MaramHarsha/MangaVeyra/tree/main/docs">Docs</a>
+    <a href="https://github.com/MaramHarsha/MangaVeyra">GitHub</a>
+    <span class="is-soon">Community <span class="mv-soon">Soon</span></span>
+    <a href="https://github.com/MaramHarsha/MangaVeyra/blob/main/LICENSE">Licence</a>
+    <a href="https://github.com/MaramHarsha/MangaVeyra/blob/main/README.md#privacy-and-security">Security</a>
+  </nav>
+  <p class="lp-foot__meta">AGPL-3.0 · made with Go</p>
+</footer>
+</body>
+</html>
