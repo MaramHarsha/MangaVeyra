@@ -617,3 +617,18 @@ The approved desktop artboards are followed at 1440 × 900; the mobile artboards
   Only an admin can install it on {host}; you don’t need to do anything."). The window uses `--mv-glow-status` and the
   backdrop `--mv-scrim`. G6 Maintenance shows the update's progress line ("Started 21:04 · step 3 of 5 · migrating
   database") while an update runs.
+- **G10 Backup & import.** Built to the desktop artboard (two cards and the dashed Export everything row; the sidebar
+  highlights Settings as drawn). Last backup reads the newest archive this server wrote ("Never" before the first),
+  Schedule reads "Daily · keep N", "Weekly · keep N" or "Off", and Destination shows the backup folder; both open a
+  "Backup schedule" dialog (frequency, day, time in the admin's time zone, keep 1–365, a destination folder that must
+  exist and be writable). Restore… opens "Restore a backup" (a warning notice, archives as radio rows, "Type restore to
+  confirm", a danger Restore button, "Or upload an archive"). The Backups card adds a progress line while a backup,
+  export or restore runs (polled; Refresh without JavaScript) and an "Archives" list (kind · time, size, download, delete
+  with a confirming dialog). Notices above the grid report a restore, keys sealed with another master key, a refused
+  archive and a failed backup. The import drop zone is the kit's file picker with an Import button; without pdftoppm the
+  prompt reads "Drop CBZ, CBR or image folders" with a "PDF" Soon tag. Queue rows read "Queued · N images", "Reading ·
+  N%", "Detecting panels & bubbles · N%", "Creating pages · N%", "Done · N pages" with Open, or "Failed · {reason}" with
+  Retry. The Export everything row adds a quiet button and, once an export exists, "Download · {time} · {size}".
+- **G1 Settings · Data & export.** Export everything downloads the member's own archive (their account without
+  credentials, projects, characters, published works, comments and reading data); Last export shows "{date} · {size}"
+  as a link to the newest export, kept for 7 days, or Never.

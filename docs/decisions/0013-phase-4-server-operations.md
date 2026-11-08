@@ -91,3 +91,22 @@ server will not hear about updates until the admin turns checks on; the Server t
 - **Takedowns (§1)** are stored as module keys in `instance_settings` and enforced by `publish.Service`; `Series` and
   `Publication` carry `TakenDown` so project members see a notice. Collaboration approvals are internal comments with
   status `approved` and the approved page version in their anchor.
+- **Backups (§4) as built.** `pre_update` archives hold the database only, so they take well under a second on a
+  seeded server; scheduled, manual and export archives also hold media. Restore runs in **one** transaction for the
+  whole database (stronger than the per-group wording above): with the same schema it deletes and reloads every table;
+  with a different schema it drops the tables, migrates to the archive's version, loads, then runs the calling binary's
+  newer migrations — so the old binary restoring a pre-update archive ends exactly at the archive's schema and a later
+  update can migrate forward again. A restore keeps the `backups` records, the maintenance and `backup.*` settings and the
+  restoring admin's sessions, and cancels jobs that were unfinished in the archive so it never starts generation or
+  spend by itself. Schedules, the per-slot claim and the exclusive lease live under `backup.*` keys in
+  `instance_settings`. `mangaveyra backup restore` refuses while a server announced itself in the last 90 seconds.
+  Restore progress is held by the process running it (the jobs table is itself replaced). The member export is built in
+  the request and kept for 7 days.
+- **Import (§5) as built.** Up to 4096 entries, 256 pages (the chapter limit), 64 MB per entry and 2 GB in total;
+  encrypted entries are refused; the RAR dictionary is capped at 64 MB. A failed import keeps its upload and Retry
+  resumes from the last saved page. Detection runs only when an online worker offers it and local only mode is off.
+- **Updates (§6) as built.** Update checks and settings live under `update.*` keys; an exclusive `update.lock` lease
+  covers installs across processes. After the swap the server restarts in place when started by hand and exits with
+  status 75 under systemd (the shipped unit restarts on it). If the new binary fails to start after passing the
+  loopback health check, the record stays at "restarting" and `mangaveyra.prev` plus the backup (when kept) allow a manual
+  rollback.

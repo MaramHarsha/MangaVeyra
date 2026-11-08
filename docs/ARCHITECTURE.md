@@ -89,8 +89,10 @@ internal/
   xp/                    levels, XP events, E–S ranks, quests (can be hidden per user)
   export/                PNG, print-ready PDF (trim/bleed), EPUB fixed layout, CBZ, 9:16 video, credits page
   importer/              CBZ, CBR, PDF, image folders → projects (panel/bubble detection via worker, fallback whole page)
-  backup/                scheduled backups, restore, export-everything archive, per-user data export
-  update/                release check, signed download verify, backup → migrate → health check → cleanup / rollback
+  backup/                .mvbackup archives (manifest + JSON lines per table + media, no master key), schedules, restore
+                         in one transaction, export everything, per-user export, `mangaveyra backup`
+  update/                opt-in checks of Ed25519-signed manifests, backup → download/verify → migrate → loopback health
+                         check → swap → restart, rollback before the swap; `mangaveyra release` signs releases
   admin/                 reports, users, AI-label disputes, content rules, server status, maintenance mode, invites
   setup/                 first-run wizard, GPU detection, recommended local models
   mcp/                   MCP server tools/resources/prompts, agent tokens, approvals, agent action labels
