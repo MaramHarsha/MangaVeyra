@@ -2,6 +2,8 @@ package jobs
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -71,6 +73,42 @@ type EnqueueParams struct {
 	// Returning an error aborts the enqueue. Use it for atomic de-duplication:
 	// lock the parent row, then check for an active job of the same kind.
 	Guard func(ctx context.Context, tx *db.Tx) error
+	// DedupeKey, when set, makes the enqueue idempotent across every server
+	// process sharing the database: while a queued or running job of the same
+	// type holds the same key, nothing is inserted (no guard runs) and Enqueue
+	// returns that job with Deduplicated set. Finished, failed and canceled
+	// jobs, and jobs whose cancellation was requested, never block a new
+	// request. The key must name everything that makes two requests the same
+	// piece of work, including the user; it is stored only as a SHA-256 digest.
+	DedupeKey string
+}
+
+// MaxDedupeKeyBytes bounds EnqueueParams.DedupeKey before it is hashed.
+const MaxDedupeKeyBytes = 64 << 10
+
+// ErrDuplicate rejects a manual retry while another active job already does
+// the same work (the same de-duplication key): retrying would spend twice on
+// one request.
+var ErrDuplicate = httpx.ErrConflict("an identical job is already queued or running")
+
+// dedupeDigest is the stored form of a de-duplication key. The job type is
+// part of it, so equal keys of different job types never collide.
+func dedupeDigest(jobType, key string) string {
+	sum := sha256.Sum256([]byte(jobType + "\x00" + key))
+	return hex.EncodeToString(sum[:])
+}
+
+// activeDedupe is the predicate of the partial unique index jobs_dedupe_active_uq
+// (migration 0204): the jobs that hold their de-duplication key.
+const activeDedupe = `dedupe_key IS NOT NULL AND state IN ('queued', 'running') AND cancel_requested = FALSE`
+
+// activeByDedupe returns the active job holding digest, or nil.
+func (q *Queue) activeByDedupe(ctx context.Context, qr db.Querier, digest string) (*Job, error) {
+	j, err := q.getQuery(ctx, qr, `SELECT `+jobCols+` FROM jobs WHERE dedupe_key = ? AND `+activeDedupe, digest)
+	if errors.Is(err, ErrNotFound) {
+		return nil, nil
+	}
+	return j, err
 }
 
 // Options configure the queue.
@@ -251,8 +289,10 @@ func (q *Queue) Enqueue(ctx context.Context, p EnqueueParams) (*Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	q.publish(job, "job.queued", "")
-	q.signal()
+	if !job.Deduplicated {
+		q.publish(job, "job.queued", "")
+		q.signal()
+	}
 	return job, nil
 }
 
@@ -304,6 +344,34 @@ func (q *Queue) EnqueueTx(ctx context.Context, tx *db.Tx, p EnqueueParams) (*Job
 	if !p.RunAfter.IsZero() {
 		runAfter = p.RunAfter.UTC()
 	}
+	digest := ""
+	if p.DedupeKey != "" {
+		if len(p.DedupeKey) > MaxDedupeKeyBytes {
+			return nil, httpx.ErrBadRequest("job de-duplication key is too long")
+		}
+		digest = dedupeDigest(p.Type, p.DedupeKey)
+		// The identical active job wins before any guard runs, so a repeated
+		// submission receives the work already queued, as it always has.
+		existing, err := q.activeByDedupe(ctx, tx, digest)
+		if err != nil {
+			return nil, fmt.Errorf("jobs: enqueue: %w", err)
+		}
+		if existing != nil {
+			existing.Deduplicated = true
+			return existing, nil
+		}
+	}
+	insert := `INSERT INTO jobs (id, type, scope, scope_kind, project_id, chapter_id, page_id, panel_id, layer_id,
+		user_id, state, executor, model_id, provider_id, decision, input, files, estimate, max_attempts, parent_id, priority, batch,
+		run_after, dedupe_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	if digest != "" {
+		// Another process may insert the same key after the read above. The
+		// partial unique index (migration 0204) decides; DO NOTHING keeps the
+		// caller's transaction usable on PostgreSQL, where a unique violation
+		// would abort it.
+		insert += ` ON CONFLICT (dedupe_key) WHERE ` + activeDedupe + ` DO NOTHING`
+	}
+	var existing *Job
 	err = func() error {
 		if p.Guard != nil {
 			if err := p.Guard(ctx, tx); err != nil {
@@ -315,26 +383,47 @@ func (q *Queue) EnqueueTx(ctx context.Context, tx *db.Tx, p EnqueueParams) (*Job
 				return guardError{err}
 			}
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO jobs (id, type, scope, scope_kind, project_id, chapter_id, page_id, panel_id, layer_id,
-			user_id, state, executor, model_id, provider_id, decision, input, files, estimate, max_attempts, parent_id, priority, batch,
-			run_after, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			id, p.Type, db.MustJSON(p.Scope), p.Scope.Kind, db.NullString(p.Scope.ProjectID), db.NullString(p.Scope.ChapterID),
-			db.NullString(p.Scope.PageID), db.NullString(p.Scope.PanelID), db.NullString(p.Scope.LayerID), db.NullString(p.UserID),
-			p.Executor, p.ModelID, p.ProviderID, decision, input, db.MustJSON(p.Files), db.MustJSON(p.Estimate), p.MaxAttempts,
-			db.NullString(p.ParentID), p.Priority, p.Batch, runAfter, now, now); err != nil {
-			return err
+		// The conflicting job can finish between the conflict and the read that
+		// returns it; the next insert then succeeds. Each pass inserts, finds
+		// the winner or observes it finishing, so a few passes suffice.
+		for range 3 {
+			res, err := tx.Exec(ctx, insert,
+				id, p.Type, db.MustJSON(p.Scope), p.Scope.Kind, db.NullString(p.Scope.ProjectID), db.NullString(p.Scope.ChapterID),
+				db.NullString(p.Scope.PageID), db.NullString(p.Scope.PanelID), db.NullString(p.Scope.LayerID), db.NullString(p.UserID),
+				p.Executor, p.ModelID, p.ProviderID, decision, input, db.MustJSON(p.Files), db.MustJSON(p.Estimate), p.MaxAttempts,
+				db.NullString(p.ParentID), p.Priority, p.Batch, runAfter, db.NullString(digest), now, now)
+			if err != nil {
+				return err
+			}
+			n, err := res.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if n == 1 {
+				return addEvent(ctx, tx, id, "created", "", map[string]any{"model_id": p.ModelID, "provider_id": p.ProviderID, "estimate": p.Estimate})
+			}
+			if existing, err = q.activeByDedupe(ctx, tx, digest); err != nil || existing != nil {
+				return err
+			}
 		}
-		return addEvent(ctx, tx, id, "created", "", map[string]any{"model_id": p.ModelID, "provider_id": p.ProviderID, "estimate": p.Estimate})
+		return ErrDuplicate
 	}()
 	if err != nil {
 		var guarded guardError
 		if errors.As(err, &guarded) {
 			return nil, guarded.err
 		}
+		if errors.Is(err, ErrDuplicate) {
+			return nil, ErrDuplicate
+		}
 		if db.IsForeignKeyViolation(err) {
 			return nil, httpx.ErrBadRequest("job references an unknown project, user or parent job")
 		}
 		return nil, fmt.Errorf("jobs: enqueue: %w", err)
+	}
+	if existing != nil {
+		existing.Deduplicated = true
+		return existing, nil
 	}
 	return q.get(ctx, tx, id)
 }
@@ -1113,9 +1202,28 @@ func (q *Queue) Retry(ctx context.Context, id string) (*Job, error) {
 	var j *Job
 	err := q.db.WithTx(ctx, func(tx *db.Tx) error {
 		now := q.now()
+		// A retried job takes its de-duplication key back. While another active
+		// job holds that key, the same work is already queued: refuse instead of
+		// spending twice (the unique index also refuses a concurrent insert).
+		var key string
+		if err := tx.Get(ctx, &key, `SELECT COALESCE(dedupe_key, '') FROM jobs WHERE id = ? AND state IN ('failed', 'canceled') AND parent_id IS NULL`, id); err != nil && !db.IsNotFound(err) {
+			return err
+		}
+		if key != "" {
+			var holders int
+			if err := tx.Get(ctx, &holders, `SELECT COUNT(*) FROM jobs WHERE dedupe_key = ? AND id <> ? AND `+activeDedupe, key, id); err != nil {
+				return err
+			}
+			if holders > 0 {
+				return ErrDuplicate
+			}
+		}
 		res, err := tx.Exec(ctx, `UPDATE jobs SET state = 'queued', attempt_base = attempts, progress = 0, step = 0, message = '', error = '{}',
 			output = '{}', cancel_requested = FALSE, worker_id = NULL, lease_expires_at = NULL, run_after = NULL, finished_at = NULL, updated_at = ?
 			WHERE id = ? AND state IN ('failed', 'canceled') AND parent_id IS NULL`, now, id)
+		if db.IsUniqueViolation(err) {
+			return ErrDuplicate
+		}
 		if err != nil {
 			return err
 		}

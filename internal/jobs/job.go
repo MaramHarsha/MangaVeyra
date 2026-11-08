@@ -232,6 +232,9 @@ type Job struct {
 	UpdatedAt       time.Time  `json:"updated_at"`
 	StartedAt       *time.Time `json:"started_at,omitempty"`
 	FinishedAt      *time.Time `json:"finished_at,omitempty"`
+	// Deduplicated is set on the job Enqueue returns when EnqueueParams.DedupeKey
+	// matched an active job, so no new job was stored. It is not persisted.
+	Deduplicated bool `json:"-"`
 }
 
 // RoundAttempt is the attempt number within the current round (1 for the
