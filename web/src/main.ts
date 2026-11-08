@@ -171,13 +171,16 @@ document.addEventListener('click', (e) => {
   void persistTheme(theme, btn.dataset.themeToggle || '/settings/theme');
 });
 
-// Clear offline chapter downloads kept by the service worker / reader on this device.
+// Clear offline chapter downloads kept by the service worker / reader on this
+// device, then the member's download records on the server (ADR 0012 §7). A
+// failed server call is not fatal: the library marks rows missing on this device.
 document.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-clear-downloads]');
   if (!btn || !('caches' in window)) return;
   e.preventDefault();
   void caches.keys().then(async (keys) => {
     await Promise.all(keys.filter((k) => k.startsWith('mv-offline')).map((k) => caches.delete(k)));
+    await fetch('/api/v1/reader/downloads', { method: 'DELETE', credentials: 'same-origin', headers: { Accept: 'application/json' } }).catch(() => undefined);
     showToast({ kind: 'success', title: btn.dataset.done || root.dataset.doneLabel || 'Done' });
   });
 });

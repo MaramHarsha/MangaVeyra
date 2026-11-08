@@ -77,6 +77,10 @@ func TestSeriesPageAnonymousNoJS(t *testing.T) {
 		html = string(c.Get("/s/" + s.Slug).Body)
 		mustContain(t, "member E5", html, `<form method="post" action="/s/`+s.Slug+`/follow"`,
 			`action="/s/`+s.Slug+`/comments"`, `name="body"`, "Members only")
+		// Members start an offline download in the reader; visitors cannot download (ADR 0012 §7).
+		mustContain(t, "member E5 download", html, `class="mv-series__dl" href="/s/`+s.Slug+`/`)
+		mustContain(t, "member E5 download", html, `?download=1"`)
+		mustNotContain(t, "anonymous E5 download", string(e.ta.NewClient().Get("/s/"+s.Slug).Body), "?download=1")
 	})
 }
 
