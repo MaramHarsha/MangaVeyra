@@ -15,8 +15,10 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish/publishtest"
+	"github.com/MaramHarsha/MangaVeyra/internal/reader"
 	"github.com/MaramHarsha/MangaVeyra/internal/reader/agegate"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
+	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 )
 
 var propsRe = regexp.MustCompile(`data-island="reader" data-props="([^"]*)"`)
@@ -528,6 +530,126 @@ func TestAnonymousOpensAreLimitedPerAddress(t *testing.T) {
 			t.Fatalf("view_count = %d, %v; want %d", got.ViewCount, err, 5+minted)
 		}
 	})
+}
+
+// An unlisted chapter is read by its link but never listed (ADR 0012 §1):
+// its reader page renders, prev/next come from the neighbouring listed
+// chapters by number (or are absent), the Episodes list and the chapter-end
+// card leave it out, listed chapters step over it, and the library's
+// "New ch." never points at it. A member who read, bookmarked or downloaded
+// it by its link still finds it in the library, and the download is not
+// revoked. All of this holds whether publish.Service's Publications lists
+// unlisted chapters for the viewer or leaves them out for anyone outside the
+// project (checked with a wrapper that does).
+func TestUnlistedChapterIsReadByLinkOnly(t *testing.T) {
+	each(t, func(t *testing.T, e *env) {
+		rm := e.readerModule()
+		svc := reader.Publish(rm)
+		for _, behaviour := range []string{"Publications lists unlisted", "Publications omits unlisted"} {
+			if behaviour == "Publications omits unlisted" {
+				reader.SetPublish(rm, listedOnly{svc})
+			}
+			checkUnlistedChapter(t, e, behaviour)
+		}
+		reader.SetPublish(rm, svc)
+	})
+}
+
+func checkUnlistedChapter(t *testing.T, e *env, behaviour string) {
+	s := e.f.Series(publishtest.SeriesSpec{Title: "Paper Crows"})
+	ch1 := e.f.Publish(s, publishtest.PublicationSpec{Pages: 2})
+	bonus := e.f.Publish(s, publishtest.PublicationSpec{Pages: 2, Visibility: publish.VisibilityUnlisted, Title: "Harbour bonus"})
+	ch3 := e.f.Publish(s, publishtest.PublicationSpec{Pages: 2})
+	extra := e.f.Publish(s, publishtest.PublicationSpec{Pages: 2, Visibility: publish.VisibilityUnlisted, Title: "Lantern extra"})
+	u, member := e.member()
+	owner := e.ta.Login(t, s.Owner.Username)
+
+	id := func(v any) string {
+		if m, ok := v.(map[string]any); ok {
+			s, _ := m["id"].(string)
+			return s
+		}
+		return ""
+	}
+	for name, c := range map[string]*testutil.Client{"anonymous": e.ta.NewClient(), "member": member, "project owner": owner} {
+		name = behaviour + ", " + name
+		check := func(what string, ch publishtest.Publication, prev, next string) {
+			t.Helper()
+			got := c.Get(chapterPath(s, ch))
+			wantStatus(t, name+" "+what, got, http.StatusOK)
+			p := props(t, got.Body)
+			if id(p["prev"]) != prev || id(p["next"]) != next {
+				t.Errorf("%s %s: prev %q next %q, want %q and %q", name, what, id(p["prev"]), id(p["next"]), prev, next)
+			}
+			var listed []string
+			for _, raw := range p["chapters"].([]any) {
+				c := raw.(map[string]any)
+				listed = append(listed, c["id"].(string))
+				if c["current"] == true && c["id"] != ch.ID {
+					t.Errorf("%s %s: %v is marked current", name, what, c["id"])
+				}
+			}
+			if strings.Join(listed, ",") != ch1.ID+","+ch3.ID {
+				t.Errorf("%s %s: episodes %v, want only the listed chapters", name, what, listed)
+			}
+			body := string(got.Body)
+			for _, unlisted := range []publishtest.Publication{bonus, extra} {
+				if unlisted.ID != ch.ID && strings.Contains(body, `href="`+chapterPath(s, unlisted)+`"`) {
+					t.Errorf("%s %s: links to unlisted chapter %v", name, what, unlisted.Number)
+				}
+			}
+		}
+		check("unlisted between", bonus, ch1.ID, ch3.ID)
+		check("unlisted last", extra, ch3.ID, "")
+		check("first listed", ch1, "", ch3.ID)
+		check("last listed", ch3, ch1.ID, "")
+	}
+
+	// The library offers the newest listed chapter, not the unlisted extra.
+	e.follow(member, u, s)
+	page := string(member.Get("/library/following").Body)
+	if !strings.Contains(page, "Ch. 3 · new") || !strings.Contains(page, `href="`+chapterPath(s, ch3)+`"`) {
+		t.Errorf("%s: following does not offer the newest listed chapter: %.1500s", behaviour, page)
+	}
+	if strings.Contains(page, chapterPath(s, extra)) || strings.Contains(page, "Ch. 4") {
+		t.Errorf("%s: following points at an unlisted chapter", behaviour)
+	}
+
+	// Reading, bookmarking and downloading the unlisted chapter by its link
+	// keeps it in the member's library.
+	wantStatus(t, behaviour+" progress", member.SendJSON(http.MethodPut, "/api/v1/reader/progress",
+		map[string]any{"series_id": s.ID, "publication_id": bonus.ID, "page": 2, "percent": 1, "completed": true}), http.StatusOK)
+	wantStatus(t, behaviour+" bookmark", member.PostJSON("/api/v1/reader/bookmarks",
+		map[string]any{"series_id": s.ID, "publication_id": bonus.ID, "page": 2}), http.StatusCreated)
+	start := member.PostJSON("/api/v1/reader/downloads", map[string]any{"series_id": s.ID, "publication_id": bonus.ID})
+	wantStatus(t, behaviour+" download unlisted", start, http.StatusOK)
+	var man struct {
+		Download  struct{ ID string } `json:"download"`
+		ReaderURL string              `json:"reader_url"`
+	}
+	start.JSON(t, &man)
+	if man.ReaderURL != chapterPath(s, bonus) {
+		t.Errorf("%s: download reader_url = %q", behaviour, man.ReaderURL)
+	}
+	wantStatus(t, behaviour+" finish download", member.SendJSON(http.MethodPut, "/api/v1/reader/downloads/"+man.Download.ID,
+		map[string]any{"bytes": 2048}), http.StatusOK)
+	bonusHref := `href="` + chapterPath(s, bonus)
+	for _, tab := range []string{"history", "bookmarks", "downloads"} {
+		if lib := string(member.Get("/library/" + tab).Body); !strings.Contains(lib, bonusHref) {
+			t.Errorf("%s: library %s lost the chapter read by its link", behaviour, tab)
+		}
+	}
+	var list struct {
+		Items []struct {
+			ID       string `json:"id"`
+			Status   string `json:"status"`
+			Readable bool   `json:"readable"`
+		} `json:"items"`
+	}
+	member.Get("/api/v1/reader/downloads").JSON(t, &list)
+	if len(list.Items) != 1 || list.Items[0].Status != "ready" || !list.Items[0].Readable {
+		t.Errorf("%s: unlisted download = %+v, want ready and readable", behaviour, list.Items)
+	}
 }
 
 // A webtoon series opens in Scroll mode with vertical direction and the

@@ -54,7 +54,25 @@ func (m *Module) publicationOf(ctx context.Context, v publish.Viewer, s publish.
 			}
 		}
 	}
-	return publish.Publication{}, false
+	return m.publicationByLink(ctx, v, s, id)
+}
+
+// publicationByLink reads a publication that Publications does not list for
+// the viewer (an unlisted chapter is read by its link only) the way its link
+// does: through publish.Service.Publication by number and language.
+func (m *Module) publicationByLink(ctx context.Context, v publish.Viewer, s publish.Series, id string) (publish.Publication, bool) {
+	if !db.ValidID(id) {
+		return publish.Publication{}, false
+	}
+	seriesID, number, lang, err := m.store.publicationKey(ctx, id)
+	if err != nil || seriesID != s.ID {
+		return publish.Publication{}, false
+	}
+	p, _, err := m.pub.Publication(ctx, v, s.ID, number, lang)
+	if err != nil || p.ID != id {
+		return publish.Publication{}, false
+	}
+	return p, true
 }
 
 // ---- progress -----------------------------------------------------------------

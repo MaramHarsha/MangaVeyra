@@ -287,6 +287,24 @@ func (s *store) deleteBookmark(ctx context.Context, userID, id string) error {
 	return nil
 }
 
+// publicationKey returns the series, number and language of a publication:
+// the key publish.Service.Publication reads it by, for a chapter the member
+// opened by its link that Publications does not list (unlisted). Like
+// downloadCols it reads the row by foreign key only; whether the viewer may
+// read it is still decided by publish.Service.
+func (s *store) publicationKey(ctx context.Context, id string) (seriesID string, number float64, lang string, err error) {
+	var row struct {
+		SeriesID string  `db:"series_id"`
+		Number   float64 `db:"number"`
+		Lang     string  `db:"lang"`
+	}
+	err = s.db.Get(ctx, &row, `SELECT series_id, number, lang FROM chapter_publications WHERE id = ?`, id)
+	if db.IsNotFound(err) {
+		return "", 0, "", errNoRow
+	}
+	return row.SeriesID, row.Number, row.Lang, err
+}
+
 // ---- downloads ----------------------------------------------------------------
 
 // downloadCols joins the publication's series ID by foreign key only; access

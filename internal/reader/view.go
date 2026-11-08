@@ -216,8 +216,11 @@ func (m *Module) signPages(ctx context.Context, v publish.Viewer, pages []publis
 	return out, nil
 }
 
-// buildChapters lists the readable chapters of the series in the
-// publication's language and marks the current and finished ones.
+// buildChapters lists the listed readable chapters of the series in the
+// publication's language and marks the current and finished ones. Unlisted
+// chapters are read by their link only (ADR 0012 §1), so they are never in
+// the list, never prev or next, and the current chapter may be missing from
+// it: prev and next are the nearest listed chapters by number.
 func (m *Module) buildChapters(ctx context.Context, v publish.Viewer, s publish.Series, cur publish.Publication) ([]chapterLink, *chapterLink, *chapterLink, error) {
 	pubs, err := m.pub.Publications(ctx, v, s.ID, cur.Lang)
 	if err != nil {
@@ -230,23 +233,21 @@ func (m *Module) buildChapters(ctx context.Context, v publish.Viewer, s publish.
 		}
 	}
 	out := make([]chapterLink, 0, len(pubs))
-	idx := -1
+	var prev, next *chapterLink
 	for _, p := range pubs {
+		if p.Visibility == publish.VisibilityUnlisted {
+			continue
+		}
 		c := chapterLink{ID: p.ID, Number: p.Number, Title: p.Title, Label: shortLabel(p), Href: chapterURL(s, p.Number, p.Lang),
 			Completed: done[p.ID], Current: p.ID == cur.ID}
-		if c.Current {
-			idx = len(out)
-		}
 		out = append(out, c)
-	}
-	var prev, next *chapterLink
-	if idx > 0 {
-		c := out[idx-1]
-		prev = &c
-	}
-	if idx >= 0 && idx < len(out)-1 {
-		c := out[idx+1]
-		next = &c
+		switch {
+		case c.Current:
+		case p.Number < cur.Number && (prev == nil || p.Number > prev.Number):
+			prev = &c
+		case p.Number > cur.Number && (next == nil || p.Number < next.Number):
+			next = &c
+		}
 	}
 	return out, prev, next, nil
 }

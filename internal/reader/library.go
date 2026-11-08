@@ -164,12 +164,15 @@ type resolver struct {
 	v      publish.Viewer
 	series map[string]*publish.Series
 	pubs   map[string]map[string]publish.Publication
+	// linked caches chapters read by their link that Publications does not
+	// list (an empty Publication when not readable).
+	linked map[string]publish.Publication
 	covers map[string]string
 }
 
 func newResolver(m *Module, v publish.Viewer) *resolver {
 	return &resolver{m: m, v: v, series: map[string]*publish.Series{}, pubs: map[string]map[string]publish.Publication{},
-		covers: map[string]string{}}
+		linked: map[string]publish.Publication{}, covers: map[string]string{}}
 }
 
 // load resolves readable series by ID through publish.Service (unreadable ones stay nil).
@@ -241,12 +244,31 @@ func (res *resolver) publications(ctx context.Context, s *publish.Series) map[st
 	return out
 }
 
-// latest returns the newest readable chapter of s in its original language.
+// byID returns a readable publication of s by ID: from the listed ones, or
+// (for a chapter read by its link that Publications leaves out) the way its
+// link reads it.
+func (res *resolver) byID(ctx context.Context, s *publish.Series, id string) (publish.Publication, bool) {
+	if p, ok := res.publications(ctx, s)[id]; ok {
+		return p, true
+	}
+	if p, ok := res.linked[id]; ok {
+		return p, p.ID != ""
+	}
+	p, ok := res.m.publicationByLink(ctx, res.v, *s, id)
+	if !ok {
+		p = publish.Publication{} // remembered as not readable
+	}
+	res.linked[id] = p
+	return p, ok
+}
+
+// latest returns the newest listed readable chapter of s in its original
+// language (an unlisted chapter is read by its link only, never offered).
 func (res *resolver) latest(ctx context.Context, s *publish.Series) (publish.Publication, bool) {
 	var best publish.Publication
 	found := false
 	for _, p := range res.publications(ctx, s) {
-		if p.Lang != s.OriginalLang {
+		if p.Lang != s.OriginalLang || p.Visibility == publish.VisibilityUnlisted {
 			continue
 		}
 		if !found || p.Number > best.Number {
@@ -342,7 +364,7 @@ func (m *Module) followingCards(ctx context.Context, v publish.Viewer, res *reso
 			c.Meta = chapterWord(ctx, s, latest.Number) + " · " + i18n.T(ctx, "reader.library.new_word")
 			c.Href = chapterURL(*s, latest.Number, latest.Lang)
 		case read && !p.Completed:
-			if pub, ok := res.publications(ctx, s)[p.PublicationID]; ok {
+			if pub, ok := res.byID(ctx, s, p.PublicationID); ok {
 				c.Meta = chapterWord(ctx, s, pub.Number) + " · " + i18n.T(ctx, "reader.library.page_short", "page", p.Page)
 				if isWebtoon(s.Format) {
 					c.Meta = chapterWord(ctx, s, pub.Number) + " · " + strconv.Itoa(int(p.Percent*100+0.5)) + "%"
@@ -444,7 +466,7 @@ func (m *Module) historyCard(ctx context.Context, res *resolver, p Progress, inP
 	if s == nil {
 		return rowCard{}, false
 	}
-	pub, ok := res.publications(ctx, s)[p.PublicationID]
+	pub, ok := res.byID(ctx, s, p.PublicationID)
 	if !ok {
 		return rowCard{}, false
 	}
@@ -492,7 +514,7 @@ func (m *Module) bookmarkRows(ctx context.Context, v publish.Viewer, res *resolv
 		if s == nil {
 			continue
 		}
-		pub, ok := res.publications(ctx, s)[b.PublicationID]
+		pub, ok := res.byID(ctx, s, b.PublicationID)
 		if !ok {
 			continue
 		}
@@ -533,7 +555,7 @@ func (m *Module) downloadRows(ctx context.Context, v publish.Viewer, res *resolv
 		var pub publish.Publication
 		ok := s != nil
 		if ok {
-			pub, ok = res.publications(ctx, s)[d.PublicationID]
+			pub, ok = res.byID(ctx, s, d.PublicationID)
 		}
 		if !ok {
 			// No longer readable: never show it, and stop the device from serving it.
