@@ -3,6 +3,7 @@ package update
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -103,11 +104,11 @@ func (v view) versions(ctx context.Context) string {
 	return i18n.T(ctx, "update.list_and", "a", head, "b", list[len(list)-1])
 }
 
-// notes are the changelog lines, newest release first (at most 12).
+// notes are the changelog lines, oldest release first as in the design (at most 12).
 func (v view) notes() []string {
 	var out []string
-	for _, r := range v.O.Releases {
-		out = append(out, r.Notes...)
+	for i := len(v.O.Releases) - 1; i >= 0; i-- {
+		out = append(out, v.O.Releases[i].Notes...)
 	}
 	if len(out) > 12 {
 		out = append(out[:12:12], "…")
@@ -217,9 +218,11 @@ func (v view) runDetail(ctx context.Context, s Step) (string, string) {
 			}
 			return i18n.T(ctx, "update.detail.migrate.none"), ""
 		case StateFailed:
+			cause := migrateCause(ctx, s.Error)
 			if n := strings.TrimPrefix(v.Run.Code, "UPD-MIGRATE-"); n != v.Run.Code && n != "" {
-				return i18n.T(ctx, "update.detail.migrate.failed_n", "n", n, "error", short(s.Error)), ""
+				return i18n.T(ctx, "update.detail.migrate.failed_n", "n", n, "error", cause), ""
 			}
+			return i18n.T(ctx, "update.detail.failed", "error", cause), ""
 		}
 	case StepHealth:
 		switch s.State {
@@ -261,6 +264,18 @@ func (v view) runDetail(ctx context.Context, s Step) (string, string) {
 		return i18n.T(ctx, "update.detail.failed", "error", short(s.Error)), ""
 	}
 	return i18n.T(ctx, "update.detail.waiting"), ""
+}
+
+var migratePrefix = regexp.MustCompile(`^(db: )?migrate \S+: (statement \d+: )?`)
+
+// migrateCause shortens a failed migration's error to its cause ("disk full").
+func migrateCause(ctx context.Context, s string) string {
+	s = short(s)
+	low := strings.ToLower(s)
+	if strings.Contains(low, "no space left") || strings.Contains(low, "disk is full") || strings.Contains(low, "disk full") {
+		return i18n.T(ctx, "update.cause.disk_full")
+	}
+	return migratePrefix.ReplaceAllString(s, "")
 }
 
 func short(s string) string {

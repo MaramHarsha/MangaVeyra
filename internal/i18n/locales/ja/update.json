@@ -82,6 +82,7 @@
   "update.detail.restore.running": "バックアップから {version} を復元中",
   "update.detail.restore.done": "{version} に自動でロールバックしました",
   "update.detail.restore.failed": "復元に失敗しました: {error}",
+  "update.cause.disk_full": "ディスクの空き容量不足",
   "update.detail.failed": "失敗: {error}",
 
   "update.done.sfx": "LEVEL UP",

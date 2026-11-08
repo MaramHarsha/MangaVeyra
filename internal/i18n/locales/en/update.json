@@ -85,6 +85,7 @@
   "update.detail.restore.running": "Restoring {version} from the backup",
   "update.detail.restore.done": "Rolled back to {version} automatically",
   "update.detail.restore.failed": "Restore failed: {error}",
+  "update.cause.disk_full": "disk full",
   "update.detail.failed": "Failed: {error}",
 
   "update.done.sfx": "LEVEL UP",
