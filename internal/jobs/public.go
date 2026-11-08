@@ -50,12 +50,15 @@ var publicEventKinds = map[string]bool{
 	"canceled": true, "cancel_requested": true, "retried": true, "retry": true, "fallback": true, "log": true,
 }
 
-// PublicView returns j as the job API may show it to anyone, including its
+// PublicView is PublicViewFor with the fallback-language recovery copy.
+func (q *Queue) PublicView(j *Job) *Job { return q.PublicViewFor(context.Background(), j) }
+
+// PublicViewFor returns j as the job API may show it to anyone, including its
 // owner, admins and bearer tokens: the input is removed when the job type's
 // input is private, progress text is dropped and a failure carries only its
-// public code with localized recovery copy. Raw worker/provider text stays
-// in the database for handlers; it never leaves the server.
-func (q *Queue) PublicView(ctx context.Context, j *Job) *Job {
+// public code with recovery copy in the locale of ctx. Raw worker/provider
+// text stays in the database for handlers; it never leaves the server.
+func (q *Queue) PublicViewFor(ctx context.Context, j *Job) *Job {
 	if j == nil {
 		return nil
 	}
