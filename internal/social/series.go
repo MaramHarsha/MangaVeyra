@@ -143,6 +143,11 @@ func (m *Module) renderSeries(w http.ResponseWriter, r *http.Request, status int
 	if err != nil {
 		return err
 	}
+	// Only public series may be indexed; an unlisted, members-only or private
+	// series page must not reach search engines through a shared link.
+	if s.Visibility != publish.VisibilityPublic {
+		w.Header().Set("X-Robots-Tag", "noindex")
+	}
 	return m.ui.Page(w, r, status, web.PageOpts{Title: s.Title, Section: layout.SectionExplore, Tab: layout.TabExplore,
 		NoSidebar: true}, SeriesPage(v))
 }

@@ -169,7 +169,8 @@ func TestCommentAccessFollowsPublish(t *testing.T) {
 			{"unlisted", publishtest.SeriesSpec{Visibility: publish.VisibilityUnlisted}, publishtest.PublicationSpec{}, true, true, true},
 			{"members", publishtest.SeriesSpec{Visibility: publish.VisibilityMembers}, publishtest.PublicationSpec{}, false, true, true},
 			{"private", publishtest.SeriesSpec{Visibility: publish.VisibilityPrivate}, publishtest.PublicationSpec{}, false, false, true},
-			{"mature", publishtest.SeriesSpec{AgeRating: publish.RatingMature}, publishtest.PublicationSpec{}, false, true, true},
+			// Mature and adult comments wait for the reader's age confirmation, as E5 and the reader do.
+			{"mature unconfirmed", publishtest.SeriesSpec{AgeRating: publish.RatingMature}, publishtest.PublicationSpec{}, false, false, false},
 			{"members chapter", publishtest.SeriesSpec{}, publishtest.PublicationSpec{Visibility: publish.VisibilityMembers}, false, true, true},
 			{"scheduled chapter", publishtest.SeriesSpec{}, publishtest.PublicationSpec{Status: publish.PublicationScheduled}, false, false, false},
 			{"unpublished chapter", publishtest.SeriesSpec{}, publishtest.PublicationSpec{Status: publish.PublicationUnpublished}, false, false, false},
@@ -196,6 +197,18 @@ func TestCommentAccessFollowsPublish(t *testing.T) {
 			wantStatus(t, tc.name+": project member write", studioClient.PostJSON("/api/v1/social/comments", chapterBody), status(tc.projectMember, http.StatusCreated))
 			wantStatus(t, tc.name+": anonymous write", anon.PostJSON("/api/v1/social/comments", chapterBody), http.StatusUnauthorized)
 		}
+
+		// After confirming once, a member reads and writes a mature series' comments.
+		adult := e.f.Series(publishtest.SeriesSpec{Owner: owner, AgeRating: publish.RatingAdult})
+		adultCh := e.f.Publish(adult, publishtest.PublicationSpec{})
+		confirmed, confirmedClient := e.user(auth.RoleReader)
+		adultBody := map[string]any{"series_id": adult.ID, "target_kind": "chapter", "target_id": adultCh.ID, "body": "hello"}
+		wantStatus(t, "adult before confirming", confirmedClient.Get(commentsURL(adult.ID, "chapter", adultCh.ID)), http.StatusNotFound)
+		e.confirmAge(confirmed.ID, adult.ID)
+		wantStatus(t, "adult confirmed read", confirmedClient.Get(commentsURL(adult.ID, "chapter", adultCh.ID)), http.StatusOK)
+		wantStatus(t, "adult confirmed write", confirmedClient.PostJSON("/api/v1/social/comments", adultBody), http.StatusCreated)
+		ownerClient := e.login(owner)
+		wantStatus(t, "adult owner read", ownerClient.Get(commentsURL(adult.ID, "chapter", adultCh.ID)), http.StatusOK)
 
 		// Personal mode: anonymous visitors read nothing, members still read public series.
 		s := e.f.Series(publishtest.SeriesSpec{Owner: owner})

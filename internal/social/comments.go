@@ -90,6 +90,17 @@ func (s *service) resolveTarget(ctx context.Context, v publish.Viewer, seriesID,
 	if err != nil {
 		return target{}, accessErr(err)
 	}
+	// Mature and adult comments wait for the reader's one-time age confirmation,
+	// as the series page and the reader do; the owner previews without it.
+	if (series.AgeRating == publish.RatingMature || series.AgeRating == publish.RatingAdult) && v.UserID != series.OwnerID {
+		ok, err := s.ageConfirmed(ctx, v.UserID, series.ID)
+		if err != nil {
+			return target{}, err
+		}
+		if !ok {
+			return target{}, ErrNotFound
+		}
+	}
 	if kind == TargetSeries {
 		if targetID != series.ID {
 			return target{}, ErrNotFound

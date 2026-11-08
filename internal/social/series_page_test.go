@@ -69,6 +69,15 @@ func TestSeriesPageAnonymousNoJS(t *testing.T) {
 		r = e.ta.NewClient().Get("/s/" + s.Slug + "?lang=ja")
 		mustContain(t, "E5 ja", string(r.Body), "最後の渡し")
 		mustNotContain(t, "E5 ja", string(r.Body), "Salt Road")
+		// Only public series pages may be indexed; unlisted links must not end up in search engines.
+		if got := r.Header.Get("X-Robots-Tag"); got != "" {
+			t.Fatalf("public E5 X-Robots-Tag = %q", got)
+		}
+		hidden := e.f.Series(publishtest.SeriesSpec{Visibility: publish.VisibilityUnlisted})
+		e.f.Publish(hidden, publishtest.PublicationSpec{})
+		if got := e.ta.NewClient().Get("/s/" + hidden.Slug).Header.Get("X-Robots-Tag"); got != "noindex" {
+			t.Fatalf("unlisted E5 X-Robots-Tag = %q, want noindex", got)
+		}
 		// The page is complete without JavaScript: no island and no hx- attributes.
 		mustNotContain(t, "E5 no-JS", html, "data-island", "hx-post", "hx-get")
 
