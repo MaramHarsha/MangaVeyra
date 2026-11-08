@@ -1038,8 +1038,37 @@ func TestExpiredArchivesAreDeleted(t *testing.T) {
 	}
 }
 
-// TestRestoreUndoesNewerMigrations is the failed-update rollback: a newer
-// binary migrated the database, the old binary restores its pre-update archive.
+// withProbeMigration is the embedded migrations plus a test-only migration
+// N+1 that adds a table and a column, as a newer binary's migrate would.
+func withProbeMigration(t *testing.T) fs.FS {
+	t.Helper()
+	files := fstest.MapFS{}
+	entries, err := fs.ReadDir(db.Migrations(), ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		b, err := fs.ReadFile(db.Migrations(), e.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[e.Name()] = &fstest.MapFile{Data: b}
+	}
+	files["9900_rollback_probe.sql"] = &fstest.MapFile{Data: []byte(`
+CREATE TABLE rollback_probe (
+    id         TEXT PRIMARY KEY,
+    project_id TEXT REFERENCES projects (id) ON DELETE CASCADE,
+    note       TEXT NOT NULL DEFAULT ''
+);
+ALTER TABLE projects ADD COLUMN probe_flag TEXT NOT NULL DEFAULT '';
+`)}
+	return files
+}
+
+// TestRestoreUndoesNewerMigrations is the failed-update rollback: the new
+// binary's migrate moved the live schema to N+1, then the old binary restores
+// its pre-update archive at N. The schema goes back to exactly N (objects and
+// schema_migrations), the rows match, and migrating forward again works.
 func TestRestoreUndoesNewerMigrations(t *testing.T) {
 	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
 		ctx := context.Background()
@@ -1049,37 +1078,63 @@ func TestRestoreUndoesNewerMigrations(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		n := b.Schema
 		before := fingerprints(t, ta)
+		var versionsBefore []string
 		d := ta.Deps.DB
-		if _, err := d.Exec(ctx, `CREATE TABLE future_panels (id TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '')`); err != nil {
+		if err := d.Select(ctx, &versionsBefore, `SELECT version FROM schema_migrations ORDER BY version`); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := d.Exec(ctx, `ALTER TABLE projects ADD COLUMN future_flag TEXT NOT NULL DEFAULT ''`); err != nil {
+		probe := withProbeMigration(t)
+		applied, err := d.MigrateFS(ctx, probe)
+		if err != nil || !slices.Equal(applied, []string{"9900_rollback_probe"}) {
+			t.Fatalf("N+1 migration %v %v", applied, err)
+		}
+		var projectID string
+		if err := d.Get(ctx, &projectID, `SELECT id FROM projects LIMIT 1`); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := d.Exec(ctx, `INSERT INTO schema_migrations (version, file, applied_at) VALUES ('9000_future', '9000_future.sql', ?)`, db.Now()); err != nil {
+		if _, err := d.Exec(ctx, `INSERT INTO rollback_probe (id, project_id, note) VALUES (?, ?, 'written by the new binary')`, db.NewID(), projectID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.Exec(ctx, `UPDATE projects SET probe_flag = 'new'`); err != nil {
 			t.Fatal(err)
 		}
 		maintenance(t, ta, true)
-		if _, err := s.RestoreArchive(ctx, b.ID, ta.Admin.ID); err != nil {
+		rep, err := s.RestoreArchive(ctx, b.ID, ta.Admin.ID)
+		if err != nil {
 			t.Fatal(err)
 		}
-		if newestSchema(t, d) != b.Schema {
-			t.Fatalf("schema %s after rollback, want %s", newestSchema(t, d), b.Schema)
+		if len(rep.Migrated) != 0 {
+			t.Fatalf("a rollback migrated forward: %v", rep.Migrated)
 		}
-		var n int
-		if err := d.Get(ctx, &n, `SELECT COUNT(*) FROM future_panels`); err == nil {
-			t.Fatal("the newer binary's table survived the rollback")
+		var versionsAfter []string
+		if err := d.Select(ctx, &versionsAfter, `SELECT version FROM schema_migrations ORDER BY version`); err != nil {
+			t.Fatal(err)
+		}
+		if newestSchema(t, d) != n || !slices.Equal(versionsAfter, versionsBefore) {
+			t.Fatalf("schema_migrations after rollback %v, want %v (newest %s)", versionsAfter, versionsBefore, n)
+		}
+		var count int
+		if err := d.Get(ctx, &count, `SELECT COUNT(*) FROM rollback_probe`); err == nil {
+			t.Fatal("the N+1 table survived the rollback")
+		}
+		if err := d.Get(ctx, &count, `SELECT COUNT(*) FROM projects WHERE probe_flag = 'new'`); err == nil {
+			t.Fatal("the N+1 column survived the rollback")
 		}
 		after := fingerprints(t, ta)
 		for table, rows := range before {
 			if !slices.Equal(rows, after[table]) {
-				t.Fatalf("%s differs after the rollback", table)
+				t.Fatalf("%s differs after the rollback (%d rows, want %d)", table, len(after[table]), len(rows))
 			}
 		}
-		// The pre-update archive holds no media: media stay in place.
-		if _, err := ta.Deps.Store.List(ctx, ""); err != nil {
-			t.Fatal(err)
+		// A later update can migrate forward again.
+		applied, err = d.MigrateFS(ctx, probe)
+		if err != nil || !slices.Equal(applied, []string{"9900_rollback_probe"}) {
+			t.Fatalf("migrating forward after the rollback: %v %v", applied, err)
+		}
+		if err := d.Get(ctx, &count, `SELECT COUNT(*) FROM rollback_probe`); err != nil || count != 0 {
+			t.Fatalf("N+1 table after migrating again: %d %v", count, err)
 		}
 	})
 }
