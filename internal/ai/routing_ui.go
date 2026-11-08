@@ -7,10 +7,12 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
@@ -40,6 +42,8 @@ type routingDecisionView struct {
 	ProviderKind string `db:"provider_kind"`
 	Overridden   bool   `db:"overridden"`
 	Explanation  string `db:"explanation"`
+	// Record is the parsed explanation: estimate and fallback switch.
+	Record decisionRecord `db:"-"`
 }
 type routingPinView struct {
 	ID       string `db:"id"`
@@ -105,6 +109,9 @@ func (m *Module) loadRoutingView(ctx context.Context, actor providerActor) (rout
 		FROM routing_decisions d LEFT JOIN providers p ON p.id = d.chosen_provider_id
 		WHERE d.user_id = ? ORDER BY d.created_at DESC, d.id DESC LIMIT 20`, actor.UserID); err != nil {
 		return v, err
+	}
+	for i := range v.Decisions {
+		v.Decisions[i].Record = parseDecisionRecord(v.Decisions[i].Explanation)
 	}
 	if !v.CanPin {
 		var owned int
@@ -283,10 +290,79 @@ func (s *imageService) recordDecision(ctx context.Context, req ImageGenerateRequ
 			}
 		}
 	}
-	explanation := fmt.Sprintf("%d × %d", req.Width, req.Height)
+	size := fmt.Sprintf("%d × %d", req.Width, req.Height)
 	if req.Count > 1 {
-		explanation += fmt.Sprintf(" · ×%d", req.Count)
+		size += fmt.Sprintf(" · ×%d", req.Count)
 	}
-	_, err := s.d.DB.Exec(ctx, `INSERT INTO routing_decisions (id, job_id, user_id, project_id, task, mode, chosen_model_id, chosen_provider_id, candidates, explanation, overridden, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, db.NewID(), db.NullString(req.JobID), req.ActorID, req.ProjectID, req.Plan.Task, req.Plan.RoutingMode, req.Plan.ModelID, req.Plan.ProviderID, db.MustJSON(candidates), explanation, req.Plan.PinModelID != "" || req.Plan.PinProviderID != "", db.Now())
+	record := newDecisionRecord(size, req.Plan, d)
+	_, err := s.d.DB.Exec(ctx, `INSERT INTO routing_decisions (id, job_id, user_id, project_id, task, mode, chosen_model_id, chosen_provider_id, candidates, explanation, overridden, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, db.NewID(), db.NullString(req.JobID), req.ActorID, req.ProjectID, req.Plan.Task, req.Plan.RoutingMode, req.Plan.ModelID, req.Plan.ProviderID, db.MustJSON(candidates), db.MustJSON(record), req.Plan.PinModelID != "" || req.Plan.PinProviderID != "", db.Now())
 	return err
+}
+
+// decisionRecord is what one G11 "Recent decisions" row shows about the
+// route that ran, stored as the decision's explanation JSON. It carries
+// only server-made values: the size, the plan's per-call estimate and, after
+// an automatic fallback, the failed "kind:model" and its safe error code.
+// Rows recorded before this record existed hold plain text ("1024 × 1024").
+type decisionRecord struct {
+	Size         string  `json:"size"`
+	EstimateUSD  float64 `json:"estimate_usd,omitempty"`
+	Remote       bool    `json:"remote,omitempty"`
+	SwitchedFrom string  `json:"switched_from,omitempty"`
+	SwitchCode   string  `json:"switch_code,omitempty"`
+	// Skip names why the direct OpenAI image route was passed over
+	// (decisionSkips) when another route ran instead.
+	Skip string `json:"skip,omitempty"`
+}
+
+// decisionSkips map a planner skip reason to its G11 words.
+var decisionSkips = map[string]string{skipImagesUnavailable: "images_unavailable", skipImagesVerification: "images_verification"}
+
+func newDecisionRecord(size string, plan ImagePlan, d imageDecision) decisionRecord {
+	r := decisionRecord{Size: size, Remote: plan.Remote}
+	if plan.Remote && d.EstimateUSD > 0 && !math.IsNaN(d.EstimateUSD) && !math.IsInf(d.EstimateUSD, 0) {
+		r.EstimateUSD = d.EstimateUSD
+	}
+	if kind, model, ok := strings.Cut(d.SwitchedFrom, ":"); ok && validSwitchKind(kind) && validModelID(model) {
+		r.SwitchedFrom = d.SwitchedFrom
+		if fallbackCodes[d.SwitchCode] {
+			r.SwitchCode = d.SwitchCode
+		}
+	}
+	if _, direct := imageRouteFor(providerKindOpenAI, plan.ModelID); !direct {
+		for _, s := range d.Skipped {
+			_, reason, _ := strings.Cut(s, ": ")
+			if code := decisionSkips[reason]; code != "" {
+				r.Skip = code
+				break
+			}
+		}
+	}
+	return r
+}
+
+// fallbackCodes are the transient failures automatic fallback switches on
+// (imageService.fallback); each has its own words in G11.
+var fallbackCodes = map[string]bool{CodeTimeout: true, CodeRateLimited: true, CodeUpstream: true, jobs.ErrCodeOOM: true, jobs.ErrCodeInternal: true}
+
+// validSwitchKind accepts the provider kinds a fallback can leave.
+func validSwitchKind(kind string) bool {
+	return validProviderKind(kind) || kind == providerKindWorker || kind == PlaceholderID
+}
+
+// parseDecisionRecord reads a stored explanation. Legacy plain-text rows and
+// anything malformed show the decision without an estimate or a switch.
+func parseDecisionRecord(raw string) decisionRecord {
+	var r decisionRecord
+	if !strings.HasPrefix(strings.TrimSpace(raw), "{") || json.Unmarshal([]byte(raw), &r) != nil {
+		return decisionRecord{Size: raw}
+	}
+	// Re-validate: the row is data, never instructions.
+	out := newDecisionRecord(r.Size, ImagePlan{Remote: r.Remote}, imageDecision{EstimateUSD: r.EstimateUSD, SwitchedFrom: r.SwitchedFrom, SwitchCode: r.SwitchCode})
+	for _, code := range decisionSkips {
+		if r.Skip == code {
+			out.Skip = code
+		}
+	}
+	return out
 }

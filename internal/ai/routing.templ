@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -42,10 +43,50 @@ func decisionReason(ctx context.Context, d routingDecisionView) string {
 		reason = i18n.T(ctx, "aiimage.decision.pinned")
 	case d.Provider == PlaceholderID && d.Mode == ModeLocalOnly:
 		reason = i18n.T(ctx, "aiimage.decision.local_only")
+	case d.Record.Skip != "" && d.Provider == PlaceholderID:
+		reason = i18n.T(ctx, "aiimage.decision."+d.Record.Skip+"_placeholder")
+	case d.Record.Skip != "":
+		reason = i18n.T(ctx, "aiimage.decision."+d.Record.Skip)
 	case d.Provider == PlaceholderID:
 		reason = i18n.T(ctx, "aiimage.decision.placeholder")
 	}
 	return reason
+}
+
+// decisionEstimate is the route's per-call estimate in the compute meter's
+// format ("~$0.08", "~<$0.01"); local and placeholder routes show none.
+func decisionEstimate(ctx context.Context, d routingDecisionView) string {
+	usd := d.Record.EstimateUSD
+	if !d.Record.Remote || !(usd > 0) {
+		return ""
+	}
+	amount := fmt.Sprintf("$%.2f", usd)
+	if usd < 0.005 {
+		amount = "<$0.01"
+	}
+	return i18n.T(ctx, "aiimage.decision.estimate", "amount", amount)
+}
+
+// decisionSwitch is the automatic fallback in words ("Switched from GPT
+// Image 2.5 Sunburst · OpenAI (rate limited)"), or "" when none happened.
+func decisionSwitch(ctx context.Context, v routingView, d routingDecisionView) string {
+	kind, model, ok := strings.Cut(d.Record.SwitchedFrom, ":")
+	if !ok {
+		return ""
+	}
+	provider := providerKindName(kind)
+	switch kind {
+	case PlaceholderID:
+		provider = i18n.T(ctx, "aiimage.decision.builtin")
+	case providerKindWorker, providerKindLocalText:
+		provider = i18n.T(ctx, "aiimage.decision.local")
+	}
+	route := v.modelName(model) + " · " + provider
+	if d.Record.SwitchCode == "" {
+		return i18n.T(ctx, "aiimage.decision.switched", "route", route)
+	}
+	return i18n.T(ctx, "aiimage.decision.switched_because", "route", route,
+		"reason", i18n.T(ctx, "aiimage.decision.switch."+d.Record.SwitchCode))
 }
 
 func routingTaskLabel(ctx context.Context, task string) string {
@@ -79,8 +120,16 @@ templ RoutingPage(v routingView) {
 						<li class="mv-airouting__decision">
 							<span>{ routingTaskLabel(ctx, decision.Task) }</span>
 							<div>
-								<strong>{ v.modelName(decision.Model) } · { decisionProvider(ctx, decision) }</strong>
+								<span class="mv-airouting__route">
+									<strong>{ v.modelName(decision.Model) } · { decisionProvider(ctx, decision) }</strong>
+									if estimate := decisionEstimate(ctx, decision); estimate != "" {
+										<span class="mv-airouting__estimate" title={ i18n.T(ctx, "aiimage.decision.estimate_hint") }>{ estimate }</span>
+									}
+								</span>
 								<p>{ decisionReason(ctx, decision) }</p>
+								if switched := decisionSwitch(ctx, v, decision); switched != "" {
+									<p>{ switched }</p>
+								}
 							</div>
 						</li>
 					}

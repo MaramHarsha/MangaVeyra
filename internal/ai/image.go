@@ -23,9 +23,13 @@ const falSchnellModel = "fal-ai/flux/schnell"
 const falInpaintModel = "fal-ai/flux-lora/inpainting"
 const maxImageBytes = 24 << 20
 
-// skipImagesUnavailable is the skipped-candidate reason for a GPT Image model
-// the connection's key cannot use (ADR 0009 amendment).
-const skipImagesUnavailable = "not available for this key"
+// Skipped-candidate reasons for a GPT Image model the connection's key cannot
+// use: the last model-list check did not list it, or GPT Image refused the key
+// because the OpenAI organisation is not verified (ADR 0009 amendment).
+const (
+	skipImagesUnavailable  = "not available for this key"
+	skipImagesVerification = "needs organisation verification"
+)
 
 type imageService struct {
 	d          *core.Deps
@@ -235,7 +239,11 @@ func (s *imageService) planImage(ctx context.Context, req ImagePlanRequest, excl
 			// The connection's last model-list check (or a GPT Image refusal)
 			// showed this key cannot use the model: route around it.
 			if p.Kind == providerKindOpenAI && !p.Test.imageModelAvailable(m.ID) {
-				skipped = append(skipped, m.ID+": "+skipImagesUnavailable)
+				reason := skipImagesUnavailable
+				if p.Test.Images == capabilityVerification {
+					reason = skipImagesVerification
+				}
+				skipped = append(skipped, m.ID+": "+reason)
 				continue
 			}
 			cost, ok := quoteImage(p.Kind, m.ID, n)

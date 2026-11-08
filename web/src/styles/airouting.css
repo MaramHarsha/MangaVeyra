@@ -8,6 +8,9 @@
 .mv-airouting__decision{display:grid;grid-template-columns:130px minmax(0,1fr);gap:12px;padding:12px 16px;border-bottom:1px solid var(--mv-line);font-size:var(--mv-fs-small)}
 .mv-airouting__decision>span{font-family:var(--mv-font-mono);font-size:var(--mv-fs-meta);color:var(--mv-text-3);overflow-wrap:anywhere}
 .mv-airouting__decision p{margin:3px 0 0;color:var(--mv-text-2)}
+/* "model · provider" with the route's per-call estimate in the compute meter's mono cost style. */
+.mv-airouting__route{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.mv-airouting__estimate{font-family:var(--mv-font-mono);font-size:var(--mv-fs-mono);color:var(--mv-text-2);white-space:nowrap}
 .mv-airouting__side{display:flex;flex-direction:column;gap:14px;min-width:0}
 .mv-airouting__box{padding:16px;display:flex;flex-direction:column;gap:10px}
 .mv-airouting__pin{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--mv-line);font-size:var(--mv-fs-small);overflow-wrap:anywhere}

@@ -579,7 +579,7 @@ func TestImageFallbackLeavesTheFailedProviderKind(t *testing.T) {
 			t.Fatalf("second fallback = %+v %v", rr, err)
 		}
 		// Terminal failures and pinned plans never fall back.
-		for _, code := range []string{CodeProviderRefuse, CodeProviderAuth, CodeBadInput, CodeSpendLimit} {
+		for _, code := range []string{CodeProviderRefuse, CodeProviderAuth, CodeProviderVerification, CodeBadInput, CodeSpendLimit} {
 			if rr, err := m.image.fallback(ctx, j, p, jobs.JobError{Code: code}); err != nil || rr != nil {
 				t.Fatalf("terminal %s fell back: %+v", code, rr)
 			}
