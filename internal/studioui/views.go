@@ -286,6 +286,8 @@ func jobErrorKey(j *jobs.Job) string {
 		return "studioui.job.no_provider_detail"
 	case ai.CodeProviderAuth:
 		return "studioui.job.provider_auth_detail"
+	case ai.CodeProviderVerification:
+		return "studioui.job.provider_verification_detail"
 	case ai.CodeProviderRefuse:
 		return "studioui.job.provider_refused_detail"
 	case ai.CodeRateLimited:
@@ -319,7 +321,7 @@ func manualRetryAllowed(j *jobs.Job) bool {
 		return true
 	}
 	switch j.Error.Code {
-	case ai.CodeSpendLimit, ai.CodeLocalOnly, ai.CodeNoProvider, ai.CodeProviderAuth, ai.CodeProviderRefuse,
+	case ai.CodeSpendLimit, ai.CodeLocalOnly, ai.CodeNoProvider, ai.CodeProviderAuth, ai.CodeProviderVerification, ai.CodeProviderRefuse,
 		ai.CodeApproval, jobs.ErrCodeBadInput, jobs.ErrCodeSafety:
 		return false
 	}

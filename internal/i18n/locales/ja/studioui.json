@@ -250,5 +250,6 @@
   "studioui.script.state.conflict": "別の場所で変更されました · 再読み込み",
   "studioui.script.state.locked": "話がロックされています · 未保存",
   "studioui.script.state.invalid": "保存できません · 正しくない項目があります",
-  "studioui.new.upload_prompt": ".txtファイルを選ぶ"
+  "studioui.new.upload_prompt": ".txtファイルを選ぶ",
+  "studioui.job.provider_verification_detail": "OpenAIで画像を生成するには、組織の確認が必要です。OpenAIアカウントで確認してから、もう一度接続を確認してください。"
 }

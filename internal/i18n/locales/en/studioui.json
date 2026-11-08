@@ -250,5 +250,6 @@
   "studioui.script.state.conflict": "Changed elsewhere · reload",
   "studioui.script.state.locked": "Chapter locked · not saved",
   "studioui.script.state.invalid": "Not saved · a field is not valid",
-  "studioui.new.upload_prompt": "Choose a .txt file"
+  "studioui.new.upload_prompt": "Choose a .txt file",
+  "studioui.job.provider_verification_detail": "OpenAI needs your organisation verified for image generation. Verify it in your OpenAI account, then test the connection again."
 }
