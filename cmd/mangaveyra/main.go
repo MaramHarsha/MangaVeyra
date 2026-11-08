@@ -4,7 +4,7 @@
 //	mangaveyra migrate [status]          apply or list database migrations
 //	mangaveyra user create|reset-password|set-role ...
 //	mangaveyra seed --demo               create the original demo content
-//	mangaveyra mcp-stdio                 MCP over stdin/stdout for local agents
+//	mangaveyra mcp-stdio                 MCP over stdin/stdout for local agents (bridges to /mcp)
 //	mangaveyra backup ...                create, list or restore backups
 //	mangaveyra version
 //
@@ -46,7 +46,7 @@ Commands:
   user reset-password                Set a new password (--user <username|email> [--password])
   user set-role                      Change a site role (--user --role)
   seed [--demo]                      Create the demo content
-  mcp-stdio [--token mva_...]        Serve MCP over stdin/stdout
+  mcp-stdio [--url --token mva_...]  Bridge MCP over stdin/stdout to a server
   backup <create|list|restore> ...   Manage backups
   version                            Print version information
 
@@ -296,12 +296,19 @@ func cmdSeed(ctx context.Context, args []string, stdout, stderr io.Writer) error
 func cmdMCPStdio(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	fs, cfgPath := newFlags("mcp-stdio", stderr)
 	token := fs.String("token", os.Getenv("MV_AGENT_TOKEN"), "agent token (mva_...), default $MV_AGENT_TOKEN")
+	serverURL := fs.String("url", "", "server URL, default $MV_PUBLIC_URL (or public_url in --config)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	return withDeps(ctx, *cfgPath, stderr, false, func(d *core.Deps) error {
-		return mcp.RunStdio(ctx, d, *token, stdin, stdout)
-	})
+	// The bridge talks to a running server's /mcp over HTTP; it opens no database.
+	if *serverURL == "" {
+		cfg, err := loadConfig(*cfgPath)
+		if err != nil {
+			return err
+		}
+		*serverURL = cfg.PublicURL
+	}
+	return mcp.RunStdio(ctx, mcp.StdioOptions{URL: *serverURL, Token: *token}, stdin, stdout)
 }
 
 func cmdBackup(ctx context.Context, args []string, stderr io.Writer) error {
