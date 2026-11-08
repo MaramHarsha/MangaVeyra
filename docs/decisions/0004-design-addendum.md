@@ -439,3 +439,49 @@ the mobile artboards stay deferred (ADR 0012 §11).
   "No drop so far". Empty states cover no series, no reads and no published chapters. There is no revenue panel, and
   real counts replace the sample numbers.
 - **Segmented controls** in E5, E6 and F2 use the kit's 13 px labels where the artboards draw 12 px.
+- **E1 Publish flow.** The visibility segment "Followers" is labelled "Members": the `members` visibility means
+  signed-in members of this server (ADR 0012 §1), not followers. AI label rows are selects offering the recorded
+  level and anything above it, so a correction never shows less AI than the project history; the per-role detail
+  ("212 panels, 41 hand-edited", names) is not shown because no per-panel statistics are stored. Tags are a
+  comma-separated field with the chips shown below it, since the in-field chip editor needs script. Schedule uses
+  native Date and Time inputs, shown only while Schedule is chosen, with the user's time zone (UTC when unset) in
+  place of "· local", which the server cannot know without script. "Offer download for offline reading" and "Allow
+  panel comments" are disabled with Soon until publications carry per-chapter flags. "Preview as reader" links to
+  the reader once the chapter is live and is Soon before that. The primary button reads "Publish now" or "Schedule"
+  following the When control, and "Update published chapter" for a live chapter, next to an "Unpublish"
+  danger-outline button. Existing kit components add: notices above the grid (first chapter creates the series;
+  series stricter than the chapter; scheduled; unpublished; publishing progress with polling and Refresh; failure
+  with the public job error), a "Series settings" link under Licence, an in-page grid of rendered pages for "Choose
+  from pages", generated cover candidates with Keep buttons under the cover, an "Alt-text" review section below the
+  grid (one disclosure per page, a textarea per panel, ADR 0012 §5), and language options that show unlettered
+  languages with a bubble count and cannot be chosen. The editor's Publish opens E1 for the owner and editors and is
+  disabled with an explanation for other members.
+- **E1 Published.** "QUEST COMPLETE · +1,200 XP · LEVEL 24 REACHED" becomes "Quests and XP" with a Soon tag (the XP
+  layer is deferred, ADR 0001; no invented numbers). Share is a no-script disclosure showing the chapter link. "Publish
+  in {language}" appears only when another lettered language is ready and not yet live, and the follower count is the
+  real number notified. A "Back to publish settings" link is added; a scheduled chapter shows "Chapter N is scheduled
+  · Goes live {date}". The Japanese UI letters the SFX ドーン！ in the JP SFX face.
+- **Series settings (`/studio/p/{project}/series`, no artboard).** Built from E1's three-column grid and fields:
+  read-only cover on the left; title, address with a `/s/` prefix, synopsis, release note, genres, tags and five
+  support-link rows in the middle; visibility, format, age rating, status, licence, original language, creators (owner
+  first, members with a role and an optional display name) and published-language chips on the right.
+- **E5 Series page.** The creators line credits the series' creators in credit order ("by Jerry Okafor & Jun Sato"),
+  each linked to their F1 profile, followed by the release note (or the status when none is set), format, age rating
+  and licence. AI badges show every stored role (art, script, lettering), sparkles for AI-assisted/AI and the pencil
+  for human. Chapter thumbnails keep the designed screentone placeholder. Rows read "date · N pages" with New for
+  chapters published in the last seven days. The languages stat doubles as the language switch (codes are links; the
+  current one is underlined in the accent). Under the designed comment list, members get a "Write a comment" field
+  with Post and visitors "Log in to comment"; each comment has a "⋯" menu (Edit and Delete for its author, Hide from
+  readers / Show to readers for the series owner, Report for others) that opens inline forms built from the shared
+  field, select and textarea; hidden comments carry a Hidden badge, edited ones an "edited" note, and Newest/Older
+  comments links page after five comments. The support box is omitted when the series has no support links. Mature and
+  adult series show signed-in readers a one-time confirmation step built from the boxed empty-state pattern ("!?",
+  "{title} is rated Mature 17+", "I'm 17 or older", Back to Explore) over the banner; the owner previews without it.
+- **F1 Creator profile.** The sub line is the A5 creator type, the server host and the first line of the bio. The rank
+  line uses the B1 rank badge from users.xp/level, follows the viewer's ranks-and-XP preference and reads "READER" for
+  readers. The avatar colour comes from the account, not the sample yellow. Link buttons are the creator's profile
+  links (up to three) labelled by host. On your own profile Edit profile replaces Follow. Series cards show the release
+  note (or status) and chapter count. Chapters lists the 30 newest chapters across the creator's series with the E5
+  row; About shows the bio, links, @username and join date. A creator without readable series gets the empty state
+  (シーン…, "No series yet", with Open the studio on your own profile or Explore series otherwise). Genre badges show
+  the stored genre words.
