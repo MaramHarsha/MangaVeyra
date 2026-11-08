@@ -346,7 +346,7 @@
  }
  async function openHistory() { if (!page || !await flush()) return; guard(()=>{menu='';tool='select';tray='history';const url=new URL(location.href);url.searchParams.set('panel','history');url.searchParams.delete('tool');historyURL(url);}); }
  async function openControl(next:'sketch'|'lockfix',character='') { menu='';if(!page||jobRunning||!await flush())return;guard(()=>{jobID='';activeJob=null;candidates=[];tool=next;tray='properties';mode='pages';const url=new URL(location.href);url.searchParams.set('tool',next);if(character)url.searchParams.set('character',character);else url.searchParams.delete('character');url.searchParams.delete('panel');url.searchParams.delete('job');historyURL(url);}); }
- function closeControl(){guard(()=>{tool='select';tray='properties';controlDirty=false;error='';conflict=false;emitDirty();const url=new URL(location.href);url.searchParams.delete('tool');url.searchParams.delete('panel');url.searchParams.delete('character');historyURL(url);});}
+ function closeControl(){guard(()=>{tool='select';tray='properties';controlDirty=false;emitDirty();const url=new URL(location.href);url.searchParams.delete('tool');url.searchParams.delete('panel');url.searchParams.delete('character');historyURL(url);});}
  function controlJob(j:Job){activeJob=j;jobID=j.id;candidates=[];const url=new URL(location.href);url.searchParams.set('job',jobID);historyURL(url);void pollJob();scheduleQueue(0);}
  async function preparePageRun(){
   if(!page||busy||jobRunning||!await flush())return;
