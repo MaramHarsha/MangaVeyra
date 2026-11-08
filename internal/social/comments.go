@@ -376,8 +376,15 @@ func (s *service) listComments(ctx context.Context, v publish.Viewer, q CommentQ
 		if kind == TargetSeries || q.Page < 1 || q.Panel < 0 || (kind == TargetChapter && q.Panel != 0) {
 			return nil, "", invalid("anchor", "social.error.anchor")
 		}
-		where += " AND c.anchor = ?"
-		args = append(args, Anchor{Page: q.Page, Panel: q.Panel}.canonical())
+		if kind == TargetPanel && q.Panel == 0 {
+			// A page alone lists every panel comment on that page. Anchors are
+			// stored canonically ({"page":N,"panel":M}), so a prefix match is exact.
+			where += " AND c.anchor LIKE ?"
+			args = append(args, fmt.Sprintf(`{"page":%d,"panel":%%`, q.Page))
+		} else {
+			where += " AND c.anchor = ?"
+			args = append(args, Anchor{Page: q.Page, Panel: q.Panel}.canonical())
+		}
 	}
 	if q.Cursor != "" {
 		k, err := decodeCursor(q.Cursor, true)

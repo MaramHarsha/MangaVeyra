@@ -71,18 +71,21 @@ a.mv-series__row:hover .mv-series__rowtitle { text-decoration: underline; }
 .mv-series__rowtitle { font-size: .9375rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mv-series__rowmeta { font-size: var(--mv-fs-meta); color: var(--mv-text-2); }
 .mv-series__rowaside { display: flex; gap: 10px; align-items: center; color: var(--mv-text-2); }
-/* The offline download belongs to the reader; until it exists the icon keeps
-   its designed place with the Soon tag on its top edge. */
-.mv-series__dl { position: relative; display: inline-flex; color: var(--mv-text-3); }
-.mv-series__dl > .mv-soon {
+/* The offline download (members) starts in the reader with ?download=1. It is a
+   sibling of the row link, placed at the row's end where the artboard draws it. */
+.mv-series__rowitem { position: relative; }
+.mv-series__rowitem:has(.mv-series__dl) .mv-series__row { padding-right: 34px; }
+.mv-series__dl {
   position: absolute;
-  right: -6px;
-  top: -13px;
-  padding: 0 2px;
-  font-size: .5rem;
-  line-height: 1.4;
-  background: var(--mv-bg);
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  padding: 4px;
+  color: var(--mv-text-2);
 }
+.mv-series__dl:hover { color: var(--mv-text); }
+.mv-series__dl:focus-visible { outline: var(--mv-focus-width) solid var(--mv-focus); outline-offset: var(--mv-focus-offset); }
 
 .mv-series__aside { display: flex; flex-direction: column; gap: 14px; padding-top: 120px; min-width: 0; }
 .mv-series__box { display: flex; flex-direction: column; gap: 10px; padding: 16px; }

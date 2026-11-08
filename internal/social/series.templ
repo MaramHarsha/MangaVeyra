@@ -104,8 +104,14 @@ templ SeriesPage(v seriesView) {
 						} else {
 							<ol class="mv-list-plain mv-series__rows">
 								for _, row := range v.Rows {
-									<li>
+									<li class="mv-series__rowitem">
 										@chapterRowItem(row)
+										if row.Ready && v.SignedIn && ui.Ready(ctx, row.Href) {
+											<a class="mv-series__dl" href={ templ.URL(row.Href + "?download=1") } title={ i18n.T(ctx, "social.series.download") }>
+												@ui.Icon("download", 18)
+												<span class="mv-sr-only">{ i18n.T(ctx, "social.series.download") + " · " + row.Title }</span>
+											</a>
+										}
 									</li>
 								}
 							</ol>
@@ -199,13 +205,7 @@ templ chapterRowBody(row chapterRow) {
 		if row.New {
 			@ui.Badge(ui.ToneNew, "", i18n.T(ctx, "social.series.new"))
 		}
-		if row.Ready {
-			<span class="mv-series__dl is-soon" title={ i18n.T(ctx, "social.series.download") + " · " + i18n.T(ctx, "ui.soon_hint") }>
-				@ui.Icon("download", 18)
-				<span class="mv-sr-only">{ i18n.T(ctx, "social.series.download") }</span>
-				@ui.SoonTag()
-			</span>
-		} else {
+		if !row.Ready {
 			@ui.SoonTag()
 		}
 	</span>

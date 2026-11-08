@@ -87,6 +87,16 @@ func TestCommentTargetsAndAnchors(t *testing.T) {
 		if p := listComments(t, anon, commentsURL(s.ID, "panel", ch.ID, "page", "1", "panel", "1")); len(p.Items) != 0 {
 			t.Fatalf("other panel = %+v", p.Items)
 		}
+		// A page without a panel lists every panel comment on that page (the reader's open page).
+		_, second := e.user(auth.RoleReader) // the first member has used up the comment burst
+		panel1 := postComment(t, second, map[string]any{"series_id": s.ID, "target_kind": "panel", "target_id": ch.ID,
+			"anchor": map[string]any{"page": 3, "panel": 1}, "body": "The lighthouse!"}, http.StatusCreated)
+		if p := listComments(t, anon, commentsURL(s.ID, "panel", ch.ID, "page", "3")); len(p.Items) != 3 || p.Items[0].ID != panel1.ID {
+			t.Fatalf("page 3 panel comments = %+v", p.Items)
+		}
+		if p := listComments(t, anon, commentsURL(s.ID, "panel", ch.ID, "page", "1")); len(p.Items) != 0 {
+			t.Fatalf("page 1 panel comments = %+v", p.Items)
+		}
 		if p := listComments(t, anon, commentsURL(s.ID, "chapter", ch.ID)); len(p.Items) != 1 || p.Items[0].ID != cc.ID {
 			t.Fatalf("chapter list = %+v", p.Items)
 		}
