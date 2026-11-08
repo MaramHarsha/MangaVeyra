@@ -138,5 +138,6 @@
   "activity.error.upstream": "The provider or worker could not finish this job. Review it in Studio before trying again.",
   "activity.error.bad_output": "The result could not be used. Review the job in Studio before trying again.",
   "activity.error.artifact_rejected": "The trained file was rejected, so Character Lock was not changed. Check the worker setup, then train again.",
-  "activity.error.provider_verification": "OpenAI needs your organisation verified for image generation. Verify it in your OpenAI account, then test the connection again."
+  "activity.error.provider_verification": "OpenAI needs your organisation verified for image generation. Verify it in your OpenAI account, then test the connection again.",
+  "activity.job.cover": "Chapter cover"
 }

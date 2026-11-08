@@ -13,7 +13,8 @@ var publicErrorCodes = map[string]bool{
 	"provider_auth": true, "no_provider": true, "rate_limited": true, ErrCodeTimeout: true, ErrCodeOOM: true,
 	"scope_locked": true, "stale": true, "conflict": true, "spend_limit": true, "provider_refused": true,
 	ErrCodeSafety: true, ErrCodeBadInput: true, ErrCodeCanceled: true, "local_only": true, "upstream": true,
-	"bad_output": true, "approval_required": true, "artifact_rejected": true, ErrCodeInternal: true,
+	"bad_output": true, "approval_required": true, "artifact_rejected": true, "provider_verification": true,
+	ErrCodeInternal: true,
 }
 
 // describedErrorCodes have their own recovery copy (activity.error.<code>).
@@ -22,7 +23,7 @@ var describedErrorCodes = map[string]bool{
 	"provider_auth": true, "no_provider": true, "rate_limited": true, ErrCodeTimeout: true, ErrCodeOOM: true,
 	"scope_locked": true, "stale": true, "conflict": true, "spend_limit": true, "provider_refused": true,
 	ErrCodeSafety: true, ErrCodeBadInput: true, ErrCodeCanceled: true, "local_only": true, "upstream": true,
-	"bad_output": true, "artifact_rejected": true,
+	"bad_output": true, "artifact_rejected": true, "provider_verification": true,
 }
 
 // PublicErrorCode returns code when it is a stable public failure code and

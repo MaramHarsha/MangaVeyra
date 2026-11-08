@@ -138,5 +138,6 @@
   "activity.error.upstream": "プロバイダーまたはワーカーがこのジョブを完了できませんでした。もう一度試す前にStudioで確認してください。",
   "activity.error.bad_output": "結果を使用できませんでした。もう一度試す前にStudioでジョブを確認してください。",
   "activity.error.artifact_rejected": "学習ファイルが受け付けられなかったため、キャラクターロックは変更されていません。ワーカーの設定を確認してから、もう一度学習してください。",
-  "activity.error.provider_verification": "OpenAIで画像を生成するには、組織の確認が必要です。OpenAIアカウントで確認してから、もう一度接続を確認してください。"
+  "activity.error.provider_verification": "OpenAIで画像を生成するには、組織の確認が必要です。OpenAIアカウントで確認してから、もう一度接続を確認してください。",
+  "activity.job.cover": "章の表紙"
 }

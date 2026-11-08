@@ -489,7 +489,8 @@ func sanitizePlanningError(ctx context.Context, err error) error {
 func knownAICode(code string) bool {
 	switch code {
 	case ai.CodeBadInput, ai.CodeNoProvider, ai.CodeLocalOnly, ai.CodeSpendLimit, ai.CodeProviderAuth,
-		ai.CodeProviderRefuse, ai.CodeRateLimited, ai.CodeTimeout, ai.CodeBadOutput, ai.CodeUpstream, ai.CodeApproval:
+		ai.CodeProviderVerification, ai.CodeProviderRefuse, ai.CodeRateLimited, ai.CodeTimeout, ai.CodeBadOutput,
+		ai.CodeUpstream, ai.CodeApproval:
 		return true
 	default:
 		return false
@@ -511,6 +512,8 @@ func safeAIMessage(code, supplied string) string {
 		return "The remote-spend limit has been reached."
 	case ai.CodeProviderAuth:
 		return "The text provider connection is not authorized."
+	case ai.CodeProviderVerification:
+		return "OpenAI needs the organisation verified for image generation."
 	case ai.CodeProviderRefuse:
 		return "The text provider declined this request."
 	case ai.CodeRateLimited:

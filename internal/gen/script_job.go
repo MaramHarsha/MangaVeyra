@@ -160,7 +160,8 @@ func mapAIJobError(ctx context.Context, run *jobs.Run, err error) error {
 	retryable := generateErr.Retryable
 	if generateErr.Code == ai.CodeBadInput || generateErr.Code == ai.CodeBadOutput || generateErr.Code == ai.CodeApproval ||
 		generateErr.Code == ai.CodeLocalOnly || generateErr.Code == ai.CodeNoProvider || generateErr.Code == ai.CodeSpendLimit ||
-		generateErr.Code == ai.CodeProviderAuth || generateErr.Code == ai.CodeProviderRefuse {
+		generateErr.Code == ai.CodeProviderAuth || generateErr.Code == ai.CodeProviderVerification ||
+		generateErr.Code == ai.CodeProviderRefuse {
 		retryable = false
 	}
 	return &jobs.JobError{Code: generateErr.Code, Message: safeAIMessage(generateErr.Code, generateErr.SafeMessage), Retryable: retryable}

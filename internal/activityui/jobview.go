@@ -46,6 +46,8 @@ func jobLabelKey(typ, executor string) string {
 		return "activity.job.score"
 	case gen.JobLetterPage:
 		return "activity.job.lettering"
+	case gen.JobCover:
+		return "activity.job.cover"
 	}
 	switch {
 	case strings.HasPrefix(typ, "export."):
