@@ -10,4 +10,6 @@ The page store owns every commit, authorization, lock, version, and history snap
 
 New bubbles are placed in free space inside the selected panel, in reading order. Font keys follow the plan 0004 content-language contract (`comic`, `sfx`, `jp`, `ko`, `sc`, `tc`, `deva`); vertical lettering is offered only where `verticalAllowed` allows it.
 
+Collaboration (D7, ADR 0013 §8) lives in `ReviewDrawer.svelte`, `CanvasMarks.svelte`, `PresenceAvatars.svelte`, `collab.ts` and `review.svelte.ts`. `?panel=review` replaces the inspector with the review drawer; the canvas shows pins for open comments and the cursors of the others on the page. Review data comes from `/api/v1/collab` and reloads on `collab.changed` (ids only) from the page topic `doc:page:{id}`. Presence on that topic sends only a page-relative cursor (rounded, throttled to one message per 80 ms) and a colour; names come from the server, and leaving the page or closing the tab leaves the topic. Permissions are per page: a page-range member's controls follow the page loaded.
+
 Region masks use the target raster's pixel dimensions. White selects changes, black preserves; feathering is applied to the PNG mask. Brush, lasso, box, and keyboard-operable rectangle coordinates offer equivalent access; the before/after handle is backed by a keyboard slider. Object segmentation remains disabled Soon.

@@ -6,7 +6,7 @@
  import {Application,Assets,Container,Graphics,Sprite} from 'pixi.js';
  import type {Page,Lettering,Point} from './types';
  import {bounds,fitText,layerPlacement,letteringOpacity,panelLabel as labelFor,panelToolbarPlacement} from './document';
- let {page,lettering,actions={},selectedPanel='',selectedBubble='',showOrder=false,canArt=false,canLetter=false,previewURL='',previewPanel='',previewLabel='',panelActions,zoom='100',t,onPanel,onBubble,onMovePanel,onMoveBubble}:{page:Page;lettering:Lettering[];actions?:Record<string,string>;selectedPanel?:string;selectedBubble?:string;showOrder?:boolean;canArt?:boolean;canLetter?:boolean;previewURL?:string;previewPanel?:string;previewLabel?:string;panelActions?:Snippet;zoom?:string;t:(key:string,args?:Record<string,string|number>)=>string;onPanel:(id:string)=>void;onBubble:(id:string)=>void;onMovePanel:(id:string,dx:number,dy:number)=>void;onMoveBubble:(id:string,dx:number,dy:number)=>void}=$props();
+ let {page,lettering,actions={},selectedPanel='',selectedBubble='',showOrder=false,canArt=false,canLetter=false,previewURL='',previewPanel='',previewLabel='',panelActions,overlay,onCursor,zoom='100',t,onPanel,onBubble,onMovePanel,onMoveBubble}:{page:Page;lettering:Lettering[];actions?:Record<string,string>;selectedPanel?:string;selectedBubble?:string;showOrder?:boolean;canArt?:boolean;canLetter?:boolean;previewURL?:string;previewPanel?:string;previewLabel?:string;panelActions?:Snippet;overlay?:Snippet;onCursor?:(x:number|null,y:number|null)=>void;zoom?:string;t:(key:string,args?:Record<string,string|number>)=>string;onPanel:(id:string)=>void;onBubble:(id:string)=>void;onMovePanel:(id:string,dx:number,dy:number)=>void;onMoveBubble:(id:string,dx:number,dy:number)=>void}=$props();
  let displayWidth=$state(520);const toolbar=$derived(panelToolbarPlacement(page,selectedPanel,displayWidth));
  let host:HTMLDivElement;let svg:SVGSVGElement;let app= $state<Application|null>(null);let failure=$state('');let serial=0;let disposed=false;
  let drag=$state<{kind:'panel'|'bubble';id:string;start:Point;dx:number;dy:number}|null>(null);
@@ -34,7 +34,7 @@
 <svelte:window onpointermove={move} onpointerup={up}/>
 <div class="mv-ed__canvas-scroll">
  {#if failure}<p class="mv-ed__canvas-error" role="alert">{failure}</p>{/if}
- <div class={`mv-ed__proof-wrap mv-ed__proof-wrap--${zoom}`}>
+ <div class={`mv-ed__proof-wrap mv-ed__proof-wrap--${zoom}`} role="presentation" onpointermove={(e)=>{if(!onCursor)return;const r=e.currentTarget.getBoundingClientRect();onCursor((e.clientX-r.left)/Math.max(1,r.width),(e.clientY-r.top)/Math.max(1,r.height))}} onpointerleave={()=>onCursor?.(null,null)}>
   <div class="mv-ed__pixi" bind:this={host} aria-hidden="true"></div>
   <svg bind:this={svg} class="mv-ed__overlay" viewBox={`0 0 ${page.width} ${page.height}`} width={page.width} height={page.height} role="group" aria-label={t('canvas')}>
    {#each page.panels as panel,i (panel.id)}
@@ -68,5 +68,6 @@
    {#if toolbar&&panelActions}<g transform={`translate(${toolbar.x} ${toolbar.y}) scale(${toolbar.scale})`}><foreignObject width={toolbar.width} height={toolbar.height}><div class="mv-ed__panel-tools" role="toolbar" aria-label={t('panel.actions')}>{@render panelActions()}</div></foreignObject></g>{/if}
   </svg>
   {#if preview}<div class="mv-ed__preview-badge" style:left={`${preview.left}%`} style:top={`${preview.top}%`}>{previewLabel}</div>{/if}
+  {@render overlay?.()}
  </div>
 </div>
