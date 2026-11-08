@@ -160,3 +160,20 @@ def test_learned_score_job_forces_dino_and_keeps_outfit_separate(run_job: Callab
     assert result.output["outfit_scores"] == [.72]
     assert calls[0][0] == calls[1][0] == "dinov2"
     assert calls[1][1][0] < calls[0][1][0]
+
+
+def test_non_finite_identity_features_never_become_a_perfect_score(monkeypatch) -> None:
+    """max(0, min(1, nan)) is 1.0 in Python; NaN features must fail, not pass."""
+    from mangaveyra_worker.vision import embed
+
+    class NaNEmbedder:
+        method = "dinov2-stub"
+
+        def embed(self, images):
+            return [[float("nan")] * 4 for _ in images]
+
+    monkeypatch.setattr(embed, "available_embedders", lambda preference, model_dir=None: ["stub"])
+    monkeypatch.setattr(embed, "make_embedder", lambda name, model_dir=None: NaNEmbedder())
+    img = Image.new("RGB", (32, 32), "white")
+    with pytest.raises(RuntimeError, match="no identity embedder"):
+        embed.score_identity([img], [img])

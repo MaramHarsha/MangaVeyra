@@ -328,8 +328,19 @@ def score_identity(
         refs = [v for v in vecs[: len(references)] if v is not None]
         cands = vecs[len(references) :]
         c = centroid(refs)
+        raw = [cosine(c, v) for v in cands if v is not None]
+        # A corrupt or badly converted checkpoint can emit NaN/inf features.
+        # max(0, min(1, nan)) is 1.0 in Python, which would read as a perfect
+        # measured match, so non-finite output counts as an embedder failure.
+        if not all(math.isfinite(x) for x in (*c, *raw)):
+            log.warning(
+                "embedder produced non-finite features, trying the next one",
+                extra={"fields": {"embedder": name}},
+            )
+            last_error = ValueError(f"embedder {name!r} produced non-finite features")
+            continue
         # Preserve the measurement for server policy decisions. Rounding a
         # value such as .89999 to .9000 would turn drift into a false pass.
-        scores = [max(0.0, min(1.0, cosine(c, v))) for v in cands if v is not None]
+        scores = [max(0.0, min(1.0, x)) for x in raw]
         return scores, getattr(emb, "method", name)
     raise RuntimeError("no identity embedder could process the images") from last_error
