@@ -62,7 +62,7 @@ func (m *Module) readerPage(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	sid := sessionID(w, r)
-	m.recordAsync(v, sid, analytics.ReadEvent{SeriesID: series.ID, PublicationID: pub.ID, Kind: analytics.EventOpen, Page: view.StartPage})
+	m.recordAsync(v, sid, analytics.ReadEvent{SeriesID: series.ID, PublicationID: pub.ID, Kind: analytics.EventOpen, Page: 1})
 	w.Header().Set("X-Robots-Tag", robotsFor(series, pub))
 	c := m.ui.Chrome(w, r, web.PageOpts{Title: series.Title + " · " + view.Label, Section: layout.SectionExplore,
 		Tab: layout.TabExplore, NoSidebar: true})

@@ -21,21 +21,23 @@
  const t = translator(p.messages);
  const webtoon = p.series.format === 'webtoon';
  const store = storage();
- const total = p.pages.length;
  const modes: Exclude<Mode, 'auto'>[] = webtoon ? ['webtoon', 'guided'] : ['paged', 'spread', 'guided', 'webtoon'];
 
  /* ---- state ---- */
  let settings = $state<ReaderSettings>(merge(p.prefs, loadLocal(store, p.series.id), p.signed_in, webtoon));
  let pages = $state.raw<Page[]>(p.pages);
+ // A creator's "Update published chapter" re-freezes pages under the same publication: total and the
+ // guided steps follow the page list the island holds.
+ const total = $derived(pages.length);
  let vw = $state(typeof window === 'undefined' ? 1440 : window.innerWidth);
  const mode = $derived(effectiveMode(settings.mode, vw, webtoon));
  const views = $derived(mode === 'spread' ? spreads(pages) : singles(pages));
- let current = $state(Math.min(Math.max(1, p.start_page || 1), Math.max(1, total)));
+ let current = $state(Math.min(Math.max(1, p.start_page || 1), Math.max(1, p.pages.length)));
  const viewIdx = $derived(viewIndexOf(views, current));
  const view = $derived(views[viewIdx] || []);
  let atEnd = $state(false);
- const steps = sequence(p.pages);
- let step = $state(stepIndex(steps, p.start_page || 1, p.start_panel || 0));
+ const steps = $derived(sequence(pages));
+ let step = $state(stepIndex(sequence(p.pages), p.start_page || 1, p.start_panel || 0));
  let settingsOpen = $state(untrack(() => settings.settings_open ?? (!webtoon && vw >= 1280)));
  let commentsOpen = $state(false);
  let chromeHidden = $state(false);
@@ -77,7 +79,7 @@
  });
 
  /* ---- reading events ---- */
- const events = new ReadingEvents({ url: p.api.events, seriesId: p.series.id, publicationId: p.publication.id, total, enabled: p.events, send: beaconSend });
+ const events = new ReadingEvents({ url: p.api.events, seriesId: p.series.id, publicationId: p.publication.id, total: p.pages.length, enabled: p.events, send: beaconSend });
 
  /* ---- host attributes (background, brightness, zoom, motion, chrome) ---- */
  $effect(() => {
@@ -356,8 +358,17 @@
   const r = await call<{ pages: Page[] }>('GET', p.api.chapter);
   refreshing = false;
   if (r.ok && r.data?.pages) {
-   const fresh = new Map(r.data.pages.map((pg) => [pg.id, pg.src]));
-   pages = pages.map((pg) => ({ ...pg, src: fresh.get(pg.id) || pg.src }));
+   const next = r.data.pages;
+   const fresh = new Map(next.map((pg) => [pg.id, pg.src]));
+   if (next.length === pages.length && pages.every((pg) => fresh.has(pg.id))) {
+    pages = pages.map((pg) => ({ ...pg, src: fresh.get(pg.id) || pg.src }));
+   } else {
+    // The chapter was re-frozen (new page rows and images): take the new pages and stay in range.
+    pages = next;
+    current = Math.min(Math.max(1, current), Math.max(1, next.length));
+    step = Math.min(step, Math.max(0, sequence(next).length - 1));
+    atEnd = false;
+   }
   }
  }
 
@@ -527,7 +538,7 @@
 {/if}
 
 {#if commentsOpen && showComments}
- <Comments api={p.api.comments} seriesId={p.series.id} publicationId={p.publication.id} page={readingPage} panel={readingPanel}
+ <Comments api={p.api.comments} seriesId={p.series.id} publicationId={p.publication.id} page={readingPage} panel={readingPanel} {pages}
   signedIn={p.signed_in} loginUrl={p.login_url} {t} onclose={() => (commentsOpen = false)} />
 {:else if settingsOpen}
  <SettingsPanel {settings} {t} {webtoon} langs={p.langs} signedIn={p.signed_in} commentsReady={p.comments} {voiceReady} {voiceName}

@@ -1,13 +1,13 @@
 <script lang="ts">
- import type { T } from './types';
+ import type { Page, T } from './types';
  import { anchorOf, authorName, load, postBody, type Comment, type LoadState } from './comments';
  import { call } from './api';
  import { showToast } from '../../lib/toast';
 
  let {
-  api, seriesId, publicationId, page, panel, signedIn, loginUrl, t, onclose,
+  api, seriesId, publicationId, page, panel, pages, signedIn, loginUrl, t, onclose,
  }: {
-  api: string; seriesId: string; publicationId: string; page: number; panel: number; signedIn: boolean; loginUrl: string; t: T; onclose: () => void;
+  api: string; seriesId: string; publicationId: string; page: number; panel: number; pages: Page[]; signedIn: boolean; loginUrl: string; t: T; onclose: () => void;
  } = $props();
 
  let state = $state<LoadState>('loading');
@@ -18,7 +18,7 @@
 
  async function refresh(forPage: number) {
   state = 'loading';
-  const r = await load(api, publicationId, seriesId, forPage);
+  const r = await load(api, publicationId, seriesId, forPage, pages);
   state = r.state;
   chapter = r.chapter;
   panelComments = r.panel;

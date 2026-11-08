@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { frame, maskPath, panelPosition, sequence, spokenText, stepIndex } from './guided';
 import { comicsIslandMessages } from './testdata';
 import { translator, type Page } from './types';
-import { anchorOf, authorName, items, listURL, postBody } from './comments';
+import { anchorOf, anchoredHere, authorName, items, listURL, load, postBody } from './comments';
 
 const page = (number: number, panels: Page['panels']): Page => ({ id: `p${number}`, number, width: 160, height: 240, src: '', alt: `Page ${number}`, panels });
 const panel = (order: number, y: number): Page['panels'][number] => ({
@@ -63,5 +63,24 @@ describe('comments anchoring', () => {
     expect(authorName({ id: 'c', body: '', author: { username: 'jo.okafor' } })).toBe('jo.okafor');
     expect(items({ items: [{ id: 'a' }] })).toHaveLength(1);
     expect(items(null)).toEqual([]);
+  });
+  it('keeps comments whose anchor no longer names a panel at chapter level (re-frozen chapter)', async () => {
+    const pages = [page(1, [panel(1, 0), panel(2, 120)]), page(2, [panel(1, 0)])];
+    expect(anchoredHere({ page: 1, panel: 2 }, pages)).toBe(true);
+    expect(anchoredHere({ page: 2, panel: 2 }, pages)).toBe(false);
+    expect(anchoredHere({ page: 9, panel: 1 }, pages)).toBe(false);
+    expect(anchoredHere(null, pages)).toBe(false);
+    const panelItems = [
+      { id: 'a', body: 'here', anchor: { page: 1, panel: 2 } },
+      { id: 'b', body: 'past the end', anchor: { page: 9, panel: 1 } },
+      { id: 'c', body: 'hidden', anchor: { page: 1, panel: 1 }, hidden: true },
+    ];
+    const fake = (async (url: string) => new Response(JSON.stringify({ items: url.includes('target_kind=panel') ? panelItems : [{ id: 'd', body: 'chapter' }] }))) as unknown as typeof fetch;
+    const got = await load('/api/v1/social/comments', 'pub1', 'ser1', 1, pages, fake);
+    expect(got.state).toBe('ready');
+    expect(got.panel.map((c) => c.id)).toEqual(['a']);
+    expect(got.chapter.map((c) => c.id)).toEqual(['d', 'b']);
+    const down = (async () => new Response('{}', { status: 404 })) as unknown as typeof fetch;
+    expect((await load('/x', 'pub1', 'ser1', 1, pages, down)).state).toBe('unavailable');
   });
 });

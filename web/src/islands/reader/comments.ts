@@ -5,6 +5,7 @@
  * page). Until the social API exists every call degrades to "unavailable".
  */
 import { call } from './api';
+import type { Page } from './types';
 
 export interface Comment {
   id: string; body: string; anchor?: unknown; created_at?: string; hidden?: boolean;
@@ -55,8 +56,21 @@ export function items(data: unknown): Comment[] {
 
 export type LoadState = 'loading' | 'ready' | 'unavailable';
 
+/**
+ * anchoredHere reports whether a panel comment's anchor still names a panel
+ * of the chapter. After "Update published chapter" re-freezes the pages an
+ * anchor may point past the new end; such comments are shown with the
+ * chapter's comments instead.
+ */
+export function anchoredHere(a: Anchor | null, pages: Pick<Page, 'number' | 'panels'>[]): boolean {
+  if (!a) return false;
+  const pg = pages.find((p) => p.number === a.page);
+  if (!pg) return false;
+  return a.panel === 0 || (pg.panels || []).some((pn) => pn.order === a.panel);
+}
+
 /** load fetches chapter comments and the panel comments of one page. */
-export async function load(api: string, publicationId: string, seriesId: string, page: number, fetchFn: typeof fetch = fetch): Promise<{ state: LoadState; chapter: Comment[]; panel: Comment[] }> {
+export async function load(api: string, publicationId: string, seriesId: string, page: number, pages: Pick<Page, 'number' | 'panels'>[] = [], fetchFn: typeof fetch = fetch): Promise<{ state: LoadState; chapter: Comment[]; panel: Comment[] }> {
   const [ch, pn] = await Promise.all([
     call<unknown>('GET', listURL(api, 'chapter', publicationId, seriesId), undefined, fetchFn),
     // All panel comments of the chapter, filtered to the page here: the API's page filter alone matches
@@ -65,8 +79,10 @@ export async function load(api: string, publicationId: string, seriesId: string,
   ]);
   if (!ch.ok && !pn.ok) return { state: 'unavailable', chapter: [], panel: [] };
   const visible = (c: Comment) => !c.hidden;
-  const panel = items(pn.data).filter((c) => visible(c) && anchorOf(c)?.page === page);
-  return { state: 'ready', chapter: items(ch.data).filter(visible), panel };
+  const panelItems = items(pn.data).filter(visible);
+  const stale = pages.length ? panelItems.filter((c) => !anchoredHere(anchorOf(c), pages)) : [];
+  const panel = panelItems.filter((c) => !stale.includes(c) && anchorOf(c)?.page === page);
+  return { state: 'ready', chapter: [...items(ch.data).filter(visible), ...stale], panel };
 }
 
 export function postBody(seriesId: string, publicationId: string, body: string, anchor: Anchor | null) {
