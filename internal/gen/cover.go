@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"image/png"
 	"strings"
 	"time"
@@ -70,6 +71,14 @@ type CoverService interface {
 }
 
 var _ CoverService = (*service)(nil)
+
+// Keep conflicts. Both match studio.ErrConflict.
+var (
+	// ErrCoverKept: a candidate of this job was already kept.
+	ErrCoverKept = fmt.Errorf("%w: a cover from this job was already kept", studio.ErrConflict)
+	// ErrCoverPending: the job has not finished, so there is nothing to keep.
+	ErrCoverPending = fmt.Errorf("%w: the cover job has not finished", studio.ErrConflict)
+)
 
 type coverCast struct {
 	CharacterID   string `json:"character_id"`
@@ -527,13 +536,13 @@ func (s *service) KeepCover(ctx context.Context, actor studio.Actor, id string, 
 		return "", err
 	}
 	if j.State != jobs.StateDone {
-		return "", studio.ErrConflict
+		return "", ErrCoverPending
 	}
 	if index < 0 || index >= len(out.Candidates) {
 		return "", studio.ErrInvalid
 	}
 	if out.KeptIndex != nil {
-		return "", studio.ErrConflict
+		return "", ErrCoverKept
 	}
 	if _, err := s.resolveImageActor(ctx, actor, p.Scope.ProjectID, jobs.Cost{}, false); err != nil {
 		return "", err
@@ -549,7 +558,7 @@ func (s *service) KeepCover(ctx context.Context, actor studio.Actor, id string, 
 			return studio.ErrInvalid
 		}
 		if fresh.KeptIndex != nil {
-			return studio.ErrConflict
+			return ErrCoverKept
 		}
 		if err := s.checkCoverTx(ctx, tx, p, actor); err != nil {
 			return err

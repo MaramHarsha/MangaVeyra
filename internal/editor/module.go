@@ -19,6 +19,7 @@ type Module struct {
 	letter  lettering.Engine
 	gen     gen.Service
 	control gen.ControlService
+	covers  gen.CoverService
 	assets  *assets.Service
 	ui      *web.UI
 }
@@ -35,6 +36,7 @@ func (m *Module) Init(context.Context) error {
 	m.letter = core.MustUse[lettering.Engine](m.d)
 	m.gen = core.MustUse[gen.Service](m.d)
 	m.control = core.MustUse[gen.ControlService](m.d)
+	m.covers = core.MustUse[gen.CoverService](m.d)
 	m.assets = core.MustUse[*assets.Service](m.d)
 	m.ui = core.MustUse[*web.UI](m.d)
 	return nil
@@ -48,6 +50,9 @@ func (m *Module) Routes(r *core.Router) {
 	r.API("POST "+base+"/lock/quote", m.repairQuote, core.RequireSession)
 	r.API("GET "+base+"/lock/{character}", m.lockStatus, core.RequireSession)
 	r.API("POST "+base+"/lock/repair", m.repairCharacter, core.RequireSession)
+	r.API("POST "+base+"/cover/generate", m.generateCover, core.RequireSession)
+	r.API("GET "+base+"/cover/jobs/{job}", m.coverJob, core.RequireSession)
+	r.API("POST "+base+"/cover/jobs/{job}/keep", m.keepCover, core.RequireSession)
 	r.API("POST "+base+"/pages/{page}/regenerate", m.generatePage, core.RequireSession)
 	r.API("POST "+base+"/pages/{page}/sketch", m.uploadSketch, core.RequireSession)
 	r.API("GET "+base+"/pages/{page}/versions/{version}", m.versionPage, core.RequireSession)
