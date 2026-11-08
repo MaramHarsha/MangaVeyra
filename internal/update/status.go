@@ -3,6 +3,8 @@ package update
 import (
 	"context"
 	"time"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 )
 
 // Page is the G14 update page for admins.
@@ -65,4 +67,30 @@ func (m *Module) AvailableUpdate(ctx context.Context) (string, bool) {
 		return info.Version, true
 	}
 	return "", false
+}
+
+// MaintenanceProgress is G6's progress line while an update runs, in the
+// request's language ("Started 21:04 · step 3 of 5 · migrating database"),
+// and "" otherwise. The maintenance page shows it once the web layer asks for
+// it (see the root hook in the Phase 4 report).
+func (m *Module) MaintenanceProgress(ctx context.Context) string {
+	rec, err := m.activeAttempt(ctx)
+	if err != nil || rec == nil || rec.StartedAt == nil {
+		return ""
+	}
+	n, key := 1, rec.Status
+	switch rec.Status {
+	case StatusDownloading, StatusVerifying:
+		n = 2
+	case StatusMigrating:
+		n = 3
+	case StatusHealthCheck:
+		n = 4
+		if rec.Run().Phase == PhaseRestarting {
+			n, key = 5, PhaseRestarting
+		}
+	}
+	v := view{Loc: userLocation(ctx)}
+	return i18n.T(ctx, "update.maintenance.progress", "time", v.clock(rec.StartedAt), "n", n,
+		"step", i18n.T(ctx, "update.maintenance.step."+key))
 }

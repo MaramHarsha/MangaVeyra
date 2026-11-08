@@ -173,5 +173,12 @@
   "update.banner.body": "{host} にインストールできるのは管理者だけです。あなたが何かをする必要はありません。",
   "update.notify.title": "アップデート {version} があります",
   "update.notify.body": "サーバーは {current} です。管理画面からバックアップして更新できます。",
-  "update.maintenance.message": "管理者がバージョン {version} をインストールしています。保存した内容は失われません。"
+  "update.maintenance.message": "管理者がバージョン {version} をインストールしています。保存した内容は失われません。",
+  "update.maintenance.progress": "開始 {time} · ステップ {n} / 5 · {step}",
+  "update.maintenance.step.backing_up": "バックアップ中",
+  "update.maintenance.step.downloading": "アップデートをダウンロード中",
+  "update.maintenance.step.verifying": "ダウンロードを検証中",
+  "update.maintenance.step.migrating": "データベースをマイグレーション中",
+  "update.maintenance.step.health_check": "新しいバージョンを確認中",
+  "update.maintenance.step.restarting": "再起動中"
 }

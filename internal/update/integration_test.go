@@ -267,6 +267,9 @@ func TestInstallHappyPath(t *testing.T) {
 		if !e.maintenance() {
 			t.Fatal("maintenance must stay on until the new binary starts")
 		}
+		if p := e.m.MaintenanceProgress(e.ctx); !strings.HasPrefix(p, "Started ") || !strings.HasSuffix(p, "· step 5 of 5 · restarting") {
+			t.Fatalf("G6 progress = %q", p)
+		}
 		if len(e.backups.created) != 1 || e.backups.created[0].Kind != "pre_update" || e.backups.created[0].KeepFor != 0 {
 			t.Fatalf("backups = %+v", e.backups.created)
 		}
@@ -290,6 +293,9 @@ func TestInstallHappyPath(t *testing.T) {
 		}
 		if e.maintenance() {
 			t.Fatal("maintenance must be off after the update")
+		}
+		if p := e.m.MaintenanceProgress(e.ctx); p != "" {
+			t.Fatalf("G6 progress after the update = %q", p)
 		}
 		var locks int
 		_ = e.ta.Deps.DB.Get(e.ctx, &locks, `SELECT COUNT(*) FROM instance_settings WHERE key = 'update.lock'`)

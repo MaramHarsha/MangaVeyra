@@ -176,5 +176,12 @@
   "update.banner.body": "Only an admin can install it on {host}; you don’t need to do anything.",
   "update.notify.title": "Update {version} available",
   "update.notify.body": "The server is on {current}. Back up and update from Admin.",
-  "update.maintenance.message": "Your admin is installing version {version}; nothing you saved is lost."
+  "update.maintenance.message": "Your admin is installing version {version}; nothing you saved is lost.",
+  "update.maintenance.progress": "Started {time} · step {n} of 5 · {step}",
+  "update.maintenance.step.backing_up": "backing up",
+  "update.maintenance.step.downloading": "downloading the update",
+  "update.maintenance.step.verifying": "verifying the download",
+  "update.maintenance.step.migrating": "migrating database",
+  "update.maintenance.step.health_check": "checking the new version",
+  "update.maintenance.step.restarting": "restarting"
 }
