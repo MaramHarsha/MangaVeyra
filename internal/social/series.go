@@ -398,6 +398,12 @@ func (m *Module) backToComments(w http.ResponseWriter, r *http.Request, s publis
 	core.Redirect(w, r, "/s/"+url.PathEscape(s.Slug)+frag)
 }
 
+// backToNext returns to the local page that posted a follow form (Explore and
+// search send "next"), or to the series page.
+func (m *Module) backToNext(w http.ResponseWriter, r *http.Request, s publish.Series) {
+	core.Redirect(w, r, core.SafeRedirectTarget(r.PostFormValue("next"), "/s/"+url.PathEscape(s.Slug)))
+}
+
 // POST /s/{series}/follow
 func (m *Module) followSeriesForm(w http.ResponseWriter, r *http.Request) error {
 	if err := allow(m.followL, r); err != nil {
@@ -410,7 +416,7 @@ func (m *Module) followSeriesForm(w http.ResponseWriter, r *http.Request) error 
 	if err := m.svc.follow(r.Context(), core.UserFrom(r.Context()).ID, s, true); err != nil {
 		return apiError(r.Context(), err)
 	}
-	m.backToComments(w, r, s, "")
+	m.backToNext(w, r, s)
 	return nil
 }
 
@@ -426,7 +432,7 @@ func (m *Module) unfollowSeriesForm(w http.ResponseWriter, r *http.Request) erro
 	if err := m.svc.unfollow(r.Context(), core.UserFrom(r.Context()).ID, s.ID); err != nil {
 		return err
 	}
-	m.backToComments(w, r, s, "")
+	m.backToNext(w, r, s)
 	return nil
 }
 

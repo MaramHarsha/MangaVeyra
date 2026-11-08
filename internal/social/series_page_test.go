@@ -165,6 +165,16 @@ func TestSeriesPageFollowAndCommentForms(t *testing.T) {
 		if e.followerCount(s.ID) != 0 {
 			t.Fatal("follower_count not decremented")
 		}
+		// Explore and search post with a local next to return to; anything else falls back to the series.
+		for next, want := range map[string]string{"/explore?genre=mystery": "/explore?genre=mystery", "https://evil.example/": path, "//evil.example": path} {
+			r := postForm(c, path+"/follow", url.Values{"next": {next}})
+			if loc := r.Header.Get("Location"); loc != want {
+				t.Fatalf("follow next %q redirect = %q, want %q", next, loc, want)
+			}
+			if loc := postForm(c, path+"/unfollow", url.Values{"next": {next}}).Header.Get("Location"); loc != want {
+				t.Fatalf("unfollow next %q redirect = %q, want %q", next, loc, want)
+			}
+		}
 
 		// Post, fail validation (draft kept), edit, report and hide through the no-JS forms.
 		r = postForm(c, path+"/comments", url.Values{"body": {"  "}})
