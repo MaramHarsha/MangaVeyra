@@ -447,7 +447,7 @@ func (a *API) list(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	for i := range list {
-		list[i] = a.Q.PublicView(list[i])
+		list[i] = a.Q.PublicViewFor(r.Context(), list[i])
 	}
 	httpx.JSON(w, http.StatusOK, httpx.Paginate(list, p.Limit, func(j *Job) string { return j.ID }))
 	return nil
@@ -476,7 +476,7 @@ func (a *API) get(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"job": a.Q.PublicView(j), "position": pos})
+	httpx.JSON(w, http.StatusOK, map[string]any{"job": a.Q.PublicViewFor(r.Context(), j), "position": pos})
 	return nil
 }
 
@@ -489,10 +489,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if ev == nil {
-		ev = []Event{}
-	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"items": ev})
+	httpx.JSON(w, http.StatusOK, map[string]any{"items": PublicEvents(ev)})
 	return nil
 }
 
@@ -505,7 +502,7 @@ func (a *API) cancel(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"job": a.Q.PublicView(j)})
+	httpx.JSON(w, http.StatusOK, map[string]any{"job": a.Q.PublicViewFor(r.Context(), j)})
 	return nil
 }
 
@@ -518,7 +515,7 @@ func (a *API) retry(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"job": a.Q.PublicView(j)})
+	httpx.JSON(w, http.StatusOK, map[string]any{"job": a.Q.PublicViewFor(r.Context(), j)})
 	return nil
 }
 

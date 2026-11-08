@@ -43,8 +43,20 @@ diffusers = [
 comfyui = [
   "websockets>=17.1",
 ]
-# Panel/bubble detection, identity scoring and OCR helpers. insightface, open_clip_torch and
-# manga-ocr are optional extras on top of this (see README).
+# Explicit offline learned Character Lock scoring; weights are provisioned separately.
+character-lock = [
+  "torch>=2.14.0",
+  "transformers>=5.17.0",
+  "safetensors>=0.8.0",
+  "numpy>=2.5.3",
+]
+# Optional anime-character scorer. ONNX weights are supplied explicitly and
+# retain their separate OpenRAIL terms; installing this extra downloads no model.
+character-lock-ccip = [
+  "onnxruntime>=1.30.0",
+  "numpy>=2.5.3",
+]
+# Panel/bubble detection and OCR helpers. Learned scoring additionally uses character-lock.
 vision = [
   "numpy>=2.5.3",
   "opencv-python-headless>=5.0.0.93",

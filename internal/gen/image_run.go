@@ -10,6 +10,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"strconv"
 	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/ai"
@@ -127,6 +128,73 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 	if err = s.db.WithTx(ctx, func(tx *db.Tx) error { return s.checkImageTx(ctx, tx, p, actor) }); err != nil {
 		return mapImageJobError(ctx, err)
 	}
+	var rendered imageRender
+	components := len(p.Components)
+	progress := func(ctx context.Context, done int) error {
+		return run.Progress(ctx, float64(done)/float64(components+1), done, components+1, "Generating art")
+	}
+	if err := s.renderImage(ctx, run, p, 0, progress, &rendered); err != nil {
+		return err
+	}
+	staged, out := rendered.Staged, rendered.Output
+	defer s.discardRenders(context.WithoutCancel(ctx), []imageRender{rendered})
+	err = run.CommitSideEffect(ctx, func(ctx context.Context, tx *db.Tx) (any, error) {
+		if err := s.checkImageTx(ctx, tx, p, actor); err != nil {
+			return nil, err
+		}
+		for _, a := range staged {
+			if _, err := s.assets.CommitStagedTx(ctx, tx, a); err != nil {
+				return nil, err
+			}
+		}
+		if err := s.saveAssessmentsTx(ctx, tx, rendered.Assessments); err != nil {
+			return nil, err
+		}
+		if len(out.Candidates) == 1 {
+			if err := s.attachCandidateTx(ctx, tx, j, p, actor, &out, 0); err != nil {
+				return nil, err
+			}
+		}
+		return out, nil
+	})
+	if err != nil {
+		return mapImageJobError(ctx, err)
+	}
+	return nil
+}
+
+type imageRender struct {
+	Output      imageOutput
+	Staged      []*assets.StagedAsset
+	Assessments []lockAssessment
+}
+
+func (s *service) discardRenders(ctx context.Context, all []imageRender) {
+	for _, item := range all {
+		for _, a := range item.Staged {
+			_ = s.assets.DiscardStaged(ctx, a)
+		}
+	}
+}
+
+// artProgress reports a render's completed components in its caller's job.
+// The caller maps them onto its own total steps, so a multi-panel job never
+// restarts its bar at each panel and reports its steps before the first call.
+type artProgress func(ctx context.Context, done int) error
+
+// renderImage stages pixels only. Its caller owns the single atomic commit.
+// Page operations reuse this path and commit every panel together.
+func (s *service) renderImage(ctx context.Context, run *jobs.Run, p imagePayload, callOffset int, progress artProgress, rendered *imageRender) error {
+	j := run.Job
+	plan := currentImagePlan(p, j)
+	cost, err := scaleCost(plan.Estimate, imageAttempts*len(p.Components))
+	if err != nil {
+		return mapImageJobError(ctx, err)
+	}
+	actor, err := s.resolveImageActor(ctx, imageActor(p), p.Scope.ProjectID, cost, plan.Remote)
+	if err != nil {
+		return mapImageJobError(ctx, err)
+	}
 	totalInputBytes := 0
 	var references []ai.ImageRef
 	refByID := map[string]ai.ImageRef{}
@@ -156,19 +224,32 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 		}
 		init = data
 		initRef = &ai.ImageRef{Data: data, ContentType: a.ContentType, Role: "init"}
-		data, a, err = s.readOwned(ctx, p.Scope.ProjectID, p.MaskAssetID)
+		if p.MaskAssetID != "" {
+			data, a, err = s.readOwned(ctx, p.Scope.ProjectID, p.MaskAssetID)
+			if err != nil {
+				return mapImageJobError(ctx, err)
+			}
+			totalInputBytes += len(data)
+			if totalInputBytes > 48<<20 {
+				return mapImageJobError(ctx, studio.ErrInvalid)
+			}
+			mask = data
+			maskRef = &ai.ImageRef{Data: data, ContentType: a.ContentType, Role: "mask"}
+			if _, _, err = validateMask(init, mask, a.ContentType); err != nil {
+				return mapImageJobError(ctx, err)
+			}
+		}
+	}
+	if p.SketchAssetID != "" {
+		data, err := s.sketchCrop(ctx, p)
 		if err != nil {
 			return mapImageJobError(ctx, err)
 		}
-		totalInputBytes += len(data)
-		if totalInputBytes > 48<<20 {
-			return mapImageJobError(ctx, studio.ErrInvalid)
-		}
-		mask = data
-		maskRef = &ai.ImageRef{Data: data, ContentType: a.ContentType, Role: "mask"}
-		if _, _, err = validateMask(init, mask, a.ContentType); err != nil {
-			return mapImageJobError(ctx, err)
-		}
+		initRef = &ai.ImageRef{Data: data, ContentType: "image/png", Role: "init"}
+	}
+	contexts, pose, err := s.controlReferences(ctx, p)
+	if err != nil {
+		return mapImageJobError(ctx, err)
 	}
 	staged := []*assets.StagedAsset{}
 	committed := false
@@ -190,7 +271,7 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 	out := imageOutput{Candidates: make([]Candidate, plan.Needs.Count), PageID: p.PageID, CharacterID: p.CharacterID}
 	previewImages := make([][]image.Image, plan.Needs.Count)
 	for i, c := range p.Components {
-		if err := run.Progress(ctx, float64(i)/float64(len(p.Components)+1), i, len(p.Components)+1, "Generating art"); err != nil {
+		if err := progress(ctx, i); err != nil {
 			return mapImageJobError(ctx, err)
 		}
 		if _, err := s.resolveImageActor(ctx, actor, p.Scope.ProjectID, cost, plan.Remote); err != nil {
@@ -214,7 +295,33 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 				prompt = regionEditPrompt(p.Style, c.Kind, c.Prompt)
 			}
 		}
-		result, err := s.images.GenerateImage(ctx, ai.ImageGenerateRequest{Plan: plan, ActorID: actor.UserID, JobID: j.ID, ProjectID: p.Scope.ProjectID, Attempt: j.Attempts, CallSlot: i, Prompt: prompt, Negative: negative, Width: plan.Needs.Width, Height: plan.Needs.Height, Count: plan.Needs.Count, Seed: seedFor(j.ID, i), Style: p.Style, Background: c.Background, References: callRefs, Init: initRef, Mask: maskRef})
+		if c.Kind == pagedoc.LayerBackground {
+			callRefs = append(callRefs, contexts...)
+		}
+		if c.Kind == pagedoc.LayerCharacter && pose != nil {
+			// Identity references stay first and the pose guide last, so a route
+			// that sends only its first N references never trades an identity
+			// reference for the skeleton (ADR 0009/0010).
+			callRefs = append(append([]ai.ImageRef(nil), callRefs...), *pose)
+			prompt += " Follow the supplied skeleton for pose only; kept character references define identity and outfit. "
+		}
+		loraID := ""
+		if c.Kind == pagedoc.LayerCharacter && plan.ProviderID == "local-worker" {
+			if character, err := s.studio.GetCharacter(ctx, c.CharacterID); err == nil && character.LoraAssetID != "" {
+				if a, err := s.assets.Get(ctx, character.LoraAssetID); err == nil {
+					var meta struct {
+						Hash    string `json:"reference_hash"`
+						Model   string `json:"base_model"`
+						Trigger string `json:"trigger"`
+					}
+					if json.Unmarshal(a.Meta, &meta) == nil && meta.Hash == c.ReferenceHash && meta.Model == plan.ModelID && meta.Trigger != "" {
+						loraID = a.ID
+						prompt += " Character identity trigger: " + meta.Trigger + "."
+					}
+				}
+			}
+		}
+		result, err := s.images.GenerateImage(ctx, ai.ImageGenerateRequest{Plan: plan, ActorID: actor.UserID, JobID: j.ID, ProjectID: p.Scope.ProjectID, Attempt: j.Attempts, CallSlot: callOffset + i, Prompt: prompt, Negative: negative, Width: plan.Needs.Width, Height: plan.Needs.Height, Count: plan.Needs.Count, Seed: seedFor(j.ID, callOffset+i), Style: p.Style, Background: c.Background, Strength: p.Strength, LoRAAssetID: loraID, References: callRefs, Init: initRef, Mask: maskRef})
 		if err != nil {
 			return mapAIJobError(ctx, run, err)
 		}
@@ -225,13 +332,15 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 		if result.ProviderID != plan.ProviderID || result.ModelID != plan.ModelID || len(result.Images) != plan.Needs.Count {
 			return mapImageJobError(ctx, studio.ErrInvalid)
 		}
+		candidateData := [][]byte{}
+		candidateIDs := []string{}
 		for k, im := range result.Images {
 			pixels, err := decodePixels(im.Data)
 			if err != nil || pixels.Bounds().Dx() != plan.Needs.Width || pixels.Bounds().Dy() != plan.Needs.Height {
 				return mapImageJobError(ctx, studio.ErrInvalid)
 			}
 			data := im.Data
-			if initRef != nil {
+			if maskRef != nil {
 				data, err = preserveRegion(init, mask, data)
 				if err != nil {
 					return mapImageJobError(ctx, err)
@@ -256,6 +365,8 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 			if err != nil {
 				return mapImageJobError(ctx, err)
 			}
+			candidateData = append(candidateData, b.Bytes())
+			candidateIDs = append(candidateIDs, id)
 			candidate := &out.Candidates[k]
 			candidate.Index = k
 			candidate.Seed = im.Seed
@@ -264,6 +375,24 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 				candidate.Layers = append(candidate.Layers, CandidateLayer{LayerID: c.LayerID, Kind: c.Kind, CharacterID: c.CharacterID, Name: c.Name, AssetID: id, Seed: im.Seed, Prompt: c.Prompt})
 			}
 			previewImages[k] = append(previewImages[k], pixels)
+		}
+		if c.Kind == pagedoc.LayerCharacter && plan.ProviderID != ai.PlaceholderID {
+			if character, err := s.studio.GetCharacter(ctx, c.CharacterID); err == nil {
+				if hash, err := referenceStamp(ctx, s.db, character); err == nil {
+					if assessed, err := s.assessPixels(ctx, run, character, hash, candidateIDs, candidateData, p.Scope, "auto-"+strconv.Itoa(callOffset+i), "", nil); err == nil {
+						rendered.Assessments = append(rendered.Assessments, assessed...)
+						for k, a := range assessed {
+							score := assessmentScore(a)
+							out.Candidates[k].Layers[len(out.Candidates[k].Layers)-1].LockScore = score
+							if out.Candidates[k].LockScore == nil || *score < *out.Candidates[k].LockScore {
+								out.Candidates[k].LockScore = score
+							}
+						}
+					} else if ctx.Err() != nil {
+						return mapImageJobError(ctx, err)
+					}
+				}
+			}
 		}
 	}
 	if len(p.Components) > 1 {
@@ -283,28 +412,11 @@ func (s *service) handleImage(ctx context.Context, run *jobs.Run) error {
 			out.Candidates[i].AssetID = id
 		}
 	}
-	err = run.CommitSideEffect(ctx, func(ctx context.Context, tx *db.Tx) (any, error) {
-		if err := s.checkImageTx(ctx, tx, p, actor); err != nil {
-			return nil, err
-		}
-		for _, a := range staged {
-			if _, err := s.assets.CommitStagedTx(ctx, tx, a); err != nil {
-				return nil, err
-			}
-		}
-		if len(out.Candidates) == 1 {
-			if err := s.attachCandidateTx(ctx, tx, j, p, actor, &out, 0); err != nil {
-				return nil, err
-			}
-		}
-		return out, nil
-	})
-	if err != nil {
-		return mapImageJobError(ctx, err)
-	}
+	rendered.Output, rendered.Staged = out, staged
 	committed = true
 	return nil
 }
+
 func (s *service) attachCandidateTx(ctx context.Context, tx *db.Tx, j *jobs.Job, p imagePayload, actor studio.Actor, out *imageOutput, index int) error {
 	if index < 0 || index >= len(out.Candidates) || out.AppliedIndex != nil {
 		return studio.ErrConflict
@@ -351,6 +463,9 @@ func (s *service) attachCandidateTx(ctx context.Context, tx *db.Tx, j *jobs.Job,
 					}
 				}
 			}
+			// Character Lock evidence lives in character_assessments and is resolved
+			// for the current references and method on every read (WithLockScores).
+			// A percentage copied onto the layer would outlive both.
 			stored, err := s.pages.SetLayerAssetTx(ctx, tx, pagestore.SetLayerAsset{PageID: p.PageID, PanelID: p.PanelID, LayerID: l.LayerID, Kind: l.Kind, CharacterID: l.CharacterID, Name: l.Name, AssetID: l.AssetID, MaskAssetID: maskToKeep, Seed: &seed, Prompt: l.Prompt, Provenance: provenance, ModelID: j.ModelID, ProviderID: j.ProviderID, JobID: j.ID}, ch)
 			if err != nil {
 				return err
@@ -398,6 +513,23 @@ func (s *service) Candidates(ctx context.Context, actor studio.Actor, id string)
 		return nil, err
 	}
 	for i := range out.Candidates {
+		// Candidate snapshots may predate a bible edit or the learned scorer.
+		// Resolve evidence against current references just as the page view does.
+		candidate := &out.Candidates[i]
+		proof := pagedoc.Page{ProjectID: p.Scope.ProjectID, Panels: []pagedoc.Panel{{}}}
+		for _, l := range candidate.Layers {
+			proof.Panels[0].Layers = append(proof.Panels[0].Layers, pagedoc.Layer{ID: l.LayerID, Kind: l.Kind, CharacterID: l.CharacterID, Asset: &pagedoc.AssetRef{ID: l.AssetID}})
+		}
+		if err := s.WithLockScores(ctx, actor, &proof); err != nil {
+			return nil, err
+		}
+		candidate.LockScore = nil
+		for n, l := range proof.Panels[0].Layers {
+			candidate.Layers[n].LockScore = l.LockScore
+			if l.LockScore != nil && (candidate.LockScore == nil || *l.LockScore < *candidate.LockScore) {
+				candidate.LockScore = l.LockScore
+			}
+		}
 		a, err := s.assets.Get(ctx, out.Candidates[i].AssetID)
 		if err != nil || a.ProjectID == nil || *a.ProjectID != p.Scope.ProjectID {
 			return nil, studio.ErrForbidden

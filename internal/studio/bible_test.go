@@ -86,6 +86,55 @@ func TestBibleProfileReferencesOutfitsAndSettings(t *testing.T) {
 	})
 }
 
+func TestOutfitReferenceBindingSurvivesDefaultSwitchAndRejectsStaleKeep(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		svc := studioService(ta)
+		bible := core.MustUse[studio.BibleService](ta.Deps)
+		owner, actor, p := createProject(t, ta, "Outfit reference binding")
+		c, err := svc.CreateCharacter(ctx, actor, studio.NewCharacter{ProjectID: p.ID, Name: "Mina Sazanami", Category: "main"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, err := assets.From(ta.Deps).Save(ctx, assets.SaveParams{ProjectID: p.ID, OwnerID: owner.ID, Data: biblePNG(t)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		legacy, err := bible.AddCharacterRef(ctx, actor, studio.NewCharacterRef{ProjectID: p.ID, CharacterID: c.ID, AssetID: a.ID, Kind: "outfit", ExpectedUpdatedAt: c.UpdatedAt})
+		if err != nil || legacy.OutfitID != "" {
+			t.Fatalf("unassigned reference: %+v %v", legacy, err)
+		}
+		c, _ = svc.GetCharacter(ctx, c.ID)
+		first, err := bible.CreateOutfit(ctx, actor, studio.NewOutfit{ProjectID: p.ID, CharacterID: c.ID, Name: "Courier coat", IsDefault: true, ExpectedUpdatedAt: c.UpdatedAt})
+		if err != nil {
+			t.Fatal(err)
+		}
+		c, _ = svc.GetCharacter(ctx, c.ID)
+		bound, err := bible.AddCharacterRef(ctx, actor, studio.NewCharacterRef{ProjectID: p.ID, CharacterID: c.ID, AssetID: a.ID, Kind: "outfit", Label: "Crouched", ExpectedUpdatedAt: c.UpdatedAt})
+		if err != nil || bound.OutfitID != first.ID {
+			t.Fatalf("bound reference: %+v %v", bound, err)
+		}
+		c, _ = svc.GetCharacter(ctx, c.ID)
+		stale := c.UpdatedAt
+		second, err := bible.CreateOutfit(ctx, actor, studio.NewOutfit{ProjectID: p.ID, CharacterID: c.ID, Name: "Storm gear", IsDefault: true, ExpectedUpdatedAt: c.UpdatedAt})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = bible.AddCharacterRef(ctx, actor, studio.NewCharacterRef{ProjectID: p.ID, CharacterID: c.ID, AssetID: a.ID, Kind: "outfit", ExpectedUpdatedAt: stale}); !errors.Is(err, studio.ErrConflict) {
+			t.Fatalf("stale default association: %v", err)
+		}
+		c, _ = svc.GetCharacter(ctx, c.ID)
+		current, err := bible.AddCharacterRef(ctx, actor, studio.NewCharacterRef{ProjectID: p.ID, CharacterID: c.ID, AssetID: a.ID, Kind: "outfit", ExpectedUpdatedAt: c.UpdatedAt})
+		if err != nil || current.OutfitID != second.ID {
+			t.Fatalf("current reference: %+v %v", current, err)
+		}
+		c, _ = svc.GetCharacter(ctx, c.ID)
+		if len(c.Refs) != 3 || c.Refs[0].OutfitID != "" || c.Refs[1].OutfitID != first.ID || c.Refs[2].OutfitID != second.ID {
+			t.Fatalf("default switch reassigned older poses: %+v", c.Refs)
+		}
+	})
+}
+
 func TestBibleAuthorizationValidationAndAtomicRollback(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp) {
 		ctx := context.Background()

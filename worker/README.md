@@ -46,7 +46,8 @@ timeout of at least `MV_DRAIN_TIMEOUT_S` (default 120 s) so running jobs can fin
 ```sh
 python3.12 -m venv .venv && . .venv/bin/activate
 pip install ./worker                              # mock backend only (Pillow, httpx) — works anywhere
-pip install './worker[vision]'                    # + OpenCV panel/bubble detection, identity scoring
+pip install './worker[vision]'                    # + OpenCV panel/bubble detection
+pip install './worker[character-lock]'            # + explicit offline DINOv2 scoring (weights supplied separately)
 pip install './worker[diffusers,comfyui,vision]'  # everything (install a CUDA build of torch first, see GPU notes)
 
 export MV_SERVER=http://studio.local:8080 MV_WORKER_TOKEN=mvw_…
@@ -97,7 +98,11 @@ Every option is an environment variable; a TOML file (`--config worker.toml` or 
 | `MV_COMFYUI_WORKFLOWS` | — | Directory of ComfyUI workflow bundles |
 | `MV_COMFYUI_TIMEOUT_S` | `1800` | Longest a ComfyUI prompt may run |
 | `MV_OCR_ENGINE` / `MV_OCR_URL` | `auto` | `auto`, `manga-ocr`, `tesseract`, `http`, `none` |
-| `MV_EMBEDDER` | `auto` | Character Lock embedder: `auto`, `insightface`, `clip`, `structural` |
+| `MV_EMBEDDER` | `auto` | Character Lock embedder: `auto`/`dinov2`, explicit `ccip`; legacy explicit `insightface`, `clip`, `structural` |
+| `MV_CCIP_MODEL_DIR` | — | Explicit local CCIP feature ONNX directory; select it with `MV_EMBEDDER=ccip`; weights retain their separate OpenRAIL terms |
+| `MV_FASHION_MODEL_DIR` / `MV_OUTFIT_MODEL` | — | Explicit local FashionCLIP files and a validated frozen outfit artifact; no automatic downloads |
+| `MV_OUTFIT_MODE` | `centroid` | `multiview` selects validated learned matching to up to five kept views of the default outfit; requires CCIP, FashionCLIP and the matching artifact |
+| `MV_DINO_MODEL_DIR` | — | Explicit local DINOv2 Small directory containing config, processor config and safetensors; no runtime downloads |
 | `MV_MOCK_MODELS` | `mock` | Model ids the mock backend advertises |
 | `MV_MOCK_STEP_DELAY` | `0.05` | Seconds per simulated step (makes progress bars realistic) |
 | `MV_MAX_DOWNLOAD_MB` | `64` | Largest input file the worker downloads |
@@ -264,16 +269,66 @@ from outputs (it can contain local paths).
   manga). A page without structure yields one full-page panel, so imports always produce an editable page.
 - **Bubbles**: enclosed, roughly elliptical white regions that contain ink (OpenCV). When an OCR engine is present,
   the vision backend fills their text.
-- **Character Lock** (`character.score`): cosine similarity between each candidate and the centroid of the reference
-  embeddings. Embedders, best first: InsightFace ArcFace (`pip install insightface`; only when every image has a
-  detectable face), OpenCLIP (`pip install open_clip_torch`), and a numpy structural descriptor that always works.
-  The output carries `method` so the UI can say which one scored.
+- **Character Lock** (`character.score`): the automatic learned backend is DINOv2 Small. Install the optional
+  `character-lock` dependencies explicitly and provision `facebook/dinov2-small` (Apache-2.0) into
+  `MV_DINO_MODEL_DIR` yourself. The three required files are `config.json`, `preprocessor_config.json` and
+  `model.safetensors`. Loading is offline, safetensors-only, with remote model code disabled. The vision backend
+  advertises `character-lock-dinov2-v1` only when dependencies/files are present. OpenCV is independently required
+  for panel detection, not for learned scoring.
+  The method is `dinov2-small-v1:<weights SHA256>`. Identity compares candidate/reference-centroid embeddings;
+  an explicitly supplied outfit reference gets a separate lower-body comparison. The server records current
+  reference/asset fingerprints and rejects structural/mock evidence. Missing learned weights mean unavailable,
+  not a synthetic fallback percentage. Legacy InsightFace/CLIP/structural modes remain explicit diagnostic
+  opt-ins; the application never uses them as authoritative Character Lock evidence.
+  DINOv2 is a general visual feature model: these are uncalibrated similarities, not identity probabilities.
+  The original Phase 2 DINOv2 run failed the 0.90 policy threshold; see [ADR 0010](../docs/decisions/0010-phase-2-scoped-control-and-character-evidence.md).
+  An explicitly selected `MV_EMBEDDER=ccip` instead uses a local official `ccip-caformer-24-randaug-pruned`
+  `model_feat.onnx` from `deepghs/ccip_onnx`, supplied in `MV_CCIP_MODEL_DIR`. Install the
+  `character-lock-ccip` extra separately. These weights are tagged OpenRAIL and are not bundled or downloaded
+  by the worker. The model advertises `character-lock-ccip-v1` and records
+  `ccip-caformer24-v1:<weights SHA256>`. It retains the full-image published preprocessing and the same
+  independent lower-body outfit comparison. No missing-score or structural fallback is accepted.
+  CCIP and DINOv2 metrics or different weight revisions are never averaged together; changing the explicitly
+  configured scorer requires a fresh assessment. The C3 card names the method actually used.
+  The worker disables ONNX Runtime and Hugging Face telemetry before optional library imports. This includes
+  ORT initialization, not only subsequent inference sessions.
+  Outfit relationship scoring also requires explicit `MV_FASHION_MODEL_DIR` and `MV_OUTFIT_MODEL`, plus the
+  `character-lock` dependencies. The single-centroid profile `character-lock-ccip-outfit-v3` requires reproducible
+  held-out and independent controls; the single-view candidates failed and remain disabled.
+  `MV_OUTFIT_MODE=multiview` instead advertises `character-lock-ccip-outfit-multiview-v1` only with its distinct
+  validated artifact. It compares each of up to five kept views of the current default outfit with the candidate,
+  then takes the maximum frozen two-feature clothing match. Identity must first pass 0.90; a different person is
+  drift with no outfit judgment. Matching identities require an outfit measurement when references exist.
+  `ccip-outfit-multiview-v1:<artifact SHA256>` binds the fit, preprocessing and feature-model lineage. Per-view
+  CCIP/FashionCLIP features, predictions, selected reference indices and fit parameters stay in job history;
+  the server reproduces their predictions before persisting a score. Raw CCIP outfit cosine is inspectable,
+  not a second clothing threshold. Scores are learned matches, not probabilities or a universal quality guarantee.
+  Missing or failed artifacts leave this explicit profile unavailable. Details and rollback:
+  [ADR 0011](../docs/decisions/0011-explicit-anime-scoring-and-outfit-validation.md).
 - **OCR** (`ocr`), pluggable via `MV_OCR_ENGINE`:
   - `manga-ocr` (Apache-2.0, `pip install manga-ocr`) — Japanese manga text incl. vertical lines, run per bubble;
   - `tesseract` (`pip install pytesseract` + the `tesseract` binary and language packs) — Latin scripts;
   - `http` — POSTs the image (multipart `image`, `lang`) to `MV_OCR_URL` and expects
     `{"lines": [{"text", "box": [x, y, w, h]}]}`. Use this to run GPL tools such as *manga-image-translator* as a
     separate service; MangaVeyra never vendors or links GPL code.
+
+For the validated Phase 2 example, provision the exact model revisions/checksums in ADR 0011 yourself, then use
+these settings in addition to your normal server/token settings (paths are examples):
+
+```sh
+MV_BACKENDS=vision MV_EMBEDDER=ccip MV_CCIP_MODEL_DIR=/models/ccip \
+MV_FASHION_MODEL_DIR=/models/fashion-clip MV_OUTFIT_MODE=multiview \
+MV_OUTFIT_MODEL=./worker/examples/scoring/outfit-multiview-v1.json \
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 mangaveyra-worker
+```
+
+The example JSON includes the reproducible held-out/control features and an unchanged training-only fit; it
+contains no image weights or user credentials. Its paired freeze is
+[`examples/scoring/outfit-pair-frozen-fit.json`](examples/scoring/outfit-pair-frozen-fit.json).
+It passed the original-manga Phase 2 chapter and independent controls described in the QA record. Its narrow
+wardrobe/identity sample is a limitation; review new styles, costumes, occlusions and body types yourself. Keep
+dedicated outfit references through C3 with the intended variant selected as default. Legacy unbound outfit
+views are not silently assigned to a named variant. Never use assessed chapter images as their own references.
 
 ## GPU notes
 

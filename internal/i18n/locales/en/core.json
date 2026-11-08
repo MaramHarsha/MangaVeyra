@@ -94,5 +94,7 @@
 
   "compute.gpu_time": "~{seconds} s GPU",
   "compute.remote_spend": "~{amount} on your key",
-  "compute.local": "local"
+  "compute.local": "local",
+  "notify.kind.lock_ready": "Character Lock training finished",
+  "notify.lock.ready_body": "The trained character is ready. Review its references and assessed panels."
 }

@@ -176,12 +176,12 @@ const storyHTML = `
       <p data-prose-line="p1.0"><strong data-mirror="panel.p1.dialogue.0.speaker">Kaito</strong><span data-mirror="panel.p1.dialogue.0.text">Late.</span></p>
     </div>
   </article>
-  <form class="mv-c1__script" data-view-panel="panels">
+  <form class="mv-c1__script" data-view-panel="panels" novalidate>
     <input name="scene.s1.title" value="Harbour at dusk">
-    <textarea name="panel.p1.action">Rin runs.</textarea>
+    <textarea name="panel.p1.action" style="resize: none">Rin runs.</textarea>
     <div data-lines="p1">
-      <div class="mv-c1__line" data-line="p1.0" data-kind="speech"><input name="panel.p1.dialogue.0.speaker" value="Kaito"><textarea name="panel.p1.dialogue.0.text">Late.</textarea></div>
-      <div class="mv-c1__line" data-line="p1.3" data-kind="caption"><input name="panel.p1.dialogue.3.speaker" value=""><textarea name="panel.p1.dialogue.3.text">The ferry leaves.</textarea></div>
+      <div class="mv-c1__line" data-line="p1.0" data-kind="speech"><input name="panel.p1.dialogue.0.speaker" value="Kaito"><textarea name="panel.p1.dialogue.0.text" style="resize: none">Late.</textarea></div>
+      <div class="mv-c1__line" data-line="p1.3" data-kind="caption"><input name="panel.p1.dialogue.3.speaker" value=""><textarea name="panel.p1.dialogue.3.text" style="resize: none">The ferry leaves.</textarea></div>
     </div>
   </form>
 </div>`;

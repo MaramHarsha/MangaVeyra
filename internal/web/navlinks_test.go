@@ -76,6 +76,8 @@ func checkBuiltPages(t *testing.T, dialect string) {
 		"new project":              "/studio/new/premise",
 		"story":                    "/studio/p/" + project.ID + "/story/" + chapter.ID,
 		"models":                   "/models",
+		"job queue":                "/queue",
+		"notification center":      "/notifications",
 		"connect OR":               "/models/providers/new?kind=openrouter",
 		"connect OAI":              "/models/providers/new?kind=openai",
 		"connect fal":              "/models/providers/new/fal",

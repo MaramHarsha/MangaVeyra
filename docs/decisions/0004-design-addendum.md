@@ -206,8 +206,9 @@ nearest designed screen would put it.
   (Pages; the same value as the app shell: the instance public URL or request host, including the port), the worker
   GPU and VRAM or "No image worker · {host}" (Variations), the lettering note (Lettering) and "Region edit · step N in
   version history" (Region).
-- **D1 page and layer actions:** the "…" beside Pages holds Change layout, Move page earlier/later, Version history,
-  Lock/Unlock page and Delete page. The layout-grid-add icon adds a page and opens the layout picker. The Layers "+"
+- **D1 page and layer actions:** the "…" beside Pages holds Change layout, Move page earlier/later, Regenerate this
+  page, Sketch to manga, Version history, Lock/Unlock page and Delete page; Regenerate this page and Sketch to manga
+  are disabled with the lock reason while the page, a panel or an art layer is locked. The layout-grid-add icon adds a page and opens the layout picker. The Layers "+"
   adds a layer for a bible character not yet in the panel, or an FX layer. The dashed "Add" character chip is a native
   select styled as the chip; chips show the character's name and wrap to a second row rather than truncate. A page
   without panels shows "No panels yet" and Choose layout in the inspector; otherwise a panel is always selected.
@@ -237,7 +238,7 @@ nearest designed screen would put it.
   placement as a new speech bubble. Previously positioned tails remain where the creator put them.
 - **D8 Variations:** the status line reads "{ready} of 4 ready · {seconds} s · {model}" from the job's real timing.
   Lock captions and DRIFT appear only when a job reports lock scores. The queue lists the user's recent panel and
-  region jobs in the chapter; Open queue is Soon. Repeating an identical panel or region request while its job is
+  region jobs in the chapter; Open queue links to G9. Repeating an identical panel or region request while its job is
   queued or running returns that job instead of starting another.
 - **D13 Region edit:** region editing fits the actual layer's aspect ratio within the desktop proof area, and the
   panel's screentone shows through transparent layer areas. The compare handle, comparison area and four-tile strip
@@ -249,3 +250,132 @@ nearest designed screen would put it.
   visibly Soon.
 - **Editor without JavaScript:** the shell shows the page scaled to the canvas with its art, page thumbnails and
   export, and the inspector lists each panel's prompt and layers read-only.
+
+## 9. Phase 2 activity states (G9/G4)
+
+The desktop artboards define these screens' layout, copy, iconography and hierarchy. G9 keeps the full queue table,
+worker action and three summary cards. G4 keeps the full-width shell without the Studio sidebar, the four category
+segments, Mark all read and the compact 760 px notification list. Existing tokens and UI-kit owners are reused.
+
+- **G9 real data:** rows use the actual job type, panel number when available, member, route, state and progress.
+  Members see their own jobs. Admins see their own jobs by default and every member's jobs through an explicit "All
+  users" filter (`?all=1`, URL-restorable), drawn as the existing segmented-link control before the worker button;
+  the This week summary follows the same filter. No registered online or paused worker means the subtitle identifies
+  server/remote jobs; while every worker is paused the subtitle keeps the GPU or worker name and reads "{n} running
+  slot(s) paused". No hardware name or worker slot count is fabricated. Online worker slots come from registered
+  worker capacity.
+  Per-user limits distinguish configured GPU/server limits. Night mode uses its configured window and server time.
+  This week's summary uses recorded actuals for finished top-level jobs since Monday 00:00 UTC; parent actuals
+  include their child work. These values replace the artboard's sample metrics. A worker job started by a parent
+  job (Character Lock assessment or training, local image generation) is part of that job: the queue shows one row
+  whose bar uses the running child's measurement, never ahead of the parent's measured steps; the child's detail link
+  opens the parent, and canceling the parent also stops the child. An unacknowledged cancellation reads Stopping in
+  the warning tone; finished jobs show their final state. Remote spend uses two decimals ("$4.18"), amounts below one
+  cent read "<$0.01", queued estimates read "~3 min"/"~$0.24", and a finished job's time reads "38 s", "2 min" or
+  "1 h 5 m". Character Lock scoring models absent from the routing catalogue are named DINOv2, CCIP, CCIP + outfit
+  and CCIP + outfit views.
+- **G9 action states not drawn in the handoff:** reuse the shared dropdown for View details, Review in Studio and
+  cancellation. Retry is reviewed in the original Studio flow so scope, revision and spend approval remain there.
+  A selected job expands a shared Box/KV/Notice section below the designed queue and summary, with at most 50
+  sanitized recent event kinds/timestamps. No prompt, payload or raw provider/worker log is shown. A single online or
+  paused worker uses the designed button, labelled and iconed by the action it performs (Pause worker with the pause
+  icon; Resume worker with the play icon when every worker is paused); several use the existing dropdown with named
+  actions. Offline workers are not counted. No worker
+  or insufficient role disables the action with its reason. Pause drains new claims and preserves running work.
+- **G4 real data:** titles and bodies are persisted notification content; times, controls and read status follow
+  the current interface locale. Notification text retains the language in which it was created. Category filters
+  use the existing segmented-link component; Mark all read covers the selected category for the current member and
+  is disabled when that category has nothing unread. Rows are ordered by the time shown, newest first (a regrouped
+  notification moves to the top). Job notification bodies are a summary in the recipient's language — project ·
+  what was made · duration ("Tidebreak Courier · Panel 1.2 · Regenerate · 38 s") — never a job type or worker text;
+  older rows that stored a raw job type show that job's localized label.
+  Clicking a row explicitly marks it read and opens an existing local destination. Missing or external destinations
+  return to the notification category instead of offering a dead/external link.
+- **Necessary empty, paging and recovery states:** use the existing State, Notice and button components. Cursor
+  pages use Latest/Older below the list. Empty states explain where future activity appears; they do not fabricate
+  sample jobs or notices. Queue polling retains loaded content on errors and offers Refresh, stops when idle and
+  does not replace an open menu, focused control, dialog or pending form. No-JavaScript views use ordinary complete
+  pages, POST forms and Refresh. Timestamps explicitly label UTC.
+- **Narrow widths:** existing responsive patterns stack queue rows/cards and wrap header actions. The unapproved
+  mobile artboards remain deferred, following the owner's instruction.
+
+## 10. Phase 2 control states (D4/D10/D12 and C3/C4)
+
+The approved desktop workbenches use the full canvas plus a 340 px inspector, a 52 px bar and the handoff's
+two-proof composition. D4 uses 340×480 proofs and an arrow; D12 uses 380×300 character proofs, the warning outline
+and the arrow. D10 uses 400 px proofs, compact history rows, branch section and paired footer actions. The normal
+filmstrip/footer and redundant history shortcut are hidden in these workbenches. No mobile-artboard layout is used.
+
+- **Actual data:** chapter/page/character names, reference thumbnails, measured drift, versions, route and estimates
+  replace samples. An absent result uses the existing dashed State/Notice pattern; it never shows a fabricated
+  97% repair score. A successful measured repair uses the existing success token; a low result remains a warning.
+- **D10 basic history:** one real `main` branch and the latest 50 snapshots are shown. The selected snapshot is the
+  second proof with the designed accent outline. Restore uses the existing confirmation dialog and creates a new
+  revision. New branch/Merge branch stay visible, disabled and labelled Soon until Phase 6. UTC timestamps and
+  localized action labels replace sample author/time/change strings. A Close icon follows the existing inspector
+  pattern so the creator can return to the normal editor.
+- **D4 source and detection:** Upload and Draw here are active; Camera remains disabled Soon. The three designed
+  check rows describe the actual saved layout, character layers and editable speech. Automatic detection is Soon,
+  rather than claiming invented detected counts. A helper states limits and the unchanged-content scope. Pointer
+  drawing has an upload alternative; the canvas dimensions are bounded even for extreme page aspect ratios.
+- **D12 unavailable/evidence states:** no kept reference, unassessed/outfit-pending, locked targets, no eligible
+  worker and failed/canceled work use existing Notice, badge, progress and disabled-control patterns. Selections
+  are bounded to 24 character layers per action. A narrow helper explains that limit. Quote errors retain the
+  workbench and disable dispatch until Refresh succeeds. Leaving aborts obsolete requests and protects an unsaved
+  sketch. The before proof is retained after repair; the drift list and selected target revisions refresh.
+- **C3/C4 evidence:** the existing Character Lock card contains actual status, evidence count, pending outfit count,
+  optional training/assessment actions, queue progress and the D12 link. Similarity is explicitly not an identity
+  guarantee. Missing capabilities/three distinct references keep training unavailable. No sample percentage or
+  invented training duration is shown. C4 links to the real character status after keeping a reference.
+  The measurement caption names the actually selected CCIP or DINOv2 method; changing model/weight revisions
+  never mixes different methods in a displayed aggregate. A newly selected model remains unassessed until fresh
+  evidence exists. Whole-percent labels truncate measurements so a failing score cannot round up to 90%.
+  This changes no artboard geometry or components.
+  The designed 36px, twelve-bar chart now uses up to twelve recent current-method measurements, with accessible
+  numeric descriptions. Missing evidence never creates placeholder bars. D12's kept-reference thumbnails retain
+  the designed frames and contain the full images, matching the existing reference-card pattern, so a portrait's
+  face and boots are not cropped away.
+  The existing reference-upload form explains that outfit views bind the current default outfit. This is needed
+  to keep variants separate; it adds bilingual helper text using the existing form/help pattern. The measured
+  caption distinguishes learned matching to kept outfit views from raw cosine. Actual longer names wrap and
+  the necessary readiness/actions make C3 taller than the sample, without changing its grid or components.
+- **C3 drift line:** the drift line follows the handoff copy and amber tone ("1 drifted panel in Ch. 8 · Fix"). It
+  counts drifted appearances in the lowest-numbered chapter that has drift, which is the chapter its Fix opens in
+  D12. The score, chart and D12 still cover every assessed appearance; once that chapter is fixed the line names the
+  next one. The lock icon takes the card's state colour (green pass, amber drift). The worker helper appears only
+  while no scoring worker is online.
+- **D1 entry points:** the design draws no D1 control for D4 or D12. The character chip's designed lock score
+  ("🔒 96%") opens D12 for that character, D8's drift Fix opens D12 for the drifted character, and Sketch to manga
+  sits in the page "…" menu. No inspector button is added, so Style stays in view at 1440 × 900.
+- **D10 actions and comparison:** the newest snapshot is the saved page, so its row offers the design's Undo, which
+  restores the snapshot before it through the same confirmation and a new revision; older rows offer Restore.
+  Restoring is not destructive, so the confirmation uses the primary tone. The compared proof outlines, with the
+  design's dashed accent line, each panel whose geometry, prompt, camera, style, pose, locks, art layers or lettering
+  differ from the saved page; its caption counts those panels and panels added since ("Version 8 · 3 changes", or
+  "no changes"). Signed URLs and derived lock scores are not changes. A restore that meets the version fence shows
+  the shared conflict notice with Reload latest inside the workbench. Rows keep the design's 16 px inset and 52 px
+  height; the compared row uses the branch rows' surface and accent bar. Footer Soon tags sit on the buttons' top
+  edge like the other editor Soon tags.
+- **D12 evidence states:** the before proof outlines the visible pixels of the character layer with the design's
+  dashed warning line; no face or part region is inferred, and an opaque layer gets no outline. Its tag names only
+  what stored evidence shows ("{name} · identity differs", "outfit differs" or both), and a repaired result carries
+  "Only {name}'s layer regenerated". Before anything is measured the caption reads "Before · not assessed" in the
+  neutral caption colour and the subtitle counts the chapter's unassessed panels. The route chip asks for a
+  selection, shows "Estimating…" or names a lock; only a failed estimate reads "Estimate unavailable", next to the
+  notice's Refresh. A finished job reloads the selected targets' revisions before the next estimate. A character
+  outside the project opens a chooser built from the shared select. Japanese uses the C3 term キャラクターロック.
+  Assessment is read-only for artwork, so locked approved art can be assessed without unlocking it; repair and
+  generation still refuse locked targets.
+- **D4 proofs and limits:** both proofs use the page's aspect inside the designed 340 × 480 frame; in Draw here the
+  drawing help and Clear sit below the frame so the proofs stay aligned. The caption names the source ("Your sketch ·
+  uploaded" / "drawn") and the frame carries the design's "Rough pencil · page N" tag with the real page number.
+  In-proof tags (D4 and D12) use the reference-caption chip (surface background, secondary text) so they stay
+  legible over any sketch or art. Strength uses the editor's thin slider. Type, 16 MiB, 64–4096 px per side and 16 MP
+  are checked before upload and again on the server, with one message. Switching to Draw here replaces an uploaded
+  sketch. Locked panels or art layers disable Ink this page with the lock reason under the button. The "Art only · N
+  layers · lettering kept" helper appears under Ink this page only.
+- **Pose input:** the existing Leap/Crouch/Run cards show their own skeletons. Sketch opens the normalized joint
+  editor; arrow keys (Shift for larger steps) and pointer dragging move joints. Its helper and clear control use
+  existing inspector patterns. Generated control images are machine inputs, not a new product illustration style.
+
+Desktop and basic 390×844 evidence is recorded in [the control QA record](../qa/phase-2-control-2026-11-08.md).

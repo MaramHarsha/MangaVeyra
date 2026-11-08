@@ -133,6 +133,7 @@ type ImageService interface {
 
 // ImageNeeds describes what a job requires so the router can filter models.
 type ImageNeeds struct {
+	Pose       bool `json:"pose,omitempty"`
 	References int  `json:"references"`
 	TextInArt  bool `json:"text_in_art"`
 	BW         bool `json:"bw"`
@@ -204,6 +205,10 @@ type ImageGenerateRequest struct {
 	// for backgrounds, sheets and covers, or "" to let the route decide. Only
 	// routes with alpha output honour "transparent" (ADR 0009).
 	Background string
+	// Strength is composition fidelity (0–1) for image edits.
+	Strength float64
+	// LoRAAssetID is an owned, compatible trained artifact, used by workers only.
+	LoRAAssetID string
 	// References may be fewer than Plan.Needs.References: the plan bounds the
 	// whole job, while each call carries only its own component's references.
 	References []ImageRef

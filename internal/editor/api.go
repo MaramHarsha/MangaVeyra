@@ -46,6 +46,7 @@ type pageResponse struct {
 	Lettering []lettering.BubbleLayout `json:"lettering"`
 }
 type bootstrapData struct {
+	PosePresets map[string]pagedoc.Pose `json:"pose_presets"`
 	Project     studio.Project          `json:"project"`
 	Chapter     studio.Chapter          `json:"chapter"`
 	Pages       []pagestore.PageSummary `json:"pages"`
@@ -180,6 +181,12 @@ func mapped(r *http.Request, err error) error {
 	return err
 }
 func (m *Module) response(ctx context.Context, p pagedoc.Page, lang string) (pageResponse, error) {
+	id := core.IdentityFrom(ctx)
+	if id.User != nil {
+		if err := m.control.WithLockScores(ctx, studio.Actor{UserID: id.User.ID}, &p); err != nil {
+			return pageResponse{}, err
+		}
+	}
 	layouts, err := m.letter.LayoutPage(p, lang)
 	if err != nil {
 		return pageResponse{}, err
@@ -234,6 +241,7 @@ func (m *Module) data(r *http.Request, res resource) (bootstrapData, error) {
 	v.Styles = styles(ctx, res.Project.Style)
 	v.Print = printFor(ctx, res.Project)
 	v.Compute = m.compute(r)
+	v.PosePresets = pagedoc.PosePresets()
 	v.Beats = m.beats(ctx, res.Chapter.ID)
 	v.ScriptActions = m.scriptActions(ctx, res.Chapter.ID)
 	panels, number := 0, 0
@@ -524,9 +532,28 @@ func (m *Module) revert(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// abandoned answers a lettering preview whose request context ended (the
+// client went away): there is nobody to answer, so it is reported as
+// canceled (499, nothing written, not logged as a server error).
+func abandoned(r *http.Request) error {
+	return fmt.Errorf("editor: lettering preview abandoned: %w: %w", context.Canceled, r.Context().Err())
+}
+
+// layoutLettering previews the lettering of an unsaved page draft. Only
+// members who can change the page (art or lettering) preview drafts: the
+// editor asks for a preview after their edits, and read-only members only
+// ever see saved pages. The layout stops when the request is abandoned (the
+// editor aborts a preview superseded by the next keystroke).
 func (m *Module) layoutLettering(w http.ResponseWriter, r *http.Request) error {
 	res, err := m.resource(r, true)
 	if err != nil {
+		return mapped(r, err)
+	}
+	if err := m.authorize(r, res, studio.ActLetter); errors.Is(err, studio.ErrForbidden) {
+		if err := m.authorize(r, res, studio.ActEditArt); err != nil {
+			return mapped(r, err)
+		}
+	} else if err != nil {
 		return mapped(r, err)
 	}
 	var in struct {
@@ -544,6 +571,9 @@ func (m *Module) layoutLettering(w http.ResponseWriter, r *http.Request) error {
 			return mapped(r, err)
 		}
 		for _, pn := range in.Page.Panels {
+			if err := r.Context().Err(); err != nil {
+				return abandoned(r)
+			}
 			lines := []lettering.Line{}
 			indices := []int{}
 			for i, b := range in.Page.Bubbles {
@@ -567,8 +597,11 @@ func (m *Module) layoutLettering(w http.ResponseWriter, r *http.Request) error {
 			}
 		}
 	}
-	l, err := m.letter.LayoutPage(in.Page, res.Project.Language)
+	l, err := lettering.LayoutPageContext(r.Context(), m.letter, in.Page, res.Project.Language)
 	if err != nil {
+		if r.Context().Err() != nil {
+			return abandoned(r)
+		}
 		return mapped(r, studio.ErrInvalid)
 	}
 	core.JSON(w, 200, map[string]any{"lettering": l, "bubbles": in.Page.Bubbles, "reading_order": m.letter.ReadingOrder(in.Page)})
@@ -764,6 +797,29 @@ func (m *Module) ownedJob(r *http.Request, res resource) (*jobs.Job, error) {
 			return nil, studio.ErrNotFound
 		}
 	}
+	if j.Type == gen.JobRepair && j.Scope.ChapterID == res.Chapter.ID {
+		return j, nil
+	}
+	if j.Type == gen.JobPage || j.Type == gen.JobRepair {
+		var p struct {
+			Panels []struct {
+				PageID string `json:"page_id"`
+			} `json:"panels"`
+		}
+		if j.DecodeInput(&p) != nil {
+			return nil, studio.ErrNotFound
+		}
+		found := false
+		for _, item := range p.Panels {
+			if item.PageID == res.Page.ID {
+				found = true
+			}
+		}
+		if !found {
+			return nil, studio.ErrNotFound
+		}
+		return j, nil
+	}
 	if j.Type != gen.JobPanel && j.Type != gen.JobRegionEdit {
 		return nil, studio.ErrNotFound
 	}
@@ -779,7 +835,7 @@ func (m *Module) job(w http.ResponseWriter, r *http.Request) error {
 		return mapped(r, err)
 	}
 	candidates := []gen.Candidate{}
-	if j.State == jobs.StateDone {
+	if j.State == jobs.StateDone && (j.Type == gen.JobPanel || j.Type == gen.JobRegionEdit) {
 		candidates, err = m.gen.Candidates(r.Context(), res.Actor, j.ID)
 		if err != nil {
 			return mapped(r, err)

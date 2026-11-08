@@ -30,19 +30,31 @@ func (s *store) SetLayerAssetTx(ctx context.Context, tx *db.Tx, in SetLayerAsset
 	if err != nil {
 		return pagedoc.Layer{}, err
 	}
+	layerID, err := setArtLayer(&p, in)
+	if err != nil {
+		return pagedoc.Layer{}, err
+	}
+	saved, err := s.save(ctx, tx, p, p.Version, ch)
+	if err != nil {
+		return pagedoc.Layer{}, err
+	}
+	return *saved.Panel(in.PanelID).Layer(layerID), nil
+}
+
+func setArtLayer(p *pagedoc.Page, in SetLayerAsset) (string, error) {
 	pn := p.Panel(in.PanelID)
 	if pn == nil {
-		return pagedoc.Layer{}, ErrNotFound
+		return "", ErrNotFound
 	}
 	if in.Kind == pagedoc.LayerLettering {
-		return pagedoc.Layer{}, ErrInvalid
+		return "", ErrInvalid
 	}
 	l := pn.Layer(in.LayerID)
 	if in.LayerID != "" && l == nil {
-		return pagedoc.Layer{}, ErrNotFound
+		return "", ErrNotFound
 	}
 	if l != nil && (l.Kind == pagedoc.LayerLettering || (in.Kind != "" && l.Kind != in.Kind) || (in.CharacterID != "" && l.CharacterID != in.CharacterID)) {
-		return pagedoc.Layer{}, ErrInvalid
+		return "", ErrInvalid
 	}
 	if l == nil {
 		l = pn.LayerOfKind(in.Kind, in.CharacterID)
@@ -51,14 +63,14 @@ func (s *store) SetLayerAssetTx(ctx context.Context, tx *db.Tx, in SetLayerAsset
 		switch in.Kind {
 		case pagedoc.LayerBackground, pagedoc.LayerCharacter, pagedoc.LayerFX:
 		default:
-			return pagedoc.Layer{}, ErrInvalid
+			return "", ErrInvalid
 		}
 		pn.Layers = append(pn.Layers, pagedoc.Layer{ID: db.NewID(), Kind: in.Kind, CharacterID: in.CharacterID,
 			Name: in.Name, Visible: true, Opacity: 1, Blend: "normal", Provenance: pagedoc.ProvenanceAI})
 		l = &pn.Layers[len(pn.Layers)-1]
 	}
 	if l.Locked || pn.Locked || p.Locked {
-		return pagedoc.Layer{}, ErrLocked
+		return "", ErrLocked
 	}
 	l.Asset = &pagedoc.AssetRef{ID: in.AssetID}
 	l.Mask = nil
@@ -73,12 +85,49 @@ func (s *store) SetLayerAssetTx(ctx context.Context, tx *db.Tx, in SetLayerAsset
 	if l.Provenance == "" {
 		l.Provenance = pagedoc.ProvenanceAI
 	}
-	layerID := l.ID
+	return l.ID, nil
+}
+
+// SetLayerAssetsTx records one user-visible art operation as one version.
+func (s *store) SetLayerAssetsTx(ctx context.Context, tx *db.Tx, pageID string, inputs []SetLayerAsset, ch Change) ([]pagedoc.Layer, error) {
+	if len(inputs) == 0 || len(inputs) > pagedoc.MaxPanels*(pagedoc.MaxLayersPerPane-1) {
+		return nil, ErrInvalid
+	}
+	if err := s.authorizePage(ctx, tx, pageID, studio.ActEditArt, ch); err != nil {
+		return nil, err
+	}
+	p, err := s.GetPageTx(ctx, tx, pageID)
+	if err != nil {
+		return nil, err
+	}
+	if ch.ExpectedVersion > 0 && ch.ExpectedVersion != p.Version {
+		return nil, ErrVersion
+	}
+	ids := []string{}
+	seen := map[string]bool{}
+	for _, in := range inputs {
+		if in.PageID != pageID {
+			return nil, ErrInvalid
+		}
+		id, err := setArtLayer(&p, in)
+		if err != nil {
+			return nil, err
+		}
+		if seen[id] {
+			return nil, ErrInvalid
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
 	saved, err := s.save(ctx, tx, p, p.Version, ch)
 	if err != nil {
-		return pagedoc.Layer{}, err
+		return nil, err
 	}
-	return *saved.Panel(in.PanelID).Layer(layerID), nil
+	out := make([]pagedoc.Layer, 0, len(ids))
+	for i, id := range ids {
+		out = append(out, *saved.Panel(inputs[i].PanelID).Layer(id))
+	}
+	return out, nil
 }
 
 func (s *store) SetBubblesTx(ctx context.Context, tx *db.Tx, pageID string, bubbles []pagedoc.Bubble, ch Change) error {

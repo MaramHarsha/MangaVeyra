@@ -231,7 +231,7 @@ func openRouterImagePayload(req ImageGenerateRequest) (map[string]any, error) {
 	if !ok {
 		return nil, badInputAdapterError()
 	}
-	refs := min(len(req.References), route.MaxRefs)
+	refs := routeReferences(req.References, route.MaxRefs)
 	references := []map[string]any{}
 	// Every input is re-encoded and bounded: references to gptImageRefEdge,
 	// the init and mask together to gptImageEditEdge so they stay aligned.
@@ -248,7 +248,7 @@ func openRouterImagePayload(req ImageGenerateRequest) (map[string]any, error) {
 			return nil, err
 		}
 	}
-	for _, r := range req.References[:refs] {
+	for _, r := range refs {
 		if err := add(r.Data, gptImageRefEdge); err != nil {
 			return nil, err
 		}

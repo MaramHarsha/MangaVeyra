@@ -359,11 +359,18 @@ type Summary struct {
 	Preview string `json:"preview,omitempty"`
 }
 
-// Summary returns the compact form of j.
+// Summary returns the compact form of j. It is broadcast to the owner's,
+// project's and admins' topics, so like PublicView it carries no progress
+// text and only the public failure code: raw worker/provider messages can
+// contain prompts or credentials.
 func (j *Job) Summary() Summary {
-	return Summary{ID: j.ID, Type: j.Type, State: j.State, Progress: j.Progress, Step: j.Step, Steps: j.Steps, Message: j.Message,
+	s := Summary{ID: j.ID, Type: j.Type, State: j.State, Progress: j.Progress, Step: j.Step, Steps: j.Steps,
 		ModelID: j.ModelID, ProviderID: j.ProviderID, Scope: j.Scope, UserID: j.UserID, Estimate: j.Estimate, Actual: j.Actual,
-		Error: j.Error, Attempts: j.Attempts, UpdatedAt: j.UpdatedAt}
+		Attempts: j.Attempts, UpdatedAt: j.UpdatedAt}
+	if j.Error != nil {
+		s.Error = &JobError{Code: PublicErrorCode(j.Error.Code), Retryable: j.Error.Retryable}
+	}
+	return s
 }
 
 // Event is one entry of a job's log.

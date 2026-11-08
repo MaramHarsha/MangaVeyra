@@ -8,10 +8,10 @@ import time
 from pathlib import Path
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from mangaveyra_worker.errors import JobCanceled, JobFailure, OutOfMemory
-from mangaveyra_worker.train.base import TrainRequest, write_dataset
+from mangaveyra_worker.train.base import TrainRequest, square_crop, write_dataset
 from mangaveyra_worker.train.external import ExternalTrainer, parse_progress
 
 FAKE_TRAINER = r"""
@@ -72,6 +72,34 @@ def test_dataset_layout(tmp_path: Path) -> None:
     assert (folder / "0000.txt").read_text().strip() == "kaito mbeki, 1character, solo"
     assert Image.open(folder / "0001.png").size == (64, 64)
     assert (folder / "metadata.jsonl").read_text().count("\n") == 3
+
+
+def test_training_keeps_face_feet_and_asymmetric_reference_details(tmp_path: Path) -> None:
+    # Deliberately tall original fixture; the previous centre crop lost both
+    # identity markers. Transparent red pixels must not leak into its padding.
+    image = Image.new("RGBA", (40, 160), (255, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((10, 0, 29, 19), fill=(20, 60, 230, 255))
+    draw.rectangle((10, 140, 29, 159), fill=(30, 180, 40, 255))
+    draw.rectangle((10, 60, 14, 99), fill=(200, 30, 40, 255))
+    prepared = square_crop(image, 160)
+    assert prepared.mode == "RGB" and prepared.size == (160, 160)
+    assert prepared.getpixel((80, 5)) == (20, 60, 230)
+    assert prepared.getpixel((80, 155)) == (30, 180, 40)
+    assert prepared.getpixel((72, 80)) == (200, 30, 40)
+    assert prepared.getpixel((87, 80)) == (255, 255, 255)
+    assert prepared.getpixel((0, 80)) == (255, 255, 255)
+
+    req = request(tmp_path, [])
+    req.images = [image]
+    req.resolution = 160
+    exported = Image.open(write_dataset(req) / "0000.png")
+    assert exported.tobytes() == prepared.tobytes()
+
+
+def test_training_reference_resolution_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        square_crop(Image.new("RGB", (40, 160)), 0)
 
 
 def test_external_trainer_success(tmp_path: Path) -> None:

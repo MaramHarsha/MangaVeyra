@@ -82,6 +82,9 @@ type PanelRequest struct {
 	RoutingMode     string `json:"routing_mode,omitempty"`
 	PinModelID      string `json:"pin_model_id,omitempty"`
 	ExpectedVersion int    `json:"expected_version,omitempty"`
+	// PreserveComposition uses the existing character layer as an edit source.
+	// It requires that layer and kept character references; it never edits text.
+	PreserveComposition bool `json:"preserve_composition,omitempty"`
 }
 
 // RegionEditRequest changes only a masked region of a panel image.
@@ -110,13 +113,14 @@ type Candidate struct {
 
 // CandidateLayer is one independently editable art component of a variation.
 type CandidateLayer struct {
-	LayerID     string `json:"layer_id"`
-	Kind        string `json:"kind"`
-	CharacterID string `json:"character_id,omitempty"`
-	Name        string `json:"name"`
-	AssetID     string `json:"asset_id"`
-	Seed        int64  `json:"seed"`
-	Prompt      string `json:"prompt"`
+	LayerID     string   `json:"layer_id"`
+	Kind        string   `json:"kind"`
+	CharacterID string   `json:"character_id,omitempty"`
+	Name        string   `json:"name"`
+	AssetID     string   `json:"asset_id"`
+	Seed        int64    `json:"seed"`
+	Prompt      string   `json:"prompt"`
+	LockScore   *float64 `json:"lock_score,omitempty"`
 }
 
 // Service enqueues generation jobs. Every method authorizes the actor,

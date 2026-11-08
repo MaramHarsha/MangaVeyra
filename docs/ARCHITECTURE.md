@@ -67,6 +67,7 @@ internal/
   jobs/                  queue (enqueue, claim, progress, cancel, retry, fair share), Go executor pool, handler registry, events
   ws/                    WebSocket hub: topics, presence, Yjs relay + persistence
   notify/                notifications (in-app, email via SMTP, web push), preferences, quiet hours
+  activityui/            session-only G9 queue and G4 notification screens over the jobs/notify foundation services
   web/                   templ UI kit (ui/), layouts (layout/), page helpers, static assets (static/, embedded), Vite manifest
   studio/                projects, members & roles, chapters, arcs/scenes, script panels, pages, panels, layers, bubbles,
                          characters (refs, outfits, relations, voice), setting items, templates, wizard, story editor,
@@ -165,6 +166,9 @@ lookups while keeping imports acyclic.
 * Browser Studio pages and manual retry require a signed-in session. Bearer job reads require `projects:read`,
   bearer cancellation requires `projects:write` plus `generate`, and both per-job access and lists enforce the
   token's project allow-list. Aggregate job stats and manual retry are not bearer-token operations.
+* Job API responses, job events and realtime job summaries never contain progress text, event messages or data, or
+  raw failure messages for any caller; failures carry a public code with localized recovery copy. A child job cannot
+  be retried on its own (409 `child_job` with `parent_id`); canceling a parent cancels its unfinished worker children.
 * Go executor: `jobs.Handler func(ctx, *jobs.Run) error` registered by job type (remote APIs, text LLM, exports,
   compositing). Worker executor: Python workers call `/api/worker/v1` (`register`, `claim`, `progress`, `upload`,
   `complete`, `fail`, `heartbeat`) with a worker token. Progress is broadcast on WS topics `job:{id}`, `user:{id}`,
@@ -246,6 +250,18 @@ status window, rank badges E–S, XP bar, level-up toast, screentone skeleton, e
 (no mascot: ink splashes, speed lines, SFX lettering).
 
 ## Build and test
+
+Phase 2 adds `gen.ControlService` for atomic page generation, selected-character repair, optional worker training
+and attributable learned assessments. Migration 0202 stores current asset/reference/method evidence separately
+from historical page percentages. D4/D10/D12 are documented rich editor islands; C3 remains server rendered with
+ordinary POST forms. See [ADR 0010](decisions/0010-phase-2-scoped-control-and-character-evidence.md) for their fences,
+offline-model rules and initial quality assessment. `cmd/phase2check` is an explicitly gated, temporary-data live
+acceptance harness and is not part of normal application startup or routing.
+Explicit CCIP selection, method binding and validated per-view outfit matching are described in
+[ADR 0011](decisions/0011-explicit-anime-scoring-and-outfit-validation.md). Migration 0203 binds kept outfit views
+to the current default variant without assigning legacy views. The final explicit offline scorer passes the
+thirty-page acceptance; failed earlier metrics remain separate. See the
+[completion evidence](qa/phase-2-completion-2026-11-08.md) for scope, validation limits and pixel isolation.
 
 ```
 make tools     # templ, golangci-lint (optional)

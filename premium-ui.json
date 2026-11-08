@@ -1,18 +1,41 @@
 {
   "profile": "product-admin",
-  "sourceRoots": ["internal/ai", "internal/studioui", "internal/export", "internal/editor", "web/src/styles"],
+  "sourceRoots": [
+    "internal/ai",
+    "internal/studioui",
+    "internal/export",
+    "internal/editor",
+    "web/src/styles",
+    "internal/activityui",
+    "web/src/lib",
+    "web/src/islands/editor"
+  ],
   "locale": "ja-JP",
   "canonicalMap": "UX-CONTRACT.md",
-  "requiredCapabilities": ["Select/Listbox", "Form", "Toast", "CRUD"],
+  "requiredCapabilities": [
+    "Select/Listbox",
+    "Form",
+    "Toast",
+    "CRUD",
+    "Scrollbar"
+  ],
   "ownership": {
     "Select/Listbox": "native",
     "Form": "authored",
     "Toast": "authored",
-    "CRUD": "authored"
+    "CRUD": "authored",
+    "Scrollbar": "authored"
   },
-  "requiredCommands": ["go-focused", "edition", "templ", "frontend-check", "frontend-test", "frontend-build"],
+  "requiredCommands": [
+    "go-focused",
+    "edition",
+    "templ",
+    "frontend-check",
+    "frontend-test",
+    "frontend-build"
+  ],
   "commands": {
-    "go-focused": "go test -count=1 ./internal/ai ./internal/studioui ./internal/studio ./internal/gen ./internal/jobs ./internal/pagestore ./internal/lettering ./internal/compose ./internal/export ./internal/editor",
+    "go-focused": "go test -count=1 ./internal/ai ./internal/studioui ./internal/studio ./internal/gen ./internal/jobs ./internal/pagestore ./internal/lettering ./internal/compose ./internal/export ./internal/editor ./internal/activityui ./internal/notify",
     "edition": "go test -count=1 ./internal/editioncheck/...",
     "templ": "templ generate",
     "frontend-check": "cd web && npm run check",

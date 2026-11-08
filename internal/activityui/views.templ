@@ -1,0 +1,239 @@
+package activityui
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+templ notificationsBody(v notificationsView) {
+	<div class="mv-activity mv-notifications" data-screen="G4">
+		@ui.PageHead(i18n.T(ctx, "activity.notifications.title"), "", notificationActions(v))
+		<div class="mv-notifications__feed">
+			if len(v.Items) == 0 {
+				@ui.State(ui.StateProps{Title: i18n.T(ctx, "activity.notifications.empty"), Body: i18n.T(ctx, "activity.notifications.empty_help"), Boxed: true}) {
+					@ui.LinkButton("/settings/notifications", ui.ButtonProps{Size: ui.SM}) {
+						{ i18n.T(ctx, "activity.notifications.settings") }
+					}
+				}
+			} else {
+				<ul class="mv-notifications__list" aria-label={ i18n.T(ctx, "activity.notifications.title") }>
+					for _, n := range v.Items {
+						<li>
+							<form method="post" action={ templ.URL("/notifications/" + n.ID + "/open") } novalidate>
+								<input type="hidden" name="category" value={ v.Category }/>
+								<button type="submit" class="mv-notifications__item" title={ n.Action } data-notification-id={ n.ID }>
+									<span class={ "mv-notifications__icon mv-notifications__icon--" + n.Tone }>
+										@ui.Icon(n.Icon, 20)
+									</span>
+									<span class="mv-notifications__copy">
+										<span class={ "mv-notifications__title", ui.If(n.Unread, "is-unread") }>{ n.Title }</span>
+										if n.Body != "" {
+											<span class="mv-notifications__body">{ n.Body }</span>
+										}
+									</span>
+									<time class="mv-notifications__time" datetime={ n.ISOTime } title={ n.Timestamp }>{ n.Age }</time>
+									<span class="mv-notifications__unread" hidden?={ !n.Unread }><span class="mv-sr-only">{ i18n.T(ctx, "activity.notifications.unread") }</span></span>
+								</button>
+							</form>
+						</li>
+					}
+				</ul>
+			}
+			@listNavigation(v.NextURL, v.RefreshURL, v.Past)
+		</div>
+	</div>
+}
+
+templ notificationActions(v notificationsView) {
+	@ui.SegmentedLinks(i18n.T(ctx, "activity.notifications.filter"), notificationTabs(ctx, v.Category))
+	<form method="post" action="/notifications/read" novalidate>
+		<input type="hidden" name="category" value={ v.Category }/>
+		@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Type: "submit", Disabled: v.Unread == 0}) {
+			{ i18n.T(ctx, "activity.notifications.read_all") }
+		}
+	</form>
+}
+
+templ queueBody(v queueView) {
+	<div class="mv-activity mv-queue" data-screen="G9">
+		@ui.PageHead(i18n.T(ctx, "activity.queue.title"), v.Subtitle, queueActions(v))
+		@queueLive(v)
+		<div data-queue-error hidden>
+			@ui.Notice(ui.ToneWarning, "wifi-off") {
+				<span>{ i18n.T(ctx, "activity.queue.refresh_failed") }</span>
+				@ui.LinkButton(v.PageURL, ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM}) {
+					{ i18n.T(ctx, "activity.queue.refresh") }
+				}
+			}
+		</div>
+		<noscript>
+			@ui.LinkButton(v.PageURL, ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Icon: "refresh"}) {
+				{ i18n.T(ctx, "activity.queue.refresh") }
+			}
+		</noscript>
+	</div>
+}
+
+templ queueActions(v queueView) {
+	if len(v.Scope) > 0 {
+		@ui.SegmentedLinks(i18n.T(ctx, "activity.queue.scope"), v.Scope)
+	}
+	@workerControls(v)
+}
+
+// workerTipEnd anchors the worker button's tooltip to its end: the button is the
+// last header action, so a start-anchored tooltip would run past the page edge.
+var workerTipEnd = templ.Attributes{"data-tip-pos": "end"}
+
+templ workerControls(v queueView) {
+	if len(v.WorkerActions) == 1 {
+		<form method="post" action={ templ.URL(v.WorkerActions[0].URL) } novalidate>
+			@ui.Button(ui.ButtonProps{Type: "submit", Icon: v.WorkerIcon, Tip: v.WorkerHint, Attrs: workerTipEnd}) {
+				{ v.WorkerLabel }
+			}
+		</form>
+	} else if len(v.WorkerActions) > 1 {
+		@ui.Dropdown("", "end", false, workerTrigger(v.WorkerLabel, v.WorkerIcon), workerMenu(v.WorkerActions))
+	} else {
+		@ui.Button(ui.ButtonProps{Icon: v.WorkerIcon, Disabled: true, Tip: v.WorkerHint, Attrs: workerTipEnd}) {
+			{ v.WorkerLabel }
+		}
+	}
+}
+
+templ workerTrigger(label, icon string) {
+	<span class="mv-btn mv-btn--secondary">
+		@ui.Icon(icon, 18)
+		{ label }
+	</span>
+}
+
+templ queueLive(v queueView) {
+	<div id="queue-live" class="mv-queue__live" data-queue-refresh={ v.RefreshURL } data-queue-active={ boolString(v.Active) } data-queue-admin={ boolString(v.All) }>
+		if len(v.Jobs) == 0 {
+			@ui.State(ui.StateProps{Title: i18n.T(ctx, "activity.queue.empty"), Body: i18n.T(ctx, "activity.queue.empty_help"), Boxed: true}) {
+				@ui.LinkButton("/studio/projects", ui.ButtonProps{Size: ui.SM}) {
+					{ i18n.T(ctx, "activity.queue.projects") }
+				}
+			}
+		} else {
+			<div class="mv-queue__table-wrap">
+				<table class="mv-queue__table" role="table">
+					<caption class="mv-sr-only">{ i18n.T(ctx, "activity.queue.table") }</caption>
+					<thead class="mv-sr-only" role="rowgroup">
+						<tr role="row">
+							<th scope="col">{ i18n.T(ctx, "activity.queue.state") }</th>
+							<th scope="col">{ i18n.T(ctx, "activity.queue.job") }</th>
+							<th scope="col">{ i18n.T(ctx, "activity.queue.member") }</th>
+							<th scope="col">{ i18n.T(ctx, "activity.queue.route") }</th>
+							<th scope="col">{ i18n.T(ctx, "activity.queue.progress") }</th>
+							<th scope="col">{ i18n.T(ctx, "activity.queue.actions") }</th>
+						</tr>
+					</thead>
+					<tbody role="rowgroup">
+						for _, j := range v.Jobs {
+							<tr role="row" data-job-id={ j.ID } data-job-state={ j.State }>
+								<td class="mv-queue__state">
+									@ui.Badge(j.Tone, "", j.Status)
+								</td>
+								<th scope="row"><a class="mv-queue__job" href={ templ.URL(j.DetailURL) }>{ j.Title }</a></th>
+								<td class="mv-queue__owner">{ j.Owner }</td>
+								<td class="mv-queue__route">{ j.Route }</td>
+								<td class="mv-queue__metric">
+									if j.Running {
+										@ui.Bar(float64(j.Progress)/100, "", false, i18n.T(ctx, "activity.queue.job_progress", "job", j.Title))
+									} else {
+										{ j.Metric }
+									}
+								</td>
+								<td class="mv-queue__actions">
+									@ui.Dropdown("", "end", false, jobMenuTrigger(j.Title), jobMenu(ctx, j))
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+		<div class="mv-queue__summary">
+			@queueSummary(i18n.T(ctx, "activity.queue.per_user"), v.Limit, "")
+			@queueSummary(i18n.T(ctx, "activity.queue.night"), v.Night, "")
+			@queueSummary(i18n.T(ctx, "activity.queue.week"), v.Usage, i18n.T(ctx, "activity.queue.usage_hint"))
+		</div>
+		@listNavigation(v.NextURL, v.LatestURL, v.Past)
+		if v.Detail != nil {
+			@jobDetails(*v.Detail)
+		}
+	</div>
+}
+
+templ queueSummary(label, value, hint string) {
+	@ui.Box("mv-queue__summary-card") {
+		<span>{ label }</span><strong title={ hint }>{ value }</strong>
+	}
+}
+
+templ jobMenuTrigger(title string) {
+	<span class="mv-queue__menu-trigger">
+		@ui.Icon("dots", 18)
+		<span class="mv-sr-only">
+			{ i18n.T(ctx, "activity.queue.job_actions", "job", title) }
+		</span>
+	</span>
+}
+
+templ jobDetails(v jobDetail) {
+	@ui.Box("mv-box--pad mv-queue__detail") {
+		<div class="mv-queue__detail-head">
+			<h2>{ v.Job.Title }</h2>
+			@ui.LinkButton(v.CloseURL, ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM, Icon: "x", Label: i18n.T(ctx, "ui.close")})
+		</div>
+		<span class="mv-meta">{ v.Job.ID }</span>
+		<div class="mv-queue__detail-kv">
+			@ui.KV(i18n.T(ctx, "activity.queue.state"), v.Job.Status)
+			if v.Job.Running {
+				@ui.KVC(i18n.T(ctx, "activity.queue.progress_label")) {
+					@ui.Bar(float64(v.Job.Progress)/100, "", false, i18n.T(ctx, "activity.queue.job_progress", "job", v.Job.Title))
+				}
+			}
+			@ui.KV(i18n.T(ctx, "activity.queue.route"), v.Job.Route)
+			@ui.KV(i18n.T(ctx, "activity.queue.member"), v.Job.Owner)
+			@ui.KV(i18n.T(ctx, "activity.queue.estimate"), v.Estimate)
+			@ui.KV(i18n.T(ctx, "activity.queue.actual"), v.Actual)
+			@ui.KV(i18n.T(ctx, "activity.queue.created"), v.Created)
+		</div>
+		if v.Error != "" {
+			@ui.Notice(ui.ToneError, "alert-triangle") {
+				{ v.Error }
+			}
+		}
+		if v.Job.StudioURL != "" {
+			@ui.LinkButton(v.Job.StudioURL, ui.ButtonProps{Icon: "arrow-right", Size: ui.SM}) {
+				{ i18n.T(ctx, "activity.queue.open_studio") }
+			}
+		}
+		<details class="mv-queue__events">
+			<summary>{ i18n.T(ctx, "activity.queue.events") }</summary>
+			<ol>
+				for _, e := range v.Events {
+					<li><span>{ e.Label }</span><time datetime={ e.ISOTime }>{ e.Time }</time></li>
+				}
+			</ol>
+		</details>
+	}
+}
+
+templ listNavigation(next, first string, past bool) {
+	if next != "" || past {
+		<nav class="mv-activity__pagination" aria-label={ i18n.T(ctx, "activity.list.navigation") }>
+			@ui.LinkButton(first, ui.ButtonProps{Variant: ui.Ghost, Size: ui.SM}) {
+				{ i18n.T(ctx, "activity.list.latest") }
+			}
+			if next != "" {
+				@ui.LinkButton(next, ui.ButtonProps{Variant: ui.Secondary, Size: ui.SM, Icon: "chevron-right"}) {
+					{ i18n.T(ctx, "activity.list.older") }
+				}
+			}
+		</nav>
+	}
+}

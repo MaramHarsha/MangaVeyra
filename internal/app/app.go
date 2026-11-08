@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/activityui"
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/config"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
@@ -180,8 +181,13 @@ func jobNotifier(d *core.Deps) func(context.Context, *jobs.Job) {
 		if j.UserID == "" {
 			return
 		}
+		if j.ParentID != "" && j.Executor == jobs.ExecutorWorker {
+			return // part of its parent job, which reports the outcome
+		}
 		var kind, key string
 		switch {
+		case j.State == jobs.StateDone && j.Type == "character.lock_train":
+			kind, key = notify.KindLockTraining, "notify.kind.lock_ready"
 		case j.State == jobs.StateFailed:
 			kind, key = notify.KindJobFailed, "notify.kind.job_failed"
 		case j.State == jobs.StateDone && j.Batch:
@@ -189,12 +195,30 @@ func jobNotifier(d *core.Deps) func(context.Context, *jobs.Job) {
 		default:
 			return
 		}
-		body := j.Type
-		if j.Error != nil {
-			body += ": " + j.Error.Message
+		// Same order as page requests: the user's own language when set and
+		// supported, otherwise the instance default (users.locale defaults to '').
+		var userLocale string
+		_ = d.DB.Get(ctx, &userLocale, `SELECT locale FROM users WHERE id = ?`, j.UserID)
+		locale := i18n.Negotiate(d.I18n.Languages(), d.Settings.MustInstance(ctx).DefaultLocale, userLocale, "", "")
+		titleCtx := i18n.WithLocale(ctx, locale)
+		// A human summary (project · what was made · duration), never the job
+		// type or raw worker/provider errors, which may contain private prompts
+		// or credentials. The queue link maps safe error codes.
+		body := activityui.JobNotificationBody(titleCtx, d.DB, j)
+		data := map[string]any{"job_id": j.ID, "body": activityui.JobSummaryBody}
+		link := "/queue?job=" + j.ID
+		if kind == notify.KindLockTraining {
+			var p struct {
+				ProjectID   string `json:"project_id"`
+				CharacterID string `json:"character_id"`
+			}
+			if j.DecodeInput(&p) == nil {
+				link = "/studio/p/" + p.ProjectID + "/characters/" + p.CharacterID
+			}
+			body = i18n.T(titleCtx, "notify.lock.ready_body")
 		}
-		if _, err := d.Notify.Notify(ctx, notify.Input{UserID: j.UserID, Kind: kind, Title: i18n.T(ctx, key), Body: body,
-			Link: "/queue?job=" + j.ID, Data: map[string]any{"job_id": j.ID}, GroupKey: kind}); err != nil {
+		if _, err := d.Notify.Notify(ctx, notify.Input{UserID: j.UserID, Kind: kind, Title: i18n.T(titleCtx, key), Body: body,
+			Link: link, Data: data, GroupKey: kind}); err != nil {
 			d.Log.Warn("notify job result", "job", j.ID, "err", err)
 		}
 	}

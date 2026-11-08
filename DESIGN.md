@@ -118,6 +118,12 @@ Motion confirms state: 120 ms control feedback, 200–320 ms reveal/step transit
 
 Voice is direct, calm, and creator-owned: “Connect OpenRouter,” “Generate script,” “Save changes,” “Reload latest.” Do not anthropomorphize the model or promise quality. Costs are presented as bounded estimates with six-decimal precision only where needed for approval/audit. Errors translate stable codes and never render upstream text. Gate A has no charts; future visualizations must include a textual equivalent.
 
+Phase 2 control workbenches follow D4/D10/D12 exactly: full canvas, 340 px inspector, 52 px bar, two proofs and the
+handoff's compact sections/actions. Hide the ordinary filmstrip/footer in these modes. Use real, attributable
+similarities and warning states; absent evidence stays unassessed. Branch merging, camera capture and automatic
+sketch detection use the designed Soon treatment. Necessary states and desktop comparisons are maintained in
+`docs/decisions/0004-design-addendum.md` §10 and `docs/qa/phase-2-control-2026-11-08.md`.
+
 ## Do's and Don'ts
 
 - **Do:** Make the next production action unmistakable with one gate-blue primary control.

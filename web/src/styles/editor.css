@@ -187,7 +187,10 @@
 .mv-ed__chip { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; max-width: 100%; min-height: 34px; padding: 4px 8px 4px 4px; border: 1px solid var(--mv-line); background: var(--mv-surface-2); color: var(--mv-text); font: inherit; font-size: var(--mv-fs-small); }
 .mv-ed__chip.selected { border-color: var(--mv-text-2); }
 .mv-ed__chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mv-ed__chip-lock { display: inline-flex; align-items: center; gap: 2px; font-family: var(--mv-font-mono); font-size: 10px; color: var(--mv-success); }
+.mv-ed__chip-select { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; }
+.mv-ed__chip-lock { display: inline-flex; align-items: center; gap: 2px; flex: none; padding: 2px 0; border: 0; background: transparent; font-family: var(--mv-font-mono); font-size: 10px; color: var(--mv-success); }
+button.mv-ed__chip-lock:hover:not(:disabled) { text-decoration: underline; }
+.mv-ed__chip-select:focus-visible, .mv-ed__chip-lock:focus-visible { outline: var(--mv-focus-width) solid var(--mv-focus); outline-offset: 2px; }
 .mv-ed__chip-lock.drift { color: var(--mv-warning); }
 .mv-ed__chip-lock .ti { font-size: 11px; }
 .mv-ed__chip--add { position: relative; flex: none; gap: 6px; padding: 4px 8px; border-style: dashed; background: transparent; color: var(--mv-text-2); cursor: pointer; }
@@ -413,3 +416,50 @@ body:has(.mv-ed) .mv-toasts { right: 340px; bottom: 44px; }
  .mv-ed__layer-row > .mv-iconlink { width: 44px; height: 44px; }
  .mv-ed__chips { flex-wrap: wrap; }
 }
+
+/* ---- D4 / D10 / D12 workbench fidelity (overrides the base workbench rules) ---- */
+/* Proof wrappers hold overlays that align with the image's object-fit box. */
+.mv-ed .mv-control__proof { position: relative; display: block; width: 100%; }
+.mv-ed .mv-control__proof > svg { position: absolute; fill: none; pointer-events: none; }
+.mv-ed .mv-control__tag { position: absolute; left: 12px; bottom: 10px; max-width: calc(100% - 24px); padding: 2px 5px; overflow: hidden; background: var(--mv-surface); color: var(--mv-text-2); font-family: var(--mv-font-mono); font-size: var(--mv-fs-micro); letter-spacing: .04em; text-transform: uppercase; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.mv-ed .mv-control__actions .mv-route { font-size: var(--mv-fs-meta); }
+.mv-ed .mv-control__actions .mv-route > strong { flex: none; white-space: nowrap; }
+.mv-ed .mv-control__blocked { display: flex; gap: 6px; align-items: flex-start; }
+.mv-ed .mv-control__blocked .ti { flex: none; margin-block-start: 2px; color: var(--mv-warning); }
+
+/* D10: 400 px proofs, changed panels dashed in accent, compact inset history rows. */
+.mv-ed .mv-control__pair--history .mv-control__proof { max-width: 400px; }
+.mv-ed .mv-control__pair--history .mv-control__proof > img { width: 100%; max-width: none; }
+.mv-ed .mv-control__compared figcaption { color: var(--mv-acc-text); }
+.mv-ed .mv-control__changes { inset: 1px; width: calc(100% - 2px); height: calc(100% - 2px); stroke: var(--mv-accent); stroke-width: 3px; stroke-dasharray: 7px 5px; }
+.mv-ed .mv-control__versions { padding: 8px 10px; }
+.mv-ed--control .mv-control__inspector .mv-control__version { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 52px; padding: 9px 6px; border-bottom: 1px solid var(--mv-line); }
+.mv-ed--control .mv-control__inspector .mv-control__version.selected { background: var(--mv-surface-2); box-shadow: inset 3px 0 0 var(--mv-accent); }
+.mv-ed .mv-control__version-pick { gap: 2px; min-width: 0; line-height: 1.3; }
+.mv-ed .mv-control__version-pick > strong { max-width: 100%; overflow: hidden; font-size: var(--mv-fs-small); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.mv-ed .mv-control__version-pick > span { font-size: var(--mv-fs-mono); }
+.mv-ed .mv-control__version-action { flex: none; padding: 4px 0; border: 0; background: transparent; color: var(--mv-acc-text); font: inherit; font-size: var(--mv-fs-meta); white-space: nowrap; }
+.mv-ed .mv-control__version-action:hover:not(:disabled) { text-decoration: underline; }
+.mv-ed .mv-control__version-action:disabled { color: var(--mv-text-3); }
+.mv-ed .mv-control__version-action:focus-visible { outline: var(--mv-focus-width) solid var(--mv-focus); outline-offset: 2px; }
+/* Footer Soon tags sit on the button's top edge, like the other editor Soon tags. */
+.mv-ed .mv-control__actions--history .mv-soon { position: absolute; top: -7px; right: -3px; z-index: 1; margin: 0; padding: 0 3px; font-size: 8px; line-height: 12px; background: var(--mv-bg); pointer-events: none; }
+
+/* D4: both proofs share the page's aspect (340 × 480 for B5); drawing help sits below the frame. */
+.mv-ed .mv-control__pair.mv-control__pair--sketch { grid-template-columns: minmax(0, 340px) 36px minmax(0, 340px); justify-content: center; gap: 24px; max-width: none; }
+.mv-ed .mv-control__pair--sketch figure { align-items: flex-start; }
+.mv-ed .mv-control__frame { position: relative; width: min(100%, 340px, calc(480px * var(--mv-ratio, .7083))); aspect-ratio: var(--mv-ratio, .7083); }
+.mv-ed .mv-control__frame > img, .mv-ed .mv-control__frame > .mv-control__placeholder { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; max-height: none; aspect-ratio: auto; }
+.mv-ed .mv-control__draw { position: absolute; inset: 0; }
+.mv-ed .mv-control__draw canvas { width: 100%; height: 100%; max-height: none; }
+.mv-ed .mv-control__draw-tools { position: absolute; top: calc(100% + 8px); inset-inline: 0; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+
+/* D12: neutral caption until drift is measured; the result caption follows the measured result. */
+.mv-ed .mv-control__pair--lockfix > .mv-control__before:not(.mv-control__before--drift) figcaption { color: var(--mv-text-3); }
+.mv-ed .mv-control__pair--lockfix > .mv-control__after--pass figcaption { color: var(--mv-success); }
+.mv-ed .mv-control__pair--lockfix > .mv-control__after--fail figcaption { color: var(--mv-warning); }
+.mv-ed .mv-control__region { inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); stroke: var(--mv-warning); stroke-width: 2px; stroke-dasharray: 6px 4px; }
+.mv-ed .mv-control__refs figcaption { position: absolute; left: 8px; bottom: 6px; max-width: calc(100% - 16px); padding: 2px 5px; overflow: hidden; background: var(--mv-surface); color: var(--mv-text-2); font-family: var(--mv-font-mono); font-size: var(--mv-fs-micro); letter-spacing: .04em; text-transform: uppercase; text-overflow: ellipsis; white-space: nowrap; }
+.mv-ed .mv-control__drift { gap: 10px; padding: 6px; }
+.mv-ed .mv-control__drift.selected { box-shadow: inset 3px 0 0 var(--mv-accent); }
+.mv-ed .mv-control__drift-pick img { width: 52px; }

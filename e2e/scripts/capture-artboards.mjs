@@ -10,7 +10,8 @@ const output = resolve(process.env.MV_DESIGN_SCREENSHOTS || join(repo, 'e2e/test
 const baseURL = process.env.MV_E2E_BASE_URL || 'http://127.0.0.1:6199';
 const sheets = [
   ['07 Screens - Flow 2 Start a Story.dc.html', ['B2', 'B3', 'C1', 'C2', 'C3', 'C4', 'C5']],
-  ['09 Screens - Flow 6-7 Tools and System.dc.html', ['G2', 'G11', 'G12', 'D2']],
+  ['08 Screens - Flow 4-5 Publish Read Translate.dc.html', ['G4']],
+  ['09 Screens - Flow 6-7 Tools and System.dc.html', ['G2', 'G11', 'G12', 'G9', 'D2']],
   ['05 Screens - Flow 3 Make a Page.dc.html', ['D1', 'D3', 'D8', 'D13', 'E2']],
 ];
 const cssDir = join(repo, 'internal/web/static/dist/assets');

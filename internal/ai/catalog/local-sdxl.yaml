@@ -5,7 +5,7 @@ kind: image
 licence: openrail++
 commercial: true
 providers: [local-worker]
-references: 0
+references: 8
 text_in_art: false
 bw: true
 edit: true
@@ -21,6 +21,10 @@ worker:
   diffusers:
     repo: stabilityai/stable-diffusion-xl-base-1.0
     family: sdxl
+    controlnet_openpose: xinsir/controlnet-openpose-sdxl-1.0
+    controlnet_lineart: xinsir/controlnet-scribble-sdxl-1.0
+    ip_adapter: {repo: h94/IP-Adapter, subfolder: sdxl_models, weight_name: ip-adapter_sdxl.bin, scale: 0.6}
+    trainable: true
     default_steps: 28
     default_guidance: 6
     job_types: [image.generate, image.edit, image.inpaint, character.sheet]

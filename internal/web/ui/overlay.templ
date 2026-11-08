@@ -116,7 +116,7 @@ templ Menu(items []MenuItem) {
 			if it.Separator {
 				<div class="mv-menu__sep" role="separator"></div>
 			} else if it.Post {
-				<form method="post" action={ templ.URL(it.Href) }>
+				<form method="post" action={ templ.URL(it.Href) } novalidate>
 					<button type="submit" class={ Cls("mv-menu__item", If(it.Danger, "mv-menu__item--danger")) } role="menuitem" { it.Attrs... }>
 						if it.Icon != "" {
 							@Icon(it.Icon, 18)

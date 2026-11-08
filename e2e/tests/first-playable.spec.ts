@@ -47,7 +47,8 @@ function archiveEntries(data: Buffer): string[] {
 }
 
 test('fresh install → script → characters → layered art → lettering → print and comic exports', async ({ page, context, browser }, info) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
+  page.setDefaultTimeout(20_000);
   const origin = new URL(info.project.use.baseURL as string).origin;
   const unexpectedRequests: string[] = [];
   const loadedScripts: string[] = [];
@@ -156,7 +157,7 @@ test('fresh install → script → characters → layered art → lettering → 
     await page.locator('label').filter({ has: page.locator('input[name=variation][value="1"]') }).click();
     await page.screenshot({ animations: 'disabled', path: info.outputPath('D8-desktop.png') });
     await page.getByRole('button', { name: /^Keep 2/ }).click();
-    await expect(page.getByText('Variation applied', { exact: true })).toBeVisible();
+    await expect(page.getByText('Variation applied', { exact: true }).last()).toBeVisible();
     editor = new URL(page.url()).pathname;
     await page.screenshot({ animations: 'disabled', path: info.outputPath('D1-desktop.png') });
   });
@@ -180,7 +181,8 @@ test('fresh install → script → characters → layered art → lettering → 
     await expect(page.getByRole('slider', { name: 'Compare before and after', exact: true })).toBeVisible();
     await page.screenshot({ animations: 'disabled', path: info.outputPath('D13-result-desktop.png') });
     await page.getByRole('button', { name: /^Keep 1/ }).click();
-    await expect(page.getByText('Variation applied', { exact: true })).toBeVisible();
+    await expect(page.locator('.mv-ed[aria-busy]')).not.toHaveClass(/mv-ed--region/);
+    await expect(page.getByText('Variation applied', { exact: true }).last()).toBeVisible();
   });
 
   await test.step('edit structured lettering with undo, redo and a saved page revision', async () => {
@@ -270,6 +272,127 @@ test('fresh install → script → characters → layered art → lettering → 
     await expect(page.getByLabel('Text', { exact: true })).toBeEnabled();
   });
 
+  await test.step('use pose, atomic page regeneration, visual history and sketch controls', async () => {
+    const api = `/api/v1/editor/p/${project}/chapters/${chapter}`;
+    await page.getByRole('button', { name: 'Pages', exact: true }).click();
+    await page.getByRole('button', { name: 'RUN', exact: true }).click();
+    await savePage(page);
+    let current = (await (await page.request.get(api)).json()).current.page;
+    expect(current.panels[0].pose.preset).toBe('run');
+    await page.getByRole('button', { name: 'Sketch', exact: true }).click();
+    const head = page.locator('.mv-ed__pose-editor').getByRole('slider').first();
+    await head.focus();
+    await page.keyboard.press('ArrowRight');
+    await savePage(page);
+    current = (await (await page.request.get(api)).json()).current.page;
+    expect(current.panels[0].pose.joints[0].x).toBeCloseTo(.59, 5);
+    expect(current.panels[0].pose.preset).toBeUndefined();
+    await page.getByRole('button', { name: 'Sketch', exact: true }).click();
+    const poseVersion = current.version;
+    await page.getByRole('button', { name: 'Version history', exact: true }).click();
+    await expect.poll(async () => Math.round((await page.locator('.mv-control__stage').boundingBox())!.x)).toBe(0);
+    await expect.poll(async () => Math.round((await page.locator('.mv-control__inspector').boundingBox())!.width)).toBe(340);
+    await expect(page.locator('.mv-control__pair figure img')).toHaveCount(2);
+    await page.locator('.mv-control__pair figure img').first().evaluate((img: HTMLImageElement) => img.decode());
+    await page.screenshot({ animations: 'disabled', path: info.outputPath('D10-basic-desktop.png') });
+    await page.locator('.mv-control__inspector .mv-ed__version').nth(1).getByRole('button', { name: 'Restore', exact: true }).click();
+    await page.locator('.mv-ed__dialog').getByRole('button', { name: 'Confirm', exact: true }).click();
+    await expect.poll(async () => (await (await page.request.get(api)).json()).current.page.version).toBe(poseVersion + 1);
+    await page.locator('.mv-control__inspector').getByRole('button', { name: 'Close', exact: true }).click();
+    current = (await (await page.request.get(api)).json()).current.page;
+    const bubbles = JSON.stringify(current.bubbles), oldVersion = current.version;
+    await page.getByRole('button', { name: 'Page actions', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Regenerate this page', exact: true }).click();
+    await page.locator('.mv-ed__dialog').getByRole('button', { name: 'Regenerate this page', exact: true }).click();
+    await expect.poll(async () => (await (await page.request.get(api)).json()).current.page.version).toBe(oldVersion + 1);
+    await expect.poll(async () => JSON.stringify((await (await page.request.get(api)).json()).current.page.bubbles)).toBe(bubbles);
+    await page.goto(editor);
+    await page.getByRole('button', { name: 'Page actions', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Sketch to manga', exact: true }).click();
+    current = (await (await page.request.get(api)).json()).current.page;
+    const original = await page.request.get(current.panels[0].layers.find((l: { kind: string }) => l.kind === 'background').asset.url);
+    await page.locator('.mv-control__inspector input[type=file]').setInputFiles({ name: 'original-sketch.png', mimeType: 'image/png', buffer: await original.body() });
+    await expect(page.getByRole('button', { name: 'Ink this page', exact: true })).toBeEnabled();
+    await page.screenshot({ animations: 'disabled', path: info.outputPath('D4-desktop.png') });
+    await page.getByRole('slider', { name: 'How close to your sketch', exact: true }).focus();
+    await page.keyboard.press('ArrowRight');
+    await page.getByRole('button', { name: 'Ink this page', exact: true }).click();
+    await expect(page.locator('.mv-control__pair figure').nth(1).locator('img')).toBeVisible();
+    await page.locator('.mv-control__pair figure').nth(1).locator('img').evaluate((img: HTMLImageElement) => img.decode());
+    current = (await (await page.request.get(api)).json()).current.page;
+    expect(JSON.stringify(current.bubbles)).toBe(bubbles);
+    expect(current.panels[0].layers.filter((l: { kind: string }) => l.kind !== 'lettering').every((l: { provenance: string }) => l.provenance === 'mixed')).toBe(true);
+    await page.screenshot({ animations: 'disabled', path: info.outputPath('D4-result-desktop.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ animations: 'disabled', path: info.outputPath('D4-responsive.png') });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(editor);
+  });
+
+  await test.step('show current measured drift and repair only the selected character layer', async () => {
+    // Controlled protocol results exercise the real persistence and D12 UI.
+    // These fixture scores are not evidence of learned-model quality.
+    const api = `/api/v1/editor/p/${project}/chapters/${chapter}`;
+    const headers = { Authorization: 'Bearer mangaveyra-e2e-worker-only' };
+    const registered = await page.request.post('/api/worker/v1/register', { headers, data: { name: 'E2E controlled score fixture', version: 'test', backends: ['vision'], job_types: ['character.score'], models: ['character-lock-dinov2-v1'], max_concurrent: 1 } });
+    expect(registered.status()).toBe(200);
+    const workerID = (await registered.json()).worker_id;
+    let stop = false;
+    const worker = (async () => {
+      while (!stop) {
+        const claim = await page.request.post('/api/worker/v1/claim', { headers, data: { worker_id: workerID, job_types: ['character.score'], models: ['character-lock-dinov2-v1'], wait_s: 1 } });
+        if (claim.status() === 204) continue;
+        expect(claim.status()).toBe(200);
+        const j = (await claim.json()).job;
+        const count = Object.keys(j.files).filter(n => n.startsWith('candidate_')).length;
+        const done = await page.request.post(`/api/worker/v1/jobs/${j.id}/complete`, { headers, data: { worker_id: workerID, attempt: j.attempt, output: { scores: Array(count).fill(.78), outfit_scores: Array(count).fill(null), method: 'dinov2-small-v1:' + 'a'.repeat(64) }, actual: { gpu_seconds: 0 } } });
+        expect(done.status()).toBe(200);
+      }
+    })();
+    try {
+      await page.goto(`/studio/p/${project}/characters/${character}`);
+      await expect(page.getByRole('button', { name: 'Assess panels', exact: true })).toBeEnabled();
+      await page.getByRole('button', { name: 'Assess panels', exact: true }).click();
+      await expect(page.locator('.mv-bible__lock-score')).toHaveText('78%');
+      await page.screenshot({ animations: 'disabled', path: info.outputPath('C3-assessed-desktop.png') });
+      await page.getByRole('link', { name: 'Fix', exact: true }).click();
+      await expect(page.locator('.mv-control__drift')).toHaveCount(1);
+      await expect(page.getByRole('button', { name: 'Fix 1 panel', exact: true })).toBeEnabled();
+      await page.screenshot({ animations: 'disabled', path: info.outputPath('D12-desktop.png') });
+      const before = (await (await page.request.get(api)).json()).current.page;
+      await page.getByRole('button', { name: 'Fix 1 panel', exact: true }).click();
+      await expect(page.locator('.mv-control__pair figure').nth(1).locator('img')).toBeVisible();
+      const after = (await (await page.request.get(api)).json()).current.page;
+      expect(after.bubbles).toEqual(before.bubbles);
+      for (const layer of before.panels[0].layers.filter((l: { kind: string }) => l.kind !== 'character')) expect(JSON.stringify(after.panels[0].layers.find((l: { id: string }) => l.id === layer.id),(key,value)=>key==='url'?undefined:value)).toBe(JSON.stringify(layer,(key,value)=>key==='url'?undefined:value));
+      await page.screenshot({ animations: 'disabled', path: info.outputPath('D12-result-desktop.png') });
+    } finally { stop = true; await worker; }
+    await page.goto(editor);
+  });
+
+  await test.step('keep control workbenches usable in Japanese, Paper and reduced motion', async () => {
+    expect((await page.request.patch('/api/v1/auth/me', { data: { locale: 'ja' } })).ok()).toBe(true);
+    expect((await page.request.post('/settings/theme', { form: { theme: 'light' } })).ok()).toBe(true);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const [id, query] of [['D10', 'panel=history'], ['D4', 'tool=sketch'], ['D12', `tool=lockfix&character=${character}`]]) {
+      await page.goto(`${editor}?${query}`);
+      await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
+      const inspector = page.locator('.mv-control__inspector');
+      await expect(inspector).toBeVisible();
+      expect(await inspector.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+      await page.screenshot({ animations: 'disabled', path: info.outputPath(`${id}-ja-paper-desktop.png`) });
+      await page.setViewportSize({ width: 390, height: 844 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ animations: 'disabled', path: info.outputPath(`${id}-ja-responsive.png`) });
+      await page.setViewportSize({ width: 1440, height: 900 });
+    }
+    expect((await page.request.patch('/api/v1/auth/me', { data: { locale: 'en' } })).ok()).toBe(true);
+    expect((await page.request.post('/settings/theme', { form: { theme: 'dark' } })).ok()).toBe(true);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto(editor);
+  });
+
   await test.step('export a boxed KDP PDF and a CBZ with original credits', async () => {
     await page.getByRole('link', { name: 'Export', exact: true }).click();
     await page.locator('.mv-exportui__canvas img').evaluate((image: HTMLImageElement) => image.decode());
@@ -320,6 +443,81 @@ test('fresh install → script → characters → layered art → lettering → 
     expect(archiveEntries(await readFile(pngPath)).filter(name => name.endsWith('.png'))).toHaveLength(3);
   });
 
+  await test.step('inspect the real queue and explicitly read categorized notifications', async () => {
+    await page.goto('/queue');
+    await expect(page.getByRole('heading', { name: 'Job queue', exact: true })).toBeVisible();
+    expect(await page.locator('[data-job-id]').count()).toBeGreaterThan(0);
+    await expect(page.locator('.mv-queue__summary-card')).toHaveCount(3);
+    await page.screenshot({ animations: 'disabled', path: info.outputPath('G9-desktop.png') });
+    await page.waitForFunction(() => 'mv' in window);
+    const snapshot = await page.locator('#queue-live').innerHTML();
+    await context.route('**/queue/status*', route => route.abort());
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('mv:ws', { detail: { type: 'job.progress' } })));
+    await expect(page.locator('[data-queue-error]')).toBeVisible();
+    expect(await page.locator('#queue-live').innerHTML()).toBe(snapshot);
+    await page.screenshot({ animations: 'disabled', path: info.outputPath('G9-refresh-error-desktop.png') });
+    await context.unroute('**/queue/status*');
+    await page.goto('/queue');
+    await page.locator('.mv-queue__actions summary').first().focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('menuitem', { name: 'View details', exact: true }).first()).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.mv-queue__actions summary').first()).toBeFocused();
+    await page.locator('.mv-queue__job').first().click();
+    await expect(page.locator('.mv-queue__detail')).toBeVisible();
+    await expect(page.locator('.mv-queue__detail')).not.toContainText('An apprentice courier delivers letters');
+    await page.locator('.mv-queue__events summary').click();
+    expect(await page.locator('.mv-queue__events li').count()).toBeGreaterThan(0);
+
+    // Ordinary single jobs stay quiet; the existing notifier sends failures
+    // and completed batch jobs. Exercise G4 with its real in-app test action.
+    for (let i = 0; i < 2; i++) expect((await page.request.post('/api/v1/notifications/test')).status()).toBe(201);
+    const before = (await (await page.request.get('/api/v1/notifications/unread-count')).json()).unread;
+    expect(before).toBeGreaterThan(0);
+    await page.goto('/notifications');
+    await expect(page.getByRole('heading', { name: 'Notifications', exact: true })).toBeVisible();
+    await expect(page.locator('.mv-sidebar')).toHaveCount(0);
+    expect((await (await page.request.get('/api/v1/notifications/unread-count')).json()).unread).toBe(before);
+    await page.screenshot({ animations: 'disabled', path: info.outputPath('G4-desktop.png') });
+    await page.getByRole('link', { name: 'Reading', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'No notifications yet', exact: true })).toBeVisible();
+    await page.getByRole('link', { name: 'System', exact: true }).click();
+    await page.locator('.mv-notifications__item').first().click();
+    await page.waitForURL('**/notifications?category=system');
+    expect((await (await page.request.get('/api/v1/notifications/unread-count')).json()).unread).toBe(before - 1);
+    await page.goto('/notifications');
+    const allRead = page.getByRole('button', { name: 'Mark all read', exact: true });
+    if (await allRead.isEnabled()) await allRead.click();
+    await expect(page.getByRole('button', { name: 'Mark all read', exact: true })).toBeDisabled();
+    await expect(page.locator('.mv-bell')).toHaveAttribute('aria-label', 'Notifications');
+
+    for (const locale of ['ja', 'en']) {
+      expect((await page.request.patch('/api/v1/auth/me', { data: { locale } })).ok()).toBe(true);
+      for (const path of ['/queue', '/notifications']) {
+        await page.goto(path);
+        await expect(page.locator('html')).toHaveAttribute('lang', locale);
+        await page.screenshot({ animations: 'disabled', path: info.outputPath(`${path.slice(1)}-${locale}-desktop.png`) });
+      }
+    }
+    expect((await page.request.post('/settings/theme', { form: { theme: 'light' } })).ok()).toBe(true);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const path of ['/queue', '/notifications']) {
+      await page.goto(path);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
+      await page.screenshot({ animations: 'disabled', path: info.outputPath(`${path.slice(1)}-paper-reduced-motion.png`) });
+    }
+    expect((await page.request.post('/settings/theme', { form: { theme: 'dark' } })).ok()).toBe(true);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    for (const path of ['/queue', '/notifications']) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(path);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ animations: 'disabled', path: info.outputPath(`${path.slice(1)}-responsive.png`) });
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+  });
+
   await test.step('complete all custom-provider steps against a local fake model catalogue', async () => {
     const calls: string[] = [];
     const fake = createServer((req, res) => {
@@ -360,7 +558,7 @@ test('fresh install → script → characters → layered art → lettering → 
     const noJS = await browser.newContext({ baseURL: origin, javaScriptEnabled: false, storageState: await context.storageState(), viewport: { width: 1440, height: 900 } });
     try {
       const proof = await noJS.newPage();
-      for (const path of ['/studio/projects', `/studio/p/${project}/characters`, `/studio/p/${project}/setting`, '/models', '/models/routing']) {
+      for (const path of ['/studio/projects', `/studio/p/${project}/characters`, `/studio/p/${project}/setting`, '/models', '/models/routing', '/queue', '/notifications']) {
         const response = await proof.goto(path);
         expect(response?.status()).toBe(200);
         await expect(proof.locator('h1').first()).toBeVisible();

@@ -13,6 +13,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/config"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/storage"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil/testdb"
@@ -83,10 +84,71 @@ func TestJobFailureNotifiesOwner(t *testing.T) {
 	q := ta.Deps.Jobs
 	j, _ := q.Enqueue(ctx, jobs.EnqueueParams{Type: "t", UserID: u.ID, Scope: jobs.Scope{Kind: jobs.ScopeNone}, MaxAttempts: 1})
 	q.Claim(ctx, jobs.ClaimParams{Executor: jobs.ExecutorGo, Types: []string{"t"}})
-	q.Fail(ctx, j.ID, "", jobs.JobError{Code: "oom", Message: "CUDA out of memory"}, jobs.Cost{})
+	q.Fail(ctx, j.ID, "", jobs.JobError{Code: "oom", Message: "PRIVATE_WORKER_PROMPT_MUST_NOT_LEAVE_JOB"}, jobs.Cost{})
 	list, err := ta.Deps.Notify.List(ctx, u.ID, notifyListAll())
-	if err != nil || len(list) != 1 || list[0].Kind != "job_failed" || !strings.Contains(list[0].Body, "out of memory") {
+	if err != nil || len(list) != 1 || list[0].Kind != "job_failed" || !strings.HasPrefix(list[0].Body, "Job") ||
+		strings.Contains(list[0].Body, "PRIVATE") || list[0].Link != "/queue?job="+j.ID {
 		t.Fatalf("notifications: %+v %v", list, err)
+	}
+}
+
+func TestJobNotificationUsesRecipientLocale(t *testing.T) {
+	for _, dialect := range testdb.Dialects() {
+		t.Run(dialect, func(t *testing.T) {
+			ta := testutil.NewTestApp(t, testutil.WithDialect(dialect))
+			ctx := context.Background()
+			u := ta.CreateUser(t, "rin-notifications", auth.RoleCreator)
+			if _, err := ta.Deps.DB.Exec(ctx, `UPDATE users SET locale = 'ja' WHERE id = ?`, u.ID); err != nil {
+				t.Fatal(err)
+			}
+			q := ta.Deps.Jobs
+			j, err := q.Enqueue(ctx, jobs.EnqueueParams{Type: "notification.fixture", UserID: u.ID, Scope: jobs.Scope{Kind: jobs.ScopeNone}, MaxAttempts: 1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := q.Claim(ctx, jobs.ClaimParams{Executor: jobs.ExecutorGo, Types: []string{j.Type}}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := q.Fail(ctx, j.ID, "", jobs.JobError{Code: "oom", Message: "private worker detail"}, jobs.Cost{}); err != nil {
+				t.Fatal(err)
+			}
+			notices, err := ta.Deps.Notify.List(ctx, u.ID, notifyListAll())
+			if err != nil || len(notices) != 1 || notices[0].Title != "生成に失敗しました" || !strings.HasPrefix(notices[0].Body, "ジョブ") ||
+				strings.Contains(notices[0].Body, j.Type) || strings.Contains(notices[0].Body, "private") {
+				t.Fatalf("recipient locale or safe body missing: %+v %v", notices, err)
+			}
+		})
+	}
+}
+
+func TestJobNotificationFallsBackToInstanceLocale(t *testing.T) {
+	for _, dialect := range testdb.Dialects() {
+		t.Run(dialect, func(t *testing.T) {
+			ta := testutil.NewTestApp(t, testutil.WithDialect(dialect))
+			ctx := context.Background()
+			if _, err := ta.Deps.Settings.UpdateInstance(ctx, "", func(in *settings.Instance) error {
+				in.DefaultLocale = "ja"
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			u := ta.CreateUser(t, "sora-default-locale", auth.RoleCreator) // users.locale stays ''
+			q := ta.Deps.Jobs
+			j, err := q.Enqueue(ctx, jobs.EnqueueParams{Type: "notification.fixture", UserID: u.ID, Scope: jobs.Scope{Kind: jobs.ScopeNone}, MaxAttempts: 1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := q.Claim(ctx, jobs.ClaimParams{Executor: jobs.ExecutorGo, Types: []string{j.Type}}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := q.Fail(ctx, j.ID, "", jobs.JobError{Code: "oom", Message: "private worker detail"}, jobs.Cost{}); err != nil {
+				t.Fatal(err)
+			}
+			notices, err := ta.Deps.Notify.List(ctx, u.ID, notifyListAll())
+			if err != nil || len(notices) != 1 || notices[0].Title != "生成に失敗しました" {
+				t.Fatalf("instance default locale not used for a user without a language: %+v %v", notices, err)
+			}
+		})
 	}
 }
 

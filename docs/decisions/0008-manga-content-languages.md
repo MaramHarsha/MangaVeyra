@@ -54,5 +54,7 @@ binary must carry the fonts. The interface itself stays English and Japanese; th
 ## Consequences
 
 The binary grows by about 10.7 MB, and one embedded font set serves the editor, the proof and every export
-identically. Shaping is serialised behind the lettering engine's mutex, so very large concurrent exports queue on it.
+identically. Auto-fit decides each size from cached glyph metrics and outline boxes and draws only the chosen size;
+each bubble has a fixed work budget, and only per-bubble shaping and the final drawing hold the engine mutex, so other
+layouts interleave between bubbles. Page layout honours request cancellation.
 Adding a script needs a new font key, fallback entry and tests; adding an interface locale is a separate decision.

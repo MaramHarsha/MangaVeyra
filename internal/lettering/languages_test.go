@@ -2,6 +2,7 @@ package lettering
 
 import (
 	"bytes"
+	"context"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -38,7 +39,7 @@ func languageBubble(lang, text string) pagedoc.Bubble {
 
 func layoutStatsFor(t *testing.T, e Engine, b pagedoc.Bubble, lang string) (BubbleLayout, layoutStats) {
 	t.Helper()
-	l, stats, err := e.(*engine).layout(b, lang)
+	l, stats, err := e.(*engine).layout(context.Background(), b, lang)
 	if err != nil {
 		t.Fatalf("%s: %v", lang, err)
 	}

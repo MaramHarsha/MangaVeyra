@@ -5,6 +5,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/compose"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
+	"github.com/MaramHarsha/MangaVeyra/internal/gen"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/lettering"
 	"github.com/MaramHarsha/MangaVeyra/internal/pagestore"
@@ -16,6 +17,9 @@ type Module struct {
 	d  *core.Deps
 	s  *service
 	ui *web.UI
+	// control resolves Character Lock evidence for the E2 layer list. Scores
+	// persisted on layers are never displayed (ADR 0010).
+	control gen.ControlService
 }
 
 func New(d *core.Deps) *Module {
@@ -32,6 +36,7 @@ func (m *Module) Init(context.Context) error {
 	m.s.assets = core.MustUse[*assets.Service](m.d)
 	m.s.lettering = core.MustUse[lettering.Engine](m.d)
 	m.ui = core.MustUse[*web.UI](m.d)
+	m.control = core.MustUse[gen.ControlService](m.d)
 	return nil
 }
 func (m *Module) JobHandlers() map[string]jobs.Handler {

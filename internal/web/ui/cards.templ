@@ -1,6 +1,9 @@
 package ui
 
-import "strconv"
+import (
+	"math"
+	"strconv"
+)
 
 // BadgeSpec is a badge to show on a card.
 type BadgeSpec struct {
@@ -163,7 +166,7 @@ templ CharacterCard(p CharacterCardProps) {
 							@Icon("lock", 14)
 							{ p.LockLabel }
 						</span>
-						<span class="mv-lock__score">{ strconv.Itoa(int(p.Lock*100 + .5)) }%</span>
+						<span class="mv-lock__score">{ lockPercent(p.Lock) }</span>
 					</div>
 					@Bar(p.Lock, lockTone(p.Lock), false, p.LockLabel)
 				</div>
@@ -174,6 +177,16 @@ templ CharacterCard(p CharacterCardProps) {
 			}
 		</div>
 	</article>
+}
+
+// lockPercent floors a Character Lock measurement to a whole percent and never
+// lets a value below the 0.90 pass threshold read as "90%" (ADR 0011).
+func lockPercent(v float64) string {
+	percent := int(math.Floor(v*100 + 1e-9))
+	if v < .9 && percent >= 90 {
+		percent = 89
+	}
+	return strconv.Itoa(percent) + "%"
 }
 
 func lockTone(v float64) string {

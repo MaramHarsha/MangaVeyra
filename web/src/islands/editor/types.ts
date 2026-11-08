@@ -1,3 +1,4 @@
+export interface Pose {schema:string;preset?:string;joints:Point[]}
 export interface Point { x: number; y: number }
 export interface Rect extends Point { w: number; h: number }
 export interface Asset { id: string; url?: string; width?: number; height?: number }
@@ -14,11 +15,15 @@ export interface Layout {id:string;name:string;panels:number;points:Point[][];su
 export interface Character {id:string;name:string;portrait_asset_id?:string;lock_score?:number}
 export interface Candidate {index:number;asset_id:string;url?:string;seed:number;lock_score?:number;layers?:{layer_id:string;kind:string;name:string;asset_id:string}[]}
 export interface Job {id:string;type?:string;state:string;progress:number;step?:number;steps?:number;model_id?:string;model_name?:string;provider_id?:string;error_code?:string;created_at?:string;started_at?:string;finished_at?:string;position?:number;estimate_seconds?:number;page_id?:string;panel_id?:string;layer_id?:string;prompt?:string}
-export interface Version {id:string;number:number;action:string;summary:string;created_at:string}
+export interface Version {id:string;number:number;action:string;summary:string;created_at:string;actor_kind?:string}
 export interface Compute {queued:number;running:number;workers_online:number;load:number;gpu?:string;vram_used_mb?:number;vram_total_mb?:number;worker_name?:string;host:string}
 export interface Beat {panels:number;wide:number;medium:number;close:number}
 export interface Option {id:string;label:string}
 export interface ChapterLink {id:string;number:number;title:string;href:string}
 export interface Print {format_label:string;size_label:string;width_mm?:number;height_mm?:number}
-export interface Bootstrap {project:{id:string;title:string;language:string;style:string;format:string;page_size:string;page_width:number;page_height:number};chapter:{id:string;number:number;title:string;locked:boolean};pages:PageSummary[];characters:Character[];layouts:Layout[];permissions:{art:boolean;letter:boolean;generate:boolean;lock:boolean};current?:PageResponse;api:string;lang:string;messages:Record<string,string>;chapters?:ChapterLink[];styles?:Option[];print?:Print;compute?:Compute;beats?:Record<string,Beat>;script_actions?:Record<string,string>}
+export interface Bootstrap {pose_presets?:Record<string,Pose>;project:{id:string;title:string;language:string;style:string;format:string;page_size:string;page_width:number;page_height:number};chapter:{id:string;number:number;title:string;locked:boolean};pages:PageSummary[];characters:Character[];layouts:Layout[];permissions:{art:boolean;letter:boolean;generate:boolean;lock:boolean};current?:PageResponse;api:string;lang:string;messages:Record<string,string>;chapters?:ChapterLink[];styles?:Option[];print?:Print;compute?:Compute;beats?:Record<string,Beat>;script_actions?:Record<string,string>}
 export interface Props {initial:Bootstrap;mode?:string;tool?:string;panel?:string;job?:string}
+
+export interface RepairTarget {page_id:string;panel_id:string;layer_id:string;version:number}
+export interface DriftPanel extends RepairTarget {chapter_id:string;page_number:number;panel_number:number;asset_id:string;url?:string;score:number;identity:number;outfit?:number;locked?:boolean}
+export interface LockStatus {character_id:string;status:string;method?:string;score?:number;panels:number;references:number;threshold:number;can_train:boolean;can_score:boolean;training_model?:string;training_job_id?:string;training_progress:number;drift:DriftPanel[];drift_total?:number;unscored?:number;outfit_pending?:number}

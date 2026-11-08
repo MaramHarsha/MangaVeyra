@@ -53,6 +53,35 @@ type loadedFont struct {
 	upem                       float64
 	err                        error
 	bounds                     map[uint16][4]float64 // glyph outline bounds in em (engine mutex)
+	inks                       map[uint16]glyphInk   // exact drawn outline bounds (engine mutex)
+}
+
+// glyphInk is the exact bounding box, in font units, of the outline
+// appendGlyph draws for a glyph at scale 1 (canvas Path.Bounds of the curves,
+// not the font's stored box). Placing it as draw places the glyph gives the
+// glyph's drawn bounds at any size without building its outline again.
+type glyphInk struct {
+	x0, y0, x1, y1 float64
+	empty          bool // nothing is drawn (white space)
+}
+
+// glyphInk returns id's exact outline bounds, building the outline once per
+// font and glyph.
+func (l *loadedFont) glyphInk(id uint16) glyphInk {
+	if g, ok := l.inks[id]; ok {
+		return g
+	}
+	p := appendGlyph(&canvas.Path{}, l, id, 0, 0, 1)
+	g := glyphInk{empty: p.Empty()}
+	if !g.empty {
+		r := p.Bounds()
+		g.x0, g.y0, g.x1, g.y1 = r.X0, r.Y0, r.X1, r.Y1
+	}
+	if l.inks == nil {
+		l.inks = map[uint16]glyphInk{}
+	}
+	l.inks[id] = g
+	return g
 }
 
 // glyphBounds returns a glyph's outline bounds (xmin, ymin, xmax, ymax) in em.

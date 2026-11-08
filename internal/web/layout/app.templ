@@ -73,6 +73,14 @@ func (c *Chrome) userMenu(ctx context.Context) []ui.MenuItem {
 	return append(items, ui.MenuItem{Separator: true}, ui.MenuItem{Href: "/logout", Label: i18n.T(ctx, "nav.logout"), Icon: "logout", Post: true})
 }
 
+func notificationLabel(ctx context.Context, unread int) string {
+	label := i18n.T(ctx, "nav.notifications")
+	if unread > 0 {
+		label += " · " + i18n.T(ctx, "nav.unread", "count", unread)
+	}
+	return label
+}
+
 // AppShell renders the signed-in frame: top bar, studio sidebar, main content and the mobile bottom nav.
 templ AppShell(c *Chrome) {
 	@Base(c) {
@@ -131,12 +139,10 @@ templ TopBar(c *Chrome) {
 					@ui.ComputeMeter(*c.Meter)
 				}
 				if ui.Ready(ctx, "/notifications") {
-					<a class="mv-iconlink mv-bell" href="/notifications" aria-label={ i18n.T(ctx, "nav.notifications") }>
+					<a class="mv-iconlink mv-bell" href="/notifications" aria-label={ notificationLabel(ctx, c.Unread) } data-unread-base={ i18n.T(ctx, "nav.notifications") } data-unread-label={ i18n.T(ctx, "nav.unread", "count", "{count}") }>
 						@ui.Icon("bell", 20)
 						<span class="mv-iconlink__dot" data-unread-dot hidden?={ c.Unread == 0 }></span>
-						if c.Unread > 0 {
-							<span class="mv-sr-only">{ i18n.T(ctx, "nav.unread", "count", c.Unread) }</span>
-						}
+						<span class="mv-sr-only" data-unread-count hidden?={ c.Unread == 0 }>{ i18n.T(ctx, "nav.unread", "count", c.Unread) }</span>
 					</a>
 				} else {
 					<span class="mv-iconlink mv-bell is-soon" role="img" aria-label={ i18n.T(ctx, "nav.notifications") + " · " + i18n.T(ctx, "ui.soon_hint") } title={ i18n.T(ctx, "ui.soon_hint") }>

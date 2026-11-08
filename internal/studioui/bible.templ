@@ -321,34 +321,14 @@ templ BibleCharacter(v biblePage) {
 				</div>
 				<div class="mv-bible__actions">
 					@bibleSoon(i18n.T(ctx, "bible.character.export"), "package-export")
-					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Disabled: true, Tip: i18n.T(ctx, "ui.soon_hint")}) {
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Disabled: true, Tip: i18n.T(ctx, "ui.soon_hint"), Attrs: templ.Attributes{"data-tip-pos": "end"}}) {
 						{ i18n.T(ctx,"bible.character.use") }
 						@ui.SoonTag()
 					}
 				</div>
 			</header>
 			<div class="mv-bible__character-summary">
-				<section class={ "mv-bible__lock-card",ui.If(v.Character.LockScore!=nil,"mv-bible__lock-card--ready") }>
-					<div class="mv-bible__lock-heading">
-						<strong>
-							@ui.Icon("lock", 18)
-							{ i18n.T(ctx,"bible.lock.title") }
-						</strong>
-						if v.Character.LockScore!=nil {
-							<span class="mv-bible__lock-score">
-								{ strconv.Itoa(int(*v.Character.LockScore*100+.5)) }%
-							</span>
-						} else {
-							@ui.SoonTag()
-						}
-					</div>
-					<p>
-						{ i18n.T(ctx,"bible.lock.references","count",len(v.Character.Refs)) }
-					</p>
-					<p>
-						{ i18n.T(ctx,"bible.lock.hint") }
-					</p>
-				</section>
+				@BibleLockCard(v)
 				<dl class="mv-bible__facts">
 					<div>
 						<dt>
@@ -600,7 +580,12 @@ templ BibleNewCharacter(v biblePage) {
 				</div>
 			}
 			@ui.Notice(ui.ToneInfo, "info-circle") {
-				{ i18n.T(ctx,"bible.new.training_hint") } @ui.SoonTag()
+				{ i18n.T(ctx,"bible.lock.training_hint") }
+                if v.Character.ID!="" {
+                 @ui.LinkButton(characterPath(v.Project.ID,v.Character.ID),ui.ButtonProps{Size:ui.SM,Variant:ui.Quiet}) {
+                  {i18n.T(ctx,"bible.lock.open_status")}
+                 }
+                }
 			}
 		</section>
 	</div>
@@ -677,6 +662,11 @@ templ BibleReferenceForm(v biblePage) {
 		@bibleTextField(v, "label", v.Form.Label, 160)
 		@ui.Field(ui.FieldProps{ID: "bible-kind", Label: i18n.T(ctx, "bible.field.kind"), Error: v.Errors["kind"]}) {
 			@ui.Select(ui.SelectProps{ID: "bible-kind", Name: "kind", Value: v.Form.Kind, Invalid: v.Errors["kind"] != "", Options: bibleOptions(ctx, "refs", "front", "side", "back", "face", "expression", "outfit", "sheet", "other"), Attrs: bibleControlAttrs(v, "kind")})
+		}
+		for _, outfit := range v.Character.Outfits {
+			if outfit.IsDefault {
+				<p class="mv-bible__hint">{ i18n.T(ctx,"bible.refs.outfit_binding","outfit",outfit.Name) }</p>
+			}
 		}
 		@ui.Checkbox(ui.CheckProps{Name: "portrait", Label: i18n.T(ctx, "bible.refs.portrait"), Checked: v.Form.Portrait})
 		@bibleFormActions(characterPath(v.Project.ID, v.Character.ID))

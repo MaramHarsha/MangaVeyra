@@ -2,6 +2,7 @@ package export
 
 import (
 	"context"
+	"github.com/MaramHarsha/MangaVeyra/internal/gen"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/layout"
@@ -428,7 +429,7 @@ func layerMeta(ctx context.Context, page pagedoc.Page, panel pagedoc.Panel, l pa
 		return i18n.T(ctx, "exportui.bubble_count", "count", n)
 	}
 	if l.Kind == pagedoc.LayerCharacter && l.LockScore != nil {
-		return i18n.T(ctx, "exportui.lock_score", "score", int(*l.LockScore*100+.5))
+		return i18n.T(ctx, "exportui.lock_score", "score", gen.LockPercent(*l.LockScore))
 	}
 	switch l.Provenance {
 	case pagedoc.ProvenanceAI, pagedoc.ProvenanceMixed:

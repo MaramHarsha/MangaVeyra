@@ -106,3 +106,19 @@ func (a textArea) contains(box canvas.Rect) bool {
 	}
 	return true
 }
+
+// outside reports that every rectangle whose edges lie within d of box's is
+// not contained: some corner of box stays outside the area even when moved
+// up to d towards the centre on each axis. Both area shapes are separable
+// in x and y, so that move is the corner's most favourable one.
+func (a textArea) outside(box canvas.Rect, d float64) bool {
+	const eps = 1e-6
+	toward := func(v, c float64) float64 { return v - math.Max(-d, math.Min(d, v-c)) }
+	for _, p := range [4][2]float64{{box.X0, box.Y0}, {box.X1, box.Y0}, {box.X0, box.Y1}, {box.X1, box.Y1}} {
+		dx, dy := (toward(p[0], a.cx)-a.cx)/a.rx, (toward(p[1], a.cy)-a.cy)/a.ry
+		if a.round && dx*dx+dy*dy > 1+eps || !a.round && (math.Abs(dx) > 1+eps || math.Abs(dy) > 1+eps) {
+			return true
+		}
+	}
+	return false
+}
