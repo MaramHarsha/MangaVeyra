@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
@@ -182,9 +183,7 @@ func (s *service) Start(ctx context.Context, userID, kind, filename, sourceKey s
 	default:
 		return Import{}, studio.ErrInvalid
 	}
-	if len(filename) > 200 {
-		filename = filename[:200]
-	}
+	filename = cutUTF8(strings.ToValidUTF8(filename, "�"), maxFilenameBytes)
 	id := db.NewID()
 	now := db.Now()
 	res := Result{SourceKey: sourceKey, Images: images}
@@ -199,6 +198,20 @@ func (s *service) Start(ctx context.Context, userID, kind, filename, sourceKey s
 		return Import{}, err
 	}
 	return s.Get(ctx, id)
+}
+
+// maxFilenameBytes bounds the stored import name.
+const maxFilenameBytes = 200
+
+// cutUTF8 shortens s to at most n bytes without splitting a character.
+func cutUTF8(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }
 
 func (s *service) enqueueTx(ctx context.Context, tx *db.Tx, id, userID string) error {

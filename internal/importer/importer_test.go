@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
@@ -645,5 +646,29 @@ func TestPDFNeedsPdftoppm(t *testing.T) {
 	imp := recent(t, ta, ta.Admin.ID)[0]
 	if imp.Kind != importer.KindPDF || imp.Status != importer.StatusDone || imp.Pages != 2 {
 		t.Fatalf("pdf import %+v", imp)
+	}
+}
+
+// A long Japanese file name is cut at a character boundary: the stored name
+// stays valid UTF-8 (PostgreSQL refuses anything else) and the import starts.
+func TestLongMultibyteNameIsCutAtACharacter(t *testing.T) {
+	for _, dialect := range testdb.Dialects() {
+		t.Run(dialect, func(t *testing.T) {
+			ta := testutil.NewTestApp(t, testutil.WithDialect(dialect))
+			admin := ta.Login(t, "admin")
+			name := strings.Repeat("潮騒の灯台守", 20) + ".cbz" // 364 bytes
+			r := upload(t, admin, map[string][]byte{name: makeZip(t, []entry{{name: "p1.png", data: pagePNG(t, 1, 20, 30)}})})
+			if r.StatusCode != http.StatusSeeOther {
+				t.Fatalf("upload %d %s", r.StatusCode, r.Body)
+			}
+			list := recent(t, ta, ta.Admin.ID)
+			if len(list) != 1 {
+				t.Fatalf("imports %+v", list)
+			}
+			got := list[0].Filename
+			if !utf8.ValidString(got) || len(got) > 200 || !strings.HasPrefix(name, got) || len(got) < 190 {
+				t.Fatalf("stored name %q (%d bytes)", got, len(got))
+			}
+		})
 	}
 }
