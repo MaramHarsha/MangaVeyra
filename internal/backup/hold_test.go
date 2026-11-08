@@ -15,6 +15,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/admin/adminapi"
 	"github.com/MaramHarsha/MangaVeyra/internal/backup"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
+	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 )
@@ -248,12 +249,23 @@ func TestRestoreSubmittedTwiceRunsOnce(t *testing.T) {
 			}()
 		}
 		wg.Wait()
+		// While a restore holds the server (the lease row says it owns
+		// maintenance), maintenance is on: read both in one snapshot.
+		heldButOff := func() bool {
+			var lease, maint string
+			_ = ta.Deps.DB.WithReadTx(ctx, func(tx *db.Tx) error {
+				_ = tx.Get(ctx, &lease, `SELECT value FROM instance_settings WHERE key = 'backup.lock'`)
+				_ = tx.Get(ctx, &maint, `SELECT value FROM instance_settings WHERE key = 'maintenance'`)
+				return nil
+			})
+			return strings.Contains(lease, `"maintenance":true`) && !strings.Contains(maint, `"enabled":true`)
+		}
 		deadline := time.Now().Add(30 * time.Second)
 		for s.State().Running && time.Now().Before(deadline) {
-			if !instMaintenance(t, ta).Enabled {
+			if heldButOff() {
 				t.Fatal("maintenance went off while the restore ran")
 			}
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(5 * time.Millisecond)
 		}
 		if st := s.State(); st.Running || st.Err != nil {
 			t.Fatalf("restore state %+v", st)
