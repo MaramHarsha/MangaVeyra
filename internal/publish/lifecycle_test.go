@@ -19,6 +19,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish/publishtest"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
+	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 )
 
@@ -240,6 +241,96 @@ func TestScheduleLoopPublishesOnceAcrossConnections(t *testing.T) {
 		}
 		if live := f.client.Get(f.base + "/published?lang=en"); !contains(live.Body, "2 followers notified") {
 			t.Fatal("published page lacks the notified count")
+		}
+	})
+}
+
+// The schedule loop publishes as the person who scheduled the chapter, so it
+// checks again when the chapter comes due that they still may: an editor
+// demoted meanwhile, or a suspended owner, publishes nothing. The chapter is
+// left unpublished (E1 says so) and nobody is notified.
+func TestScheduleLoopRechecksWhoScheduled(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, pf *publishtest.Fixture) {
+		ctx := context.Background()
+		pf.SetMode(settings.ModePublic)
+		svc := pf.Service()
+		fake := &fakeFollowers{users: map[string][]string{}}
+		publish.SetFollowersForTest(svc, fake)
+		follower := ta.CreateUser(t, "", auth.RoleReader)
+		at := time.Now().Add(2 * time.Hour).UTC()
+		schedule := func(f *chapterFix, c *testutil.Client) string {
+			t.Helper()
+			form := f.formFor(c, "en", "when", "schedule", "date", at.Format("2006-01-02"), "time", at.Format("15:04"))
+			resp := postForm(c, f.base+"/publish", form)
+			loc, _ := url.Parse(resp.Header.Get("Location"))
+			if resp.StatusCode != http.StatusSeeOther || loc == nil || loc.Query().Get("job") == "" {
+				t.Fatalf("schedule POST = %d %s", resp.StatusCode, resp.Body)
+			}
+			if j := runJob(t, ta, loc.Query().Get("job")); j.State != jobs.StateDone {
+				t.Fatalf("schedule: %+v", j.Error)
+			}
+			sid := seriesID(t, ta, f.project.ID)
+			fake.users[sid] = []string{follower.ID}
+			return sid
+		}
+
+		// An editor schedules chapter 1 of one project, then is demoted to viewer.
+		demoted := newChapter(t, ta, false)
+		editor := ta.CreateUser(t, "", auth.RoleCreator)
+		pf.AddMember(demoted.project.ID, editor.ID, studio.RoleEditor)
+		first := schedule(demoted, ta.Login(t, editor.Username))
+		exec(t, ta, `UPDATE project_members SET role = ? WHERE project_id = ? AND user_id = ?`, studio.RoleViewer, demoted.project.ID, editor.ID)
+		// The owner of another project schedules, then is suspended.
+		suspended := newChapter(t, ta, false)
+		second := schedule(suspended, suspended.client)
+		if err := ta.Deps.Auth.SetStatus(ctx, suspended.owner.ID, auth.StatusSuspended, "test"); err != nil {
+			t.Fatal(err)
+		}
+
+		exec(t, ta, `UPDATE chapter_publications SET scheduled_at = ?`, db.Now().Add(-time.Minute))
+		dialect, dsn, err := ta.Deps.Cfg.Database()
+		if err != nil {
+			t.Fatal(err)
+		}
+		other, err := db.Open(ctx, dialect, dsn, db.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer other.Close()
+		var wg sync.WaitGroup
+		results := make([]int, 2)
+		errs := make([]error, 2)
+		for i, conn := range []*db.DB{ta.Deps.DB, other} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				results[i], errs[i] = publish.PublishDueForTest(ctx, svc, conn)
+			}()
+		}
+		wg.Wait()
+		if errs[0] != nil || errs[1] != nil || results[0]+results[1] != 0 {
+			t.Fatalf("passes = %v %v, want nothing published", results, errs)
+		}
+		for _, sid := range []string{first, second} {
+			if _, _, err := svc.Publication(ctx, publish.Viewer{UserID: follower.ID}, sid, 1, "en"); !errors.Is(err, publish.ErrNotFound) {
+				t.Fatalf("chapter published for a user who may no longer publish: %v", err)
+			}
+		}
+		if n := count(t, ta, `SELECT COUNT(*) FROM chapter_publications WHERE status = ? AND scheduled_at IS NULL`, publish.PublicationUnpublished); n != 2 {
+			t.Fatalf("held chapters = %d, want 2 unpublished", n)
+		}
+		if n := notifications(t, ta, notify.KindChapter)[follower.ID]; n != 0 {
+			t.Fatalf("follower notified %d times", n)
+		}
+		// Later passes leave them alone; the owner sees the state on E1 and can publish again.
+		if n, err := publish.PublishDueForTest(ctx, svc, other); err != nil || n != 0 {
+			t.Fatalf("repeat pass = %d %v", n, err)
+		}
+		if page := demoted.client.Get(demoted.base + "/publish?lang=en"); !contains(page.Body, "This chapter is unpublished") {
+			t.Fatal("E1 does not show that the scheduled chapter was not published")
+		}
+		if j := demoted.publish(t, demoted.publishForm("en")); j.State != jobs.StateDone {
+			t.Fatalf("owner publishes again: %+v", j.Error)
 		}
 	})
 }

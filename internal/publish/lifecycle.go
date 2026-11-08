@@ -2,6 +2,7 @@ package publish
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -10,12 +11,19 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/notify"
+	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 )
 
 // Scheduling: a scheduled publication already has its frozen pages; the loop
 // only flips it to published once scheduled_at has passed. The flip is a
 // conditional UPDATE under a row lock, so with several server processes each
 // due row is published, and its followers notified, exactly once.
+//
+// The loop publishes as the user who scheduled the chapter, so it checks
+// again at that moment that they still hold a publishing role in the project
+// and an active account. If not, nothing goes live: the chapter is set to
+// unpublished (E1 shows it as such and the creators may publish it again)
+// and the loop logs it.
 
 const scheduleBatch = 50
 
@@ -30,8 +38,27 @@ func (s *service) publishDue(ctx context.Context, d *db.DB) (int, error) {
 	}
 	published := 0
 	for _, id := range ids {
-		fired, first := false, false
+		fired, first, held, by := false, false, false, ""
 		err := d.WithTx(ctx, func(tx *db.Tx) error {
+			// Who scheduled it is re-authorized before the row is locked, in
+			// the order publish jobs and unpublish take their locks (account,
+			// project, membership, then the publication).
+			var due struct {
+				ProjectID string `db:"project_id"`
+				Flags     string `db:"flags"`
+			}
+			if err := tx.Get(ctx, &due, `SELECT s.project_id, p.flags FROM chapter_publications p JOIN series s ON s.id = p.series_id
+				WHERE p.id = ? AND p.status = ? AND p.scheduled_at <= ?`, id, PublicationScheduled, now); err != nil {
+				if db.IsNotFound(err) {
+					return nil // another process published it first
+				}
+				return err
+			}
+			by = decodeFlags(due.Flags).PublishedBy
+			authErr := s.authorizePublish(ctx, tx, studio.Actor{UserID: by}, due.ProjectID)
+			if authErr != nil && !errors.Is(authErr, ErrNotFound) && !errors.Is(authErr, errForbidden) {
+				return authErr
+			}
 			var row struct {
 				SeriesID string `db:"series_id"`
 				Flags    string `db:"flags"`
@@ -44,6 +71,15 @@ func (s *service) publishDue(ctx context.Context, d *db.DB) (int, error) {
 				return err
 			}
 			flags := decodeFlags(row.Flags)
+			if flags.PublishedBy != by {
+				return nil // rescheduled by someone else meanwhile: the next pass checks them
+			}
+			if authErr != nil {
+				_, err := tx.Exec(ctx, `UPDATE chapter_publications SET status = ?, unpublished_at = ?, scheduled_at = NULL, updated_at = ?
+					WHERE id = ? AND status = ?`, PublicationUnpublished, now, now, id, PublicationScheduled)
+				held = err == nil
+				return err
+			}
 			first, flags.EverPublished = !flags.EverPublished, true
 			res, err := tx.Exec(ctx, `UPDATE chapter_publications SET status = ?, published_at = ?, unpublished_at = NULL, flags = ?,
 				updated_at = ? WHERE id = ? AND status = ?`, PublicationPublished, now, db.MustJSON(flags), now, id, PublicationScheduled)
@@ -58,6 +94,10 @@ func (s *service) publishDue(ctx context.Context, d *db.DB) (int, error) {
 		})
 		if err != nil {
 			return published, fmt.Errorf("publish: publish due %s: %w", id, err)
+		}
+		if held && s.log != nil {
+			s.log.WarnContext(ctx, "scheduled chapter not published: the user who scheduled it can no longer publish it",
+				"publication", id, "user", by)
 		}
 		if fired {
 			published++
