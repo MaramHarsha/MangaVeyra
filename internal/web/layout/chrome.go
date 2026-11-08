@@ -64,6 +64,10 @@ const (
 
 // Chrome is everything a layout needs to know about the request.
 type Chrome struct {
+	// SignedOut marks a page rendered for a visitor known to be signed out
+	// (body[data-signed-out]); pages that do not know who is asking carry
+	// neither it nor data-user, so client code never mistakes them for either.
+	SignedOut bool
 	// Title is the page title (without the instance name).
 	Title string
 	// MobileTitle is the centred mobile header title (defaults to Title).

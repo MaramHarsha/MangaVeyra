@@ -193,6 +193,7 @@ func (u *UI) Chrome(w http.ResponseWriter, r *http.Request, o PageOpts) *layout.
 		if c.User != nil {
 			c.Prefs = core.PrefsFrom(ctx)
 		}
+		c.SignedOut = c.User == nil && httpx.IdentityKnown(ctx)
 	}
 	inst := u.d.Settings.MustInstance(ctx)
 	c.InstanceName = inst.Name

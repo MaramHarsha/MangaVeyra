@@ -144,6 +144,15 @@ func IdentityFrom(ctx context.Context) Identity {
 	return id
 }
 
+// IdentityKnown reports whether the identity step ran for this request and
+// settled who is asking (a signed-in user, a token, or nobody). It is false
+// for responses written before that step, such as the maintenance and setup
+// gates, or when the session store could not be read.
+func IdentityKnown(ctx context.Context) bool {
+	_, ok := ctx.Value(identityKey).(Identity)
+	return ok
+}
+
 // UserFrom returns the signed-in user, or nil.
 func UserFrom(ctx context.Context) *User { return IdentityFrom(ctx).User }
 

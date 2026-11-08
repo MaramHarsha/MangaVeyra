@@ -189,12 +189,17 @@ document.addEventListener('click', (e) => {
 // is shared by everyone using this browser. Signing out deletes them all
 // before the sign-out form is sent (without JavaScript it posts as usual), and
 // a page fresh from the server deletes the chapters of anyone but the member
-// signed in (body[data-user]; every chapter when signed out). Pages a service
-// worker served from a cache (data-offline-copy) and the anonymous G6 offline
-// page say nothing about who is signed in now, so they are skipped.
+// signed in (body[data-user]; every chapter when body[data-signed-out]). Pages
+// that do not know who is asking (the G6 offline page, gates rendered before
+// sign-in is checked) carry neither attribute, and pages a service worker
+// served from a cache (data-offline-copy) are stale, so both are skipped.
 installLogoutClearing(document, () => ('caches' in window ? caches : null));
-if ('caches' in window && navigator.onLine && !document.body.hasAttribute('data-offline-copy') && location.pathname !== '/offline') {
-  void dropForeignChapters(caches, document.body.dataset.user || '', Date.now() / 1000).catch(() => undefined);
+{
+  const body = document.body;
+  const knowsViewer = body.hasAttribute('data-user') || body.hasAttribute('data-signed-out');
+  if ('caches' in window && navigator.onLine && knowsViewer && !body.hasAttribute('data-offline-copy')) {
+    void dropForeignChapters(caches, body.dataset.user || '', Date.now() / 1000).catch(() => undefined);
+  }
 }
 
 // ---- form enhancements ---------------------------------------------------------
