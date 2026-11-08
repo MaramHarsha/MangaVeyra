@@ -5,7 +5,9 @@
 //     publish.Service.CanRead, validates and clamps events, limits each viewer
 //     (members by account, anonymous visitors by session hash) and stores
 //     user_id for members and only a salted, daily-rotating session hash for
-//     anonymous visitors. The first open of a chapter per reader and UTC day
+//     anonymous visitors. The salt is random per UTC day (salts.go, table
+//     analytics_day_salts, proposed migration 0403 in testdata/) and deleted
+//     once the day is over. The first open of a chapter per reader and UTC day
 //     also adds one to series.view_count in the same transaction.
 //   - ReadingSessions (session.go) is provided as analytics.ReadingSessions:
 //     it accepts only the server-signed first-party mv_rs cookie and starts a

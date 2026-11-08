@@ -56,14 +56,17 @@ const sessionPurpose = "analytics-session-hash-v1"
 // recorder implements Recorder over read_events (ADR 0012 §8).
 //
 // Members are stored by user_id with an empty session_hash. Anonymous visitors
-// are stored only by session_hash = HMAC-SHA256(key, UTC day ‖ session ID),
-// where key is derived from the server's master key: the hash changes every
-// UTC day, cannot be reversed without the server secret, and the raw session
+// are stored only by session_hash = HMAC-SHA256(HMAC-SHA256(key, salt),
+// session ID), where key is derived from the server's master key and salt is
+// the random salt of the UTC day (daySalts). The hash changes every UTC day;
+// once the day is over its salt is deleted, so the hash cannot be recomputed,
+// not even with the server secret and the visitor's cookie. The raw session
 // ID, IP address and user agent are never written anywhere.
 type recorder struct {
 	db      *db.DB
 	publish publish.Service
 	key     []byte
+	salts   *daySalts
 	limiter *core.Limiter
 	now     func() time.Time
 }
@@ -71,16 +74,26 @@ type recorder struct {
 var _ Recorder = (*recorder)(nil)
 
 func newRecorder(d *db.DB, key []byte) *recorder {
-	return &recorder{db: d, key: key, limiter: core.NewLimiter(SessionRate, SessionBurst), now: db.Now}
+	return &recorder{db: d, key: key, salts: &daySalts{db: d}, limiter: core.NewLimiter(SessionRate, SessionBurst), now: db.Now}
 }
 
 // sessionHash returns the salted hash of a session ID for the UTC day of t.
-func (r *recorder) sessionHash(sessionID string, t time.Time) string {
-	daySalt := hmac.New(sha256.New, r.key)
-	daySalt.Write([]byte(t.UTC().Format(time.DateOnly)))
-	m := hmac.New(sha256.New, daySalt.Sum(nil))
+func (r *recorder) sessionHash(ctx context.Context, sessionID string, t time.Time) (string, error) {
+	salt, err := r.salts.get(ctx, t)
+	if err != nil {
+		return "", err
+	}
+	dayKey := hmac.New(sha256.New, r.key)
+	dayKey.Write(salt)
+	m := hmac.New(sha256.New, dayKey.Sum(nil))
 	m.Write([]byte(sessionID))
-	return hex.EncodeToString(m.Sum(nil))
+	return hex.EncodeToString(m.Sum(nil)), nil
+}
+
+// purgeSalts forgets the salts of finished days (run by the background loop
+// right after midnight UTC and with every roll-up).
+func (r *recorder) purgeSalts(ctx context.Context) error {
+	return r.salts.purge(ctx, r.now())
 }
 
 // readKey caches CanRead answers within one batch.
@@ -104,7 +117,9 @@ func (r *recorder) record(ctx context.Context, v publish.Viewer, sessionID strin
 	now := r.now().UTC()
 	hash, limitKey := "", "u:"+userID
 	if userID == "" {
-		hash = r.sessionHash(sessionID, now)
+		if hash, err = r.sessionHash(ctx, sessionID, now); err != nil {
+			return err
+		}
 		limitKey = "s:" + hash
 	}
 	if ok, _ := r.limiter.Allow(limitKey); !ok {

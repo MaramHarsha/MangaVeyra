@@ -147,16 +147,26 @@ func readerKey(user sql.NullString, session string) string {
 	return ""
 }
 
-// rollUpLoop runs RollUp shortly after start and then every interval.
+// rollUpLoop runs RollUp shortly after start and then every interval. It
+// also deletes the session-hash salts of finished days right after each UTC
+// midnight (and with every roll-up), so a day's hashes stop being
+// recomputable as soon as the day is over.
 func (m *Module) rollUpLoop(ctx context.Context, first, interval time.Duration) error {
 	t := time.NewTimer(first)
 	defer t.Stop()
+	midnight := time.NewTimer(untilNextDay(m.rec.now()))
+	defer midnight.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-midnight.C:
+			m.purgeSalts(ctx)
+			midnight.Reset(untilNextDay(m.rec.now()))
+			continue
 		case <-t.C:
 		}
+		m.purgeSalts(ctx)
 		res, err := RollUp(ctx, m.d.DB, m.rec.now())
 		switch {
 		case err != nil:
@@ -166,4 +176,15 @@ func (m *Module) rollUpLoop(ctx context.Context, first, interval time.Duration) 
 		}
 		t.Reset(interval)
 	}
+}
+
+func (m *Module) purgeSalts(ctx context.Context) {
+	if err := m.rec.purgeSalts(ctx); err != nil && ctx.Err() == nil {
+		m.d.Log.Warn("analytics: delete old session salts", "err", err)
+	}
+}
+
+// untilNextDay is how long until just after the next UTC midnight.
+func untilNextDay(now time.Time) time.Duration {
+	return dayStart(now).AddDate(0, 0, 1).Sub(now) + time.Second
 }

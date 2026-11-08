@@ -2,6 +2,9 @@ package analytics_test
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"sync"
@@ -329,6 +332,104 @@ func TestRecordConcurrentOpensStaySane(t *testing.T) {
 		}
 		if got.ViewCount != 20 || count(t, ta, `SELECT COUNT(*) FROM read_events`) != 20 {
 			t.Errorf("view_count = %d, want 20", got.ViewCount)
+		}
+	})
+}
+
+// ADR 0012 §8: anonymous session hashes use a random salt per UTC day that is
+// deleted once the day is over, so not even the master key together with a
+// visitor's cookie can link that visitor's reads across days. Within a day
+// every server process, and a restarted one, uses the same salt.
+func TestSessionSaltIsRandomPerDayAndForgotten(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, f *publishtest.Fixture) {
+		createDaySalts(t, ta)
+		ctx := context.Background()
+		rec := recorderOf(ta)
+		day1 := time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC)
+		clock := testutil.NewClock(day1)
+		analytics.SetClock(rec, clock.Now)
+		s := f.Series(publishtest.SeriesSpec{})
+		ch := f.Publish(s, publishtest.PublicationSpec{Pages: 3})
+		const session = "visitor-cookie-id-Rin-Asagiri"
+		page := func(n int) analytics.ReadEvent {
+			return analytics.ReadEvent{SeriesID: s.ID, PublicationID: ch.ID, Kind: analytics.EventPage, Page: n, MS: 1000}
+		}
+		stored := func(n int) string {
+			var h string
+			if err := ta.Deps.DB.Get(ctx, &h, `SELECT session_hash FROM read_events WHERE page = ?`, n); err != nil {
+				t.Fatal(err)
+			}
+			return h
+		}
+		if err := rec.Record(ctx, publish.Viewer{}, session, page(1)); err != nil {
+			t.Fatal(err)
+		}
+		h1 := stored(1)
+
+		// The day's salt is not derived from the master key and the date.
+		key := ta.Deps.Secrets.Derive("analytics-session-hash-v1")
+		daySalt := hmac.New(sha256.New, key)
+		daySalt.Write([]byte(day1.Format(time.DateOnly)))
+		derived := hmac.New(sha256.New, daySalt.Sum(nil))
+		derived.Write([]byte(session))
+		if h1 == hex.EncodeToString(derived.Sum(nil)) {
+			t.Fatal("the session hash can be recomputed from the master key, the date and the cookie")
+		}
+		var days []string
+		if err := ta.Deps.DB.Select(ctx, &days, `SELECT day FROM analytics_day_salts ORDER BY day`); err != nil {
+			t.Fatal(err)
+		}
+		if len(days) != 1 || days[0] != "2026-11-08" {
+			t.Fatalf("salt days = %v, want [2026-11-08]", days)
+		}
+		var salt string
+		if err := ta.Deps.DB.Get(ctx, &salt, `SELECT salt FROM analytics_day_salts`); err != nil || len(salt) != 64 {
+			t.Fatalf("salt = %q, %v; want 32 random bytes in hex", salt, err)
+		}
+
+		// Another server process on the same database, or this one after a
+		// restart, hashes the same way within the day.
+		other := analytics.NewTestRecorder(ta.Deps.DB, key, f.Service())
+		analytics.SetClock(other, clock.Now)
+		if got := analytics.HashSession(other, session, clock.Now().Add(3*time.Hour)); got != h1 {
+			t.Fatalf("another process hashes %q, want %q", got, h1)
+		}
+
+		// The next day gets a new salt and the old one is deleted, so the
+		// day-1 hash cannot be recomputed any more.
+		clock.Advance(24 * time.Hour)
+		if err := rec.Record(ctx, publish.Viewer{}, session, page(2)); err != nil {
+			t.Fatal(err)
+		}
+		if h2 := stored(2); h2 == h1 || h2 == "" {
+			t.Fatalf("day-2 hash %q must differ from day 1", h2)
+		}
+		days = nil
+		if err := ta.Deps.DB.Select(ctx, &days, `SELECT day FROM analytics_day_salts ORDER BY day`); err != nil {
+			t.Fatal(err)
+		}
+		if len(days) != 1 || days[0] != "2026-11-09" {
+			t.Fatalf("salt days after the day changed = %v, want [2026-11-09]", days)
+		}
+		// The other process still held day 1's salt in memory; the
+		// background loop's purge makes it forget it too.
+		if err := analytics.PurgeDaySalts(other); err != nil {
+			t.Fatal(err)
+		}
+		restarted := analytics.NewTestRecorder(ta.Deps.DB, key, f.Service())
+		for name, r := range map[string]analytics.Recorder{"this process": rec, "the other process": other, "a restarted process": restarted} {
+			if again := analytics.HashSession(r, session, day1); again == h1 {
+				t.Fatalf("%s can still recompute the day-1 hash", name)
+			}
+		}
+
+		// Without any event the background loop still forgets a finished day.
+		clock.Advance(24 * time.Hour)
+		if err := analytics.PurgeDaySalts(rec); err != nil {
+			t.Fatal(err)
+		}
+		if n := count(t, ta, `SELECT COUNT(*) FROM analytics_day_salts WHERE day < '2026-11-10'`); n != 0 {
+			t.Fatalf("%d salts of finished days kept", n)
 		}
 	})
 }
