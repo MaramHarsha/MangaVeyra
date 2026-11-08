@@ -59,7 +59,9 @@ export type LoadState = 'loading' | 'ready' | 'unavailable';
 export async function load(api: string, publicationId: string, seriesId: string, page: number, fetchFn: typeof fetch = fetch): Promise<{ state: LoadState; chapter: Comment[]; panel: Comment[] }> {
   const [ch, pn] = await Promise.all([
     call<unknown>('GET', listURL(api, 'chapter', publicationId, seriesId), undefined, fetchFn),
-    call<unknown>('GET', listURL(api, 'panel', publicationId, seriesId, page), undefined, fetchFn),
+    // All panel comments of the chapter, filtered to the page here: the API's page filter alone matches
+    // only page-level anchors ({page, panel: 0}).
+    call<unknown>('GET', listURL(api, 'panel', publicationId, seriesId), undefined, fetchFn),
   ]);
   if (!ch.ok && !pn.ok) return { state: 'unavailable', chapter: [], panel: [] };
   const visible = (c: Comment) => !c.hidden;
