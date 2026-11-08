@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -36,8 +37,16 @@ type fitGolden struct {
 	Size     float64 `json:"size"`
 	Overflow bool    `json:"overflow"`
 	Lines    int     `json:"lines"`
-	Layout   string  `json:"layout"`
+	// Text hashes the line texts and their positions rounded to 0.01 px:
+	// identical on every architecture.
+	Text string `json:"text"`
+	// Layout hashes the whole BubbleLayout JSON bit for bit. Fused
+	// multiply-add (arm64) can move a coordinate by one ulp, so it is only
+	// compared on goldenArch, where it was recorded.
+	Layout string `json:"layout"`
 }
+
+const goldenArch = "arm64"
 
 type corpusText struct {
 	lang, text string
@@ -177,7 +186,14 @@ func goldenOf(t *testing.T, c fitCase, l BubbleLayout) fitGolden {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(raw)
-	return fitGolden{Name: c.name, Size: l.FontSize, Overflow: l.Overflow, Lines: len(linesOf(l)), Layout: hex.EncodeToString(sum[:12])}
+	var text strings.Builder
+	fmt.Fprintf(&text, "%.6f %v\n", l.FontSize, l.Overflow)
+	for _, line := range l.Lines {
+		fmt.Fprintf(&text, "%q %v %v %.2f %.2f %.4f\n", line.Text, line.Ruby, line.Vertical, line.X, line.Y, line.FontSize)
+	}
+	textSum := sha256.Sum256([]byte(text.String()))
+	return fitGolden{Name: c.name, Size: l.FontSize, Overflow: l.Overflow, Lines: len(linesOf(l)),
+		Text: hex.EncodeToString(textSum[:12]), Layout: hex.EncodeToString(sum[:12])}
 }
 
 const goldenPath = "testdata/fit_golden.json"
@@ -249,7 +265,11 @@ func TestFitMatchesGoldenCorpus(t *testing.T) {
 	}
 	bad := 0
 	for i := range want {
-		if got[i] != want[i] {
+		g, w := got[i], want[i]
+		if runtime.GOARCH != goldenArch {
+			g.Layout, w.Layout = "", ""
+		}
+		if g != w {
 			bad++
 			if bad <= 20 {
 				t.Errorf("%s:\n got  %+v\n want %+v", cases[i].name, got[i], want[i])
