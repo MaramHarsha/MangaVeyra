@@ -19,9 +19,10 @@ const (
 	providerKindOpenAI = "openai"
 	openAIModel        = "gpt-6-luna"
 	openAIChatURL      = "https://api.openai.com/v1/chat/completions"
-	// The connection check reads the model resource: authenticated, no
-	// generation, no user content, and it proves the key can use this model.
-	openAIModelURL = "https://api.openai.com/v1/models/" + openAIModel
+	// The connection check lists the key's models: authenticated, no
+	// generation, no user content. One response shows both the frozen text
+	// model (ADR 0006) and the GPT Image route models (ADR 0009).
+	openAIModelsURL = "https://api.openai.com/v1/models"
 	// Prompts above 272,000 input tokens are billed at the long-context rate,
 	// so MangaVeyra never sends one: the reservation below stays an upper bound.
 	openAIInputTokens        = 272_000
@@ -32,7 +33,7 @@ const (
 	openAIReserveUSD         = 0.035392
 	openAIPlanUSD            = 2 * openAIReserveUSD
 	openAIResponseLimit      = 8 << 20
-	openAIModelResponseLimit = 64 << 10
+	openAIModelResponseLimit = 4 << 20
 	openAITimeout            = 2 * time.Minute
 )
 
@@ -190,36 +191,75 @@ func (c *openAIClient) Complete(ctx context.Context, key string, in ScriptInput,
 	return out, nil
 }
 
+// TestKey checks the key with the model list (TestCapabilities) and fails
+// only when the key can use neither the text model nor a GPT Image model.
 func (c *openAIClient) TestKey(ctx context.Context, key string) (string, error) {
+	test, err := c.TestCapabilities(ctx, key)
+	return test.RequestID, err
+}
+
+// TestCapabilities sends one GET /v1/models and reports, from that single
+// non-generating response, whether the key lists the frozen text model and
+// each GPT Image route model. It never sends a generation request. A key that
+// lists neither fails as no_provider and still reports both as unavailable.
+func (c *openAIClient) TestCapabilities(ctx context.Context, key string) (providerTestState, error) {
+	var out providerTestState
 	if c == nil || c.doer == nil || strings.TrimSpace(key) == "" {
-		return "", providerAdapterError(CodeProviderAuth, false, false)
+		return out, providerAdapterError(CodeProviderAuth, false, false)
 	}
 	callCtx, cancel := context.WithTimeout(ctx, openAITimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(callCtx, http.MethodGet, openAIModelURL, nil)
+	req, err := http.NewRequestWithContext(callCtx, http.MethodGet, openAIModelsURL, nil)
 	if err != nil {
-		return "", upstreamAdapterError(false)
+		return out, upstreamAdapterError(false)
 	}
 	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("Accept", "application/json")
 	resp, err := c.doer.Do(req)
 	if err != nil {
-		return "", classifyTransportError(err)
+		return out, classifyTransportError(err)
 	}
 	if resp == nil || resp.Body == nil {
-		return "", upstreamAdapterError(false)
+		return out, upstreamAdapterError(false)
 	}
 	defer resp.Body.Close()
 	raw, tooLarge, readErr := readBounded(resp.Body, openAIModelResponseLimit)
 	if readErr != nil || tooLarge {
-		return "", upstreamAdapterError(false)
+		return out, upstreamAdapterError(false)
 	}
+	out.RequestID = sanitizeRequestID(resp.Header.Get("X-Request-Id"))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var decoded openAIResponse
 		_ = json.Unmarshal(raw, &decoded)
-		return "", classifyOpenAIStatus(resp.StatusCode, decoded)
+		return out, classifyOpenAIStatus(resp.StatusCode, decoded)
 	}
-	return sanitizeRequestID(resp.Header.Get("X-Request-Id")), nil
+	var list struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(raw, &list) != nil || list.Data == nil {
+		return out, upstreamAdapterError(false)
+	}
+	listed := make(map[string]bool, len(list.Data))
+	for _, m := range list.Data {
+		listed[m.ID] = true
+	}
+	out.Text, out.Images = capabilityUnavailable, capabilityUnavailable
+	if listed[openAIModel] {
+		out.Text = capabilityReady
+	}
+	for _, r := range imageRoutes {
+		if r.Kind == providerKindOpenAI && listed[r.Model] {
+			out.Images = capabilityReady
+			out.ImageModels = append(out.ImageModels, r.Model)
+		}
+	}
+	if out.Text != capabilityReady && out.Images != capabilityReady {
+		return out, &adapterError{code: CodeNoProvider, safe: "The OpenAI key cannot use the configured models.",
+			cause: errors.New("ai: provider models unavailable")}
+	}
+	return out, nil
 }
 
 // classifyOpenAIStatus maps OpenAI errors to safe codes. A 429 with

@@ -276,6 +276,100 @@ func providerStatusIcon(provider providerView) string {
 	return ""
 }
 
+// textUnavailable reports an OpenAI connection whose passing check did not
+// list the frozen text model: its text row cannot be used for scripts.
+func textUnavailable(provider providerView) bool {
+	return provider.Enabled && provider.LastTest.State == "ok" && provider.LastTest.Text == capabilityUnavailable
+}
+
+// providerRowStatus is the text row's STATUS badge: the connection status,
+// or "No access" when the key lacks the text model (G2 warning badge, as the
+// design's Licence guard).
+templ providerRowStatus(provider providerView) {
+	if textUnavailable(provider) {
+		@ui.Badge(ui.ToneWarning, "alert-triangle", i18n.T(ctx, "models.status.no_access"))
+		<span class="mv-sr-only">{ i18n.T(ctx, "models.test.unavailable") }</span>
+	} else {
+		@ui.Badge(providerStatusTone(provider), providerStatusIcon(provider), providerStatusLabel(ctx, provider))
+	}
+}
+
+func providerStatusTitle(ctx context.Context, provider providerView) string {
+	if textUnavailable(provider) {
+		return i18n.T(ctx, "models.test.unavailable")
+	}
+	if provider.LastTest.RequestID != "" {
+		return i18n.T(ctx, "models.status.request", "id", provider.LastTest.RequestID)
+	}
+	return ""
+}
+
+// capabilityLabel is one capability result of the OpenAI model-list check in
+// words: Ready, Not available for this key, or Needs organisation verification.
+func capabilityLabel(ctx context.Context, state string) string {
+	switch state {
+	case capabilityReady:
+		return i18n.T(ctx, "models.status.ready")
+	case capabilityVerification:
+		return i18n.T(ctx, "models.test.verification")
+	default:
+		return i18n.T(ctx, "models.test.unavailable")
+	}
+}
+
+func capabilityTone(state string) ui.Tone {
+	if state == capabilityReady {
+		return ui.ToneSuccess
+	}
+	return ui.ToneWarning
+}
+
+func capabilityIcon(state string) string {
+	if state == capabilityReady {
+		return "circle-check"
+	}
+	return "alert-triangle"
+}
+
+// providerCapabilities lists what the last OpenAI connection test found, one
+// "Text · Ready" / "Images · Not available for this key" pair per capability
+// (the G12 test-result key/value pattern with status badges).
+templ providerCapabilities(provider providerView) {
+	if provider.LastTest.Text != "" || provider.LastTest.Images != "" {
+		<dl class="mv-models-caps" aria-label={ i18n.T(ctx, "models.test.results") }>
+			if provider.LastTest.Text != "" {
+				<div>
+					<dt>{ i18n.T(ctx, "models.test.text") }</dt>
+					<dd>
+						@ui.Badge(capabilityTone(provider.LastTest.Text), capabilityIcon(provider.LastTest.Text), capabilityLabel(ctx, provider.LastTest.Text))
+					</dd>
+				</div>
+			}
+			if provider.LastTest.Images != "" {
+				<div>
+					<dt>{ i18n.T(ctx, "models.test.images") }</dt>
+					<dd>
+						@ui.Badge(capabilityTone(provider.LastTest.Images), capabilityIcon(provider.LastTest.Images), capabilityLabel(ctx, provider.LastTest.Images))
+					</dd>
+				</div>
+			}
+		</dl>
+	}
+}
+
+// providerCapabilitySummary is the same result as one line for the flash
+// that a no-JavaScript test from the image tab returns to.
+func providerCapabilitySummary(ctx context.Context, provider providerView) string {
+	parts := []string{}
+	if provider.LastTest.Text != "" {
+		parts = append(parts, i18n.T(ctx, "models.test.capability", "name", i18n.T(ctx, "models.test.text"), "state", capabilityLabel(ctx, provider.LastTest.Text)))
+	}
+	if provider.LastTest.Images != "" {
+		parts = append(parts, i18n.T(ctx, "models.test.capability", "name", i18n.T(ctx, "models.test.images"), "state", capabilityLabel(ctx, provider.LastTest.Images)))
+	}
+	return strings.Join(parts, i18n.T(ctx, "models.test.separator"))
+}
+
 // providerStatusLabel is the STATUS column: Disabled, Ready (last check
 // passed), Check failed, or Not checked.
 func providerStatusLabel(ctx context.Context, provider providerView) string {
@@ -341,11 +435,11 @@ templ ProviderRows(v providerRowView) {
 			<td
 				class="mv-models-table__status"
 				data-label={ i18n.T(ctx, "models.col.status") }
-				if v.Provider.LastTest.RequestID != "" {
-					title={ i18n.T(ctx, "models.status.request", "id", v.Provider.LastTest.RequestID) }
+				if title := providerStatusTitle(ctx, v.Provider); title != "" {
+					title={ title }
 				}
 			>
-				@ui.Badge(providerStatusTone(v.Provider), providerStatusIcon(v.Provider), providerStatusLabel(ctx, v.Provider))
+				@providerRowStatus(v.Provider)
 			</td>
 			<td class="mv-models-table__cost" data-label={ i18n.T(ctx, "models.col.cost") }>
 				{ providerCostLabel(ctx, v.Provider.Kind) }
@@ -363,6 +457,9 @@ templ ProviderRows(v providerRowView) {
 				<td colspan="6">
 					@ui.Notice(v.Tone, providerNoticeIcon(v.Tone)) {
 						{ v.Notice }
+						if v.Tested {
+							@providerCapabilities(v.Provider)
+						}
 					}
 				</td>
 			</tr>

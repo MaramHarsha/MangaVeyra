@@ -147,6 +147,34 @@
 
 .mv-models-table__notice td { padding-top: 0; }
 
+/* Connection test result: one "Text · Ready" pair per capability, the G12
+   result's key/value pattern with the table's status badges. */
+.mv-models-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mv-space-2) var(--mv-space-5);
+  margin: var(--mv-space-2) 0 0;
+}
+
+.mv-models-caps > div {
+  display: flex;
+  align-items: center;
+  gap: var(--mv-space-2);
+  min-width: 0;
+}
+
+.mv-models-caps dt {
+  color: var(--mv-text-2);
+  font-family: var(--mv-font-mono);
+  font-size: var(--mv-fs-meta);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.mv-models-caps dt::after { content: " ·"; }
+
+.mv-models-caps dd { margin: 0; }
+
 /* Replace-key dialog. Without JavaScript the menu link targets the dialog,
    which then shows in place of the modal. */
 .mv-models-keydlg:target:not([open]) {

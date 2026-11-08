@@ -12,6 +12,7 @@ import (
 	"image/draw"
 	"image/png"
 	"math"
+	"net/http"
 	"strings"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
@@ -266,6 +267,9 @@ func classifyGPTImageError(status int, decoded gptImageResponse, parsed bool) (*
 			return nil, refused
 		case decoded.Error.Type == "image_generation_user_error":
 			return &zero, &adapterError{code: CodeBadInput, safe: "The image request is invalid.", cause: errors.New("ai: image request rejected")}
+		case gptImageNeedsVerification(status, decoded):
+			return &zero, &adapterError{code: CodeProviderVerification, safe: "OpenAI needs the organisation verified for image generation.",
+				cause: errors.New("ai: image organisation not verified")}
 		}
 	}
 	var text openAIResponse
@@ -276,6 +280,17 @@ func classifyGPTImageError(status int, decoded gptImageResponse, parsed bool) (*
 		}{Code: decoded.Error.Code, Type: decoded.Error.Type}
 	}
 	return &zero, classifyOpenAIStatus(status, text)
+}
+
+// gptImageNeedsVerification recognises OpenAI's organisation-verification
+// refusal for GPT Image from the status and the error's type and code only;
+// the provider's message is never read or shown. The refusal is a 403 with
+// type invalid_request_error and no code. A 403 that carries a code (for
+// example unsupported_country_region_territory) is another account problem
+// and stays provider_auth.
+func gptImageNeedsVerification(status int, decoded gptImageResponse) bool {
+	return status == http.StatusForbidden && decoded.Error != nil && decoded.Error.Type == "invalid_request_error" &&
+		decoded.Error.Code == ""
 }
 
 func pngDataURL(data []byte) string {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -67,6 +68,66 @@ type providerTestState struct {
 	RequestID string    `json:"request_id,omitempty"`
 	// DurationMS is how long the last custom connection test took (G12).
 	DurationMS int64 `json:"duration_ms,omitempty"`
+	// Text and Images are what the last OpenAI model-list check found for the
+	// frozen text model and the GPT Image routes (capabilityReady or
+	// capabilityUnavailable). Images becomes capabilityVerification when GPT
+	// Image refused a job because the organisation is not verified. Both stay
+	// empty for other kinds and when the check could not tell.
+	Text   string `json:"text,omitempty"`
+	Images string `json:"images,omitempty"`
+	// ImageModels are the GPT Image route models the key's model list showed.
+	ImageModels []string `json:"image_models,omitempty"`
+}
+
+// Capability states of an OpenAI connection (ADR 0006/0009).
+const (
+	capabilityReady        = "ready"
+	capabilityUnavailable  = "unavailable"
+	capabilityVerification = "verification"
+)
+
+// imageModelAvailable reports whether routing may send GPT Image model to
+// this connection. A connection the model-list check never covered keeps the
+// ADR 0009 behaviour; one whose check or last image job showed the model
+// unavailable is skipped.
+func (t providerTestState) imageModelAvailable(model string) bool {
+	switch t.Images {
+	case "":
+		return true
+	case capabilityReady:
+		return slices.Contains(t.ImageModels, model)
+	default:
+		return false
+	}
+}
+
+// textAvailable reports whether the last check left the frozen text model usable.
+func (t providerTestState) textAvailable() bool { return t.Text != capabilityUnavailable }
+
+// sanitizeCapabilities drops capability values the store never writes, so a
+// tampered or stale row cannot widen routing or reach the page.
+func (t *providerTestState) sanitizeCapabilities() {
+	if t.Text != capabilityReady && t.Text != capabilityUnavailable {
+		t.Text = ""
+	}
+	if t.Images != capabilityReady && t.Images != capabilityUnavailable && t.Images != capabilityVerification {
+		t.Images = ""
+	}
+	models := []string{}
+	if t.Images == capabilityReady {
+		for _, r := range imageRoutes {
+			if r.Kind == providerKindOpenAI && slices.Contains(t.ImageModels, r.Model) {
+				models = append(models, r.Model)
+			}
+		}
+	}
+	if len(models) == 0 && t.Images == capabilityReady {
+		t.Images = capabilityUnavailable
+	}
+	t.ImageModels = nil
+	if len(models) > 0 {
+		t.ImageModels = models
+	}
 }
 
 // providerView is the only representation suitable for a response or page.
@@ -108,6 +169,9 @@ type providerCandidate struct {
 	Kind  string
 	Scope string
 	Model string
+	// Test is the connection's last check, which can rule out OpenAI text or
+	// image routes the key cannot use.
+	Test providerTestState
 }
 
 type dispatchProvider struct {
@@ -349,7 +413,7 @@ func (s *providerStore) Candidates(ctx context.Context, actorID string) ([]provi
 	out := make([]providerCandidate, 0, len(rows))
 	for _, r := range rows {
 		if validateProviderRecord(r) == nil {
-			out = append(out, providerCandidate{ID: r.ID, Kind: r.Kind, Scope: r.Scope, Model: r.localConfig().Model})
+			out = append(out, providerCandidate{ID: r.ID, Kind: r.Kind, Scope: r.Scope, Model: r.localConfig().Model, Test: r.lastTest()})
 		}
 	}
 	return out, nil
@@ -370,7 +434,7 @@ func (s *providerStore) Candidate(ctx context.Context, actorID, id string) (prov
 	if r.Scope == providerScopeUser && (!r.OwnerID.Valid || r.OwnerID.String != actorID) {
 		return zero, errProviderUnavailable
 	}
-	return providerCandidate{ID: r.ID, Kind: r.Kind, Scope: r.Scope, Model: r.localConfig().Model}, nil
+	return providerCandidate{ID: r.ID, Kind: r.Kind, Scope: r.Scope, Model: r.localConfig().Model, Test: r.lastTest()}, nil
 }
 
 func (s *providerStore) ResolveDispatch(ctx context.Context, actorID, id string) (dispatchProvider, error) {
@@ -401,10 +465,18 @@ func (s *providerStore) ResolveDispatch(ctx context.Context, actorID, id string)
 }
 
 func (s *providerStore) recordTest(ctx context.Context, providerID, expectedKeyEnc, state, requestID string) error {
-	if state != "ok" && state != "error" {
+	return s.recordTestResult(ctx, providerID, expectedKeyEnc, providerTestState{State: state, RequestID: requestID})
+}
+
+// recordTestResult stores a connection check, including the capabilities an
+// OpenAI model-list check found, for the key that was checked only.
+func (s *providerStore) recordTestResult(ctx context.Context, providerID, expectedKeyEnc string, test providerTestState) error {
+	if test.State != "ok" && test.State != "error" {
 		return errProviderInvalid
 	}
-	test := providerTestState{State: state, Time: s.timeNow(), RequestID: sanitizeRequestID(requestID)}
+	test = providerTestState{State: test.State, Time: s.timeNow(), RequestID: sanitizeRequestID(test.RequestID),
+		Text: test.Text, Images: test.Images, ImageModels: test.ImageModels}
+	test.sanitizeCapabilities()
 	raw, err := json.Marshal(test)
 	if err != nil {
 		return err
@@ -418,6 +490,34 @@ func (s *providerStore) recordTest(ctx context.Context, providerID, expectedKeyE
 		return errProviderUnavailable
 	}
 	return nil
+}
+
+// markImagesNeedVerification records that GPT Image refused this key because
+// the OpenAI organisation is not verified. Routing then skips the
+// connection's image routes and G2 says why until the next connection test.
+// Only the key that was refused is marked; text capability is unchanged.
+func (s *providerStore) markImagesNeedVerification(ctx context.Context, providerID, expectedKeyEnc string) error {
+	if s == nil || s.db == nil {
+		return errProviderUnavailable
+	}
+	return s.db.WithTx(ctx, func(tx *db.Tx) error {
+		r, err := providerByID(ctx, tx, providerID, true)
+		if err != nil {
+			return err
+		}
+		if r.Kind != providerKindOpenAI || r.KeyEnc != expectedKeyEnc {
+			return errProviderUnavailable
+		}
+		test := r.lastTest()
+		test.Images, test.ImageModels = capabilityVerification, nil
+		raw, err := json.Marshal(test)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE providers SET last_test = ?, updated_at = ? WHERE id = ? AND key_enc = ?`,
+			string(raw), s.timeNow(), providerID, expectedKeyEnc)
+		return err
+	})
 }
 
 func (s *providerStore) ownerForCreate(ctx context.Context, actor providerActor, scope string) (string, error) {
@@ -522,15 +622,30 @@ func authorizeProvider(actor providerActor, r providerRecord) error {
 	return nil
 }
 
-func (r providerRecord) view() providerView {
+// lastTest decodes the stored connection check. An unreadable record reads
+// as a failed check with no capabilities.
+func (r providerRecord) lastTest() providerTestState {
 	last := providerTestState{}
 	if strings.TrimSpace(r.LastTest) != "" && r.LastTest != "{}" {
-		if err := json.Unmarshal([]byte(r.LastTest), &last); err != nil || (last.State != "ok" && last.State != "error" && !(last.State == "" && customStepNumber(last.Step) > 0)) {
+		err := json.Unmarshal([]byte(r.LastTest), &last)
+		// An unchecked connection may still carry a G12 step or an image
+		// refusal recorded by a job (markImagesNeedVerification).
+		unchecked := last.State == "" && (customStepNumber(last.Step) > 0 || last.Images == capabilityVerification)
+		if err != nil || (last.State != "ok" && last.State != "error" && !unchecked) {
 			last = providerTestState{State: "error"}
 		}
 		last.RequestID = sanitizeRequestID(last.RequestID)
 		last.Time = last.Time.UTC()
 	}
+	if r.Kind != providerKindOpenAI {
+		last.Text, last.Images, last.ImageModels = "", "", nil
+	}
+	last.sanitizeCapabilities()
+	return last
+}
+
+func (r providerRecord) view() providerView {
+	last := r.lastTest()
 	owner := ""
 	if r.OwnerID.Valid {
 		owner = r.OwnerID.String

@@ -23,8 +23,19 @@ templ imageModelsTable(rows []imageModelView) {
 						}
 					</td>
 					<td class="mv-models-table__muted" data-label={ i18n.T(ctx, "models.col.use") }>{ row.Use }</td>
-					<td class="mv-models-table__status" data-label={ i18n.T(ctx, "models.col.status") }>
-						@ui.Badge(imageStatusTone(row.Ready), "", row.Status)
+					<td
+						class="mv-models-table__status"
+						data-label={ i18n.T(ctx, "models.col.status") }
+						if row.Detail != "" {
+							title={ row.Detail }
+						}
+					>
+						if row.Warning {
+							@ui.Badge(ui.ToneWarning, "alert-triangle", row.Status)
+							<span class="mv-sr-only">{ row.Detail }</span>
+						} else {
+							@ui.Badge(imageStatusTone(row.Ready), "", row.Status)
+						}
 					</td>
 					<td class="mv-models-table__cost" data-label={ i18n.T(ctx, "models.col.cost") }>{ row.Cost }</td>
 					<td data-label={ i18n.T(ctx, "models.col.on") }>

@@ -221,11 +221,28 @@ func TestOpenAIClientMapsResponses(t *testing.T) {
 	}
 }
 
+// adapterCode is the safe code of an adapter error ("" for none).
+func adapterCode(err error) string {
+	var adapter *adapterError
+	if errors.As(err, &adapter) {
+		return adapter.code
+	}
+	return ""
+}
+
+// openAIModelList is a GET /v1/models response listing ids.
+func openAIModelList(requestID string, ids ...string) *http.Response {
+	data := []any{}
+	for _, id := range ids {
+		data = append(data, map[string]any{"id": id, "object": "model", "owned_by": "system"})
+	}
+	return httpJSON(http.StatusOK, map[string]any{"object": "list", "data": data}, map[string]string{"X-Request-Id": requestID})
+}
+
 func TestOpenAITestKeyReadsTheModelWithoutGenerating(t *testing.T) {
 	doer := &queuedDoer{responders: []func(*http.Request) (*http.Response, error){
 		func(*http.Request) (*http.Response, error) {
-			return httpJSON(http.StatusOK, map[string]any{"id": openAIModel, "object": "model"},
-				map[string]string{"X-Request-Id": "req_abc123"}), nil
+			return openAIModelList("req_abc123", "gpt-4.1", openAIModel, gptImageSunburst, gptImageFlare), nil
 		},
 		func(*http.Request) (*http.Response, error) {
 			return openAIError(http.StatusUnauthorized, "invalid_api_key"), nil
@@ -241,9 +258,59 @@ func TestOpenAITestKeyReadsTheModelWithoutGenerating(t *testing.T) {
 		t.Fatalf("rejected key = %v", err)
 	}
 	for _, seen := range doer.requests() {
-		if seen.Method != http.MethodGet || seen.URL != openAIModelURL || len(seen.Body) != 0 {
+		if seen.Method != http.MethodGet || seen.URL != openAIModelsURL || len(seen.Body) != 0 {
 			t.Fatalf("connection check sent %+v", seen)
 		}
+	}
+}
+
+// One model-list request reports both capabilities. A key without GPT Image
+// access still passes for text but says so for images; a key with neither
+// fails as no_provider while reporting both. Nothing is generated.
+func TestOpenAICapabilitiesComeFromOneModelList(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		ids          []string
+		text, images string
+		imageModels  []string
+		code         string
+	}{
+		{"both", []string{openAIModel, gptImageSunburst, gptImageFlare}, capabilityReady, capabilityReady, []string{gptImageSunburst, gptImageFlare}, ""},
+		{"text only", []string{openAIModel, "gpt-image-1", "dall-e-3"}, capabilityReady, capabilityUnavailable, nil, ""},
+		{"flare only", []string{gptImageFlare}, capabilityUnavailable, capabilityReady, []string{gptImageFlare}, ""},
+		{"neither", []string{"gpt-4.1-mini"}, capabilityUnavailable, capabilityUnavailable, nil, CodeNoProvider},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doer := &queuedDoer{responders: []func(*http.Request) (*http.Response, error){
+				func(*http.Request) (*http.Response, error) { return openAIModelList("req_caps", tc.ids...), nil },
+			}}
+			test, err := newOpenAIClient(doer).TestCapabilities(context.Background(), "sk-caps")
+			if tc.code == "" && err != nil || tc.code != "" && adapterCode(err) != tc.code {
+				t.Fatalf("err = %v, want %q", err, tc.code)
+			}
+			if test.Text != tc.text || test.Images != tc.images || strings.Join(test.ImageModels, ",") != strings.Join(tc.imageModels, ",") || test.RequestID != "req_caps" {
+				t.Fatalf("capabilities = %+v", test)
+			}
+			if doer.count() != 1 || doer.requests()[0].Method != http.MethodGet || doer.requests()[0].URL != openAIModelsURL || len(doer.requests()[0].Body) != 0 {
+				t.Fatalf("connection check sent %+v", doer.requests())
+			}
+		})
+	}
+	// An HTTP failure reports no capability: routing keeps its previous view.
+	doer := &queuedDoer{responders: []func(*http.Request) (*http.Response, error){
+		func(*http.Request) (*http.Response, error) {
+			return openAIError(http.StatusUnauthorized, "invalid_api_key"), nil
+		},
+		func(*http.Request) (*http.Response, error) {
+			return httpJSON(http.StatusOK, map[string]any{"id": openAIModel}, nil), nil
+		},
+	}}
+	client := newOpenAIClient(doer)
+	if test, err := client.TestCapabilities(context.Background(), "sk-bad"); adapterCode(err) != CodeProviderAuth || test.Text != "" || test.Images != "" {
+		t.Fatalf("rejected key = %+v, %v", test, err)
+	}
+	if test, err := client.TestCapabilities(context.Background(), "sk-odd"); adapterCode(err) != CodeUpstream || test.Text != "" || test.Images != "" {
+		t.Fatalf("a single model object is not a model list: %+v, %v", test, err)
 	}
 }
 
@@ -426,17 +493,40 @@ func TestOpenAIConnectionCheckUsesTheOpenAITester(t *testing.T) {
 		openRouterDoer := &queuedDoer{}
 		openAIDoer := &queuedDoer{responders: []func(*http.Request) (*http.Response, error){
 			func(*http.Request) (*http.Response, error) {
-				return httpJSON(http.StatusOK, map[string]any{"id": openAIModel}, map[string]string{"X-Request-Id": "req_ok"}), nil
+				return openAIModelList("req_ok", openAIModel), nil
+			},
+			func(*http.Request) (*http.Response, error) {
+				return openAIModelList("req_none", "gpt-4.1-mini"), nil
+			},
+			func(*http.Request) (*http.Response, error) {
+				return openAIError(http.StatusUnauthorized, "invalid_api_key"), nil
 			},
 		}}
 		service := &providerService{store: providers, settings: fixture.settings, client: newOpenRouterClient(openRouterDoer),
 			testers: map[string]remoteKeyTester{providerKindOpenAI: newOpenAIClient(openAIDoer)}}
-		view, err := service.TestConnection(ctx, providerActor{UserID: fixture.userID, Admin: true}, openai.ID)
-		if err != nil || view.LastTest.State != "ok" || view.LastTest.RequestID != "req_ok" {
+		actor := providerActor{UserID: fixture.userID, Admin: true}
+		view, err := service.TestConnection(ctx, actor, openai.ID)
+		if err != nil || view.LastTest.State != "ok" || view.LastTest.RequestID != "req_ok" ||
+			view.LastTest.Text != capabilityReady || view.LastTest.Images != capabilityUnavailable || len(view.LastTest.ImageModels) != 0 {
 			t.Fatalf("connection check = %+v, %v", view, err)
 		}
-		if openRouterDoer.count() != 0 || openAIDoer.count() != 1 || openAIDoer.requests()[0].URL != openAIModelURL {
+		if openRouterDoer.count() != 0 || openAIDoer.count() != 1 || openAIDoer.requests()[0].URL != openAIModelsURL {
 			t.Fatalf("wrong tester: openrouter=%d openai=%+v", openRouterDoer.count(), openAIDoer.requests())
+		}
+		candidates, err := providers.Candidates(ctx, fixture.userID)
+		if err != nil || len(candidates) != 1 || candidates[0].Test.imageModelAvailable(gptImageSunburst) || !candidates[0].Test.textAvailable() {
+			t.Fatalf("candidates = %+v, %v", candidates, err)
+		}
+		// Neither model listed: the check fails and records both as unavailable.
+		view, err = service.TestConnection(ctx, actor, openai.ID)
+		if adapterCode(err) != CodeNoProvider || view.LastTest.State != "error" ||
+			view.LastTest.Text != capabilityUnavailable || view.LastTest.Images != capabilityUnavailable {
+			t.Fatalf("no usable model = %+v, %v", view.LastTest, err)
+		}
+		// A rejected key records a failed check without capabilities.
+		view, err = service.TestConnection(ctx, actor, openai.ID)
+		if err == nil || view.LastTest.State != "error" || view.LastTest.Text != "" || view.LastTest.Images != "" {
+			t.Fatalf("rejected key = %+v, %v", view.LastTest, err)
 		}
 	})
 }

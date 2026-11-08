@@ -111,6 +111,9 @@ type providerRowView struct {
 	LocalOnly bool
 	Tone      ui.Tone
 	Notice    string
+	// Tested marks the fragment returned by Test connection, whose notice
+	// also lists the capabilities the check found.
+	Tested bool
 }
 
 func browserProviderActor(ctx context.Context) (providerActor, error) {
@@ -358,7 +361,7 @@ func (m *Module) testProvider(w http.ResponseWriter, r *http.Request) error {
 	if settingsErr != nil {
 		return settingsErr
 	}
-	row := providerRowView{Provider: view, LocalOnly: inst.LocalOnly}
+	row := providerRowView{Provider: view, LocalOnly: inst.LocalOnly, Tested: true}
 	if testErr != nil {
 		row.Tone, row.Notice = ui.ToneError, i18n.T(ctx, "models.test.failed")
 	} else {
@@ -371,7 +374,7 @@ func (m *Module) testProvider(w http.ResponseWriter, r *http.Request) error {
 	if testErr != nil {
 		kind = "error"
 	}
-	web.Flash(w, r, kind, row.Notice, "")
+	web.Flash(w, r, kind, row.Notice, providerCapabilitySummary(ctx, view))
 	core.Redirect(w, r, modelsReturnURL(r))
 	return nil
 }

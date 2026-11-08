@@ -382,7 +382,9 @@ func TestOpenAIImageErrorsMapAndAccount(t *testing.T) {
 			charged   bool // keeps the reservation (unknown or consumed)
 		}{
 			{"auth", errBody(401, "invalid_api_key", "invalid_request_error", ""), CodeProviderAuth, false, false},
-			{"org verification", errBody(403, "", "invalid_request_error", ""), CodeProviderAuth, false, false},
+			{"org verification", errBody(403, "", "invalid_request_error", ""), CodeProviderVerification, false, false},
+			{"region", errBody(403, "unsupported_country_region_territory", "request_forbidden", ""), CodeProviderAuth, false, false},
+			{"forbidden without body", func(*http.Request) (*http.Response, error) { return httpJSON(403, map[string]any{}, nil), nil }, CodeProviderAuth, false, false},
 			{"rate limit", errBody(429, "rate_limit_exceeded", "requests", ""), CodeRateLimited, true, false},
 			{"quota", errBody(429, "insufficient_quota", "insufficient_quota", ""), CodeProviderAuth, false, false},
 			{"model access", errBody(404, "model_not_found", "invalid_request_error", ""), CodeNoProvider, false, false},

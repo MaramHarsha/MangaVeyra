@@ -15,6 +15,10 @@ type imageModelView struct {
 	Name, ID, Provider, Use, Status, Cost string
 	Ready                                 bool
 	Connection                            *providerView
+	// Warning marks a connected route the key cannot use (a warning badge,
+	// as the design's Licence guard); Detail says why in full.
+	Warning bool
+	Detail  string
 }
 
 func (m *Module) catalogueRows(ctx context.Context, actor providerActor, manageable []providerView, inst settings.Instance) ([]imageModelView, error) {
@@ -45,10 +49,12 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 			row.Ready = true
 			row.Status = i18n.T(ctx, "models.status.ready")
 		}
+		var routed *providerCandidate
 		for _, p := range candidates {
 			if !hasProvider(model, p.Kind) {
 				continue
 			}
+			routed = &p
 			row.Provider = providerKindName(p.Kind)
 			row.Ready = !inst.LocalOnly
 			row.Status = i18n.T(ctx, "models.status.ready")
@@ -94,6 +100,15 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 		if row.Connection != nil && !inst.LocalOnly {
 			row.Status = providerStatusLabel(ctx, *row.Connection)
 			row.Ready = row.Connection.Enabled && row.Connection.LastTest.State == "ok"
+		}
+		// The connection's last test (or a GPT Image refusal) showed the key
+		// cannot use this model, so routing skips it: say so in the row.
+		if routed != nil && routed.Kind == providerKindOpenAI && !inst.LocalOnly && !routed.Test.imageModelAvailable(model.ID) {
+			row.Ready, row.Warning = false, true
+			row.Status, row.Detail = i18n.T(ctx, "models.status.no_access"), i18n.T(ctx, "models.test.unavailable")
+			if routed.Test.Images == capabilityVerification {
+				row.Status, row.Detail = i18n.T(ctx, "models.status.verify"), i18n.T(ctx, "models.status.verify_detail")
+			}
 		}
 		if row.Provider == "" && hasProvider(model, providerKindWorker) {
 			row.Provider = i18n.T(ctx, "models.tile.local")

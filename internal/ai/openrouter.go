@@ -433,12 +433,19 @@ func (s *providerService) TestConnection(ctx context.Context, actor providerActo
 	if tester == nil {
 		return zero, errProviderUnavailable
 	}
-	requestID, testErr := tester.TestKey(ctx, provider.Key)
-	state := "ok"
-	if testErr != nil {
-		state = "error"
+	var test providerTestState
+	var testErr error
+	if caps, ok := tester.(capabilityTester); ok {
+		// OpenAI: one model-list request reports text and image capability.
+		test, testErr = caps.TestCapabilities(ctx, provider.Key)
+	} else {
+		test.RequestID, testErr = tester.TestKey(ctx, provider.Key)
 	}
-	if err := s.store.recordTest(context.WithoutCancel(ctx), provider.ID, provider.KeyEnc, state, requestID); err != nil {
+	test.State = "ok"
+	if testErr != nil {
+		test.State = "error"
+	}
+	if err := s.store.recordTestResult(context.WithoutCancel(ctx), provider.ID, provider.KeyEnc, test); err != nil {
 		return zero, err
 	}
 	view, err := s.store.GetManageable(ctx, actor, id)

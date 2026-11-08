@@ -146,7 +146,7 @@ func (s *textService) PlanText(ctx context.Context, req TextPlanRequest) (TextPl
 			return zero, noProviderError(err)
 		}
 		route, ok := routeForKind(candidate.Kind)
-		if !ok || (pin.modelID != "" && pin.modelID != route.Model) {
+		if !ok || (pin.modelID != "" && pin.modelID != route.Model) || !candidate.Test.textAvailable() {
 			return zero, noProviderError(nil)
 		}
 		if !route.fits(in) {
@@ -163,7 +163,9 @@ func (s *textService) PlanText(ctx context.Context, req TextPlanRequest) (TextPl
 		}
 		for _, candidate := range candidates {
 			route, ok := routeForKind(candidate.Kind)
-			if !ok || (pin.modelID != "" && pin.modelID != route.Model) {
+			// A connection whose last model-list check did not list the
+			// frozen text model is skipped like any other unusable route.
+			if !ok || (pin.modelID != "" && pin.modelID != route.Model) || !candidate.Test.textAvailable() {
 				continue
 			}
 			if !route.fits(in) {

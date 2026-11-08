@@ -51,6 +51,18 @@ func (s *imageService) remoteImage(ctx context.Context, req ImageGenerateRequest
 	if !ok {
 		return result, imageError(CodeNoProvider, false, jobs.Cost{})
 	}
+	// A plan made before the connection's check (or an earlier job) showed
+	// the key cannot use this GPT Image model is refused before reserving, so
+	// a queued batch does not repeat a request OpenAI will reject.
+	if provider.Kind == providerKindOpenAI {
+		if c, err := s.providers.Candidate(ctx, req.ActorID, provider.ID); err == nil && !c.Test.imageModelAvailable(req.Plan.ModelID) {
+			code := CodeNoProvider
+			if c.Test.Images == capabilityVerification {
+				code = CodeProviderVerification
+			}
+			return result, imageError(code, false, jobs.Cost{})
+		}
+	}
 	// Route-specific request ceilings are checked before anything is reserved
 	// or sent (ADR 0009: composed prompt bytes bound the text-token charge).
 	if err := validateRouteRequest(provider.Kind, req); err != nil {
@@ -110,6 +122,14 @@ func (s *imageService) remoteImage(ctx context.Context, req ImageGenerateRequest
 	switch provider.Kind {
 	case providerKindOpenAI:
 		call, err := s.openAIImage(ctx, provider.Key, req)
+		var refused *adapterError
+		if errors.As(err, &refused) && refused.code == CodeProviderVerification {
+			// Remember the refusal for this key so routing and G2 reflect it
+			// until the next connection test. The job itself stays terminal.
+			if markErr := s.providers.markImagesNeedVerification(context.WithoutCancel(ctx), provider.ID, provider.KeyEnc); markErr != nil && s.d.Log != nil {
+				s.d.Log.WarnContext(ctx, "record OpenAI image verification refusal", "err", markErr)
+			}
+		}
 		return closeReservation(call, err)
 	case providerKindOpenRouter:
 		call, err := s.openRouterImage(ctx, provider.Key, req)

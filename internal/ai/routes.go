@@ -54,3 +54,10 @@ type remoteTextClient interface {
 type remoteKeyTester interface {
 	TestKey(ctx context.Context, key string) (string, error)
 }
+
+// capabilityTester is a remoteKeyTester whose one non-generating check also
+// reports which of the connection's frozen routes the key can use (OpenAI:
+// the text model and the GPT Image models, from the model list).
+type capabilityTester interface {
+	TestCapabilities(ctx context.Context, key string) (providerTestState, error)
+}

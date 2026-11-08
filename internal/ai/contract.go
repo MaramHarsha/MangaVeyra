@@ -254,11 +254,14 @@ const (
 	CodeSpendLimit     = "spend_limit"      // monthly remote spend cap reached
 	CodeProviderAuth   = "provider_auth"    // key rejected
 	CodeProviderRefuse = "provider_refused" // safety or policy refusal
-	CodeRateLimited    = "rate_limited"
-	CodeTimeout        = "timeout"
-	CodeBadOutput      = "bad_output" // invalid document after the repair attempt
-	CodeUpstream       = "upstream"   // other provider failure
-	CodeApproval       = "approval_required"
+	// CodeProviderVerification: OpenAI refused GPT Image because the
+	// organisation is not verified. Terminal: verify, then test the connection.
+	CodeProviderVerification = "provider_verification"
+	CodeRateLimited          = "rate_limited"
+	CodeTimeout              = "timeout"
+	CodeBadOutput            = "bad_output" // invalid document after the repair attempt
+	CodeUpstream             = "upstream"   // other provider failure
+	CodeApproval             = "approval_required"
 )
 
 // ErrNoProvider is wrapped by GenerateError{Code: CodeNoProvider}.

@@ -23,6 +23,10 @@ const falSchnellModel = "fal-ai/flux/schnell"
 const falInpaintModel = "fal-ai/flux-lora/inpainting"
 const maxImageBytes = 24 << 20
 
+// skipImagesUnavailable is the skipped-candidate reason for a GPT Image model
+// the connection's key cannot use (ADR 0009 amendment).
+const skipImagesUnavailable = "not available for this key"
+
 type imageService struct {
 	d          *core.Deps
 	providers  *providerStore
@@ -62,7 +66,7 @@ type imageDecision struct {
 }
 
 func imageError(code string, retry bool, cost jobs.Cost) *GenerateError {
-	messages := map[string]string{CodeBadInput: "The image request is invalid.", CodeNoProvider: "No eligible image provider is available.", CodeLocalOnly: "Image generation uses the offline placeholder while local-only mode is on.", CodeSpendLimit: "The monthly remote-spend limit has been reached.", CodeProviderAuth: "The image provider rejected its connection key.", CodeProviderRefuse: "The image provider declined this request.", CodeRateLimited: "The image provider is busy. Try again later.", CodeTimeout: "The image provider did not finish in time.", CodeBadOutput: "The image provider returned an invalid image.", CodeUpstream: "The image provider could not complete the request."}
+	messages := map[string]string{CodeBadInput: "The image request is invalid.", CodeNoProvider: "No eligible image provider is available.", CodeLocalOnly: "Image generation uses the offline placeholder while local-only mode is on.", CodeSpendLimit: "The monthly remote-spend limit has been reached.", CodeProviderAuth: "The image provider rejected its connection key.", CodeProviderRefuse: "The image provider declined this request.", CodeProviderVerification: "OpenAI needs your organisation verified for image generation. Verify it in your OpenAI account, then test the connection again.", CodeRateLimited: "The image provider is busy. Try again later.", CodeTimeout: "The image provider did not finish in time.", CodeBadOutput: "The image provider returned an invalid image.", CodeUpstream: "The image provider could not complete the request."}
 	message := messages[code]
 	if message == "" {
 		code = CodeUpstream
@@ -226,6 +230,12 @@ func (s *imageService) planImage(ctx context.Context, req ImagePlanRequest, excl
 			route, frozen := imageRouteFor(p.Kind, m.ID)
 			if frozen && route.PinOnly && req.PinModelID != m.ID {
 				skipped = append(skipped, m.ID+": pin only")
+				continue
+			}
+			// The connection's last model-list check (or a GPT Image refusal)
+			// showed this key cannot use the model: route around it.
+			if p.Kind == providerKindOpenAI && !p.Test.imageModelAvailable(m.ID) {
+				skipped = append(skipped, m.ID+": "+skipImagesUnavailable)
 				continue
 			}
 			cost, ok := quoteImage(p.Kind, m.ID, n)
