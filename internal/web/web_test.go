@@ -247,4 +247,3 @@ func TestPagesStateWhoIsSignedIn(t *testing.T) {
 		t.Fatal("the offline page does not know who is signed in")
 	}
 }
-
