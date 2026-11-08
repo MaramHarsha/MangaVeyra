@@ -63,3 +63,25 @@ Official sources:
 - [fal synchronous API: no retries](https://fal.ai/docs/api-reference/inference-api/sync/run)
 - [Ollama OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility)
 - [Ollama cloud-disable setting](https://docs.ollama.com/faq)
+
+## Phase 4 routes (ADR 0013 §9; fake-transport tested, not live-verified)
+
+`image_routes.go` adds one row per frozen route; each adapter file cites the
+provider documentation it follows (accessed 2026-11-09).
+
+| Adapter | Endpoint and model | Ceiling | Reserved per call |
+|---|---|---|---|
+| Google | `POST …/v1beta/models/gemini-nano-banana-2.1:generateContent` (Imagen is shut down on the Gemini API) | one 1K image, `maxOutputTokens` 4,096, ≤ 6 references, no mask | `(1,120 + 4,096) × $30/M + 6,144 × $1.50/M + inputs × 1,120 × $1.50/M` |
+| xAI | `POST https://api.x.ai/v1/images/generations`, `grok-imagine-image` | 1–4 outputs, `resolution: 1k`, no inputs | `$0.02 × n` |
+| Together | `POST https://api.together.ai/v1/images/generations`, `black-forest-labs/FLUX.1.1-pro` | ≤ 1024 px, multiples of 8, 1–4 outputs | `$0.04 × n × ceil(MP)` |
+| Replicate | `POST /v1/models/black-forest-labs/flux-schnell/predictions` (official, unpinnable) | 1–4 outputs, `megapixels: "1"` | `$0.003 × n` |
+| Replicate (pin-only) | `POST /v1/predictions`, `stability-ai/sdxl:7762fd07…9bdc` | ≤ 1024 px, `Cancel-After: 120s` | `120 s × $0.000975/s` (application bound) |
+| Runware | `POST https://api.runware.ai/v1`, `runware:100@1` | ≤ 1024 px, multiples of 64, 1–4 results | `$0.006 × n × MP` (application allowance) |
+
+Reported costs (`usageMetadata`, `cost_in_usd_ticks`, `includeCost`,
+`predict_time`) reconcile unclamped; HTTP rejections reconcile at zero except
+xAI 400/5xx (xAI charges moderated generations). Replicate and fal-style CDN
+downloads allow only the provider's HTTPS delivery hosts and carry no key.
+Custom G12 image connections (ComfyUI, HTTP) are servers on this machine or
+network: ADR 0007's custom text rules, no reservation; a Hugging Face image
+endpoint reserves zero per call because it is billed per endpoint hour.
