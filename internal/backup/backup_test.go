@@ -965,6 +965,52 @@ func TestExpiredArchivesAreDeleted(t *testing.T) {
 	}
 }
 
+// TestRestoreUndoesNewerMigrations is the failed-update rollback: a newer
+// binary migrated the database, the old binary restores its pre-update archive.
+func TestRestoreUndoesNewerMigrations(t *testing.T) {
+	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		seedServer(t, ta)
+		s := svcOf(t, ta)
+		b, err := s.Create(ctx, backup.Request{Kind: backup.KindPreUpdate})
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := fingerprints(t, ta)
+		d := ta.Deps.DB
+		if _, err := d.Exec(ctx, `CREATE TABLE future_panels (id TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '')`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.Exec(ctx, `ALTER TABLE projects ADD COLUMN future_flag TEXT NOT NULL DEFAULT ''`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.Exec(ctx, `INSERT INTO schema_migrations (version, file, applied_at) VALUES ('9000_future', '9000_future.sql', ?)`, db.Now()); err != nil {
+			t.Fatal(err)
+		}
+		maintenance(t, ta, true)
+		if _, err := s.RestoreArchive(ctx, b.ID, ta.Admin.ID); err != nil {
+			t.Fatal(err)
+		}
+		if newestSchema(t, d) != b.Schema {
+			t.Fatalf("schema %s after rollback, want %s", newestSchema(t, d), b.Schema)
+		}
+		var n int
+		if err := d.Get(ctx, &n, `SELECT COUNT(*) FROM future_panels`); err == nil {
+			t.Fatal("the newer binary's table survived the rollback")
+		}
+		after := fingerprints(t, ta)
+		for table, rows := range before {
+			if !slices.Equal(rows, after[table]) {
+				t.Fatalf("%s differs after the rollback", table)
+			}
+		}
+		// The pre-update archive holds no media: media stay in place.
+		if _, err := ta.Deps.Store.List(ctx, ""); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
 func TestRestoreCancelsUnfinishedJobs(t *testing.T) {
 	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
 		ctx := context.Background()
