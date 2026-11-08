@@ -42,7 +42,7 @@ func sortOptions(ctx context.Context) []ui.Option {
 templ LibraryPage(v *libraryView) {
 	<div class="mv-lib" data-tab={ v.Tab }>
 		<div class="mv-lib__head">
-			<h1 class="mv-lib__title">{ i18n.T(ctx, "reader.library.title") }</h1>
+			<h1 class="mv-lib__title mv-hide-mobile">{ i18n.T(ctx, "reader.library.title") }</h1>
 			@ui.SegmentedLinks(i18n.T(ctx, "reader.library.tabs"), v.tabs(ctx))
 		</div>
 		switch v.Tab {

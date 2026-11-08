@@ -47,7 +47,7 @@ export async function reconcile(doc: Document, island: HTMLElement, store: Cache
     }
   }
   const summary = doc.querySelector<HTMLElement>('[data-download-summary]');
-  if (summary) summary.textContent = t('library.on_device', { count: local, size: sizeLabel(bytes) });
+  if (summary) summary.textContent = t(local === 1 ? 'library.on_device_one' : 'library.on_device', { count: local, size: sizeLabel(bytes) });
   return { local, bytes };
 }
 

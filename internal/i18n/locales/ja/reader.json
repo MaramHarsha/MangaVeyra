@@ -194,6 +194,7 @@
   "reader.library.remove": "削除",
   "reader.library.not_on_device": "この端末にはありません",
   "reader.library.on_device": "この端末に{count}話 · {size}",
+  "reader.library.on_device_one": "この端末に{count}話 · {size}",
   "reader.library.download_again": "開いてもう一度ダウンロード",
   "reader.library.cleared": "オフラインのダウンロードを消去しました",
   "reader.library.size": "{size}",

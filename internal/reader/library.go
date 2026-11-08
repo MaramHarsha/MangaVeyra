@@ -344,6 +344,9 @@ func (m *Module) followingCards(ctx context.Context, v publish.Viewer, res *reso
 		case read && !p.Completed:
 			if pub, ok := res.publications(ctx, s)[p.PublicationID]; ok {
 				c.Meta = chapterWord(ctx, s, pub.Number) + " · " + i18n.T(ctx, "reader.library.page_short", "page", p.Page)
+				if isWebtoon(s.Format) {
+					c.Meta = chapterWord(ctx, s, pub.Number) + " · " + strconv.Itoa(int(p.Percent*100+0.5)) + "%"
+				}
 				c.Href = chapterURL(*s, pub.Number, pub.Lang) + pageQuery(chapterURL(*s, pub.Number, pub.Lang), p.Page)
 			}
 		case s.Status == publish.SeriesCompleted:

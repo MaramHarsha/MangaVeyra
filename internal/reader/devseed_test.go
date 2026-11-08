@@ -10,7 +10,9 @@ import (
 	"image/png"
 	"io"
 	"math"
+	"net/http"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -18,11 +20,13 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/assets"
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/config"
+	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/pagedoc"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish/publishtest"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
+	"github.com/MaramHarsha/MangaVeyra/internal/social"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 )
 
@@ -72,7 +76,86 @@ func TestDevSeed(t *testing.T) {
 
 	ghosts := f.Series(publishtest.SeriesSpec{Owner: jerry, Title: "Harbour Ghosts", Slug: "harbour-ghosts", AgeRating: publish.RatingMature, AILabel: label})
 	seedChapter(t, ta, f, ghosts, 1, "Low Water", 4, label, 1040, 1470)
+
+	// More shelf titles for the library (E7), two short chapters each.
+	for i, title := range []string{"Lanterns of Oru", "Glass Orchard", "Paper Crows", "Ninth Bell", "Iron Koi"} {
+		spec := publishtest.SeriesSpec{Owner: jerry, Title: title, AILabel: label, PublishedAt: publishtest.Ago(time.Duration(30+i) * 24 * time.Hour)}
+		if title == "Glass Orchard" {
+			spec.Status = publish.SeriesCompleted
+		}
+		s := f.Series(spec)
+		seedChapter(t, ta, f, s, 1, "Opening", 2, label, 520, 735)
+		seedChapter(t, ta, f, s, 2, "Second tide", 2, label, 520, 735)
+	}
+	for _, s := range []publishtest.Series{tide, radio, ghosts} {
+		seedCover(t, ta, s)
+	}
 	t.Logf("seeded %s, %s and %s", tide.Slug, radio.Slug, ghosts.Slug)
+}
+
+// seedCover gives a series a drawn 3:4 cover.
+func seedCover(t *testing.T, ta *testutil.TestApp, s publishtest.Series) {
+	t.Helper()
+	ctx := context.Background()
+	full := []pagedoc.Point{{X: 24, Y: 24}, {X: 576, Y: 24}, {X: 576, Y: 560}, {X: 24, Y: 620}}
+	data := drawPage(600, 800, []publish.GuidedPanel{{Order: 1, Points: full, X: 24, Y: 24, W: 552, H: 596}}, 2)
+	a, err := assets.From(ta.Deps).Save(ctx, assets.SaveParams{OwnerID: s.Owner.ID, ProjectID: s.ProjectID, Kind: "series_cover",
+		Source: assets.SourceSystem, ContentType: "image/png", Data: data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ta.Deps.DB.Exec(ctx, `UPDATE series SET cover_asset_id = ? WHERE id = ?`, a.ID, s.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestDevServeWithFollows serves the seeded data directory on
+// 127.0.0.1:6352 with a fake social.Follows in which every member follows
+// every series, so the E7 Following grid can be compared with the artboard
+// before the social module lands. Skipped unless MV_READER_DEVSERVE=1;
+// it stops after R_SERVE_SECONDS (default 300).
+func TestDevServeWithFollows(t *testing.T) {
+	if os.Getenv("MV_READER_DEVSERVE") != "1" {
+		t.Skip("set MV_READER_DEVSERVE=1 to serve the seeded data directory")
+	}
+	ctx := context.Background()
+	cfg, err := config.Load("", os.Getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := app.New(ctx, cfg, app.Options{LogOutput: io.Discard, ExecutorSize: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	var ids []string
+	if err := a.Deps.DB.Select(ctx, &ids, `SELECT id FROM series ORDER BY published_at DESC, id DESC`); err != nil {
+		t.Fatal(err)
+	}
+	follows := &allFollows{ids: ids}
+	core.Provide[social.Follows](a.Deps, follows)
+	secs, _ := strconv.Atoi(os.Getenv("R_SERVE_SECONDS"))
+	if secs <= 0 {
+		secs = 300
+	}
+	srv := &http.Server{Addr: "127.0.0.1:6352", Handler: a.Handler, ReadHeaderTimeout: 10 * time.Second}
+	go func() {
+		time.Sleep(time.Duration(secs) * time.Second)
+		_ = srv.Close()
+	}()
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		t.Fatal(err)
+	}
+}
+
+type allFollows struct{ ids []string }
+
+func (f *allFollows) IsFollowing(context.Context, string, string) (bool, error) { return true, nil }
+func (f *allFollows) FollowedSeriesIDs(context.Context, string, string, int) ([]string, string, error) {
+	return f.ids, "", nil
+}
+func (f *allFollows) Followers(context.Context, string, string, int) ([]string, string, error) {
+	return nil, "", nil
 }
 
 // samplePanels are the five panels of the design's sample page (E3), in a 520 × 735 box.

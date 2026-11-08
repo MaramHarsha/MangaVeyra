@@ -409,7 +409,7 @@
 
  const chapterLabel = p.publication.label;
  const pageAlt = (pg: Page) => pg.alt || t('page.alt', { page: pg.number });
- const progressLabel = $derived(mode === 'webtoon' ? `${Math.round(scrollPct * 100)}%` : mode === 'guided' ? t('panel.of', { panel: step + 1, total: steps.length }) : atEnd ? `${total} / ${total}` : progressText(view, total));
+ const progressLabel = $derived(mode === 'webtoon' ? `${Math.round(scrollPct * 100)}%` : mode === 'guided' ? `${readingPage} / ${total}` : atEnd ? `${total} / ${total}` : progressText(view, total));
  const dirLabel = $derived(t(`dir.${settings.direction}`));
  const downloadLabel = $derived(downloading >= 0 ? t('download.progress', { percent: downloading }) : onDevice ? t('download.offline') : t('download'));
  const bookmarkLabel = $derived(bookmarked ? t('bookmark.remove') : t('bookmark.add'));

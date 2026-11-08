@@ -450,7 +450,7 @@ var islandKeys = []string{
 	"comments.placeholder", "comments.post", "comments.signin", "comments.panel", "comments.chapter", "comments.failed",
 	"comments.posted", "offline.banner", "error.network", "loading", "dir.rtl", "dir.ltr", "dir.vertical",
 	"refresh.failed", "speak.start", "speak.stop", "zoom.in", "zoom.out", "zoom.reset",
-	"library.remove", "library.not_on_device", "library.on_device", "library.download_again",
+	"library.remove", "library.not_on_device", "library.on_device", "library.on_device_one", "library.download_again",
 	"library.cleared", "library.size", "library.checking",
 }
 

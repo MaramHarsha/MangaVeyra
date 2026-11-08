@@ -27,8 +27,8 @@
   if (!box) return;
   const ro = new ResizeObserver(() => {
    if (!box) return;
-   availW = Math.max(120, box.clientWidth - 48);
-   availH = Math.max(120, box.clientHeight - 48);
+   availW = Math.max(120, box.clientWidth - 96 - 6);
+   availH = Math.max(120, box.clientHeight - 64 - 6);
   });
   ro.observe(box);
   return () => ro.disconnect();

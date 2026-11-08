@@ -196,6 +196,7 @@
   "reader.library.remove": "Remove",
   "reader.library.not_on_device": "Not on this device",
   "reader.library.on_device": "{count} chapters · {size} on this device",
+  "reader.library.on_device_one": "{count} chapter · {size} on this device",
   "reader.library.download_again": "Open to download again",
   "reader.library.cleared": "Offline downloads cleared",
   "reader.library.size": "{size}",
