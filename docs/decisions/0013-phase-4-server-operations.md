@@ -110,3 +110,19 @@ server will not hear about updates until the admin turns checks on; the Server t
   status 75 under systemd (the shipped unit restarts on it). If the new binary fails to start after passing the
   loopback health check, the record stays at "restarting" and `mangaveyra.prev` plus the backup (when kept) allow a manual
   rollback.
+
+## Review follow-ups (2026-11-09)
+
+- **Agents (§7).** Agent tokens are accepted only at `/mcp` (403 `agent_token_mcp_only` everywhere else, including the
+  collaboration API, the WebSocket and doc:page); personal API tokens keep REST access. Approving a waiting generation
+  runs it only within the estimate shown in G13 (1 %, at most one cent); a higher estimate keeps it waiting with the new
+  estimate shown. Undoing an agent generation needs its job finished and no other page version since the job's first
+  one ("Can't undo: edited since"). `mcp-stdio` sends the token only to the `--url` origin and refuses cross-origin
+  redirects; G13 suggests `MV_AGENT_TOKEN` rather than `--token`.
+- **Collaboration (§8).** `doc:page` carries presence and `collab.changed` only; it takes no Yjs document writes until an
+  editor reads the document. Stored logs replay in batches and binary awareness frames are capped at 4 KiB.
+- **Providers (§9).** ComfyUI and generic HTTP are server connections only an admin creates or edits; members use them
+  through routing. Hugging Face stays a personal connection limited to Hugging Face's own HTTPS hosts. Hugging Face,
+  ComfyUI and HTTP connections turn on, route and dispatch only while their last test passed for their current endpoint,
+  key and description; local text connections turn on only after a passed test. A queued job whose route now costs more
+  than its approved estimate fails as `approval_required` before any reservation.

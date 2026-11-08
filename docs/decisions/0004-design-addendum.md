@@ -632,3 +632,9 @@ The approved desktop artboards are followed at 1440 × 900; the mobile artboards
 - **G1 Settings · Data & export.** Export everything downloads the member's own archive (their account without
   credentials, projects, characters, published works, comments and reading data); Last export shows "{date} · {size}"
   as a link to the newest export, kept for 7 days, or Never.
+- **G13 and G12/G2 after review.** G13's success box shows `MV_AGENT_TOKEN=… mangaveyra mcp-stdio --url …`; Recent
+  actions read "Can't undo: edited since" where history holds a person's edit, and a waiting generation whose price rose
+  shows the new estimate before it can be approved. A member choosing ComfyUI or HTTP in G12 sees an "An admin connects
+  this server" state (403) built like the existing Blocked state with the type switch kept; the ComfyUI and HTTP first
+  step has no scope picker. Test connection is available on a custom connection that is off, and the ON switch refuses
+  an untested one with a notice; a connection changed since its passed test shows "Not checked".
