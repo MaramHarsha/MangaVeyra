@@ -8,6 +8,9 @@ from pathlib import Path
 
 import pytest
 
+# Multi-view outfit scoring is an optional extra; a core install skips these checks.
+pytest.importorskip("numpy")
+
 from mangaveyra_worker.vision.multiview import MODEL, SCHEMA, match_views, load_artifact
 from mangaveyra_worker.vision.outfit import PREPROCESSING
 from tests.test_outfit import artifact as pair_artifact

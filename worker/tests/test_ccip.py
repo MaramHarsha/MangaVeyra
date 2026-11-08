@@ -8,9 +8,11 @@ import subprocess
 import sys
 from types import SimpleNamespace
 
-import numpy as np
 from PIL import Image, ImageDraw
 import pytest
+
+# CCIP scoring is an optional extra; a core install skips these checks.
+np = pytest.importorskip("numpy")
 
 from mangaveyra_worker.vision.ccip import CcipEmbedder, ccip_available, preprocess
 

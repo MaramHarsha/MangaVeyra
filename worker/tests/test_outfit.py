@@ -7,8 +7,10 @@ import json
 from pathlib import Path
 import importlib.util
 
-import numpy as np
 import pytest
+
+# Outfit scoring is an optional extra; a core install skips these checks.
+np = pytest.importorskip("numpy")
 
 from mangaveyra_worker.vision.outfit import FEATURES, PREPROCESSING, SCHEMA, framed_body, load_artifact, predict
 
