@@ -420,7 +420,10 @@ func (s *service) write(ctx context.Context, dir, final, id string, req Request,
 		case scope != nil:
 			keys, err = scope.mediaKeys(ctx, tx, s.store)
 		default:
-			keys, err = s.store.List(ctx, "")
+			// The store may be shared: only MangaVeyra's objects are archived.
+			if keys, err = s.store.List(ctx, ""); err == nil {
+				keys = appObjects(ctx, tx, keys)
+			}
 		}
 		return err
 	})

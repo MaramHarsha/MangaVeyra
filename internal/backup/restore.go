@@ -152,7 +152,13 @@ func (s *service) restoreArchive(ctx context.Context, id, actorID string) (*Rest
 	// here leaves the server's data as it was.
 	mediaKeys := a.mediaKeys()
 	sort.Strings(mediaKeys)
+	var ours map[string]bool
 	if m.Includes.Media {
+		// Keys outside MangaVeyra's layout that this server's data references
+		// are its own too; every other foreign key is left alone.
+		if ours, err = s.referencedOutsideLayout(ctx); err != nil {
+			return nil, fmt.Errorf("backup: list media: %w", err)
+		}
 		for i, key := range mediaKeys {
 			if err := ctx.Err(); err != nil {
 				return nil, err
@@ -176,7 +182,7 @@ func (s *service) restoreArchive(ctx context.Context, id, actorID string) (*Rest
 	}
 	s.d.Settings.Invalidate()
 	if m.Includes.Media {
-		s.removeOrphans(ctx, mediaKeys)
+		s.removeOrphans(ctx, mediaKeys, ours)
 	}
 	prog.report(1)
 	return rep, nil
@@ -198,9 +204,17 @@ func fileSHA256(path string) (string, error) {
 func (s *service) restoreObject(ctx context.Context, a *archiveReader, key string) error {
 	name := mediaPrefix + key
 	sum := a.M.Entries[name]
-	if info, err := s.store.Stat(ctx, key); err == nil && info.Size == sum.Bytes {
-		// Keys are unique per stored object: the same key and size is the same file.
-		return a.verify(name)
+	if info, err := s.store.Stat(ctx, key); err == nil {
+		if info.Size == sum.Bytes {
+			// Keys are unique per stored object: the same key and size is the same file.
+			return a.verify(name)
+		}
+		if !appKey(key) {
+			// An older archive may hold a key outside MangaVeyra's layout; an
+			// object another application keeps there is never overwritten.
+			s.log.Warn("backup: kept an existing object outside MangaVeyra's key layout", "key", key)
+			return nil
+		}
 	}
 	rc, _, err := a.open(name)
 	if err != nil {
@@ -216,8 +230,11 @@ func (s *service) restoreObject(ctx context.Context, a *archiveReader, key strin
 	return nil
 }
 
-// removeOrphans deletes stored objects the restored data does not know.
-func (s *service) removeOrphans(ctx context.Context, keep []string) {
+// removeOrphans deletes MangaVeyra's stored objects the restored data does
+// not know: keys in its layout, and the keys outside it that the server's data
+// referenced before the restore (ours). Other keys belong to whatever else
+// shares the store and are never deleted.
+func (s *service) removeOrphans(ctx context.Context, keep []string, ours map[string]bool) {
 	want := make(map[string]bool, len(keep))
 	for _, k := range keep {
 		want[k] = true
@@ -228,7 +245,7 @@ func (s *service) removeOrphans(ctx context.Context, keep []string) {
 		return
 	}
 	for _, o := range list {
-		if !want[o.Key] {
+		if !want[o.Key] && (appKey(o.Key) || ours[o.Key]) {
 			if err := s.store.Delete(ctx, o.Key); err != nil {
 				s.log.Warn("backup: remove media after restore", "key", o.Key, "err", err)
 			}

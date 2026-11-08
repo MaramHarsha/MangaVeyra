@@ -1131,6 +1131,57 @@ func TestPruneAndDeleteNeverTouchOutsideArchives(t *testing.T) {
 	})
 }
 
+// The store may be shared (an S3 bucket without a prefix): backups hold only
+// MangaVeyra's objects, and a restore removes only MangaVeyra's objects that
+// the archive does not know, never another application's keys.
+func TestBackupsAndRestoresLeaveForeignObjectsAlone(t *testing.T) {
+	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
+		ctx := context.Background()
+		f := seedServer(t, ta)
+		s := svcOf(t, ta)
+		put := func(key string) {
+			t.Helper()
+			if err := storage.PutBytes(ctx, ta.Deps.Store, key, []byte("payload "+key), "application/octet-stream"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		put("otherapp/ledger-before.bin")
+		b, err := s.Create(ctx, backup.Request{Kind: backup.KindManual})
+		if err != nil {
+			t.Fatal(err)
+		}
+		m, err := backup.ReadManifest(pathOf(t, ta, b.ID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := m.Entries["media/otherapp/ledger-before.bin"]; ok {
+			t.Fatal("the backup holds another application's object")
+		}
+		if _, ok := m.Entries["media/"+f.objectKey]; !ok {
+			t.Fatal("the backup lacks MangaVeyra's own object")
+		}
+		put("otherapp/ledger-after.bin")
+		orphan := "projects/" + db.NewID() + "/layers/" + db.NewID() + ".png"
+		put(orphan)
+		maintenance(t, ta, true)
+		if err := s.Restore(ctx, b.ID, ta.Admin.ID); err != nil {
+			t.Fatal(err)
+		}
+		have := media(t, ta)
+		for _, k := range []string{"otherapp/ledger-before.bin", "otherapp/ledger-after.bin"} {
+			if _, ok := have[k]; !ok {
+				t.Errorf("the restore deleted another application's object %s", k)
+			}
+		}
+		if _, ok := have[orphan]; ok {
+			t.Error("the restore kept a MangaVeyra object the archive does not know")
+		}
+		if _, ok := have[f.objectKey]; !ok {
+			t.Error("the restore lost an archived object")
+		}
+	})
+}
+
 func TestScheduleSlotsAndDestination(t *testing.T) {
 	ta := testutil.NewTestApp(t)
 	ctx := context.Background()
