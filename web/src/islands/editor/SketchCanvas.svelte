@@ -14,8 +14,12 @@
  $effect(()=>{void [height,strokes];redraw();});
  onDestroy(()=>serial++);
 </script>
+<!-- The canvas fills the proof frame; its help and Clear sit below the frame
+     so both proofs keep the same size and alignment. -->
 <div class="mv-control__draw">
  <canvas bind:this={canvas} {width} {height} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} aria-label={t('control.drawing')} aria-describedby="sketch-drawing-help"></canvas>
- <p id="sketch-drawing-help" class="mv-ed__help">{t('control.drawing_help')}</p>
- <button type="button" class="mv-btn mv-btn--quiet mv-btn--sm" {disabled} onclick={()=>{strokes=[];active=null;redraw();emit();}}>{t('control.clear_drawing')}</button>
+ <div class="mv-control__draw-tools">
+  <p id="sketch-drawing-help" class="mv-ed__help">{t('control.drawing_help')}</p>
+  <button type="button" class="mv-btn mv-btn--quiet mv-btn--sm" disabled={disabled||!strokes.length} onclick={()=>{strokes=[];active=null;redraw();emit();}}>{t('control.clear_drawing')}</button>
+ </div>
 </div>

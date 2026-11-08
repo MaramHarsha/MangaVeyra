@@ -15,7 +15,7 @@ export interface Layout {id:string;name:string;panels:number;points:Point[][];su
 export interface Character {id:string;name:string;portrait_asset_id?:string;lock_score?:number}
 export interface Candidate {index:number;asset_id:string;url?:string;seed:number;lock_score?:number;layers?:{layer_id:string;kind:string;name:string;asset_id:string}[]}
 export interface Job {id:string;type?:string;state:string;progress:number;step?:number;steps?:number;model_id?:string;model_name?:string;provider_id?:string;error_code?:string;created_at?:string;started_at?:string;finished_at?:string;position?:number;estimate_seconds?:number;page_id?:string;panel_id?:string;layer_id?:string;prompt?:string}
-export interface Version {id:string;number:number;action:string;summary:string;created_at:string}
+export interface Version {id:string;number:number;action:string;summary:string;created_at:string;actor_kind?:string}
 export interface Compute {queued:number;running:number;workers_online:number;load:number;gpu?:string;vram_used_mb?:number;vram_total_mb?:number;worker_name?:string;host:string}
 export interface Beat {panels:number;wide:number;medium:number;close:number}
 export interface Option {id:string;label:string}

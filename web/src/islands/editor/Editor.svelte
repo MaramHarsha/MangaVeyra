@@ -6,6 +6,7 @@
  import RegionMask from './RegionMask.svelte';
  import ControlWorkbench from './ControlWorkbench.svelte';
  import PoseTool from './PoseTool.svelte';
+ import {pageBlock} from './control';
  import {request, APIError} from './api';
  import {showToast} from '../../lib/toast';
  import {
@@ -85,7 +86,7 @@
  let rectangle = $state<Rect>({x: 0, y: 0, w: 100, h: 100}), rectangleSelection = $state<Rect | null>(null), regionWidth = $state(0);
  let rubyStart = $state(0), rubyEnd = $state(1), rubyText = $state('');
  let dragBubble = $state('');
- let confirmTitle = $state(''), confirmBody = $state(''), confirmLabel=$state(''), confirmAction: (() => void) | null = null;
+ let confirmTitle = $state(''), confirmBody = $state(''), confirmLabel=$state(''), confirmTone = $state('danger'), confirmAction: (() => void) | null = null;
 
  /* ---- derived ---- */
  const panel = $derived(page?.panels.find(p => p.id === panelID));
@@ -114,6 +115,11 @@
  const drift = $derived(candidates.find(c => c.lock_score !== undefined && c.lock_score < .9));
  const driftName = $derived(characters.find(c => c.id === characterLayers[0]?.character_id)?.name || characterLayers[0]?.name || '');
  const jobRunning = $derived(activeJob?.state === 'queued' || activeJob?.state === 'running');
+ // Whole-page art actions (D4, "Regenerate this page") share the server's page-scope lock rule.
+ const pageArtBlock = $derived(pageBlock(page, {art: initial.permissions.art, generate: initial.permissions.generate, chapterLocked: initial.chapter.locked}));
+ const controlBlock = $derived(!page || !controlMode ? '' : controlMode === 'sketch' ? pageArtBlock
+  : controlMode === 'lockfix' ? (!initial.permissions.generate || !initial.permissions.art ? 'control.blocked_permission' : initial.chapter.locked ? 'control.blocked_chapter' : '')
+  : !initial.permissions.art && !initial.permissions.letter ? 'control.blocked_permission' : initial.chapter.locked ? 'control.blocked_chapter' : page.locked ? 'control.blocked_page' : '');
 
  /* ---- routing preview (the chip and help line before anything is queued) ---- */
  interface RouteInfo {available: boolean; model_id?: string; model_name?: string; provider_id?: string; remote: boolean; placeholder: boolean; estimate_seconds?: number; remote_cost: boolean; message?: string}
@@ -136,9 +142,10 @@
 
  const meter = $derived.by(() => {
   const c = compute, jobs = (c?.queued || 0) + (c?.running || 0);
-  if (!c) return {text: t('meter.no_worker'), title: t('meter.title_none', {jobs: 0}), load: 0, idle: false, offline: true};
+  if (!c) return {text: t('meter.no_worker'), title: t('meter.title_none', {jobs: t('meter.jobs', {count: 0})}), load: 0, idle: false, offline: true};
   const text = c.queued > 0 ? t('meter.queued', {count: c.queued}) : c.running > 0 ? t('meter.running', {count: c.running}) : c.workers_online > 0 ? t('meter.idle') : t('meter.no_worker');
-  const title = c.gpu ? t('meter.title_gpu', {gpu: c.gpu, used: gb(c.vram_used_mb), total: gb(c.vram_total_mb), jobs}) : c.workers_online > 0 ? t('meter.title_workers', {count: c.workers_online, jobs}) : t('meter.title_none', {jobs});
+  const jobText = t('meter.jobs', {count: jobs});
+  const title = c.gpu ? t('meter.title_gpu', {gpu: c.gpu, used: gb(c.vram_used_mb), total: gb(c.vram_total_mb), jobs: jobText}) : c.workers_online > 0 ? t('meter.title_workers', {count: c.workers_online, jobs: jobText}) : t('meter.title_none', {jobs: jobText});
   return {text, title, load: Math.round(Math.min(1, Math.max(0, c.load)) * 100), idle: jobs === 0 && c.workers_online > 0, offline: c.workers_online === 0 && jobs === 0};
  });
  const workerLine = $derived.by(() => {
@@ -248,7 +255,7 @@
  function selectBubble(id: string) { bubbleID = id; const b = page?.bubbles.find(v => v.id === id); if (b?.panel_id) panelID = b.panel_id; if (mode !== 'lettering') switchMode('lettering'); tray = 'properties'; tool = 'select'; }
  function setMask(blob: Blob | null) { if(blob&&tool!=='region')return;mask = blob; emitDirty(); }
  function switchMode(next: string) { void leave(()=>{mode=next;tool='select';tray='properties';menu='';}); }
- function confirm(title: string, body: string, action: () => void, label=t('confirm')) { confirmTitle = title; confirmBody = body;confirmLabel=label; confirmAction = action; void tick().then(() => dialog.showModal()); }
+ function confirm(title: string, body: string, action: () => void, label=t('confirm'), tone='danger') { confirmTitle = title; confirmBody = body;confirmLabel=label; confirmTone = tone; confirmAction = action; void tick().then(() => dialog.showModal()); }
  function accept() { const action = confirmAction; confirmAction = null; dialog.close(); action?.(); }
  function fail(e: unknown) {
   if (e instanceof DOMException && e.name === 'AbortError') return;
@@ -338,8 +345,8 @@
   if (locked) confirm(t('unlock'), t('unlock.body'), perform); else perform();
  }
  async function openHistory() { if (!page || !await flush()) return; guard(()=>{menu='';tool='select';tray='history';const url=new URL(location.href);url.searchParams.set('panel','history');url.searchParams.delete('tool');historyURL(url);}); }
- async function openControl(next:'sketch'|'lockfix') { if(!page||jobRunning||!await flush())return;guard(()=>{jobID='';activeJob=null;candidates=[];tool=next;tray='properties';mode='pages';const url=new URL(location.href);url.searchParams.set('tool',next);url.searchParams.delete('panel');url.searchParams.delete('job');historyURL(url);}); }
- function closeControl(){guard(()=>{tool='select';tray='properties';controlDirty=false;emitDirty();const url=new URL(location.href);url.searchParams.delete('tool');url.searchParams.delete('panel');historyURL(url);});}
+ async function openControl(next:'sketch'|'lockfix',character='') { menu='';if(!page||jobRunning||!await flush())return;guard(()=>{jobID='';activeJob=null;candidates=[];tool=next;tray='properties';mode='pages';const url=new URL(location.href);url.searchParams.set('tool',next);if(character)url.searchParams.set('character',character);else url.searchParams.delete('character');url.searchParams.delete('panel');url.searchParams.delete('job');historyURL(url);}); }
+ function closeControl(){guard(()=>{tool='select';tray='properties';controlDirty=false;error='';conflict=false;emitDirty();const url=new URL(location.href);url.searchParams.delete('tool');url.searchParams.delete('panel');url.searchParams.delete('character');historyURL(url);});}
  function controlJob(j:Job){activeJob=j;jobID=j.id;candidates=[];const url=new URL(location.href);url.searchParams.set('job',jobID);historyURL(url);void pollJob();scheduleQueue(0);}
  async function preparePageRun(){
   if(!page||busy||jobRunning||!await flush())return;
@@ -351,13 +358,13 @@
  }
  async function regeneratePage(){if(!page||busy||jobRunning||!await flush())return;busy=true;error='';try{const out=await request<{job:Job}>(`${pageAPI()}/regenerate`,'POST',{base_version:page.version});controlJob(out.job);}catch(e){fail(e);}finally{busy=false;}}
 
- function revert(v: Version) {
-  confirm(t('history.revert'), t('history.body', {number: v.number}), () => void (async () => {
+ function revert(v: Version, undo = false) {
+  confirm(undo ? t('undo') : t('history.revert'), t(undo ? 'control.undo_body' : 'history.body', {number: v.number}), () => void (async () => {
    if (!await flush()) return;
    busy = true;
    try { install(await request<PageResponse>(`${pageAPI()}/revert`, 'POST', {version_id: v.id, base_version: history?.base.version || page!.version, confirm: true})); toast(t('version.restored')); }
    catch (e) { fail(e); } finally { busy = false; }
-  })());
+  })(), t('confirm'), 'primary');
  }
 
  /* ---- layouts (D2) ---- */
@@ -602,11 +609,13 @@
  {@const c = characters.find(v => v.id === l.character_id)}
  {@const name = c?.name || label(l)}
  {@const score = l.lock_score}
- <button type="button" class="mv-ed__chip" class:selected={l.id === layerID} aria-pressed={l.id === layerID} title={name} onclick={() => layerID = l.id}>
-  <span class={`mv-avatar mv-avatar--xs mv-avatar--c${avatarTone(l.character_id || l.id)}`} aria-hidden="true">{initials(name)}</span>
-  <span class="mv-ed__chip-name">{name}</span>
-  {#if score !== undefined}<span class="mv-ed__chip-lock" class:drift={score < .9}><i class="ti ti-lock" aria-hidden="true"></i>{scorePercent(score)}%</span>{/if}
- </button>
+ <span class="mv-ed__chip" class:selected={l.id === layerID}>
+  <button type="button" class="mv-ed__chip-select" aria-pressed={l.id === layerID} title={name} onclick={() => layerID = l.id}>
+   <span class={`mv-avatar mv-avatar--xs mv-avatar--c${avatarTone(l.character_id || l.id)}`} aria-hidden="true">{initials(name)}</span>
+   <span class="mv-ed__chip-name">{name}</span>
+  </button>
+  {#if score !== undefined}<button type="button" class="mv-ed__chip-lock" class:drift={score < .9} aria-label={t('control.lockfix_chip', {name, score: scorePercent(score)})} title={t('control.lockfix_chip', {name, score: scorePercent(score)})} disabled={!l.character_id || !initial.permissions.generate || busy || jobRunning} onclick={() => void openControl('lockfix', l.character_id)}><i class="ti ti-lock" aria-hidden="true"></i>{scorePercent(score)}%</button>{/if}
+ </span>
 {/snippet}
 
 <svelte:window onkeydown={key} onpointerdown={outside}/>
@@ -671,7 +680,8 @@
        <button type="button" class="mv-menu__item" role="menuitem" disabled={!initial.permissions.art || busy || page.locked} onclick={() => void openLayouts()}><i class="ti ti-layout-grid" aria-hidden="true"></i>{t('page.change_layout')}</button>
        <button type="button" class="mv-menu__item" role="menuitem" disabled={!initial.permissions.art || busy || pages[0]?.id === page.id} onclick={() => void reorder(-1)}><i class="ti ti-arrow-up" aria-hidden="true"></i>{t('page.previous')}</button>
        <button type="button" class="mv-menu__item" role="menuitem" disabled={!initial.permissions.art || busy || pages.at(-1)?.id === page.id} onclick={() => void reorder(1)}><i class="ti ti-arrow-down" aria-hidden="true"></i>{t('page.next')}</button>
-       <button type="button" class="mv-menu__item" role="menuitem" disabled={!writablePage||!initial.permissions.generate||jobRunning} onclick={()=>{menu='';void preparePageRun();}}><i class="ti ti-sparkles" aria-hidden="true"></i>{t('control.regenerate_page')}</button>
+       <button type="button" class="mv-menu__item" role="menuitem" disabled={!!pageArtBlock||busy||jobRunning} title={pageArtBlock?t(pageArtBlock):undefined} onclick={()=>{menu='';void preparePageRun();}}><i class="ti ti-sparkles" aria-hidden="true"></i>{t('control.regenerate_page')}</button>
+       <button type="button" class="mv-menu__item" role="menuitem" disabled={!!pageArtBlock||busy||jobRunning} title={pageArtBlock?t(pageArtBlock):undefined} onclick={()=>void openControl('sketch')}><i class="ti ti-brush" aria-hidden="true"></i>{t('control.sketch_title')}</button>
        <button type="button" class="mv-menu__item" role="menuitem" onclick={() => void openHistory()}><i class="ti ti-history" aria-hidden="true"></i>{t('history.title')}</button>
        <div class="mv-menu__sep" role="separator"></div>
        <button type="button" class="mv-menu__item" role="menuitem" disabled={!initial.permissions.lock || busy} onclick={() => void lockTarget('page')}><i class={`ti ti-${page.locked ? 'lock-open' : 'lock'}`} aria-hidden="true"></i>{page.locked ? t('unlock_page') : t('lock_page')}</button>
@@ -725,7 +735,7 @@
  </aside>
 
  {#if controlMode && page}
-  {#key `${page.id}:${controlMode}`}<ControlWorkbench kind={controlMode} {page} api={initial.api} lang={initial.lang} chapter={initial.chapter.number} characterID={new URLSearchParams(location.search).get('character')||layer?.character_id||characterLayers[0]?.character_id||''} writable={!busy&&(controlMode==='history'?(initial.permissions.art||initial.permissions.letter):initial.permissions.generate&&initial.permissions.art)&&!initial.chapter.locked&&!page.locked} {activeJob} {t} onClose={closeControl} onRestore={revert} onJob={controlJob} onDirty={(value)=>{controlDirty=value;emitDirty();}}/>{/key}
+  {#key `${page.id}:${controlMode}`}<ControlWorkbench kind={controlMode} {page} api={initial.api} lang={initial.lang} chapter={initial.chapter.number} characterID={new URLSearchParams(location.search).get('character')||layer?.character_id||characterLayers[0]?.character_id||''} characters={characters.map(c=>({id:c.id,name:c.name}))} writable={!busy&&!controlBlock} blocked={controlBlock&&controlMode!=='history'?t(controlBlock):''} notice={error} {conflict} {activeJob} {t} onClose={closeControl} onRestore={revert} onJob={controlJob} onReload={reload} onDismiss={()=>{error='';saveError=false;}} onCharacter={(id)=>{const url=new URL(location.href);url.searchParams.set('character',id);historyURL(url);}} onDirty={(value)=>{controlDirty=value;emitDirty();}}/>{/key}
  {:else}
  <section class="mv-ed__stage" aria-label={t('canvas')}>
   {#if error}
@@ -795,7 +805,7 @@
      <div class="mv-ed__property-head"><strong>{t('variations.layer')}</strong></div>
      <div class="mv-ed__reroll">{#each rerollLayers as l (l.id)}<button type="button" class="mv-ed__reroll-button" title={label(l)} disabled={busy || !initial.permissions.generate || l.locked} onclick={() => void generate('layer', l.id)}><i class="ti ti-refresh" aria-hidden="true"></i><span>{rerollName(l)}</span></button>{/each}</div>
      <p class="mv-ed__help">{drift ? t('variations.drift_hint', {number: candidates.indexOf(drift) + 1, name: driftName || t('layer.character'), score: scorePercent(drift.lock_score || 0)}) : t('variations.layer_hint')}</p>
-     {#if drift}<Button small icon="wand" disabled={!initial.permissions.generate||busy} onclick={()=>void openControl('lockfix')}>{t('control.fix_character')}</Button>{/if}
+     {#if drift}<Button small icon="wand" disabled={!initial.permissions.generate||busy} onclick={()=>void openControl('lockfix', characterLayers[0]?.character_id || '')}>{t('control.fix_character')}</Button>{/if}
     </section>
     <section class="mv-ed__property">
      <div class="mv-ed__property-head"><strong>{t('queue')}</strong><a class="mv-ed__soon-link" href="/queue">{t('queue.open')}</a></div>
@@ -934,10 +944,8 @@
      </div>
     </section>
     <section class="mv-ed__property">
-     {#if characterLayers.length}<Button small icon="lock" disabled={!initial.permissions.generate||busy} onclick={()=>void openControl('lockfix')}>{t('control.lockfix_open')}</Button>{/if}
      <div class="mv-ed__property-head"><strong>{t('pose_camera')}</strong></div>
      <PoseTool pose={panel?.pose} presets={initial.pose_presets||{}} disabled={!writableArt} {t} onChange={(value)=>editPanel(p=>p.pose=value?{...value}:undefined)}/>
-     <Button small icon="brush" disabled={!writablePage} onclick={()=>void openControl('sketch')}>{t('control.sketch_title')}</Button>
      <div class="mv-seg mv-seg--full" role="group" aria-label={t('pose_camera')}>{#each ['low', 'eye', 'high', 'bird'] as camera}<button type="button" class="mv-seg__item" aria-pressed={(cameraOption(panel?.camera) || 'eye') === camera} disabled={!writableArt} onclick={() => editPanel(p => p.camera = camera)}>{t(`camera.${camera}`)}</button>{/each}</div>
      <div class="mv-seg mv-seg--full" role="group" aria-label={t('pose_camera')}>{#each ['wide', 'medium', 'close'] as shot}<button type="button" class="mv-seg__item" aria-pressed={(shotOption(panel?.shot) || 'medium') === shot} disabled={!writableArt} onclick={() => editPanel(p => p.shot = shot)}>{t(`shot.${shot}`)}</button>{/each}</div>
     </section>
@@ -979,5 +987,5 @@
    </div>
   {/if}
  </dialog>
- <dialog bind:this={dialog} class="mv-modal mv-ed__dialog" aria-labelledby="editor-confirm-title" aria-describedby="editor-confirm-body" onclose={() => confirmAction = null}><div class="mv-modal__head"><h2 id="editor-confirm-title">{confirmTitle}</h2></div><div class="mv-modal__body"><p id="editor-confirm-body">{confirmBody}</p></div><div class="mv-modal__foot"><Button onclick={() => dialog.close()}>{t('cancel')}</Button><Button variant="danger" onclick={accept}>{confirmLabel||t('confirm')}</Button></div></dialog>
+ <dialog bind:this={dialog} class="mv-modal mv-ed__dialog" aria-labelledby="editor-confirm-title" aria-describedby="editor-confirm-body" onclose={() => confirmAction = null}><div class="mv-modal__head"><h2 id="editor-confirm-title">{confirmTitle}</h2></div><div class="mv-modal__body"><p id="editor-confirm-body">{confirmBody}</p></div><div class="mv-modal__foot"><Button onclick={() => dialog.close()}>{t('cancel')}</Button><Button variant={confirmTone} onclick={accept}>{confirmLabel||t('confirm')}</Button></div></dialog>
 </div>
