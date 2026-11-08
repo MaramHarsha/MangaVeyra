@@ -115,6 +115,7 @@ func (s *service) lockStatus(ctx context.Context, actor studio.Actor, projectID,
 	out.ReferenceFingerprint = hash
 	out.References = len(c.Refs)
 	_, out.CanScore = s.workerFor(ctx, "character.score")
+	out.ScoringWorker = out.CanScore
 	out.TrainingModel, out.CanTrain = s.workerFor(ctx, "character.train")
 	unique, err := distinctReferences(ctx, s.db, c)
 	if err != nil {
@@ -174,13 +175,24 @@ func (s *service) lockStatus(ctx context.Context, actor studio.Actor, projectID,
 		Identity    float64         `db:"identity"`
 		Outfit      sql.NullFloat64 `db:"outfit"`
 		Locked      bool            `db:"locked"`
+		Chapter     int             `db:"chapter_number"`
 	}
-	err = s.db.Select(ctx, &drift, `SELECT pg.id AS page_id,pn.id AS panel_id,l.id AS layer_id,pg.version,pg.chapter_id,pg.number AS page_number,pn.order_idx+1 AS panel_number,l.asset_id,a.identity_score AS identity,a.outfit_score AS outfit,(pg.locked OR pn.locked OR l.locked) AS locked`+query+` AND (a.identity_score<? OR a.outfit_score<?) ORDER BY pg.chapter_id,pg.number,pn.order_idx,l.id LIMIT 100`, append(args, LockThreshold, LockThreshold)...)
+	// Chapters are ordered by their number, so the first drift is the one
+	// C3's Fix opens in D12.
+	err = s.db.Select(ctx, &drift, `SELECT pg.id AS page_id,pn.id AS panel_id,l.id AS layer_id,pg.version,pg.chapter_id,(SELECT ch.number FROM chapters ch WHERE ch.id=pg.chapter_id) AS chapter_number,pg.number AS page_number,pn.order_idx+1 AS panel_number,l.asset_id,a.identity_score AS identity,a.outfit_score AS outfit,(pg.locked OR pn.locked OR l.locked) AS locked`+query+` AND (a.identity_score<? OR a.outfit_score<?) ORDER BY chapter_number,pg.chapter_id,pg.number,pn.order_idx,l.id LIMIT 100`, append(args, LockThreshold, LockThreshold)...)
 	if err != nil {
 		return out, err
 	}
 	if err := s.db.Get(ctx, &out.DriftTotal, `SELECT COUNT(*)`+query+` AND (a.identity_score<? OR a.outfit_score<?)`, append(args, LockThreshold, LockThreshold)...); err != nil {
 		return out, err
+	}
+	if len(drift) > 0 {
+		out.DriftChapterID, out.DriftChapterNumber, out.DriftChapterTotal = drift[0].ChapterID, drift[0].Chapter, out.DriftTotal
+		if chapterID == "" {
+			if err := s.db.Get(ctx, &out.DriftChapterTotal, `SELECT COUNT(*)`+query+` AND pg.chapter_id=? AND (a.identity_score<? OR a.outfit_score<?)`, append(args, drift[0].ChapterID, LockThreshold, LockThreshold)...); err != nil {
+				return out, err
+			}
+		}
 	}
 	for _, r := range drift {
 		d := DriftPanel{RepairTarget: RepairTarget{r.PageID, r.PanelID, r.LayerID, r.Version}, ChapterID: r.ChapterID, PageNumber: r.PageNumber, PanelNumber: r.PanelNumber, AssetID: r.AssetID, Identity: r.Identity, Score: r.Identity, Locked: r.Locked, URL: s.assets.URLFor(ctx, r.AssetID, 15*time.Minute)}

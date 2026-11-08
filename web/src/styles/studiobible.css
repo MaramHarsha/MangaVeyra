@@ -57,6 +57,12 @@
 .mv-bible__lock-chart { display: block; width: 100%; height: calc(var(--mv-space-6) + var(--mv-space-1)); }
 .mv-bible__lock-chart rect { fill: var(--mv-success); }
 .mv-bible__lock-chart rect.mv-bible__lock-chart-drift { fill: var(--mv-warning); }
+/* C3 handoff: the lock icon takes the card's state colour (green pass, amber
+   drift) and the drift line is amber with an underlined Fix link. */
+.mv-bible__lock-card--ready .mv-bible__lock-heading .ti { color: var(--mv-success); }
+.mv-bible__lock-card--drift .mv-bible__lock-heading .ti { color: var(--mv-warning); }
+.mv-bible__lock-card .mv-bible__lock-drift { color: var(--mv-warning); }
+.mv-bible__lock-drift a { color: inherit; text-decoration: underline; }
 .mv-bible__facts > div { display: flex; justify-content: space-between; gap: 12px; padding-block: 9px; border-bottom: 1px solid var(--mv-line); font-size: var(--mv-fs-small); }
 .mv-bible__facts dt { color: var(--mv-text-2); flex: none; }
 .mv-bible__facts dd { margin: 0; text-align: end; overflow-wrap: anywhere; }

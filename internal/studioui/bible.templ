@@ -321,7 +321,7 @@ templ BibleCharacter(v biblePage) {
 				</div>
 				<div class="mv-bible__actions">
 					@bibleSoon(i18n.T(ctx, "bible.character.export"), "package-export")
-					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Disabled: true, Tip: i18n.T(ctx, "ui.soon_hint")}) {
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Disabled: true, Tip: i18n.T(ctx, "ui.soon_hint"), Attrs: templ.Attributes{"data-tip-pos": "end"}}) {
 						{ i18n.T(ctx,"bible.character.use") }
 						@ui.SoonTag()
 					}

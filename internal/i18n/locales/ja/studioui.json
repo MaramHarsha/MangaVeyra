@@ -216,6 +216,7 @@
   "studioui.script.line": "セリフ",
   "studioui.script.sfx_text": "描き文字",
   "studioui.script.sfx_note": "メモ",
+  "studioui.dashboard.chapters.one": "{count}話",
   "studioui.dashboard.chapters.other": "{count}話",
   "studioui.status.draft": "下書き",
   "studioui.status.active": "制作中",

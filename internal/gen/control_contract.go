@@ -64,6 +64,14 @@ type LockStatus struct {
 	TrainingJobID        string       `json:"training_job_id,omitempty"`
 	TrainingProgress     float64      `json:"training_progress"`
 	Drift                []DriftPanel `json:"drift"`
+	// DriftChapter* scope C3's drift line to the chapter its Fix link opens:
+	// the lowest-numbered chapter with drift and its drifted appearances.
+	DriftChapterID     string `json:"drift_chapter_id,omitempty"`
+	DriftChapterNumber int    `json:"drift_chapter_number,omitempty"`
+	DriftChapterTotal  int    `json:"drift_chapter_total"`
+	// ScoringWorker reports an online scoring worker, whether or not this
+	// character can be assessed right now (CanScore).
+	ScoringWorker bool `json:"scoring_worker"`
 }
 type DriftPanel struct {
 	Locked bool `json:"locked"`

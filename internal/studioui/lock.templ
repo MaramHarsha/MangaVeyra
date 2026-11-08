@@ -50,7 +50,7 @@ templ BibleLockCard(v biblePage) {
 			<a href={ templ.URL("/queue?job=" + v.Lock.JobID) }>{ i18n.T(ctx,"bible.lock.open_queue") }</a>
 		}
 		if len(v.Lock.Drift)>0 {
-			<p>{ i18n.T(ctx,"bible.lock.drift","count",v.Lock.DriftTotal) } · <a href={ templ.URL(lockFixHref(v)) }>{ i18n.T(ctx,"bible.lock.fix") }</a></p>
+			<p class="mv-bible__lock-drift">{ i18n.T(ctx,"bible.lock.drift","count",v.Lock.DriftChapterTotal,"chapter",v.Lock.DriftChapterNumber) } · <a href={ templ.URL(lockFixHref(v)) }>{ i18n.T(ctx,"bible.lock.fix") }</a></p>
 		}
 		<p>{ i18n.T(ctx,"bible.lock.evidence_hint") }</p>
 		if v.CanGenerate&&v.CanArt {
@@ -68,7 +68,7 @@ templ BibleLockCard(v biblePage) {
 					}
 				</form>
 			</div>
-			if !v.Lock.CanTrain||!v.Lock.CanScore {
+			if !v.Lock.ScoringWorker {
 				<p>{ i18n.T(ctx,"bible.lock.worker_needed") }</p>
 			}
 		}
