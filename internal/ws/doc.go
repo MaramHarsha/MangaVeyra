@@ -117,16 +117,21 @@ func (h *Hub) compact(ctx context.Context, topic, watermark string, state []byte
 	})
 }
 
+// replayBatch is how many stored rows one replay query loads: the log is
+// streamed in id order, never loaded whole for each subscriber.
+const replayBatch = 16
+
 // replay sends the stored log of a page document to one subscriber, then REPLAY_DONE.
 func (h *Hub) replay(c *conn, topic string) {
 	pageID := pageIDOf(topic)
 	last := ""
-	if pageID != "" && h.db != nil {
+	for pageID != "" && h.db != nil {
 		var rows []struct {
 			ID   string `db:"id"`
 			Data []byte `db:"data"`
 		}
-		if err := h.db.Select(c.ctx, &rows, `SELECT id, data FROM page_doc_updates WHERE page_id = ? ORDER BY id`, pageID); err != nil {
+		if err := h.db.Select(c.ctx, &rows, `SELECT id, data FROM page_doc_updates WHERE page_id = ? AND id > ? ORDER BY id LIMIT ?`,
+			pageID, last, replayBatch); err != nil {
 			h.log.Error("ws: replay", "topic", topic, "err", err)
 			c.sendError(topic, "replay_failed", "could not load document")
 			return
@@ -137,6 +142,9 @@ func (h *Hub) replay(c *conn, topic string) {
 				return
 			}
 			last = r.ID
+		}
+		if len(rows) < replayBatch {
+			break
 		}
 	}
 	c.sendWait(frame{data: encodeFrame(topic, KindReplayDone, last, nil)})

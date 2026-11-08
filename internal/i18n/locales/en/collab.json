@@ -79,6 +79,7 @@
   "collab.error.changed": "The page changed since you opened it. Reload it and review it again.",
   "collab.error.forbidden": "Your role on this project cannot do that.",
   "collab.error.session": "Do this in a signed-in browser; tokens cannot.",
+  "collab.error.agent": "Review is for people. AI agents work through MCP (Agents & MCP), with your limits and approvals.",
   "collab.error.role": "Choose a role.",
   "collab.error.scope": "That limit does not fit the role.",
   "collab.error.user": "No active member has that username.",

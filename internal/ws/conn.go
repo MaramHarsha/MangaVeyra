@@ -322,6 +322,11 @@ func (c *conn) handleBinary(data []byte) {
 			c.sendError(f.topic, "not_subscribed", "subscribe first")
 			return
 		}
+		// Awareness is relayed to every subscriber: capped like presence.
+		if len(f.payload) > maxPresenceSize {
+			c.sendError(f.topic, "too_large", "awareness state too large")
+			return
+		}
 		c.hub.broadcast(f.topic, frame{data: encodeFrame(f.topic, KindAwareness, "", f.payload)}, c)
 	case KindUpdate:
 		if !c.canWrite(f.topic) {

@@ -47,6 +47,8 @@ func apiError(r *http.Request, err error) error {
 		return core.ErrNotFound()
 	case errors.Is(err, errSession):
 		return core.ErrForbidden(i18n.T(r.Context(), "collab.error.session"))
+	case errors.Is(err, errAgent):
+		return core.ErrForbidden(i18n.T(r.Context(), "collab.error.agent"))
 	case errors.Is(err, errForbidden), errors.Is(err, studio.ErrForbidden):
 		return core.ErrForbidden(i18n.T(r.Context(), "collab.error.forbidden"))
 	case errors.Is(err, errConflict), errors.Is(err, studio.ErrConflict):

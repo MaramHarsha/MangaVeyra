@@ -184,7 +184,9 @@ func TestTokensReadAndCommentWithinTheirScopes(t *testing.T) {
 		ctx := context.Background()
 		tm := newTeam(t, ta)
 		token := func(scopes []string, projects []string) *testutil.Client {
-			raw, _, err := ta.Deps.Auth.CreateToken(ctx, auth.TokenInput{UserID: tm.letterer.user.ID, Kind: auth.TokenAgent, Name: "letter-bot", Scopes: scopes, ProjectIDs: projects})
+			// A personal API token: agent tokens never reach collaboration
+			// (TestReviewAgentTokensNeverReachCollaboration).
+			raw, _, err := ta.Deps.Auth.CreateToken(ctx, auth.TokenInput{UserID: tm.letterer.user.ID, Kind: auth.TokenAPI, Name: "letter-bot", Scopes: scopes, ProjectIDs: projects})
 			if err != nil {
 				t.Fatal(err)
 			}

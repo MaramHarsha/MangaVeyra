@@ -126,17 +126,14 @@ func TestRealtimePresenceAndReviewEvents(t *testing.T) {
 		if e := stranger.await("error"); !strings.Contains(string(e.Data), "forbidden") {
 			t.Fatalf("outsider subscribe = %s", e.Data)
 		}
-		// Writing the page's document needs the right to change that page.
+		// Nobody writes the page's Yjs document (nothing reads it; see
+		// TestReviewPageDocumentsTakeNoWrites); readers still follow the page.
 		hub := ta.Deps.Hub
 		ctx := context.Background()
-		if err := hub.Allowed(ctx, identity(tm.artist), ws.DocPagePrefix+tm.page2.ID, true); err == nil {
-			t.Fatal("page-range artist may write a page outside the range")
-		}
-		if err := hub.Allowed(ctx, identity(tm.artist), ws.DocPagePrefix+tm.page1.ID, true); err != nil {
-			t.Fatalf("page-range artist write inside the range: %v", err)
-		}
-		if err := hub.Allowed(ctx, identity(tm.viewer), topic, true); err == nil {
-			t.Fatal("viewer may write the document")
+		for _, m := range []member{tm.artist, tm.viewer} {
+			if err := hub.Allowed(ctx, identity(m), topic, true); err == nil {
+				t.Fatalf("%s may write the document", m.user.Username)
+			}
 		}
 		if err := hub.Allowed(ctx, identity(tm.viewer), topic, false); err != nil {
 			t.Fatalf("viewer follow: %v", err)

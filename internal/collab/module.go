@@ -8,7 +8,6 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/core/httpx"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
-	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/pagestore"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/ws"
@@ -16,10 +15,9 @@ import (
 
 // Module is the collaboration feature module.
 type Module struct {
-	d       *core.Deps
-	studio  studio.Service
-	targets studio.TargetAuthorizer
-	pages   pagestore.Service
+	d      *core.Deps
+	studio studio.Service
+	pages  pagestore.Service
 }
 
 // New creates the module.
@@ -32,7 +30,6 @@ func (m *Module) Name() string { return "collab" }
 // presence (live cursors) and review events.
 func (m *Module) Init(context.Context) error {
 	m.studio = core.MustUse[studio.Service](m.d)
-	m.targets = core.MustUse[studio.TargetAuthorizer](m.d)
 	m.pages = core.MustUse[pagestore.Service](m.d)
 	if m.d.Hub != nil {
 		m.d.Hub.Authorize(ws.DocPagePrefix, m.authorizeDoc)
@@ -41,11 +38,19 @@ func (m *Module) Init(context.Context) error {
 }
 
 // authorizeDoc lets project readers follow doc:page:{id} (presence and
-// review events). Writing the page's Yjs document needs the right to change
-// that page (art or lettering, under the member scope).
+// review events). Agent tokens never follow it: review is for people, and
+// agents act only through /mcp.
+//
+// Nothing in the product reads a page's Yjs document (the editor saves pages
+// through the page API and uses this topic for cursors and review events
+// only), so document writes (UPDATE and SNAPSHOT frames) are refused for
+// everyone: an unread log would only let a page writer fill the database
+// and every subscriber's replay. When an editor consumes the document, this
+// is where a write needs the right to change that page (art or lettering,
+// under the member scope), together with size, rate and compaction limits.
 func (m *Module) authorizeDoc(ctx context.Context, id httpx.Identity, topic string, write bool) error {
 	pageID := strings.TrimPrefix(topic, ws.DocPagePrefix)
-	if id.User == nil || !db.ValidID(pageID) {
+	if id.User == nil || id.IsAgent() || write || !db.ValidID(pageID) {
 		return ws.ErrForbidden
 	}
 	var projectID string
@@ -59,15 +64,7 @@ func (m *Module) authorizeDoc(ctx context.Context, id httpx.Identity, topic stri
 	if id.Token != nil {
 		actor.TokenID = id.Token.ID
 	}
-	if !write {
-		return docErr(m.studio.Authorize(ctx, actor, projectID, studio.ActRead))
-	}
-	t := jobs.Scope{Kind: jobs.ScopePage, ProjectID: projectID, PageID: pageID}
-	err := m.targets.AuthorizeTarget(ctx, actor, t, studio.ActEditArt)
-	if errors.Is(err, studio.ErrForbidden) {
-		err = m.targets.AuthorizeTarget(ctx, actor, t, studio.ActLetter)
-	}
-	return docErr(err)
+	return docErr(m.studio.Authorize(ctx, actor, projectID, studio.ActRead))
 }
 
 func docErr(err error) error {

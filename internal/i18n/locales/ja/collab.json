@@ -79,6 +79,7 @@
   "collab.error.changed": "開いた後にページが変更されました。再読み込みしてからもう一度レビューしてください。",
   "collab.error.forbidden": "このプロジェクトでのあなたの役割ではできません。",
   "collab.error.session": "サインインしたブラウザーで操作してください。トークンではできません。",
+  "collab.error.agent": "レビューは人が行います。AIエージェントはMCP（エージェントとMCP）を通じて、あなたの制限と承認のもとで作業します。",
   "collab.error.role": "役割を選んでください。",
   "collab.error.scope": "その範囲はこの役割には設定できません。",
   "collab.error.user": "そのユーザー名の有効なメンバーはいません。",

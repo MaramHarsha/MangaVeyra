@@ -42,6 +42,9 @@ var (
 	errForbidden = errors.New("collab: forbidden")
 	errConflict  = errors.New("collab: conflict")
 	errSession   = errors.New("collab: needs a browser session")
+	// errAgent refuses agent tokens: review is for people, and agents act
+	// only through /mcp (the owner's switch, per-token limits, agent log).
+	errAgent = errors.New("collab: agents use MCP")
 )
 
 type fieldError struct{ field, key string }
@@ -145,6 +148,9 @@ type caller struct {
 func callerFrom(id httpx.Identity) (caller, error) {
 	if id.User == nil {
 		return caller{}, errForbidden
+	}
+	if id.IsAgent() {
+		return caller{}, errAgent
 	}
 	c := caller{user: id.User, actor: studio.Actor{UserID: id.User.ID, SiteRole: id.User.Role}}
 	if id.Token != nil {
