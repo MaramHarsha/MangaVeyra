@@ -1,0 +1,10 @@
+# Lets `docker compose up` work from the repository root (cp .env.example .env first).
+# The services live in deploy/docker-compose.yml; .env is required so the database
+# never starts with the example password by accident. Put local changes, such as
+# extra_hosts for a model server on a Linux host, in compose.override.yaml next to
+# this file: Compose merges it automatically.
+name: mangaveyra
+
+include:
+  - path: deploy/docker-compose.yml
+    env_file: .env

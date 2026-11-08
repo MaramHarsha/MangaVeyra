@@ -105,6 +105,7 @@ worker/                  Python AI worker (pyproject.toml, mangaveyra_worker/, t
 sdk/                     MIT-licensed: api/ (OpenAPI for public + World + worker APIs), mvpack/ spec + JSON schema,
                          plugin SDK stubs; LICENSE (MIT)
 deploy/                  docker-compose.yml, Dockerfile, Dockerfile.worker, systemd unit, Caddy example
+compose.yaml             includes deploy/docker-compose.yml with .env so `docker compose up` works from the root
 e2e/                     Playwright end-to-end flows against a built binary
 site/                    static project website (landing page A1), deployable to GitHub Pages
 docs/                    ARCHITECTURE.md, FEATURES.md, SCREENS.md, install/, admin/, api/, contributing docs

@@ -145,7 +145,7 @@ cd MangaVeyra
 cp .env.example .env
 # edit .env: POSTGRES_PASSWORD (letters and digits; it goes into MV_DB),
 #            MV_PUBLIC_URL and MV_WORKER_TOKEN
-docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
+docker compose up -d --build
 ```
 
 Open <http://localhost:8080>, follow first-run setup, and either keep the offline placeholder or connect OpenRouter or
@@ -155,9 +155,9 @@ Script jobs run in Go. Configured image workers receive bounded child jobs from 
 
 ```sh
 # NVIDIA GPU worker
-docker compose --env-file .env -f deploy/docker-compose.yml --profile gpu up -d --build
+docker compose --profile gpu up -d --build
 # CPU worker with the deterministic placeholder backend
-docker compose --env-file .env -f deploy/docker-compose.yml --profile worker-cpu up -d --build
+docker compose --profile worker-cpu up -d --build
 ```
 
 See [worker/README.md](worker/README.md) for `mangaveyra-worker check` and local job commands.

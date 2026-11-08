@@ -53,8 +53,7 @@
         <a class="mv-btn mv-btn--lg mv-btn--primary" href="https://github.com/MaramHarsha/MangaVeyra/blob/main/docs/install/README.md#try-the-demo-project"><i class="ti ti-player-play" aria-hidden="true"></i>Try the demo</a>
         <a class="mv-btn mv-btn--lg mv-btn--secondary" href="https://github.com/MaramHarsha/MangaVeyra/blob/main/docs/install/README.md"><i class="ti ti-terminal-2" aria-hidden="true"></i>Install on your server</a>
       </div>
-      <code class="lp-chip">$ docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
-<span class="lp-chip__note"># app + database, add a GPU worker later</span></code>
+      <code class="lp-chip">$ docker compose up <span class="lp-chip__note"># app + database, add a GPU worker later</span></code>
     </div>
 
     <figure class="lp-hero__art">
@@ -223,8 +222,7 @@
     </div>
     <pre class="lp-term" aria-label="Install with Docker Compose"><code>$ git clone https://github.com/MaramHarsha/MangaVeyra.git
 $ cd MangaVeyra &amp;&amp; cp .env.example .env
-$ docker compose --env-file .env \
-    -f deploy/docker-compose.yml up -d --build
+$ docker compose up
 <span class="lp-term__out">✓ app      :8080</span>
 <span class="lp-term__out">✓ postgres ready</span>
 <span class="lp-term__ok">→ open http://localhost:8080/setup</span></code></pre>

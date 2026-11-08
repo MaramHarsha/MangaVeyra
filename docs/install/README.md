@@ -31,7 +31,7 @@ text, so every flow completes on a fresh install.
 | Good for | A server for you or a group, optional AI workers | One machine, evaluation, development |
 | Database | PostgreSQL 18 (container) | SQLite in `./data` (PostgreSQL optional) |
 | You need | Docker with Compose v2 | Go 1.27.1 or newer, Node.js 24 LTS with npm, `make` |
-| Starts with | `docker compose … up -d --build` | `make build && ./bin/mangaveyra serve` |
+| Starts with | `docker compose up` | `make build && ./bin/mangaveyra serve` |
 
 Both run the same single Go binary with its web assets embedded. Nothing is sent anywhere unless you connect a
 remote provider: there is no telemetry.
@@ -60,16 +60,19 @@ remote provider: there is no telemetry.
 3. Build and start the app and the database:
 
    ```sh
-   docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
+   docker compose up -d --build
    ```
 
-   The first build compiles the web assets and the Go binary inside Docker and takes a few minutes. The compose
-   file names `ghcr.io/maramharsha/…` images, but none are published yet; `--build` builds them locally.
+   `compose.yaml` in the repository root includes `deploy/docker-compose.yml` and reads your `.env`; Compose
+   refuses to start without `.env`, so the database never starts with the example password. The first build
+   compiles the web assets and the Go binary inside Docker and takes a few minutes. The compose file names
+   `ghcr.io/maramharsha/…` images, but none are published yet, so Compose builds them locally; `--build` rebuilds
+   them after an update.
 
 4. Check that it is running:
 
    ```sh
-   docker compose --env-file .env -f deploy/docker-compose.yml ps
+   docker compose ps
    curl http://localhost:8080/healthz      # {"status":"ok","version":"…"}
    ```
 
@@ -77,10 +80,6 @@ remote provider: there is no telemetry.
 
 Your data lives in two Docker volumes: `mangaveyra_postgres-data` (the database) and `mangaveyra_mangaveyra-data`
 (uploaded and generated images, and `secret.key`, which encrypts saved API keys).
-
-To shorten the commands, add `COMPOSE_FILE=deploy/docker-compose.yml` to your `.env`. Compose reads it from the
-current directory, so from the repository root `docker compose up -d --build` (and every other `docker compose`
-command below without `--env-file .env -f deploy/docker-compose.yml`) then works the same way.
 
 For HTTPS on a public server, put a reverse proxy in front of port 8080: see
 [`deploy/Caddyfile.example`](../../deploy/Caddyfile.example). Set `MV_PUBLIC_URL` to the `https://` address
@@ -94,10 +93,10 @@ not available yet; the shared secret is the way to pair a worker today.
 
 ```sh
 # NVIDIA GPU (needs the NVIDIA driver and the NVIDIA Container Toolkit on the host)
-docker compose --env-file .env -f deploy/docker-compose.yml --profile gpu up -d --build
+docker compose --profile gpu up -d --build
 
 # No GPU: the deterministic placeholder backend and panel detection
-docker compose --env-file .env -f deploy/docker-compose.yml --profile worker-cpu up -d --build
+docker compose --profile worker-cpu up -d --build
 ```
 
 The worker appears under **Models & providers → Local worker** and on the **Queue** page. Generation stays scoped and
@@ -169,7 +168,7 @@ becomes the admin, and a password is generated and printed when you leave out `-
 
 ```sh
 ./bin/mangaveyra user create --username rin --email rin@example.org
-# Compose: docker compose --env-file .env -f deploy/docker-compose.yml exec app mangaveyra user create --username rin
+# Compose: docker compose exec app mangaveyra user create --username rin
 ```
 
 ## Try the demo project
@@ -178,7 +177,7 @@ After setup, create the original demo project, *Tidebreak Courier*, with labelle
 
 ```sh
 ./bin/mangaveyra seed --demo
-# Compose: docker compose --env-file .env -f deploy/docker-compose.yml exec app mangaveyra seed --demo
+# Compose: docker compose exec app mangaveyra seed --demo
 ```
 
 It belongs to the first admin (or to an existing admin or creator named with `--owner username`), creates no accounts
@@ -221,7 +220,7 @@ llama.cpp or LiteLLM. Image models run through a worker instead.
    - **Route:** the routing modes that may use it (Balanced, Best, Fastest, Free only), then **Connect provider**.
 
 With Docker Compose, `127.0.0.1` inside the app container is the container itself. On Docker Desktop use
-`http://host.docker.internal:11434/v1`. On Linux, create `compose.local-models.yml` in the repository root:
+`http://host.docker.internal:11434/v1`. On Linux, create `compose.override.yaml` in the repository root:
 
 ```yaml
 services:
@@ -230,7 +229,7 @@ services:
       - "host.docker.internal:host-gateway"
 ```
 
-and start with `-f deploy/docker-compose.yml -f compose.local-models.yml`. The model server must also listen on an
+Compose merges it automatically on the next `docker compose up -d`. The model server must also listen on an
 address the container can reach (for Ollama, `OLLAMA_HOST=0.0.0.0:11434`).
 
 A server on your own network is not proof that prompts stay local: some local servers can forward requests to cloud
@@ -288,23 +287,23 @@ tar czf mangaveyra-backup-$(date +%F).tar.gz data
 volume:
 
 ```sh
-docker compose --env-file .env -f deploy/docker-compose.yml stop app
-docker compose --env-file .env -f deploy/docker-compose.yml exec -T postgres \
+docker compose stop app
+docker compose exec -T postgres \
   pg_dump -U mangaveyra -d mangaveyra --format=custom > mangaveyra-db.dump
 docker run --rm -v mangaveyra_mangaveyra-data:/data:ro -v "$PWD":/backup alpine:3 \
   tar czf /backup/mangaveyra-data.tar.gz -C /data .
-docker compose --env-file .env -f deploy/docker-compose.yml start app
+docker compose start app
 ```
 
 To restore, stop the app and reverse both steps:
 
 ```sh
-docker compose --env-file .env -f deploy/docker-compose.yml stop app
-docker compose --env-file .env -f deploy/docker-compose.yml exec -T postgres \
+docker compose stop app
+docker compose exec -T postgres \
   pg_restore -U mangaveyra -d mangaveyra --clean --if-exists < mangaveyra-db.dump
 docker run --rm -v mangaveyra_mangaveyra-data:/data -v "$PWD":/backup:ro alpine:3 \
   tar xzf /backup/mangaveyra-data.tar.gz -C /data
-docker compose --env-file .env -f deploy/docker-compose.yml start app
+docker compose start app
 ```
 
 Copy backups to another machine. Test a restore before you rely on it.
@@ -318,8 +317,8 @@ forward, so **back up first**: the backup is your way back.
 
 ```sh
 git pull
-docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
-docker compose --env-file .env -f deploy/docker-compose.yml logs app | grep "database migrated"   # only when new migrations ran
+docker compose up -d --build
+docker compose logs app | grep "database migrated"   # only when new migrations ran
 ```
 
 **Single binary:**
@@ -349,13 +348,14 @@ mangaveyra version                   Print version information
 Every command accepts `--config <file>`; run `mangaveyra <command> -h` for its flags. When `--password` is left out,
 a password is generated and printed once; `--password -` reads it from standard input. `backup` and `mcp-stdio` are
 listed by `--help` but not available yet. With Compose, run commands inside the app container:
-`docker compose --env-file .env -f deploy/docker-compose.yml exec app mangaveyra <command>`.
+`docker compose exec app mangaveyra <command>`.
 
 ## Troubleshooting
 
 | Problem | What to do |
 |---|---|
-| `no configuration file provided: not found` | Run from the repository root with `-f deploy/docker-compose.yml`, or add `COMPOSE_FILE=deploy/docker-compose.yml` to `.env`. |
+| `no configuration file provided: not found` | Run `docker compose` from the repository root, where `compose.yaml` is. |
+| `stat …/.env: no such file or directory` | Create your settings first: `cp .env.example .env`, then set `POSTGRES_PASSWORD`. |
 | The app cannot reach PostgreSQL after you changed `POSTGRES_PASSWORD` | PostgreSQL keeps the password from its first start. Change it back, or change it inside the database. |
 | Port 8080 is in use | Compose: set `MV_PORT=8081` in `.env`. Binary: `./bin/mangaveyra serve --addr :8081`. |
 | Pages have no styling and the log says `frontend bundle missing` | Build with `make build` (it runs `make web`), not a plain `go build`. |
