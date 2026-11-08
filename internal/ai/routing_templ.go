@@ -89,7 +89,7 @@ func decisionSwitch(ctx context.Context, v routingView, d routingDecisionView) s
 	case providerKindWorker, providerKindLocalText:
 		provider = i18n.T(ctx, "aiimage.decision.local")
 	}
-	route := v.modelName(model) + " · " + provider
+	route := v.modelName(ctx, model) + " · " + provider
 	if d.Record.SwitchCode == "" {
 		return i18n.T(ctx, "aiimage.decision.switched", "route", route)
 	}
@@ -230,9 +230,9 @@ func RoutingPage(v routingView) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var8 string
-			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(v.modelName(decision.Model))
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(v.modelName(ctx, decision.Model))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/routing.templ`, Line: 124, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/routing.templ`, Line: 124, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -245,7 +245,7 @@ func RoutingPage(v routingView) templ.Component {
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(decisionProvider(ctx, decision))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/routing.templ`, Line: 124, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/routing.templ`, Line: 124, Col: 90}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 			if templ_7745c5c3_Err != nil {
@@ -409,9 +409,9 @@ func RoutingPage(v routingView) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var19 string
-			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(v.modelName(pin.Model))
+			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(v.modelName(ctx, pin.Model))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/routing.templ`, Line: 146, Col: 163}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/ai/routing.templ`, Line: 146, Col: 168}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {

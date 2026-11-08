@@ -65,14 +65,14 @@ func (v routingView) limitAmount() float64 {
 }
 
 // modelName is a catalogue model's display name (its ID when unknown).
-func (v routingView) modelName(id string) string {
+func (v routingView) modelName(ctx context.Context, id string) string {
 	for _, m := range v.Models {
 		if m.ID == id {
 			return m.Name
 		}
 	}
 	if id == PlaceholderArt {
-		return "Placeholder art"
+		return i18n.T(ctx, "aiimage.placeholder.art")
 	}
 	return id
 }
