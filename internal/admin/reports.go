@@ -72,6 +72,8 @@ type reviewView struct {
 	Error     string
 	Tab       string
 	Responder string
+	// Resolution is the outcome of a resolved report.
+	Resolution string
 }
 
 // takedownItem is one active takedown with its Restore button.
@@ -284,6 +286,7 @@ func (m *Module) review(ctx context.Context, row reportRow, disputes bool) (revi
 	}
 	rv.Reader = readerHref(t)
 	if row.Status != statusOpen {
+		rv.Resolution = i18n.T(ctx, "admin.review.resolved_"+row.Status, "resolution", row.Resolution)
 		return rv, nil
 	}
 	if row.Reason == reasonAILabel && t.Found && t.OwnerID != "" && t.SeriesID != "" {

@@ -255,7 +255,7 @@ func TestAILabelDispute(t *testing.T) {
 
 		tab := e.admin.Get("/admin/disputes")
 		wantStatus(t, "disputes", tab, http.StatusOK)
-		wantBody(t, "disputes", tab, "AI label says hand-drawn but art is generated", "Script · Human", "Lettering · AI-assisted", ">AI-label disputes 1<")
+		wantBody(t, "disputes", tab, "AI label says hand-drawn but art is generated", "Script: Human", "Lettering: AI-assisted", ">AI-label disputes 1<")
 		wantNoBody(t, "disputes", tab, "/admin/disputes/"+spam)
 		wantStatus(t, "spam is not a dispute", e.admin.Get("/admin/disputes/"+spam), http.StatusNotFound)
 

@@ -48,7 +48,7 @@
 .mv-admin__title { min-width: 0; overflow-wrap: anywhere; }
 .mv-admin__muted { min-width: 0; color: var(--mv-text-2); overflow-wrap: anywhere; }
 .mv-admin__meta { color: var(--mv-text-3); font-family: var(--mv-font-mono); font-size: .6875rem; letter-spacing: .02em; }
-.mv-admin__labels { display: flex; flex-wrap: wrap; gap: 2px 8px; margin-top: 2px; color: var(--mv-text-3); font-family: var(--mv-font-mono); font-size: .6875rem; }
+.mv-admin__labels { display: block; margin-top: 2px; color: var(--mv-text-3); font-family: var(--mv-font-mono); font-size: .6875rem; }
 /* Reason and status badges fill their column, as in the design. */
 .mv-admin__badge { display: flex; min-width: 0; }
 .mv-admin__badge .mv-badge { flex: 1 1 auto; max-width: 100%; overflow: hidden; }
@@ -129,7 +129,7 @@
 .mv-admin__roleform { display: flex; gap: 6px; align-items: center; min-width: 0; }
 .mv-admin__roleform .mv-select-wrap { flex: 1 1 auto; min-width: 0; }
 .mv-admin__menu .mv-dropdown__panel { min-width: 220px; }
-.mv-admin__dots { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; color: var(--mv-text-2); }
+.mv-admin__dots { display: inline-flex; align-items: center; justify-content: flex-start; width: 30px; height: 30px; color: var(--mv-text-2); }
 .mv-admin__dots:hover { color: var(--mv-text); }
 .mv-admin__invite {
   display: grid;

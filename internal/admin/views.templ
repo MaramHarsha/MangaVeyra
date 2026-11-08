@@ -7,6 +7,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
 	"net/url"
+	"strings"
 )
 
 // Page is the G5 frame every tab shares (design 09 "G5 – Admin & moderation –
@@ -58,11 +59,7 @@ templ ReportsTab(v reportsView) {
 				<span class="mv-admin__muted">
 					{ it.Context }
 					if len(it.Labels) > 0 {
-						<span class="mv-admin__labels">
-							for _, l := range it.Labels {
-								<span>{ l.Role } · { l.Value }</span>
-							}
-						</span>
+						<span class="mv-admin__labels">{ labelLine(ctx, it.Labels) }</span>
 					}
 				</span>
 				<span class="mv-admin__muted">{ it.Reporter }</span>
@@ -140,6 +137,9 @@ templ reviewPanel(rv reviewView) {
 				if rv.Responder != "" {
 					@ui.KV(i18n.T(ctx, "admin.review.account"), rv.Responder)
 				}
+				if rv.Resolution != "" {
+					@ui.KV(i18n.T(ctx, "admin.review.resolution"), rv.Resolution)
+				}
 				if len(rv.Item.Labels) > 0 {
 					@ui.KVC(i18n.T(ctx, "admin.review.labels")) {
 						<span class="mv-admin__badges">
@@ -189,7 +189,7 @@ templ reviewPanel(rv reviewView) {
 
 // UsersTab is "G5 – Admin · Users – Desktop": search, invite, sign-up mode,
 // the members list, then the limits and roles cards. Pending approvals and
-// invites follow the members list (ADR 0004).
+// the invites list follow the designed cards (ADR 0004).
 templ UsersTab(v usersView) {
 	if v.Error != "" {
 		@ui.Notice(ui.ToneError, "alert-triangle") {
@@ -230,6 +230,15 @@ templ UsersTab(v usersView) {
 			</div>
 		}
 	</section>
+	<div class="mv-admin__grid">
+		@limitsCard(v.Limits)
+		<div class="mv-admin__box">
+			<strong class="mv-admin__boxtitle">{ i18n.T(ctx, "admin.roles.title") }</strong>
+			@ui.KV(i18n.T(ctx, "admin.role.admin"), i18n.T(ctx, "admin.roles.admin"))
+			@ui.KV(i18n.T(ctx, "admin.role.creator"), i18n.T(ctx, "admin.roles.creator"))
+			@ui.KV(i18n.T(ctx, "admin.role.reader"), i18n.T(ctx, "admin.roles.reader"))
+		</div>
+	</div>
 	if len(v.Pending) > 0 {
 		<section class="mv-admin__box" aria-labelledby="pending-title">
 			<strong class="mv-admin__boxtitle" id="pending-title">{ i18n.T(ctx, "admin.users.pending", "count", len(v.Pending)) }</strong>
@@ -290,15 +299,6 @@ templ UsersTab(v usersView) {
 			</div>
 		}
 	</section>
-	<div class="mv-admin__grid">
-		@limitsCard(v.Limits)
-		<div class="mv-admin__box">
-			<strong class="mv-admin__boxtitle">{ i18n.T(ctx, "admin.roles.title") }</strong>
-			@ui.KV(i18n.T(ctx, "admin.role.admin"), i18n.T(ctx, "admin.roles.admin"))
-			@ui.KV(i18n.T(ctx, "admin.role.creator"), i18n.T(ctx, "admin.roles.creator"))
-			@ui.KV(i18n.T(ctx, "admin.role.reader"), i18n.T(ctx, "admin.roles.reader"))
-		</div>
-	</div>
 }
 
 templ memberLine(mbr memberItem) {
@@ -680,6 +680,15 @@ templ maintenanceDialog(v serverView) {
 }
 
 // ---- options -------------------------------------------------------------------
+
+// labelLine is the per-role AI labels on one line ("Script: Human · Art: AI").
+func labelLine(ctx context.Context, labels []labelItem) string {
+	parts := make([]string, 0, len(labels))
+	for _, l := range labels {
+		parts = append(parts, i18n.T(ctx, "admin.label.pair", "role", l.Role, "value", l.Value))
+	}
+	return strings.Join(parts, " · ")
+}
 
 func roleOptions(ctx context.Context) []ui.Option {
 	out := []ui.Option{}
