@@ -10,6 +10,7 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/backup"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
+	"github.com/MaramHarsha/MangaVeyra/internal/core/netguard"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
@@ -116,6 +117,13 @@ func (m *Module) Install(ctx context.Context, offerID, actorID string, opt Insta
 		a, ok := man.AssetFor(goos, goarch)
 		if !ok {
 			return nil, ErrNoDownload
+		}
+		if m.hooks.Client == nil {
+			// Refuse a download address the SSRF guard would block before taking a backup.
+			policy := netguard.Policy{AllowPrivate: m.d.Cfg.AllowPrivateProviderURLs, AllowHTTP: true}
+			if _, err := policy.CheckURL(ctx, a.URL, nil); err != nil {
+				return nil, fmt.Errorf("the download address is not allowed: %w", err)
+			}
 		}
 		plan.asset = a
 	}

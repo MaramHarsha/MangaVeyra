@@ -73,6 +73,7 @@ type releaseServer struct {
 	mu       sync.Mutex
 	files    map[string][]byte
 	truncate bool
+	tamper   bool
 	hits     atomic.Int64
 }
 
@@ -83,6 +84,10 @@ func newReleaseServer(t *testing.T) *releaseServer {
 		rs.mu.Lock()
 		b, ok := rs.files[r.URL.Path]
 		trunc := rs.truncate && strings.HasPrefix(r.URL.Path, "/assets/")
+		if rs.tamper && strings.HasPrefix(r.URL.Path, "/assets/") {
+			b = append([]byte{}, b...)
+			b[len(b)/2] ^= 0xff
+		}
 		rs.mu.Unlock()
 		if !ok {
 			http.NotFound(w, r)
