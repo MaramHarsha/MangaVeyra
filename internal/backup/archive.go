@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/importer"
 	"github.com/MaramHarsha/MangaVeyra/internal/storage"
 )
 
@@ -26,6 +27,12 @@ const (
 	// Extension is the archive file extension.
 	Extension = ".mvbackup"
 )
+
+// archiveLimits bound an archive's table of contents before it is parsed. The
+// manifest (at most maxManifestBytes) lists every entry with its SHA-256, so a
+// genuine archive cannot hold more than about 320,000 entries, and its central
+// directory is smaller than the manifest.
+var archiveLimits = importer.ZipLimits{MaxEntries: 400_000, MaxDirectoryBytes: maxManifestBytes * 3 / 2}
 
 // Manifest describes an archive. Every other entry is listed with its
 // SHA-256 so a damaged or edited archive is refused before anything changes.
@@ -134,7 +141,8 @@ func (w *archiveWriter) finish(m *Manifest) error {
 // archiveReader opens an archive and checks its structure. Entry contents are
 // verified as they are read.
 type archiveReader struct {
-	zr    *zip.ReadCloser
+	zr    *zip.Reader
+	f     io.Closer
 	files map[string]*zip.File
 	M     Manifest
 }
@@ -144,13 +152,16 @@ func incompatible(format string, a ...any) error {
 }
 
 func openArchive(path string) (*archiveReader, error) {
-	zr, err := zip.OpenReader(path)
-	if err != nil {
+	zr, f, err := importer.OpenZip(path, archiveLimits)
+	switch {
+	case errors.Is(err, importer.ErrZipTooManyEntries), errors.Is(err, importer.ErrZipDirectoryTooLarge):
+		return nil, incompatible("too many entries for a MangaVeyra backup (%v)", err)
+	case err != nil:
 		return nil, incompatible("not a MangaVeyra backup (%v)", err)
 	}
-	a := &archiveReader{zr: zr, files: map[string]*zip.File{}}
+	a := &archiveReader{zr: zr, f: f, files: map[string]*zip.File{}}
 	fail := func(err error) (*archiveReader, error) {
-		_ = zr.Close()
+		_ = f.Close()
 		return nil, err
 	}
 	for _, f := range zr.File {
@@ -223,7 +234,7 @@ func openArchive(path string) (*archiveReader, error) {
 	return a, nil
 }
 
-func (a *archiveReader) Close() error { return a.zr.Close() }
+func (a *archiveReader) Close() error { return a.f.Close() }
 
 // mediaKeys lists the media entries' storage keys.
 func (a *archiveReader) mediaKeys() []string {

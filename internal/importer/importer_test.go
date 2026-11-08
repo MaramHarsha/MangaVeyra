@@ -18,6 +18,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -134,6 +135,93 @@ func lyingZip(t testing.TB, n int) []byte {
 	_, _ = w.Write(comp.Bytes())
 	_ = zw.Close()
 	return buf.Bytes()
+}
+
+// directoryOnlyZip is a zip made of nothing but central directory headers
+// (stored, empty entries) and an end record that declares records entries
+// and a directory of dirSize bytes; zip64 writes the declaration into a zip64
+// end record instead.
+func directoryOnlyZip(actual int, records, dirSize uint64, zip64 bool) []byte {
+	var buf bytes.Buffer
+	le := binary.LittleEndian
+	for i := 0; i < actual; i++ {
+		h := make([]byte, 46)
+		le.PutUint32(h, 0x02014b50)
+		le.PutUint16(h[4:], 20)
+		le.PutUint16(h[6:], 20)
+		le.PutUint16(h[28:], 5) // name length
+		buf.Write(h)
+		buf.WriteString("p.png")
+	}
+	cdEnd := uint64(buf.Len())
+	if dirSize == 0 {
+		dirSize = cdEnd
+	}
+	if zip64 {
+		end := make([]byte, 56)
+		le.PutUint32(end, 0x06064b50)
+		le.PutUint64(end[4:], 44)
+		le.PutUint16(end[12:], 45)
+		le.PutUint16(end[14:], 45)
+		le.PutUint64(end[24:], records)
+		le.PutUint64(end[32:], records)
+		le.PutUint64(end[40:], dirSize)
+		le.PutUint64(end[48:], 0)
+		buf.Write(end)
+		loc := make([]byte, 20)
+		le.PutUint32(loc, 0x07064b50)
+		le.PutUint64(loc[8:], cdEnd)
+		le.PutUint32(loc[16:], 1)
+		buf.Write(loc)
+	}
+	eocd := make([]byte, 22)
+	le.PutUint32(eocd, 0x06054b50)
+	r16, size32 := uint16(records), uint32(dirSize)
+	if zip64 {
+		r16, size32 = 0xffff, 0xffffffff
+	}
+	le.PutUint16(eocd[8:], r16)
+	le.PutUint16(eocd[10:], r16)
+	le.PutUint32(eocd[12:], size32)
+	le.PutUint32(eocd[16:], 0)
+	buf.Write(eocd)
+	return buf.Bytes()
+}
+
+// A zip whose table of contents alone would cost gigabytes of memory is
+// refused from its end record, and one that holds more headers than it
+// declares is read only up to the directory limit.
+func TestCraftedCentralDirectoriesAreRefusedCheaply(t *testing.T) {
+	ctx := context.Background()
+	lim := testLimits()
+	for _, c := range []struct {
+		name string
+		data []byte
+	}{
+		{"declares millions of entries", directoryOnlyZip(1, 50_000_000, 0, true)},
+		{"declares a huge directory", directoryOnlyZip(1, 1, 2<<30, true)},
+		{"declares too many entries", directoryOnlyZip(1, 65_000, 0, false)},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, _, code, err := importer.Extract(ctx, importer.KindCBZ, writeFile(t, c.data), t.TempDir(), lim)
+			if err == nil || code != importer.CodeTooManyEntries {
+				t.Fatalf("code %q (%v), want %q", code, err, importer.CodeTooManyEntries)
+			}
+		})
+	}
+	// 131073 headers declared as 1 (the count is compared modulo 65536).
+	src := writeFile(t, directoryOnlyZip(131_073, 1, 46+5, false))
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, _, code, err := importer.Extract(ctx, importer.KindCBZ, src, t.TempDir(), lim)
+	runtime.ReadMemStats(&after)
+	if err == nil || code != importer.CodeTooManyEntries {
+		t.Fatalf("stuffed directory: code %q (%v)", code, err)
+	}
+	if grew := after.TotalAlloc - before.TotalAlloc; grew > 8<<20 {
+		t.Fatalf("opening the stuffed directory allocated %d MB", grew>>20)
+	}
 }
 
 func writeFile(t testing.TB, data []byte) string {

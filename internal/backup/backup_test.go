@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -432,6 +433,82 @@ func rewrite(t *testing.T, src, dst string, drop []string, edit map[string][]byt
 		t.Fatal(err)
 	}
 	_ = out.Close()
+}
+
+// directoryOnlyZip is a zip made of n empty central directory headers whose
+// end record declares records entries (zip64 when records ≥ 0xffff).
+func directoryOnlyZip(n int, records uint64) []byte {
+	var buf bytes.Buffer
+	put32 := func(b []byte, v uint32) { b[0], b[1], b[2], b[3] = byte(v), byte(v>>8), byte(v>>16), byte(v>>24) }
+	put16 := func(b []byte, v uint16) { b[0], b[1] = byte(v), byte(v>>8) }
+	put64 := func(b []byte, v uint64) { put32(b, uint32(v)); put32(b[4:], uint32(v>>32)) }
+	for i := 0; i < n; i++ {
+		h := make([]byte, 46)
+		put32(h, 0x02014b50)
+		put16(h[28:], 9)
+		buf.Write(h)
+		buf.WriteString("db/x.json")
+	}
+	size := uint64(buf.Len())
+	zip64 := records >= 0xffff
+	if zip64 {
+		end := make([]byte, 56)
+		put32(end, 0x06064b50)
+		put64(end[4:], 44)
+		put64(end[24:], records)
+		put64(end[32:], records)
+		put64(end[40:], size)
+		buf.Write(end)
+		loc := make([]byte, 20)
+		put32(loc, 0x07064b50)
+		put64(loc[8:], size)
+		put32(loc[16:], 1)
+		buf.Write(loc)
+	}
+	eocd := make([]byte, 22)
+	put32(eocd, 0x06054b50)
+	put16(eocd[8:], uint16(records))
+	put16(eocd[10:], uint16(records))
+	put32(eocd[12:], uint32(size))
+	if zip64 {
+		put16(eocd[8:], 0xffff)
+		put16(eocd[10:], 0xffff)
+		put32(eocd[12:], 0xffffffff)
+	}
+	buf.Write(eocd)
+	return buf.Bytes()
+}
+
+// An uploaded archive is opened only after its end record shows a table of
+// contents within the archive limits, and no larger directory is ever read.
+func TestArchivesWithHugeDirectoriesAreRefusedCheaply(t *testing.T) {
+	ta := testutil.NewTestApp(t)
+	ctx := context.Background()
+	s := svcOf(t, ta)
+	dir := t.TempDir()
+	declared := filepath.Join(dir, "declared.mvbackup")
+	if err := os.WriteFile(declared, directoryOnlyZip(1, 80_000_000), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Register(ctx, declared, "", false); !errors.Is(err, backup.ErrIncompatible) || !strings.Contains(err.Error(), "too many entries") {
+		t.Fatalf("archive declaring 80 million entries: %v", err)
+	}
+	defer backup.SetArchiveLimits(1000, 64<<10)()
+	stuffed := filepath.Join(dir, "stuffed.mvbackup")
+	if err := os.WriteFile(stuffed, directoryOnlyZip(65_537, 1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, err := s.Register(ctx, stuffed, "", false)
+	runtime.ReadMemStats(&after)
+	if !errors.Is(err, backup.ErrIncompatible) || !strings.Contains(err.Error(), "too many entries") {
+		t.Fatalf("stuffed directory: %v", err)
+	}
+	if grew := after.TotalAlloc - before.TotalAlloc; grew > 8<<20 {
+		t.Fatalf("opening the stuffed directory allocated %d MB", grew>>20)
+	}
 }
 
 func TestDamagedAndNewerArchivesAreRefused(t *testing.T) {

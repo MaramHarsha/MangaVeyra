@@ -207,14 +207,14 @@ func readEntry(r io.Reader, name string, lim Limits) ([]byte, error) {
 
 // extractZip reads a CBZ or zip (also the zip an image upload is stored as).
 func extractZip(ctx context.Context, src, dir string, lim Limits) (*extraction, error) {
-	zr, err := zip.OpenReader(src)
-	if err != nil {
+	zr, closer, err := OpenZip(src, lim.zipLimits())
+	switch {
+	case errors.Is(err, ErrZipTooManyEntries), errors.Is(err, ErrZipDirectoryTooLarge):
+		return nil, refuse(CodeTooManyEntries, "%v (at most %d entries)", err, lim.MaxEntries)
+	case err != nil:
 		return nil, refuse(CodeDamaged, "not a zip archive (%v)", err)
 	}
-	defer zr.Close()
-	if len(zr.File) > lim.MaxEntries {
-		return nil, refuse(CodeTooManyEntries, "%d entries (at most %d)", len(zr.File), lim.MaxEntries)
-	}
+	defer closer.Close()
 	type entry struct {
 		name string
 		f    *zip.File

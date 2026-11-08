@@ -30,6 +30,14 @@ func (s *service) RestoreArchive(ctx context.Context, id, actor string) (*Restor
 func (s *service) Destination(ctx context.Context) (string, error) { return s.destination(ctx) }
 func (s *service) Announce(ctx context.Context)                    { s.announce(ctx, presencePre+"test") }
 
+// SetArchiveLimits lowers the archive table-of-contents limits until the
+// returned function restores them.
+func SetArchiveLimits(entries int, directoryBytes int64) func() {
+	old := archiveLimits
+	archiveLimits.MaxEntries, archiveLimits.MaxDirectoryBytes = entries, directoryBytes
+	return func() { archiveLimits = old }
+}
+
 // ReadManifest opens an archive and returns its manifest.
 func ReadManifest(path string) (Manifest, error) {
 	a, err := openArchive(path)
