@@ -220,10 +220,10 @@ func TestViewerResolution(t *testing.T) {
 		ctx := context.Background()
 		svc := f.Service()
 		f.SetMode(settings.ModePublic)
-		public := f.Series(publishtest.SeriesSpec{})
-		members := f.Series(publishtest.SeriesSpec{Visibility: publish.VisibilityMembers})
-		mature := f.Series(publishtest.SeriesSpec{AgeRating: publish.RatingAdult})
-		private := f.Series(publishtest.SeriesSpec{Visibility: publish.VisibilityPrivate})
+		public := f.ReadableSeries(publishtest.SeriesSpec{})
+		members := f.ReadableSeries(publishtest.SeriesSpec{Visibility: publish.VisibilityMembers})
+		mature := f.ReadableSeries(publishtest.SeriesSpec{AgeRating: publish.RatingAdult})
+		private := f.ReadableSeries(publishtest.SeriesSpec{Visibility: publish.VisibilityPrivate})
 
 		suspended := f.User(auth.RoleReader)
 		if err := ta.Deps.Auth.SetStatus(ctx, suspended.ID, auth.StatusSuspended, "test"); err != nil {
@@ -387,4 +387,83 @@ func TestUnlistedChaptersAreNotListed(t *testing.T) {
 			}
 		}
 	})
+}
+
+// A series is visible to a reader only while the reader can read one of its
+// chapters; project members always see their own series (preview). A series
+// whose only readable chapters are unlisted opens by link but is not listed.
+func TestSeriesNeedsAReadableChapter(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, f *publishtest.Fixture) {
+		ctx := context.Background()
+		svc := f.Service()
+		f.SetMode(settings.ModePublic)
+		owner := f.User(auth.RoleCreator)
+		empty := f.Series(publishtest.SeriesSpec{Owner: owner})
+		membersOnly := f.Series(publishtest.SeriesSpec{Owner: owner})
+		f.Publish(membersOnly, publishtest.PublicationSpec{Visibility: publish.VisibilityMembers})
+		unlistedOnly := f.Series(publishtest.SeriesSpec{Owner: owner})
+		f.Publish(unlistedOnly, publishtest.PublicationSpec{Visibility: publish.VisibilityUnlisted})
+		notYet := f.Series(publishtest.SeriesSpec{Owner: owner})
+		f.Publish(notYet, publishtest.PublicationSpec{Status: publish.PublicationScheduled})
+		f.Publish(notYet, publishtest.PublicationSpec{Status: publish.PublicationUnpublished})
+		f.Publish(notYet, publishtest.PublicationSpec{PublishedAt: publishtest.In(time.Hour)})
+		privateOnly := f.Series(publishtest.SeriesSpec{Owner: owner})
+		f.Publish(privateOnly, publishtest.PublicationSpec{Visibility: publish.VisibilityPrivate})
+		readable := f.Series(publishtest.SeriesSpec{Owner: owner})
+		f.Publish(readable, publishtest.PublicationSpec{Visibility: publish.VisibilityPrivate})
+		f.Publish(readable, publishtest.PublicationSpec{})
+		all := []publishtest.Series{empty, membersOnly, unlistedOnly, notYet, privateOnly, readable}
+		reader := f.User(auth.RoleReader)
+
+		type want struct{ get, list, listed []publishtest.Series }
+		for name, tc := range map[string]struct {
+			v publish.Viewer
+			want
+		}{
+			"anonymous": {publish.Viewer{}, want{get: []publishtest.Series{unlistedOnly, readable},
+				list: []publishtest.Series{unlistedOnly, readable}, listed: []publishtest.Series{readable}}},
+			"member": {publishtest.Viewer(reader), want{get: []publishtest.Series{membersOnly, unlistedOnly, readable},
+				list: []publishtest.Series{membersOnly, unlistedOnly, readable}, listed: []publishtest.Series{membersOnly, readable}}},
+			"admin": {publishtest.Viewer(ta.Admin), want{get: []publishtest.Series{membersOnly, unlistedOnly, readable},
+				list: []publishtest.Series{membersOnly, unlistedOnly, readable}, listed: []publishtest.Series{membersOnly, readable}}},
+			"owner": {publishtest.Viewer(owner), want{get: all, list: all, listed: all}},
+		} {
+			ids := func(list []publishtest.Series) []string {
+				out := []string{}
+				for _, s := range list {
+					out = append(out, s.ID)
+				}
+				slices.Sort(out)
+				return out
+			}
+			var got []publishtest.Series
+			for _, s := range all {
+				if _, err := svc.SeriesByID(ctx, tc.v, s.ID); err == nil {
+					got = append(got, s)
+				} else if !errors.Is(err, publish.ErrNotFound) {
+					t.Fatalf("%s: SeriesByID: %v", name, err)
+				}
+				if _, err := svc.SeriesBySlug(ctx, tc.v, s.Slug); (err == nil) != slices.Contains(tc.get, s) {
+					t.Errorf("%s: SeriesBySlug(%s) err = %v", name, s.Title, err)
+				}
+			}
+			if !slices.Equal(ids(got), ids(tc.get)) {
+				t.Errorf("%s: SeriesByID readable = %v, want %v", name, ids(got), ids(tc.get))
+			}
+			filter := publish.SeriesFilter{OwnerID: owner.ID}
+			if list := listAll(t, svc, tc.v, filter); !slices.Equal(sorted(list), ids(tc.list)) {
+				t.Errorf("%s: ListSeries = %v, want %v", name, sorted(list), ids(tc.list))
+			}
+			filter.Listed = true
+			if list := listAll(t, svc, tc.v, filter); !slices.Equal(sorted(list), ids(tc.listed)) {
+				t.Errorf("%s: ListSeries(Listed) = %v, want %v", name, sorted(list), ids(tc.listed))
+			}
+		}
+	})
+}
+
+func sorted(ids []string) []string {
+	out := append([]string{}, ids...)
+	slices.Sort(out)
+	return out
 }

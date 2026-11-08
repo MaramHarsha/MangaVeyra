@@ -23,7 +23,7 @@ func TestSeriesFieldsDecode(t *testing.T) {
 		f.SetMode(settings.ModePublic)
 		links := []publish.SupportLink{{Label: "Studio site", URL: "https://example.org/tidebreak"}}
 		label := map[string]string{"script": "human", "art": "ai_assisted", "lettering": "ai"}
-		s := f.Series(publishtest.SeriesSpec{Title: "Paper Crows", Synopsis: "Messenger crows carry secrets.",
+		s := f.ReadableSeries(publishtest.SeriesSpec{Title: "Paper Crows", Synopsis: "Messenger crows carry secrets.",
 			Genres: []string{"fantasy", "mystery"}, Tags: []string{"crows"}, Format: "webtoon", AgeRating: publish.RatingTeen,
 			Licence: "cc-by", AILabel: label, SupportLinks: links, OriginalLang: "ja", Languages: []string{"ja", "en"},
 			Cover: true, FollowerCount: 12, ViewCount: 3400, Schedule: "Weekly, Saturday", OwnerCredit: "J. Okafor"})

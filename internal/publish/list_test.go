@@ -29,7 +29,7 @@ func TestListSeriesOrderAndPaging(t *testing.T) {
 		var want []entry
 		for i := range 7 {
 			at := base.Add(-time.Duration(i*7%5) * time.Minute).Add(-time.Duration(i) * time.Second)
-			s := f.Series(publishtest.SeriesSpec{PublishedAt: &at})
+			s := f.ReadableSeries(publishtest.SeriesSpec{PublishedAt: &at})
 			want = append(want, entry{s.ID, at})
 		}
 		// Series published in the same microsecond are ordered by id, whatever
@@ -37,7 +37,7 @@ func TestListSeriesOrderAndPaging(t *testing.T) {
 		tie := base.Add(-2 * time.Minute)
 		ids := []string{db.NewID(), db.NewID(), db.NewID(), db.NewID()}
 		for _, i := range []int{2, 0, 3, 1} {
-			s := f.Series(publishtest.SeriesSpec{ID: ids[i], PublishedAt: &tie})
+			s := f.ReadableSeries(publishtest.SeriesSpec{ID: ids[i], PublishedAt: &tie})
 			want = append(want, entry{s.ID, tie})
 		}
 		sort.Slice(want, func(i, j int) bool {
@@ -50,14 +50,16 @@ func TestListSeriesOrderAndPaging(t *testing.T) {
 		for _, e := range want {
 			wantIDs = append(wantIDs, e.id)
 		}
-		// Not listed for anonymous visitors.
+		// Not listed for anonymous visitors (each has a public chapter, so only its own rule hides it).
 		for _, spec := range []publishtest.SeriesSpec{
 			{Visibility: publish.VisibilityUnlisted}, {Visibility: publish.VisibilityMembers},
 			{Visibility: publish.VisibilityPrivate}, {AgeRating: publish.RatingMature},
 			{Status: publish.SeriesDraft}, {NeverPublished: true}, {PublishedAt: publishtest.In(time.Minute)},
 		} {
-			f.Series(spec)
+			f.ReadableSeries(spec)
 		}
+		// Nor is a series without a chapter readers may read.
+		f.Series(publishtest.SeriesSpec{})
 
 		for _, limit := range []int{1, 3, 4, 10, 50} {
 			got := listAll(t, svc, publish.Viewer{}, publish.SeriesFilter{Listed: true, Limit: limit})
@@ -71,7 +73,7 @@ func TestListSeriesOrderAndPaging(t *testing.T) {
 			t.Fatalf("first page = %d, next %q", len(list), next)
 		}
 		// The cursor is stable while new series are published ahead of it.
-		f.Series(publishtest.SeriesSpec{})
+		f.ReadableSeries(publishtest.SeriesSpec{})
 		rest := listAll(t, svc, publish.Viewer{}, publish.SeriesFilter{Listed: true, Limit: 4, Cursor: next})
 		if !slices.Equal(rest, wantIDs[4:]) {
 			t.Fatalf("after cursor = %v, want %v", rest, wantIDs[4:])
@@ -92,13 +94,13 @@ func TestListSeriesFiltersAndBounds(t *testing.T) {
 		reader := f.User(auth.RoleReader)
 		rv := publishtest.Viewer(reader)
 
-		scifi := f.Series(publishtest.SeriesSpec{Owner: owner, Genres: []string{"sci-fi", "mystery"}})
-		sci := f.Series(publishtest.SeriesSpec{Owner: owner, Genres: []string{"sci"}})
-		romance := f.Series(publishtest.SeriesSpec{Genres: []string{"romance"}})
-		weird := f.Series(publishtest.SeriesSpec{Genres: []string{`50%_off\"x`}})
-		unlisted := f.Series(publishtest.SeriesSpec{Owner: owner, Visibility: publish.VisibilityUnlisted, Genres: []string{"sci"}})
-		members := f.Series(publishtest.SeriesSpec{Owner: owner, Visibility: publish.VisibilityMembers})
-		private := f.Series(publishtest.SeriesSpec{Owner: owner, Visibility: publish.VisibilityPrivate})
+		scifi := f.ReadableSeries(publishtest.SeriesSpec{Owner: owner, Genres: []string{"sci-fi", "mystery"}})
+		sci := f.ReadableSeries(publishtest.SeriesSpec{Owner: owner, Genres: []string{"sci"}})
+		romance := f.ReadableSeries(publishtest.SeriesSpec{Genres: []string{"romance"}})
+		weird := f.ReadableSeries(publishtest.SeriesSpec{Genres: []string{`50%_off\"x`}})
+		unlisted := f.ReadableSeries(publishtest.SeriesSpec{Owner: owner, Visibility: publish.VisibilityUnlisted, Genres: []string{"sci"}})
+		members := f.ReadableSeries(publishtest.SeriesSpec{Owner: owner, Visibility: publish.VisibilityMembers})
+		private := f.ReadableSeries(publishtest.SeriesSpec{Owner: owner, Visibility: publish.VisibilityPrivate})
 
 		set := func(ids []string) []string { s := slices.Clone(ids); slices.Sort(s); return s }
 		check := func(name string, v publish.Viewer, filter publish.SeriesFilter, want ...publishtest.Series) {
@@ -151,7 +153,7 @@ func TestListSeriesFiltersAndBounds(t *testing.T) {
 
 		// Limit bounds: 0 and negative take the default, large values are capped.
 		for range publish.DefaultListLimit + 3 {
-			f.Series(publishtest.SeriesSpec{})
+			f.ReadableSeries(publishtest.SeriesSpec{})
 		}
 		for _, limit := range []int{0, -5} {
 			list, next, err := svc.ListSeries(ctx, publish.Viewer{}, publish.SeriesFilter{Limit: limit})
@@ -174,7 +176,7 @@ func TestListSeriesCapsLimit(t *testing.T) {
 	f.SetMode(settings.ModePublic)
 	owner := f.User(auth.RoleCreator)
 	for range publish.MaxListLimit + 1 {
-		f.Series(publishtest.SeriesSpec{Owner: owner})
+		f.ReadableSeries(publishtest.SeriesSpec{Owner: owner})
 	}
 	list, next, err := f.Service().ListSeries(context.Background(), publish.Viewer{}, publish.SeriesFilter{Limit: 10_000})
 	mustOK(t, "ListSeries", err)

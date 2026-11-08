@@ -9,6 +9,11 @@
 // panels. Projects and chapters are created through studio.Service. Every
 // helper works on SQLite and PostgreSQL.
 //
+// A series is visible to readers outside its project only while they can
+// read at least one of its chapters (ADR 0012 §1): a series made with Series
+// alone is seen by its project members only. Publish a chapter, or use
+// ReadableSeries, before reading it as anyone else.
+//
 //	ta := testutil.NewTestApp(t, testutil.WithDialect(dialect))
 //	f := publishtest.New(t, ta)
 //	f.SetMode(settings.ModePublic)
@@ -228,6 +233,17 @@ func (f *Fixture) Series(spec SeriesSpec) Series {
 		}
 	}
 	return out
+}
+
+// ReadableSeries creates a series (as Series) with one public, published
+// one-page chapter in its original language, so readers the series' own rules
+// allow can see it. Further chapters published with Publish are numbered
+// from 2.
+func (f *Fixture) ReadableSeries(spec SeriesSpec) Series {
+	f.t.Helper()
+	s := f.Series(spec)
+	f.Publish(s, PublicationSpec{Pages: 1})
+	return s
 }
 
 // PublicationSpec describes one chapter publication. Zero fields take the documented defaults.

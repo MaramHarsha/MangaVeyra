@@ -305,16 +305,18 @@ func publishJobError(ctx context.Context, err error) error {
 	}
 }
 
-// refreshSeriesTx recomputes what a series aggregates from its live chapters:
-// the per-role AI label (the most AI any live chapter declares), the
-// published languages, the first publish time and draft → ongoing.
+// refreshSeriesTx recomputes what a series aggregates from its live chapters
+// that are not private previews: the per-role AI label (the most AI any such
+// chapter declares), the published languages, the first publish time and
+// draft → ongoing. A private chapter, seen only by the project, never
+// publishes the series or changes what readers are told about it.
 func (s *service) refreshSeriesTx(ctx context.Context, tx *db.Tx, seriesID string) error {
 	var rows []struct {
 		Lang    string `db:"lang"`
 		AILabel string `db:"ai_label"`
 	}
-	if err := tx.Select(ctx, &rows, `SELECT lang, ai_label FROM chapter_publications WHERE series_id = ? AND status = ?`,
-		seriesID, PublicationPublished); err != nil {
+	if err := tx.Select(ctx, &rows, `SELECT lang, ai_label FROM chapter_publications WHERE series_id = ? AND status = ?
+		AND visibility <> ?`, seriesID, PublicationPublished, VisibilityPrivate); err != nil {
 		return err
 	}
 	var cur struct {

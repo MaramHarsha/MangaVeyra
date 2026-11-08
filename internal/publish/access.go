@@ -27,9 +27,12 @@ import (
 //	members           | no                      | no                            | yes              | yes
 //	private           | no                      | no                            | no               | yes
 //
-// A series is readable once published: status is not draft and published_at
-// has passed. Project members may preview their own series in any state by ID
-// or slug; lists only ever contain published series. A chapter publication is
+// A series is readable once published (status is not draft and published_at
+// has passed) and only while the viewer may read at least one of its
+// chapters, so a private preview chapter never makes a series visible and
+// unpublishing every chapter hides it again. Project members may preview their
+// own series in any state by ID or slug; lists only ever contain published
+// series (for project members, also without a readable chapter). A chapter publication is
 // readable when its series is, its status is published, its published_at has
 // passed and its own visibility passes the same table (so the effective
 // visibility is the stricter of the two). Listed lists exclude unlisted and
@@ -166,13 +169,28 @@ func (a access) seriesPublished() clause {
 		args: []any{SeriesDraft, a.now}}
 }
 
-// seriesListed is the predicate for lists: published series the viewer may read.
+// hasChapter is true when the viewer may read at least one chapter of the
+// series (alias s). It is one correlated EXISTS over the same predicate as
+// single chapters (its own alias p), so lists stay one query. listed also
+// drops chapters that are only reachable by link (unlisted).
+func (a access) hasChapter(listed bool) clause {
+	pub := a.publicationReadable()
+	if listed {
+		pub = a.publicationListed()
+	}
+	return clause{sql: "EXISTS (SELECT 1 FROM chapter_publications p WHERE p.series_id = s.id AND " + pub.sql + ")", args: pub.args}
+}
+
+// seriesListed is the predicate for lists: published series the viewer may
+// read with at least one chapter the viewer may read. Project members also
+// see their own published series without one (preview).
 func (a access) seriesListed(listed bool) clause {
-	return and(a.seriesPublished(), a.visibility("s.visibility", listed), a.rating())
+	return and(a.seriesPublished(), a.visibility("s.visibility", listed), a.rating(), or(a.member(), a.hasChapter(listed)))
 }
 
 // seriesReadable is the predicate for one series (alias s): a published series
-// the viewer may read, or any series of a project the viewer belongs to.
+// with a chapter the viewer may read, or any series of a project the viewer
+// belongs to.
 func (a access) seriesReadable() clause {
 	return or(a.member(), a.seriesListed(false))
 }

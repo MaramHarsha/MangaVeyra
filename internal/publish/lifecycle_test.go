@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -136,7 +137,11 @@ func TestUpdateAndUnpublishThroughTheReadSide(t *testing.T) {
 		if svc.CanRead(ctx, publish.Viewer{UserID: f.owner.ID}, publish.Series{ID: sid}, publish.Publication{ID: pub.ID}) {
 			t.Fatal("owner can read an unpublished chapter through the read side")
 		}
-		if s, err := svc.SeriesByID(ctx, publish.Viewer{}, sid); err != nil || len(s.AILabel) != 0 {
+		// With no readable chapter left, readers no longer see the series; the owner keeps the preview.
+		if _, err := svc.SeriesByID(ctx, publish.Viewer{}, sid); !errors.Is(err, publish.ErrNotFound) {
+			t.Fatalf("series readable after its only chapter was unpublished: %v", err)
+		}
+		if s, err := svc.SeriesByID(ctx, publish.Viewer{UserID: f.owner.ID}, sid); err != nil || len(s.AILabel) != 0 {
 			t.Fatalf("series after unpublish = %+v %v", s, err)
 		}
 		if got := postForm(f.client, f.base+"/publish/unpublish", f.publishForm("en")).StatusCode; got != http.StatusNotFound {
@@ -289,6 +294,77 @@ func seriesForm(slug string, extra ...string) url.Values {
 }
 
 func contains(b []byte, s string) bool { return strings.Contains(string(b), s) }
+
+// A series appears to readers only while they can read one of its chapters:
+// a private preview chapter does not publish the series, unpublishing every
+// chapter hides it again, and the series' languages and AI label come from
+// the chapters that are not private.
+func TestSeriesVisibleOnlyWithAReadableChapter(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, pf *publishtest.Fixture) {
+		ctx := context.Background()
+		pf.SetMode(settings.ModePublic)
+		svc := pf.Service()
+		f := newChapter(t, ta, false)
+		reader := publish.Viewer{UserID: ta.CreateUser(t, "", auth.RoleReader).ID}
+		owner := publish.Viewer{UserID: f.owner.ID}
+		visible := func(what string, v publish.Viewer, sid string, want bool) {
+			t.Helper()
+			_, err := svc.SeriesByID(ctx, v, sid)
+			if (err == nil) != want || (err != nil && !errors.Is(err, publish.ErrNotFound)) {
+				t.Fatalf("%s: SeriesByID err = %v, want visible=%v", what, err, want)
+			}
+			slug := "tidebreak-courier"
+			if _, err := svc.SeriesBySlug(ctx, v, slug); (err == nil) != want {
+				t.Fatalf("%s: SeriesBySlug err = %v, want visible=%v", what, err, want)
+			}
+			for _, listed := range []bool{false, true} {
+				if in := slices.Contains(listAll(t, svc, v, publish.SeriesFilter{Listed: listed}), sid); in != want {
+					t.Fatalf("%s: in ListSeries(Listed=%v) = %v, want %v", what, listed, in, want)
+				}
+			}
+		}
+
+		// The public series is saved first, then a private preview in Japanese
+		// labelled with AI art is published: readers still see no series.
+		if resp := postForm(f.client, "/studio/p/"+f.project.ID+"/series", seriesForm("tidebreak-courier", "status", publish.SeriesDraft)); resp.StatusCode != http.StatusSeeOther {
+			t.Fatalf("series save = %d %s", resp.StatusCode, resp.Body)
+		}
+		if j := f.publish(t, f.publishForm("ja", "visibility", publish.VisibilityPrivate, "ai_art", "ai")); j.State != jobs.StateDone {
+			t.Fatalf("private publish: %+v", j.Error)
+		}
+		sid := seriesID(t, ta, f.project.ID)
+		visible("anonymous, private chapter only", publish.Viewer{}, sid, false)
+		visible("member, private chapter only", reader, sid, false)
+		s, err := svc.SeriesByID(ctx, owner, sid)
+		if err != nil {
+			t.Fatalf("owner preview: %v", err)
+		}
+		if s.PublishedAt != nil || s.Status != publish.SeriesDraft || len(s.AILabel) != 0 || !slices.Equal(s.Languages, []string{"en"}) {
+			t.Fatalf("series after a private chapter = published %v, %s, %v, %v", s.PublishedAt, s.Status, s.AILabel, s.Languages)
+		}
+
+		// A public chapter publishes the series; the private one still adds nothing to it.
+		if j := f.publish(t, f.publishForm("en")); j.State != jobs.StateDone {
+			t.Fatalf("public publish: %+v", j.Error)
+		}
+		visible("anonymous, public chapter", publish.Viewer{}, sid, true)
+		visible("member, public chapter", reader, sid, true)
+		if s, err = svc.SeriesByID(ctx, publish.Viewer{}, sid); err != nil || s.PublishedAt == nil || s.Status != publish.SeriesOngoing ||
+			s.AILabel["art"] != "human" || s.AILabel["script"] != "ai" || !slices.Equal(s.Languages, []string{"en"}) {
+			t.Fatalf("series after a public chapter = %+v %v", s, err)
+		}
+
+		// Unpublishing the only readable chapter hides the series again; the owner keeps the preview.
+		if resp := postForm(f.client, f.base+"/publish/unpublish", f.publishForm("en")); resp.StatusCode != http.StatusSeeOther {
+			t.Fatalf("unpublish = %d", resp.StatusCode)
+		}
+		visible("anonymous, all unpublished", publish.Viewer{}, sid, false)
+		visible("member, all unpublished", reader, sid, false)
+		if _, err := svc.SeriesByID(ctx, owner, sid); err != nil {
+			t.Fatalf("owner preview after unpublish: %v", err)
+		}
+	})
+}
 
 // An unlisted chapter is shared by link only: going live never notifies
 // followers, though they may open it (ADR 0012 §1, §10).

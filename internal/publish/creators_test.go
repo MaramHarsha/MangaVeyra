@@ -22,10 +22,10 @@ func TestCreatorsAreReadOwnerFirstInCreditOrder(t *testing.T) {
 		svc := pf.Service()
 		pf.SetMode(settings.ModePublic)
 		jun, sora := pf.User(auth.RoleCreator), pf.User(auth.RoleCreator)
-		a := pf.Series(publishtest.SeriesSpec{Schedule: "Weekly, Saturday", OwnerCredit: "Jerry Okafor",
+		a := pf.ReadableSeries(publishtest.SeriesSpec{Schedule: "Weekly, Saturday", OwnerCredit: "Jerry Okafor",
 			Creators: []publish.Creator{{UserID: jun.ID, Role: "letterer", CreditName: "Jun Sato"}, {UserID: sora.ID, Role: "artist"}}})
-		b := pf.Series(publishtest.SeriesSpec{})
-		c := pf.Series(publishtest.SeriesSpec{Creators: []publish.Creator{{UserID: jun.ID, Role: "translator"}}})
+		b := pf.ReadableSeries(publishtest.SeriesSpec{})
+		c := pf.ReadableSeries(publishtest.SeriesSpec{Creators: []publish.Creator{{UserID: jun.ID, Role: "translator"}}})
 		// Credit order follows order_idx, not insertion; the owner is first even without a row.
 		exec(t, ta, `UPDATE series_creators SET order_idx = 5 WHERE series_id = ? AND user_id = ?`, a.ID, jun.ID)
 		exec(t, ta, `DELETE FROM series_creators WHERE series_id = ? AND role = 'owner'`, c.ID)
