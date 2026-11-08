@@ -22,6 +22,7 @@ import { installPageTurns } from './lib/transitions';
 import { installQueueRefresh } from './lib/queue';
 import { updateUnread } from './lib/unread';
 import './lib/models';
+import './lib/copy';
 import { mountIslands, unmountIslands } from './islands/registry';
 import { clearAll as clearOfflineChapters, dropForeignChapters, installLogoutClearing } from './islands/reader/offline';
 
