@@ -113,7 +113,7 @@
   "activity.queue.worker_unavailable": "このワーカーは利用できません。キューを更新してください。",
   "activity.job.page": "ページの絵",
   "activity.job.repair": "キャラクター修正",
-  "activity.job.train": "Character Lockの学習",
+  "activity.job.train": "キャラクターロックの学習",
   "activity.job.score": "キャラクター評価",
   "activity.error.local_only": "ローカル専用モードのため、このジョブはサーバー外へ送信されませんでした。スタジオでローカルモデルを選んでください。",
   "activity.error.child_retry": "このジョブは別のジョブの一部です。元のジョブを再試行してください。",
@@ -134,9 +134,8 @@
   "activity.queue.progress_label": "進捗",
   "activity.time.seconds": "{count}秒",
   "activity.time.minutes_long": "{count}分",
-  "activity.model.lock_dinov2": "DINOv2",
-  "activity.model.lock_ccip": "CCIP",
-  "activity.model.lock_ccip_outfit": "CCIP + 衣装",
-  "activity.model.lock_ccip_views": "CCIP + 衣装ビュー",
-  "activity.notifications.read_category_done": "{category}の通知を既読にしました"
+  "activity.notifications.read_category_done": "{category}の通知を既読にしました",
+  "activity.error.upstream": "プロバイダーまたはワーカーがこのジョブを完了できませんでした。もう一度試す前にStudioで確認してください。",
+  "activity.error.bad_output": "結果を使用できませんでした。もう一度試す前にStudioでジョブを確認してください。",
+  "activity.error.artifact_rejected": "学習ファイルが受け付けられなかったため、キャラクターロックは変更されていません。ワーカーの設定を確認してから、もう一度学習してください。"
 }

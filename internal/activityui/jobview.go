@@ -62,15 +62,6 @@ var rawJobType = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$`)
 // "page.generate", which older notifications stored as their body.
 func looksLikeJobType(s string) bool { return len(s) <= 64 && rawJobType.MatchString(s) }
 
-// lockModelKeys name the Character Lock scoring models, which the routing
-// catalogue does not list, instead of showing their internal IDs.
-var lockModelKeys = map[string]string{
-	"character-lock-dinov2-v1":                "activity.model.lock_dinov2",
-	"character-lock-ccip-v1":                  "activity.model.lock_ccip",
-	"character-lock-ccip-outfit-v3":           "activity.model.lock_ccip_outfit",
-	"character-lock-ccip-outfit-multiview-v1": "activity.model.lock_ccip_views",
-}
-
 // jobCharacterID is the character a Character Lock job works on. The input
 // stays private; only the id is read to name and link the character.
 func jobCharacterID(j *jobs.Job) string {
@@ -223,7 +214,9 @@ func (m *Module) jobView(ctx context.Context, j *jobs.Job, children []*jobs.Job,
 // route is "model · provider" with display names, never internal IDs.
 func (m *Module) route(ctx context.Context, j *jobs.Job) string {
 	model, provider := m.names.RouteNames(ctx, j.ModelID, j.ProviderID)
-	if key, ok := lockModelKeys[j.ModelID]; ok {
+	// The routing catalogue does not list Character Lock scorers; gen names them
+	// the same way on C3, so the queue and the character page always agree.
+	if key := gen.LockModelLabelKey(j.ModelID); key != "" {
 		model = i18n.T(ctx, key)
 	}
 	route := model
