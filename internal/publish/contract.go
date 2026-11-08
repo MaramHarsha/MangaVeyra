@@ -70,6 +70,13 @@ type SupportLink struct {
 	URL   string `json:"url"`
 }
 
+// Creator is one credited creator of a series (series_creators), in credit order.
+type Creator struct {
+	UserID     string `json:"user_id"`
+	Role       string `json:"role"`                  // owner, writer, artist, letterer, editor or translator
+	CreditName string `json:"credit_name,omitempty"` // shown instead of the account's display name when set
+}
+
 // Series is a published project as readers see it.
 type Series struct {
 	ID            string            `json:"id"`
@@ -91,6 +98,8 @@ type Series struct {
 	OriginalLang  string            `json:"original_lang"`
 	Languages     []string          `json:"languages"`
 	Status        string            `json:"status"`
+	Schedule      string            `json:"schedule,omitempty"` // creator-written release note, e.g. "Weekly, Saturday"
+	Creators      []Creator         `json:"creators"`           // credit order, the owner first
 	FollowerCount int               `json:"follower_count"`
 	ViewCount     int64             `json:"view_count"`
 	PublishedAt   *time.Time        `json:"published_at,omitempty"`
