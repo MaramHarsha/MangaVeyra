@@ -110,7 +110,7 @@ func (m *Module) Install(ctx context.Context, offerID, actorID string, opt Insta
 		if err != nil {
 			return nil, err
 		}
-		if man.Version != offer.ToVersion {
+		if !sameVersion(man.Version, offer.ToVersion) {
 			return nil, ErrStale
 		}
 		goos, goarch := m.platform()
@@ -255,7 +255,7 @@ func (m *Module) runInstall(ctx context.Context, rec *Record, run Run, plan inst
 	rec.Status = StatusVerifying
 	save()
 	out, err := m.runChild(ctx, time.Minute, bin, "version")
-	if f := strings.Fields(out); err != nil || len(f) < 2 || f[1] != rec.ToVersion {
+	if f := strings.Fields(out); err != nil || len(f) < 2 || !sameVersion(f[1], rec.ToVersion) {
 		fail(StepDownload, "UPD-VERIFY", fmt.Errorf("the downloaded program reports %q, not version %s: %v", truncate(out, 200), rec.ToVersion, err))
 		return
 	}

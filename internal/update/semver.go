@@ -173,3 +173,18 @@ func Eligible(cur, v Semver, channel string) bool {
 	}
 	return v.Compare(cur) > 0
 }
+
+// sameVersion reports whether a and b name the same release ("v1.0.2",
+// "1.0.2" and "1.0.2+build.7" do): manifests, binaries and the stored offer
+// may spell a version differently, so versions are compared parsed.
+func sameVersion(a, b string) bool {
+	va, err := ParseSemver(strings.TrimSpace(a))
+	if err != nil {
+		return false
+	}
+	vb, err := ParseSemver(strings.TrimSpace(b))
+	if err != nil {
+		return false
+	}
+	return va.Compare(vb) == 0
+}

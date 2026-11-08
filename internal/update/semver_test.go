@@ -66,3 +66,17 @@ func TestClassifyAndEligible(t *testing.T) {
 		t.Error("a pre-release of the running version is older")
 	}
 }
+
+func TestSameVersionIgnoresSpelling(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		same bool
+	}{
+		{"1.0.2", "1.0.2", true}, {"v1.0.2", "1.0.2", true}, {"1.0.2+build.7", "1.0.2", true}, {" 1.0.2 ", "v1.0.2+x", true},
+		{"1.0.2-beta.1", "1.0.2", false}, {"1.0.3", "1.0.2", false}, {"9.9.9", "1.0.2", false}, {"dev", "dev", false},
+	} {
+		if got := sameVersion(c.a, c.b); got != c.same {
+			t.Errorf("sameVersion(%q, %q) = %v", c.a, c.b, got)
+		}
+	}
+}

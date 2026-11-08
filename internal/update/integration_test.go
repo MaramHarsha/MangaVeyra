@@ -517,6 +517,33 @@ func TestInstallIsExclusive(t *testing.T) {
 	})
 }
 
+// A manifest may spell its version with a leading "v" or build metadata; the
+// offer stores the normalised version and the install must still accept it.
+func TestManifestVersionSpellingsInstall(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, dialect string) {
+		for _, v := range []string{"v1.0.2", "1.0.2+build.7"} {
+			t.Run(v, func(t *testing.T) {
+				e := newEnv(t, dialect)
+				e.enableChecks("")
+				e.publish(publishOpts{version: v})
+				rec, err := e.m.Check(e.ctx)
+				if err != nil || rec == nil || rec.ToVersion != "1.0.2" {
+					t.Fatalf("check = %+v, %v", rec, err)
+				}
+				if _, err := e.m.Install(e.ctx, rec.ID, e.ta.Admin.ID, update.InstallOptions{}); err != nil {
+					t.Fatalf("install: %v", err)
+				}
+				att := waitInstall(t, e)
+				select {
+				case <-e.restarted:
+				default:
+					t.Fatalf("install did not reach the restart: %s\n%s", att.Status, update.LogText(att))
+				}
+			})
+		}
+	})
+}
+
 func TestContainerInstallShowsHostCommands(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, dialect string) {
 		e := newEnv(t, dialect, withHooks(func(h *update.TestHooks) {

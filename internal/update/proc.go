@@ -279,7 +279,7 @@ func (m *Module) checkCandidate(ctx context.Context, bin, want string, logf func
 				last = errOr(err, fmt.Errorf("/healthz answered %d", code))
 				continue
 			}
-			if hz.Version != want {
+			if !sameVersion(hz.Version, want) {
 				return res, fmt.Errorf("the new version reports %q, not %q", hz.Version, want)
 			}
 			var rz struct {
