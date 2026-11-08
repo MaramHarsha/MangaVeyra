@@ -73,6 +73,10 @@ func (m *Module) Routes(r *core.Router) {
 	r.Page("POST /s/{series}/comments/{id}/hide", m.hideSeriesComment, core.RequireSession)
 	r.Page("POST /s/{series}/comments/{id}/unhide", m.unhideSeriesComment, core.RequireSession)
 	r.Page("POST /s/{series}/comments/{id}/report", m.reportSeriesComment, core.RequireSession)
+	// F1 creator profile.
+	r.Page("GET /u/{username}", m.profilePage)
+	r.Page("POST /u/{username}/follow", m.followUserForm, core.RequireSession)
+	r.Page("POST /u/{username}/unfollow", m.unfollowUserForm, core.RequireSession)
 
 	api := r.Group("/api/v1/social")
 	api.API("GET /comments", m.apiListComments)
