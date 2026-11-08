@@ -14,26 +14,33 @@ import (
 // reader island's event endpoint and the F2 screen, and rolls raw events
 // older than 90 days into daily aggregates.
 type Module struct {
-	d       *core.Deps
-	rec     *recorder
-	ui      *web.UI
-	publish publish.Service
+	d        *core.Deps
+	rec      *recorder
+	sessions *sessions
+	ui       *web.UI
+	publish  publish.Service
 }
 
-// New creates the module and provides analytics.Recorder.
+// New creates the module and provides analytics.Recorder and
+// analytics.ReadingSessions.
 func New(d *core.Deps) *Module {
-	var key []byte
-	if d.Secrets != nil {
-		key = d.Secrets.Derive(sessionPurpose)
-	} else {
-		// Without a master key the hashes are still unlinkable; they only stop
-		// matching across restarts.
-		key = make([]byte, 32)
-		_, _ = rand.Read(key)
-	}
-	rec := newRecorder(d.DB, key)
+	rec := newRecorder(d.DB, derivedKey(d, sessionPurpose))
+	s := newSessions(derivedKey(d, sessionCookiePurpose))
 	core.Provide[Recorder](d, rec)
-	return &Module{d: d, rec: rec}
+	core.Provide[ReadingSessions](d, s)
+	return &Module{d: d, rec: rec, sessions: s}
+}
+
+// derivedKey derives a purpose key from the server's master key. Without a
+// master key it is random: hashes stay unlinkable and cookies are refused
+// after a restart (visitors then simply start a new session).
+func derivedKey(d *core.Deps, purpose string) []byte {
+	if d.Secrets != nil {
+		return d.Secrets.Derive(purpose)
+	}
+	key := make([]byte, 32)
+	_, _ = rand.Read(key)
+	return key
 }
 
 // Name implements core.Module.

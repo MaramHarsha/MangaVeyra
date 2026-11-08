@@ -8,6 +8,7 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/analytics"
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
+	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish/publishtest"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
@@ -49,12 +50,17 @@ func TestEventsEndpoint(t *testing.T) {
 		if strings.Contains(strings.ToLower(cookie), "expires") || strings.Contains(strings.ToLower(cookie), "max-age") {
 			t.Errorf("the reading session cookie must end with the browser session: %q", cookie)
 		}
+		// The cookie is "<random id>.<server MAC>"; only the id is hashed.
 		raw := strings.TrimPrefix(strings.SplitN(cookie, ";", 2)[0], analytics.SessionCookie+"=")
+		id, mac, ok := strings.Cut(raw, ".")
+		if !ok || len(id) != 32 || len(mac) != 22 {
+			t.Fatalf("session cookie %q is not <32-character id>.<22-character MAC>", raw)
+		}
 		if n := count(t, ta, `SELECT COUNT(*) FROM read_events WHERE session_hash = ? AND user_id IS NULL`,
-			analytics.HashSession(recorderOf(ta), raw, ta.Clock.Now())); n != 3 {
+			analytics.HashSession(recorderOf(ta), id, ta.Clock.Now())); n != 3 {
 			t.Errorf("events stored under the session's daily hash = %d, want 3", n)
 		}
-		if n := count(t, ta, `SELECT COUNT(*) FROM read_events WHERE session_hash = ?`, raw); n != 0 {
+		if n := count(t, ta, `SELECT COUNT(*) FROM read_events WHERE session_hash IN (?, ?)`, raw, id); n != 0 {
 			t.Error("the raw session cookie value was stored")
 		}
 		// The same browser keeps its session: no new cookie, one read per day.
@@ -64,6 +70,16 @@ func TestEventsEndpoint(t *testing.T) {
 		}
 		if n := count(t, ta, `SELECT COUNT(*) FROM read_events WHERE kind = 'open'`); n != 1 {
 			t.Errorf("opens = %d, want 1", n)
+		}
+		// A changed cookie is not that session: the server starts a new one.
+		forged := []byte(raw)
+		forged[0] = map[bool]byte{true: 'B', false: 'A'}[forged[0] == 'A']
+		fc := ta.NewClient()
+		fc.Client.Jar = nil
+		fc.Header.Set("Cookie", analytics.SessionCookie+"="+string(forged))
+		if resp := fc.PostJSON("/api/v1/analytics/events", batch(events[1])); resp.StatusCode != http.StatusAccepted ||
+			!strings.HasPrefix(resp.Header.Get("Set-Cookie"), analytics.SessionCookie+"=") {
+			t.Fatalf("forged cookie: %d, cookie %q", resp.StatusCode, resp.Header.Get("Set-Cookie"))
 		}
 
 		// Members are stored by account and may record members-only reads.
@@ -106,7 +122,7 @@ func TestEventsEndpointLimitsNewSessionsPerAddress(t *testing.T) {
 	ta := testutil.NewTestApp(t)
 	f := publishtest.New(t, ta)
 	f.SetMode(settings.ModePublic)
-	analytics.SetNewSessionLimit(recorderOf(ta), 0.001, 3)
+	analytics.SetNewSessionLimit(core.MustUse[analytics.ReadingSessions](ta.Deps), 0.001, 3)
 	s := f.Series(publishtest.SeriesSpec{})
 	ch := f.Publish(s, publishtest.PublicationSpec{})
 	open := batch(analytics.ReadEvent{SeriesID: s.ID, PublicationID: ch.ID, Kind: analytics.EventOpen, Page: 1})
@@ -121,6 +137,15 @@ func TestEventsEndpointLimitsNewSessionsPerAddress(t *testing.T) {
 	if resp := c.PostJSON("/api/v1/analytics/events", open); resp.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("4th new session from one address: %d", resp.StatusCode)
 	}
+	// A session the client made up itself is no session: it cannot get
+	// around the limit (only cookies the server minted and signed count).
+	for i := range 5 {
+		c.Header.Set("Cookie", analytics.SessionCookie+"="+strings.Repeat(string(rune('a'+i)), 32))
+		if resp := c.PostJSON("/api/v1/analytics/events", open); resp.StatusCode != http.StatusTooManyRequests {
+			t.Fatalf("self-made session %d: %d", i, resp.StatusCode)
+		}
+	}
+	c.Header.Del("Cookie")
 	got, err := f.Service().SeriesByID(context.Background(), publish.Viewer{}, s.ID)
 	if err != nil || got.ViewCount != 3 {
 		t.Fatalf("view_count = %d, %v; want 3", got.ViewCount, err)

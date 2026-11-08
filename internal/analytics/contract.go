@@ -8,6 +8,7 @@ package analytics
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 )
@@ -36,4 +37,17 @@ type ReadEvent struct {
 // cheap and rate limited: a failure never breaks reading.
 type Recorder interface {
 	Record(ctx context.Context, v publish.Viewer, sessionID string, e ReadEvent) error
+}
+
+// ReadingSessions hands out the first-party reading sessions of anonymous
+// visitors (added during implementation, ADR 0012 §8). The reader asks it for
+// the session of a server-rendered open, so the open and the island's batches
+// share one daily hash, and every new session goes through the same
+// per-address limit as the events endpoint.
+type ReadingSessions interface {
+	// Session returns the request's session ID from a valid, server-minted
+	// SessionCookie. Without one it starts a new session and sets the cookie
+	// when the client address may start another (NewSessionRate,
+	// NewSessionBurst); otherwise ok is false and the caller records nothing.
+	Session(w http.ResponseWriter, r *http.Request) (id string, ok bool)
 }

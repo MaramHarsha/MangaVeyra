@@ -258,6 +258,49 @@ func TestRecordIsRateLimitedPerViewer(t *testing.T) {
 	})
 }
 
+// The once-per-day rule holds when the same reader's opens and completions
+// arrive at the same time (two tabs, a retried batch): PostgreSQL's READ
+// COMMITTED must not let two transactions both see "no open yet".
+func TestOpenCountsOnceUnderConcurrentRepeats(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, f *publishtest.Fixture) {
+		ctx := context.Background()
+		rec := recorderOf(ta)
+		s := f.Series(publishtest.SeriesSpec{})
+		ch := f.Publish(s, publishtest.PublicationSpec{Pages: 2})
+		member := f.User(auth.RoleReader)
+		done := analytics.ReadEvent{SeriesID: s.ID, PublicationID: ch.ID, Kind: analytics.EventComplete, Page: 2}
+		var wg sync.WaitGroup
+		errs := make(chan error, 160)
+		for range 40 {
+			for _, v := range []publish.Viewer{{}, publishtest.Viewer(member)} {
+				wg.Add(2)
+				go func() { defer wg.Done(); errs <- rec.Record(ctx, v, "same-tab", open(s, ch)) }()
+				go func() { defer wg.Done(); errs <- rec.Record(ctx, v, "same-tab", done) }()
+			}
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		if n := count(t, ta, `SELECT COUNT(*) FROM read_events WHERE kind = 'open'`); n != 2 {
+			t.Errorf("opens = %d, want 2 (one anonymous reader, one member)", n)
+		}
+		if n := count(t, ta, `SELECT COUNT(*) FROM read_events WHERE kind = 'complete'`); n != 2 {
+			t.Errorf("completions = %d, want 2", n)
+		}
+		got, err := f.Service().SeriesByID(ctx, publish.Viewer{}, s.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.ViewCount != 2 {
+			t.Errorf("view_count = %d, want 2", got.ViewCount)
+		}
+	})
+}
+
 func TestRecordConcurrentOpensStaySane(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, f *publishtest.Fixture) {
 		ctx := context.Background()

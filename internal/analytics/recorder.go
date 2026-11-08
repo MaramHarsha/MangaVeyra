@@ -1,6 +1,7 @@
 package analytics
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -9,6 +10,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/oklog/ulid/v2"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
@@ -62,22 +65,13 @@ type recorder struct {
 	publish publish.Service
 	key     []byte
 	limiter *core.Limiter
-	// sessions limits new anonymous sessions per client address. Its keys are
-	// daily HMACs of the address and live only in memory.
-	sessions *core.Limiter
-	now      func() time.Time
+	now     func() time.Time
 }
 
 var _ Recorder = (*recorder)(nil)
 
 func newRecorder(d *db.DB, key []byte) *recorder {
-	return &recorder{db: d, key: key, limiter: core.NewLimiter(SessionRate, SessionBurst),
-		sessions: core.NewLimiter(NewSessionRate, NewSessionBurst), now: db.Now}
-}
-
-// allowNewSession takes one new-session token for a client address.
-func (r *recorder) allowNewSession(addr string) (bool, time.Duration) {
-	return r.sessions.Allow("a:" + r.sessionHash("addr|"+addr, r.now()))
+	return &recorder{db: d, key: key, limiter: core.NewLimiter(SessionRate, SessionBurst), now: db.Now}
 }
 
 // sessionHash returns the salted hash of a session ID for the UTC day of t.
@@ -132,28 +126,36 @@ func (r *recorder) record(ctx context.Context, v publish.Viewer, sessionID strin
 }
 
 // insert stores one event. Opens and completions count once per viewer,
-// publication and UTC day (a reread the same day is not another read); the
-// first open of the day also adds one to series.view_count in the same
+// publication and UTC day (a reread the same day is not another read): their
+// ID is derived from exactly that, so the insert is one statement that does
+// nothing for a repeat, even when two transactions race under PostgreSQL's
+// READ COMMITTED (the second waits for the first, then finds the row). Only
+// an open that was inserted adds one to series.view_count, in the same
 // transaction.
 func (r *recorder) insert(ctx context.Context, tx *db.Tx, e ReadEvent, userID, hash string, now time.Time) error {
-	if e.Kind == EventOpen || e.Kind == EventComplete {
-		who, arg := "user_id = ?", any(userID)
+	id := db.NewID()
+	once := e.Kind == EventOpen || e.Kind == EventComplete
+	if once {
+		who := "u:" + userID
 		if userID == "" {
-			who, arg = "user_id IS NULL AND session_hash = ?", hash
+			who = "s:" + hash
 		}
-		var n int
-		if err := tx.Get(ctx, &n, `SELECT COUNT(*) FROM read_events WHERE publication_id = ? AND kind = ? AND created_at >= ? AND `+who,
-			e.PublicationID, e.Kind, dayStart(now), arg); err != nil {
-			return fmt.Errorf("analytics: check repeat: %w", err)
-		}
-		if n > 0 {
-			return nil
-		}
+		id = r.onceID(e, who, now)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO read_events (id, series_id, publication_id, user_id, session_hash, kind, page, ms, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		db.NewID(), e.SeriesID, e.PublicationID, db.NullString(userID), hash, e.Kind, e.Page, e.MS, now); err != nil {
+	res, err := tx.Exec(ctx, `INSERT INTO read_events (id, series_id, publication_id, user_id, session_hash, kind, page, ms, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+		id, e.SeriesID, e.PublicationID, db.NullString(userID), hash, e.Kind, e.Page, e.MS, now)
+	if err != nil {
 		return fmt.Errorf("analytics: insert event: %w", err)
+	}
+	if once {
+		n, err := res.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("analytics: insert event: %w", err)
+		}
+		if n == 0 {
+			return nil // already counted today
+		}
 	}
 	if e.Kind == EventOpen {
 		// The one write outside read_events: the all-time view counter shown
@@ -163,6 +165,21 @@ func (r *recorder) insert(ctx context.Context, tx *db.Tx, e ReadEvent, userID, h
 		}
 	}
 	return nil
+}
+
+// onceID is the read_events ID of the one open or completion a viewer (who:
+// "u:<user ID>" or "s:<daily session hash>") may have per publication and UTC
+// day: a ULID whose time is the day and whose random part comes from an HMAC
+// of the rest, so it holds nothing the row does not already hold.
+func (r *recorder) onceID(e ReadEvent, who string, now time.Time) string {
+	day := dayStart(now)
+	m := hmac.New(sha256.New, r.key)
+	m.Write([]byte("once|" + e.Kind + "|" + e.PublicationID + "|" + who + "|" + day.Format(time.DateOnly)))
+	id, err := ulid.New(ulid.Timestamp(day), bytes.NewReader(m.Sum(nil)))
+	if err != nil {
+		return db.NewID() // unreachable: the day is a valid ULID time and the HMAC has 32 bytes
+	}
+	return strings.ToLower(id.String())
 }
 
 // normalize validates an event and clamps its dwell time.

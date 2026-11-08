@@ -283,15 +283,22 @@ func startPosition(r *http.Request, p *Progress, pageCount int) (page, panel int
 	return page, panel
 }
 
-// sessionID returns the first-party reading session of the request: the
+// readingSession returns the first-party reading session of the request: the
 // browser session for members, and for anonymous visitors the analytics
-// module's reading-session cookie (created when missing), so the server's
-// "open" and the island's batches share one salted daily hash (ADR 0012 §8).
-func sessionID(w http.ResponseWriter, r *http.Request) string {
+// module's reading session, so the server's "open" and the island's batches
+// share one salted daily hash (ADR 0012 §8). A new anonymous session counts
+// against the same per-address limit as the events endpoint; ok is false when
+// the visitor may not start one (or analytics is not wired), and the open is
+// then simply not recorded.
+func (m *Module) readingSession(w http.ResponseWriter, r *http.Request) (string, bool) {
 	if id := core.IdentityFrom(r.Context()).SessionID; id != "" {
-		return id
+		return id, true
 	}
-	return analytics.ReadingSession(w, r)
+	s, ok := core.Use[analytics.ReadingSessions](m.d)
+	if !ok {
+		return "", false
+	}
+	return s.Session(w, r)
 }
 
 // islandProps is the JSON the reader island boots from.

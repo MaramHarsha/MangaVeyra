@@ -7,8 +7,12 @@
 //     user_id for members and only a salted, daily-rotating session hash for
 //     anonymous visitors. The first open of a chapter per reader and UTC day
 //     also adds one to series.view_count in the same transaction.
+//   - ReadingSessions (session.go) is provided as analytics.ReadingSessions:
+//     it accepts only the server-signed first-party mv_rs cookie and starts a
+//     new anonymous session only within the per-address new-session limit.
+//     The reader uses it for the open it records when it renders a chapter.
 //   - POST /api/v1/analytics/events (events_api.go) takes batches from the
-//     reader island and sets the first-party mv_rs session cookie.
+//     reader island under the same session rules.
 //   - RollUp (aggregate.go) folds raw events older than 90 days into daily
 //     aggregates in read_event_days (migration 0402) and deletes them in the
 //     same transaction, so raw events are never deleted without aggregating.

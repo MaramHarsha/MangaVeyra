@@ -468,6 +468,68 @@ func TestReadingEvents(t *testing.T) {
 	})
 }
 
+// A client that drops the reading-session cookie (a curl loop on the chapter
+// URL) cannot add reads without limit: every new anonymous session, the one
+// the server-rendered open starts included, goes through the per-address
+// new-session limit, and a session the client made up is no session. A
+// limited request still gets the whole chapter; it only is not counted.
+func TestAnonymousOpensAreLimitedPerAddress(t *testing.T) {
+	each(t, func(t *testing.T, e *env) {
+		if _, ok := core.Use[analytics.Recorder](e.ta.Deps); !ok {
+			t.Skip("needs the analytics module's recorder")
+		}
+		s := e.f.Series(publishtest.SeriesSpec{ViewCount: 5})
+		ch := e.f.Publish(s, publishtest.PublicationSpec{Pages: 2})
+		c := e.ta.NewClient()
+		c.Client.Jar = nil
+		minted := 0
+		get := func(what string) {
+			got := c.Get(chapterPath(s, ch))
+			wantStatus(t, what, got, http.StatusOK)
+			if !strings.Contains(string(got.Body), `class="mv-rd__img"`) {
+				t.Fatalf("%s: the chapter was not rendered", what)
+			}
+			for _, sc := range got.Header.Values("Set-Cookie") {
+				if strings.HasPrefix(sc, analytics.SessionCookie+"=") {
+					minted++
+				}
+			}
+		}
+		for range analytics.NewSessionBurst + 5 {
+			get("cookieless reader")
+		}
+		if minted != analytics.NewSessionBurst {
+			t.Fatalf("new reading sessions = %d, want the burst of %d", minted, analytics.NewSessionBurst)
+		}
+		for i := range 3 {
+			c.Header.Set("Cookie", analytics.SessionCookie+"="+strings.Repeat(string(rune('k'+i)), 43))
+			get("self-made session")
+		}
+		if minted != analytics.NewSessionBurst {
+			t.Fatalf("a self-made session cookie started %d sessions", minted-analytics.NewSessionBurst)
+		}
+		opens := func() int {
+			var n int
+			if err := e.ta.Deps.DB.Get(context.Background(), &n, `SELECT COUNT(*) FROM read_events WHERE publication_id = ? AND kind = 'open'`, ch.ID); err != nil {
+				t.Fatal(err)
+			}
+			return n
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		for opens() < minted && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		time.Sleep(200 * time.Millisecond) // let any stray recording land
+		if n := opens(); n != minted {
+			t.Fatalf("opens = %d, want %d", n, minted)
+		}
+		got, err := e.f.Service().SeriesByID(context.Background(), publish.Viewer{}, s.ID)
+		if err != nil || got.ViewCount != 5+int64(minted) {
+			t.Fatalf("view_count = %d, %v; want %d", got.ViewCount, err, 5+minted)
+		}
+	})
+}
+
 // A webtoon series opens in Scroll mode with vertical direction and the
 // Scroll/Guided switch of E4.
 func TestWebtoonDefaults(t *testing.T) {

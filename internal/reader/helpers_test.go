@@ -168,5 +168,15 @@ func (e *env) provideRecorder() *fakeRecorder {
 	}
 	r := &fakeRecorder{pub: e.f.Service()}
 	core.Provide[analytics.Recorder](e.ta.Deps, r)
+	if _, ok := core.Use[analytics.ReadingSessions](e.ta.Deps); !ok {
+		core.Provide[analytics.ReadingSessions](e.ta.Deps, fakeSessions{})
+	}
 	return r
+}
+
+// fakeSessions hands every anonymous request the same reading session.
+type fakeSessions struct{}
+
+func (fakeSessions) Session(http.ResponseWriter, *http.Request) (string, bool) {
+	return "fake-reading-session", true
 }

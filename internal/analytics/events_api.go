@@ -1,11 +1,8 @@
 package analytics
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"net/http"
-	"regexp"
 	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
@@ -13,43 +10,11 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 )
 
-// SessionCookie is the first-party reading-session cookie. It holds a random
-// identifier that is never stored: Record keeps only its salted daily hash.
-const SessionCookie = "mv_rs"
-
 // Batch bounds for POST /api/v1/analytics/events.
 const (
 	MaxBatchEvents = 50
 	maxBatchBytes  = 32 << 10
 )
-
-var sessionPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{22,64}$`)
-
-// ReadingSession returns the request's reading-session ID, setting a new
-// SessionCookie (HttpOnly, SameSite=Lax, Secure over HTTPS, no expiry, so it
-// ends with the browser session) when the request has none.
-func ReadingSession(w http.ResponseWriter, r *http.Request) string {
-	if id, ok := existingSession(r); ok {
-		return id
-	}
-	return newSession(w, r)
-}
-
-func existingSession(r *http.Request) (string, bool) {
-	if c, err := r.Cookie(SessionCookie); err == nil && sessionPattern.MatchString(c.Value) {
-		return c.Value, true
-	}
-	return "", false
-}
-
-func newSession(w http.ResponseWriter, r *http.Request) string {
-	b := make([]byte, 24)
-	_, _ = rand.Read(b)
-	id := base64.RawURLEncoding.EncodeToString(b)
-	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: id, Path: "/", HttpOnly: true,
-		Secure: httpx.IsHTTPS(r), SameSite: http.SameSiteLaxMode})
-	return id
-}
 
 type eventBatch struct {
 	Events []ReadEvent `json:"events"`
@@ -67,7 +32,8 @@ type batchResult struct {
 // {"events":[{"series_id","publication_id","kind","page","ms"}…]} with at most
 // MaxBatchEvents events. Anonymous visitors and signed-in browser sessions may
 // post; bearer tokens may not (agents do not read). It answers 202 with
-// batchResult, or 429 when every event was over the rate limit.
+// batchResult, or 429 when every event was over the rate limit or the client
+// may not start another anonymous reading session.
 func (m *Module) postEvents(w http.ResponseWriter, r *http.Request) error {
 	if core.TokenFrom(r.Context()) != nil {
 		return core.ErrForbidden("reading events come from the reader in a browser")
@@ -83,16 +49,20 @@ func (m *Module) postEvents(w http.ResponseWriter, r *http.Request) error {
 	if u := core.UserFrom(r.Context()); u != nil && u.Status == "active" {
 		v = publish.Viewer{UserID: u.ID, Admin: u.IsAdmin()}
 	}
-	session, ok := existingSession(r)
-	if !ok {
-		// A client that drops its cookie would otherwise start a new
-		// anonymous reader (and a new daily read) with every request.
-		if v.UserID == "" {
-			if allowed, wait := m.rec.allowNewSession(core.ClientIP(r)); !allowed {
+	// Members are counted by account and need no reading session. An
+	// anonymous request without a server-minted session starts one only
+	// within the per-address limit: a client that drops (or makes up) its
+	// cookie would otherwise be a new reader, and a new read, every time.
+	session := ""
+	if v.UserID == "" {
+		id, ok := m.sessions.existing(r)
+		if !ok {
+			if allowed, wait := m.sessions.allowNew(r); !allowed {
 				return httpx.ErrRateLimited(wait)
 			}
+			id = m.sessions.mint(w, r)
 		}
-		session = newSession(w, r)
+		session = id
 	}
 	cache := map[readKey]bool{}
 	var res batchResult
