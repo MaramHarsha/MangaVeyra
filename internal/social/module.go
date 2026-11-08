@@ -31,10 +31,13 @@ type Module struct {
 	commentL, editL, reportL, followL *core.Limiter
 }
 
-// New creates the module and provides social.Follows.
+// New creates the module and provides social.Follows, also as
+// publish.FollowerSource for new-chapter notifications (publish cannot import
+// social without an import cycle).
 func New(d *core.Deps) *Module {
 	svc := &service{db: d.DB, auth: d.Auth, now: db.Now}
 	core.Provide[Follows](d, svc)
+	core.Provide[publish.FollowerSource](d, svc)
 	return &Module{d: d, svc: svc,
 		commentL: core.NewLimiter(commentRate, commentBurst),
 		editL:    core.NewLimiter(editRate, editBurst),

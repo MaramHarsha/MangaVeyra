@@ -24,6 +24,25 @@ func TestFollowsIsProvided(t *testing.T) {
 	}
 }
 
+// Publish notifies followers through publish.FollowerSource (it cannot import
+// social), so social must provide its follows under that type too.
+func TestFollowersReachPublishNotifications(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, e *env) {
+		src, ok := core.Use[publish.FollowerSource](e.ta.Deps)
+		if !ok {
+			t.Fatal("publish.FollowerSource is not provided")
+		}
+		s := e.f.Series(publishtest.SeriesSpec{})
+		e.f.Publish(s, publishtest.PublicationSpec{})
+		u, c := e.user(auth.RoleReader)
+		wantStatus(t, "follow", c.SendJSON(http.MethodPut, "/api/v1/social/series/"+s.ID+"/follow", nil), http.StatusOK)
+		ids, _, err := src.Followers(context.Background(), s.ID, "", 10)
+		if err != nil || len(ids) != 1 || ids[0] != u.ID {
+			t.Fatalf("FollowerSource.Followers = %v, %v; want [%s]", ids, err, u.ID)
+		}
+	})
+}
+
 func TestFollowUnfollowIsIdempotentAndKeepsFollowerCount(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, e *env) {
 		ctx := context.Background()
