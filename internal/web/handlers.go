@@ -143,7 +143,11 @@ func errorPageHook(w http.ResponseWriter, r *http.Request, e *httpx.APIError) {
 		title = i18n.T(ctx, "errors.404.title")
 	case e.Code == httpx.CodeMaintenance:
 		inst := u.d.Settings.MustInstance(ctx)
-		body = errpages.Maintenance(inst.Name, e.Message)
+		progress := ""
+		if p, ok := core.Use[MaintenanceProgress](u.d); ok {
+			progress = p.MaintenanceProgress(ctx)
+		}
+		body = errpages.Maintenance(inst.Name, e.Message, progress)
 		title = i18n.T(ctx, "gate.maintenance.title")
 	case e.Status >= 500:
 		body = errpages.ServerError(e.Message, core.RequestIDFrom(ctx))

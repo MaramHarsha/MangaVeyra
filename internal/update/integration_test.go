@@ -692,6 +692,14 @@ func TestShellBannerForMembersModalForAdmins(t *testing.T) {
 		if _, err := e.m.Check(e.ctx); err != nil {
 			t.Fatal(err)
 		}
+		// The app shell renders them on real pages (web.UI.AddShellExtras).
+		if page := e.ta.Login(t, member.Username).Get("/studio"); !strings.Contains(string(page.Body), "Update 1.0.2 available.") ||
+			strings.Contains(string(page.Body), "Remind me next login") {
+			t.Fatalf("member page lacks the banner: %d", page.StatusCode)
+		}
+		if page := e.ta.Login(t, e.ta.Admin.Username).Get("/studio"); !strings.Contains(string(page.Body), "Remind me next login") {
+			t.Fatalf("admin page lacks the update dialog: %d", page.StatusCode)
+		}
 		b, o := update.ShellFor(e.m, req(member, "s1", nil))
 		if b == nil || o != nil {
 			t.Fatal("members get the banner only")

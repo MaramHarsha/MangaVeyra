@@ -13,6 +13,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/backup"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/web"
 )
 
 // Module is the update feature module (G14, ADR 0013 §6).
@@ -53,6 +54,11 @@ func New(d *core.Deps) *Module {
 	m := &Module{d: d, owner: db.NewID(), children: map[*exec.Cmd]struct{}{}}
 	core.Provide[Status](d, m)
 	core.Provide[adminapi.UpdateNotice](d, m)
+	core.Provide[web.MaintenanceProgress](d, m)
+	// G14's member banner and admin login dialog ride on every signed-in page.
+	if ui, ok := core.Use[*web.UI](d); ok {
+		ui.AddShellExtras(m.Shell)
+	}
 	return m
 }
 

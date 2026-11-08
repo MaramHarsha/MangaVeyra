@@ -46,7 +46,27 @@ type UI struct {
 
 	mu        sync.Mutex
 	fallbacks []fallback
+	extras    []ShellExtras
 	cc        computeCache
+}
+
+// ShellExtras lets a feature module add a banner and an overlay to the
+// signed-in app shell for one request (the update module's G14 member banner
+// and admin login dialog). Either may be nil.
+type ShellExtras func(r *http.Request) (banner, overlay templ.Component)
+
+// AddShellExtras registers fn for every signed-in page.
+func (u *UI) AddShellExtras(fn ShellExtras) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.extras = append(u.extras, fn)
+}
+
+// MaintenanceProgress describes a server-wide operation that holds the server
+// in maintenance mode (an update: "Started 21:04 · step 3 of 5 · migrating
+// database"); G6 Maintenance shows it in place of its generic line.
+type MaintenanceProgress interface {
+	MaintenanceProgress(ctx context.Context) string
 }
 
 type fallback struct {
@@ -214,6 +234,20 @@ func (u *UI) Chrome(w http.ResponseWriter, r *http.Request, o PageOpts) *layout.
 	}
 	if w != nil {
 		c.Flash = takeFlash(w, r)
+	}
+	if w != nil && c.User != nil {
+		u.mu.Lock()
+		extras := append([]ShellExtras(nil), u.extras...)
+		u.mu.Unlock()
+		for _, fn := range extras {
+			banner, overlay := fn(r)
+			if banner != nil && c.Banner == nil {
+				c.Banner = banner
+			}
+			if overlay != nil && c.Overlay == nil {
+				c.Overlay = overlay
+			}
+		}
 	}
 	return c
 }
