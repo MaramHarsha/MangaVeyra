@@ -49,7 +49,7 @@ and return changed files, tests and ADR 0004 text. Root alone edits `docs/**`, `
    from a project, freezing pages through compose/lettering, alt-text drafting, cover choose/generate through the
    existing `cover.generate` API, scheduler loop, unpublish/update, follower notifications via `social.Follows`
    and `notify`), publish locales and styles.
-2. [ ] **R — Reader and library.** `internal/reader/**`, `web/src/islands/reader/**`, the service worker's offline
+2. [x] **R — Reader and library.** `internal/reader/**`, `web/src/islands/reader/**`, the service worker's offline
    chapter cache, reader locales and styles. E3 paged/spread/guided with tap zones and RTL/LTR, E4 webtoon, reading
    settings per series, progress/history, bookmarks, local-voice read-aloud, offline downloads, E7 library, event
    recording through `analytics.Recorder`.

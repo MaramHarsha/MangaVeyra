@@ -485,3 +485,34 @@ the mobile artboards stay deferred (ADR 0012 §11).
   row; About shows the bio, links, @username and join date. A creator without readable series gets the empty state
   (シーン…, "No series yet", with Open the studio on your own profile or Explore series otherwise). Genre badges show
   the stored genre words.
+- **E3 Reader.** Reading settings adds Zoom and Brightness as two kit sliders under Background, because the feature
+  plan names both and the artboard has no control for them; Zoom also follows + / − / 0. Play living panels and the
+  top-bar reader-translation icon keep their designed places in the Soon state. Read aloud from script is disabled with
+  "No voice on this device. Read-aloud only uses voices that run on your device, so the chapter text never leaves it."
+  when the browser has no on-device voice (ADR 0012 §6); otherwise the row names the voice. Language lists the
+  languages the chapter is published in. Anonymous readers see "Saved for this series on this device". The panel's close
+  button is visually hidden until it has keyboard focus. Guided view on desktop, drawn only on the mobile artboard,
+  uses its pieces: the panel framed with a 3 px border, the "PANEL n OF m" label and the dimmed surround, then the
+  alt-text line and the back chevron, Single | Guided and next chevron row; the frame stays left of an open settings
+  panel. A chapter-end card (from the research's chapter-end card) shows "End of chapter", the per-role AI-label badges
+  (ADR 0012 §4), Previous chapter, Next chapter and Series page. With Show panel comments on, a Comments button at the
+  stage's bottom left opens a 320 px drawer in the settings panel's place listing the open page's panel comments and
+  the chapter comments (comments whose anchor no longer exists after an update are listed with the chapter); members
+  get a form, others Log in. Offline, a status line under the bar uses the G6 copy. Without JavaScript the bar keeps
+  Back, the titles and the Soon translation icon, and pages stack in a 720 px column with alt-text before the
+  chapter-end card. The age confirmation (not drawn) is a box under the reader bar with the rating badge, "This series
+  is for mature readers" / "This series is for adults only", "{title} is rated {rating}. Confirm that you are old enough
+  to read it.", "I'm old enough · Read", "Go back" and "We remember this for this series only." On phones the bar drops
+  the mode switch and Reading settings opens full width with a Reading mode group at the top.
+- **E4 Webtoon.** Shows the same Download control as E3 (between Bookmark and Settings) so episodes can be read
+  offline. Episodes lists the six latest; "Next episode ↓" appears only when there is one.
+- **E7 Library.** Category is disabled with a Soon tag (user categories are not built) and Auto-download new chapters
+  is disabled Soon. Sort offers New chapters first / Recently read / Title A–Z, with Apply when JavaScript is off.
+  Following shows a count when follows exist and Downloads/Bookmarks only above zero; History has no count, as drawn.
+  History, Downloads and Bookmarks, not drawn on desktop, use the Continue reading card in the same three-column grid.
+  Downloads adds the E7-mobile summary "{n} chapters · {size} on this device", the note "Downloads stay on the device
+  that saved them and expire after 30 days.", a status icon and a remove button; rows saved on another device say "Not
+  on this device". Bookmarks add a remove button and "· panel n". The empty Following tab reads "Nothing followed yet"
+  with Explore series. On phones the H1 is hidden because the mobile header already says Library.
+- **E5 downloads.** Members get each readable chapter's download icon as a link that starts the offline download in
+  the reader; visitors, who cannot download (ADR 0012 §7), see no icon.
