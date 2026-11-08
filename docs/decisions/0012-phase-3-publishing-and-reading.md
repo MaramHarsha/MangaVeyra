@@ -25,7 +25,9 @@ decided before the modules are built in parallel.
    Private series are readable only by project members, as a preview. Unlisted series are never listed in Explore,
    search, profiles or feeds. Only `published` publications whose `published_at` has passed are readable; scheduled
    and unpublished ones are not. Mature and adult series are never shown to anonymous visitors; a signed-in reader
-   confirms once per series (stored with their reader preferences). Instance-wide content rules and filters arrive
+   confirms once per series (stored in `age_confirmations`, migration 0400, separate from reading preferences so a
+   confirmation never pins a reading mode or direction). `publish.Service` returns such series to signed-in viewers;
+   the reader and series page show the confirmation step until it is stored. Instance-wide content rules and filters arrive
    with the admin panel in Phase 4.
 2. **Frozen publications.** Publishing renders each page in the chosen language through the existing compose and
    lettering engines into an image asset and freezes the guided-view data (panel geometry, reading-order bubbles,
