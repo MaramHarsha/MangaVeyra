@@ -112,6 +112,7 @@
   "agents.flash.declined": "却下しました · 何も実行していません",
   "agents.flash.undone": "元に戻しました",
   "agents.error.decided": "この件はすでに判断されています。",
+  "agents.error.stale": "エージェントの依頼のあとに変更があったため、何も実行していません。依頼を却下してください。エージェントはもう一度依頼できます。",
   "agents.error.changed": "エージェントの変更のあとに変更があったため、元に戻しませんでした。開いて手で直してください。",
   "agents.error.no_undo": "この操作には元に戻せるものがありません。",
   "agents.error.no_screen": "この操作の画面はまだありません。依頼を却下するか、あとで行ってください。",

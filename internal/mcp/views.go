@@ -15,6 +15,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/core/httpx"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagestore"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/studio"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
@@ -358,6 +359,12 @@ func (m *Module) approveAction(w http.ResponseWriter, r *http.Request) error {
 		return core.ErrNotFound()
 	}
 	d, err := m.approve(ctx, sessionUser(r), r.PathValue("id"))
+	if errors.Is(err, studio.ErrConflict) || errors.Is(err, pagestore.ErrVersion) {
+		// The target changed since the agent asked; the request still waits.
+		web.Flash(w, r, "error", i18n.T(ctx, "agents.error.stale"), "")
+		core.Redirect(w, r, "/agents")
+		return nil
+	}
 	if err != nil {
 		return m.decisionError(w, r, err)
 	}

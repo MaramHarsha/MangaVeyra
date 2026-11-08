@@ -167,7 +167,12 @@ templ createDialog(v pageView) {
 					@ui.Input(ui.InputProps{ID: "token-name", Name: "name", Value: v.Form.Name, Required: true, MaxLength: 80,
 						Placeholder: i18n.T(ctx, "agents.form.name_placeholder"), Invalid: v.Form.Errors["name"] != "", Described: true})
 				}
-				<fieldset class="mv-agents__fieldset" aria-describedby={ ui.If(v.Form.Errors["projects"] != "", "token-projects-error") }>
+				<fieldset
+					class="mv-agents__fieldset"
+					if v.Form.Errors["projects"] != "" {
+						aria-describedby="token-projects-error"
+					}
+				>
 					<legend class="mv-field__label">{ i18n.T(ctx, "agents.form.projects") }</legend>
 					@ui.Radio(ui.CheckProps{ID: "token-projects-all", Name: "projects", Value: "all", Checked: v.Form.Projects != "some", Label: i18n.T(ctx, "agents.form.projects_all")})
 					@ui.Radio(ui.CheckProps{ID: "token-projects-some", Name: "projects", Value: "some", Checked: v.Form.Projects == "some", Label: i18n.T(ctx, "agents.form.projects_some")})
@@ -185,7 +190,12 @@ templ createDialog(v pageView) {
 						</span>
 					}
 				</fieldset>
-				<fieldset class="mv-agents__fieldset" aria-describedby={ ui.If(v.Form.Errors["access"] != "", "token-access-error") }>
+				<fieldset
+					class="mv-agents__fieldset"
+					if v.Form.Errors["access"] != "" {
+						aria-describedby="token-access-error"
+					}
+				>
 					<legend class="mv-field__label">{ i18n.T(ctx, "agents.form.access") }</legend>
 					@ui.Checkbox(ui.CheckProps{ID: "token-read", Checked: true, Disabled: true, Label: i18n.T(ctx, "agents.form.read")})
 					@ui.Checkbox(ui.CheckProps{ID: "token-edit", Name: "edit", Checked: v.Form.Edit, Label: i18n.T(ctx, "agents.form.edit")})

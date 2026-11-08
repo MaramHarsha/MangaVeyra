@@ -8,6 +8,7 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/mcp"
+	"github.com/MaramHarsha/MangaVeyra/internal/pagestore"
 )
 
 func (f *fixture) waitJob(id string) *jobs.Job {
@@ -107,6 +108,41 @@ func TestGenerationAboveThresholdWaitsForAPerson(t *testing.T) {
 		}
 		if r := form(f.browser, "/agents/actions/"+str(second["request_id"])+"/approve", nil); r.StatusCode != http.StatusSeeOther || f.count(`SELECT COUNT(*) FROM jobs`) != jobsBefore {
 			t.Fatal("a declined request could still be approved")
+		}
+
+		// A request whose page changed before the person approved does not run.
+		stale := mustCall(t, s, "queue_generation", map[string]any{"project_id": f.project.ID, "kind": "page", "page_id": pageID, "version": version})
+		doc, err := f.pages.GetPage(f.ctx, pageID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.pages.SavePage(f.ctx, doc, doc.Version, pagestore.Change{ActorKind: "user", ActorID: f.owner.ID, Action: "save", Summary: "save"}); err != nil {
+			t.Fatal(err)
+		}
+		jobsBefore = f.count(`SELECT COUNT(*) FROM jobs`)
+		if r := form(f.browser, "/agents/actions/"+str(stale["request_id"])+"/approve", nil); r.StatusCode != http.StatusSeeOther {
+			t.Fatalf("stale approve %d", r.StatusCode)
+		}
+		if f.actionStatus(str(stale["request_id"])) != "pending" || f.count(`SELECT COUNT(*) FROM jobs`) != jobsBefore {
+			t.Fatal("a stale request ran or was closed")
+		}
+		// Estimating a region edit leaves no mask behind.
+		masks := f.count(`SELECT COUNT(*) FROM assets WHERE kind = 'region_mask'`)
+		layer := ""
+		for _, pn := range doc.Panels {
+			for _, l := range pn.Layers {
+				if l.Kind == "background" && l.Asset != nil && layer == "" {
+					layer = l.ID
+				}
+			}
+		}
+		_, version = f.firstPage()
+		if out := mustCall(t, s, "queue_generation", map[string]any{"project_id": f.project.ID, "kind": "region", "page_id": pageID, "version": version,
+			"layer_id": layer, "prompt": "Gulls over the harbour", "region": map[string]any{"x": 0, "y": 0, "width": 0.5, "height": 0.5}, "estimate_only": true}); out["needs_approval"] != true {
+			t.Fatalf("region estimate %v", out)
+		}
+		if f.count(`SELECT COUNT(*) FROM assets WHERE kind = 'region_mask'`) != masks {
+			t.Fatal("an estimate left a mask asset")
 		}
 
 		// Exactly at the threshold runs at once, as the agent.

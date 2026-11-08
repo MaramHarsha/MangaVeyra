@@ -114,6 +114,7 @@
   "agents.flash.declined": "Declined · nothing was done",
   "agents.flash.undone": "Undone",
   "agents.error.decided": "Someone already decided on this.",
+  "agents.error.stale": "It changed since the agent asked, so nothing ran. Decline the request; the agent can ask again.",
   "agents.error.changed": "This changed after the agent's change, so it was not undone. Open it to fix it by hand.",
   "agents.error.no_undo": "There is nothing to undo for this action.",
   "agents.error.no_screen": "The screen for this action is not available yet. Decline the request or do it later.",

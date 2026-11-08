@@ -262,18 +262,21 @@ func (m *Module) queueGeneration(ctx context.Context, req *mcpsdk.CallToolReques
 	if err != nil {
 		return nil, nil, err
 	}
-	if !in.EstimateOnly {
-		if err := m.writeAllowed(a); err != nil {
-			return nil, nil, err
-		}
+	// Planning a region edit stores its mask, so estimates count as writes too.
+	if err := m.writeAllowed(a); err != nil {
+		return nil, nil, err
 	}
 	greq, detail, err := m.buildRequest(ctx, a, p, in)
 	if err != nil {
 		return nil, nil, err
 	}
-	if in.EstimateOnly && greq.MaskAssetID != "" {
-		defer func() { _ = m.assets.Delete(context.WithoutCancel(ctx), greq.MaskAssetID) }()
-	}
+	// A region mask is kept only when a job or a pending request uses it.
+	keepMask := false
+	defer func() {
+		if greq.MaskAssetID != "" && !keepMask {
+			_ = m.assets.Delete(context.WithoutCancel(ctx), greq.MaskAssetID)
+		}
+	}()
 	q, err := m.quote(ctx, a, greq)
 	if err != nil {
 		return nil, nil, err
@@ -289,17 +292,22 @@ func (m *Module) queueGeneration(ctx context.Context, req *mcpsdk.CallToolReques
 		return nil, out, nil
 	}
 	if needs {
-		return m.pendingGeneration(ctx, a, p, greq, detail, q.Estimate, out)
+		res, data, err := m.pendingGeneration(ctx, a, p, greq, detail, q.Estimate, out)
+		keepMask = err == nil
+		return res, data, err
 	}
 	j, err := m.enqueue(ctx, a.actor, greq)
 	var ge *ai.GenerateError
 	if errors.As(err, &ge) && ge.Code == ai.CodeApproval {
 		// The service's own check saw a larger estimate than the quote.
-		return m.pendingGeneration(ctx, a, p, greq, detail, q.Estimate, out)
+		res, data, err := m.pendingGeneration(ctx, a, p, greq, detail, q.Estimate, out)
+		keepMask = err == nil
+		return res, data, err
 	}
 	if err != nil {
 		return nil, nil, toolError(err)
 	}
+	keepMask = true
 	out["status"], out["job"], out["estimate"] = "queued", jobOut(j), costOut(j.Estimate)
 	if j.Deduplicated {
 		out["existing"] = true
