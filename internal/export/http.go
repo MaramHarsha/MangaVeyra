@@ -115,6 +115,12 @@ func (m *Module) loadView(r *http.Request, allPages bool) (studio.Actor, exportV
 		if err != nil {
 			return actor, v, err
 		}
+		// The layer list shows only current Character Lock evidence for the
+		// current asset, references and scoring method; a percentage stored
+		// with the layer at generation time can be stale and is cleared.
+		if err = m.control.WithLockScores(r.Context(), actor, &v.Page); err != nil {
+			return actor, v, err
+		}
 	}
 	// Options are the project language plus every language that has bubble
 	// text somewhere in the chapter, in content-language order.

@@ -37,6 +37,20 @@ type lockWorkerOutput struct {
 }
 
 func fmtIndex(prefix string, n int) string { return prefix + strconv.Itoa(n) }
+
+// LockPercent is the whole-percent label of a Character Lock measurement. It
+// truncates and never shows the 0.90 policy threshold or more for a failing
+// value, so 0.895 reads 89% and cannot round up into a visible pass (ADR 0011).
+func LockPercent(score float64) int {
+	if math.IsNaN(score) {
+		return 0
+	}
+	percent := max(0, min(100, int(math.Floor(score*100+1e-9))))
+	if threshold := int(math.Round(LockThreshold * 100)); score < LockThreshold && percent >= threshold {
+		percent = threshold - 1
+	}
+	return percent
+}
 func (s *service) assessPixels(ctx context.Context, run *jobs.Run, c studio.Character, hash string, ids []string, pixels [][]byte, scope jobs.Scope, slot, selectedModel string) ([]lockAssessment, error) {
 	if len(ids) == 0 || len(ids) != len(pixels) || len(ids) > 8 || len(c.Refs) == 0 {
 		return nil, studio.ErrInvalid

@@ -451,7 +451,10 @@ func (s *service) attachCandidateTx(ctx context.Context, tx *db.Tx, j *jobs.Job,
 					}
 				}
 			}
-			stored, err := s.pages.SetLayerAssetTx(ctx, tx, pagestore.SetLayerAsset{PageID: p.PageID, PanelID: p.PanelID, LayerID: l.LayerID, Kind: l.Kind, CharacterID: l.CharacterID, Name: l.Name, AssetID: l.AssetID, MaskAssetID: maskToKeep, Seed: &seed, Prompt: l.Prompt, Provenance: provenance, ModelID: j.ModelID, ProviderID: j.ProviderID, JobID: j.ID, LockScore: l.LockScore}, ch)
+			// Character Lock evidence lives in character_assessments and is resolved
+			// for the current references and method on every read (WithLockScores).
+			// A percentage copied onto the layer would outlive both.
+			stored, err := s.pages.SetLayerAssetTx(ctx, tx, pagestore.SetLayerAsset{PageID: p.PageID, PanelID: p.PanelID, LayerID: l.LayerID, Kind: l.Kind, CharacterID: l.CharacterID, Name: l.Name, AssetID: l.AssetID, MaskAssetID: maskToKeep, Seed: &seed, Prompt: l.Prompt, Provenance: provenance, ModelID: j.ModelID, ProviderID: j.ProviderID, JobID: j.ID}, ch)
 			if err != nil {
 				return err
 			}

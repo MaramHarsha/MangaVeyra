@@ -344,7 +344,8 @@ func (s *service) handleControlArt(ctx context.Context, run *jobs.Run) error {
 					}
 				}
 				seed := l.Seed
-				operations[item.PageID] = append(operations[item.PageID], pagestore.SetLayerAsset{PageID: item.PageID, PanelID: item.PanelID, LayerID: l.LayerID, Kind: l.Kind, CharacterID: l.CharacterID, Name: l.Name, AssetID: l.AssetID, MaskAssetID: mask, Seed: &seed, Prompt: l.Prompt, Provenance: provenance, ModelID: j.ModelID, ProviderID: j.ProviderID, JobID: j.ID, LockScore: l.LockScore})
+				// No LockScore: saved assessments are the only Character Lock evidence.
+				operations[item.PageID] = append(operations[item.PageID], pagestore.SetLayerAsset{PageID: item.PageID, PanelID: item.PanelID, LayerID: l.LayerID, Kind: l.Kind, CharacterID: l.CharacterID, Name: l.Name, AssetID: l.AssetID, MaskAssetID: mask, Seed: &seed, Prompt: l.Prompt, Provenance: provenance, ModelID: j.ModelID, ProviderID: j.ProviderID, JobID: j.ID})
 			}
 		}
 		action := "generate_page"

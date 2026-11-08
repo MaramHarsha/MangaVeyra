@@ -3,7 +3,6 @@ package studioui
 import (
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -90,11 +89,7 @@ func lockPercent(n *float64) string {
 	if n == nil {
 		return ""
 	}
-	percent := int(math.Floor(*n*100 + 1e-9))
-	if *n < gen.LockThreshold && percent >= int(gen.LockThreshold*100) {
-		percent = int(gen.LockThreshold*100) - 1
-	}
-	return strconv.Itoa(percent) + "%"
+	return strconv.Itoa(gen.LockPercent(*n)) + "%"
 }
 
 func lockMethodLabel(method string) string {
