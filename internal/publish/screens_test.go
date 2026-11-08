@@ -165,7 +165,10 @@ func TestScreensAreCompleteInBothLanguages(t *testing.T) {
 
 var (
 	linkTarget = regexp.MustCompile(`\s(?:href|hx-get|src)="(/[^"]*)"`)
-	postTarget = regexp.MustCompile(`\s(?:action|formaction|hx-post)="(/[^"]*)"`)
+	postTarget = regexp.MustCompile(`\s(?:formaction|hx-post)="(/[^"]*)"`)
+	formTag    = regexp.MustCompile(`<form\b[^>]*>`)
+	formAction = regexp.MustCompile(`\saction="(/[^"]*)"`)
+	formMethod = regexp.MustCompile(`(?i)\smethod="([a-z]+)"`)
 )
 
 // checkLinks fails for any link, form action or button formaction this
@@ -175,22 +178,37 @@ func checkLinks(t *testing.T, ta *testutil.TestApp, name string, body []byte) {
 	if bytes.Contains(body, []byte(`href=""`)) {
 		t.Fatalf("%s has an empty link", name)
 	}
+	serves := func(method, raw string) {
+		path := strings.ReplaceAll(raw, "&amp;", "&")
+		if i := strings.IndexAny(path, "?#"); i >= 0 {
+			path = path[:i]
+		}
+		if strings.HasPrefix(path, "/static/") || strings.HasPrefix(path, "/media/") {
+			return
+		}
+		if !ta.Router.Serves(method, path) {
+			t.Errorf("%s links to %s %s, which this server does not serve", name, method, path)
+		}
+	}
 	check := func(method string, re *regexp.Regexp) {
 		for _, m := range re.FindAllSubmatch(body, -1) {
-			path := strings.ReplaceAll(string(m[1]), "&amp;", "&")
-			if i := strings.IndexAny(path, "?#"); i >= 0 {
-				path = path[:i]
-			}
-			if strings.HasPrefix(path, "/static/") || strings.HasPrefix(path, "/media/") {
-				continue
-			}
-			if !ta.Router.Serves(method, path) {
-				t.Errorf("%s links to %s %s, which this server does not serve", name, method, path)
-			}
+			serves(method, string(m[1]))
 		}
 	}
 	check(http.MethodGet, linkTarget)
 	check(http.MethodPost, postTarget)
+	// A form submits with its own method (GET when none is given).
+	for _, tag := range formTag.FindAll(body, -1) {
+		action := formAction.FindSubmatch(tag)
+		if action == nil {
+			continue
+		}
+		method := http.MethodGet
+		if m := formMethod.FindSubmatch(tag); m != nil {
+			method = strings.ToUpper(string(m[1]))
+		}
+		serves(method, string(action[1]))
+	}
 }
 
 func checkPage(t *testing.T, name string, body []byte) {
