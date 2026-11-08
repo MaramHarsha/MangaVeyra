@@ -71,6 +71,7 @@
   "models.test.action": "Test connection",
   "models.test.capability": "{name} · {state}",
   "models.test.failed": "Connection check failed",
+  "models.test.key_unreadable": "The saved key can’t be read: this server’s encryption key (secret.key) changed after it was saved. Replace the key to use this connection.",
   "models.test.images": "Images",
   "models.test.ok": "Connection verified",
   "models.test.results": "Connection test results",

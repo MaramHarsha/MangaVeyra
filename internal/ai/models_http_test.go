@@ -609,3 +609,29 @@ func TestSetupStepThreeShowsDesignedProviderRows(t *testing.T) {
 	}
 	mustAppearInOrder(t, string(admin.Get("/setup/models").Body), "OpenAI · Google · xAI", "Connected", "Ollama · local text model")
 }
+
+// A key saved under another master key (secret.key replaced or lost) cannot be
+// read; the connection check must say so instead of a generic failure, so the
+// admin knows to replace the key.
+func TestModelsTestNamesAnUnreadableKey(t *testing.T) {
+	forEachModelsApp(t, func(t *testing.T, ta *testutil.TestApp) {
+		admin := ta.Login(t, ta.Admin.Username)
+		created := postModelsForm(admin, "/models/providers", url.Values{"kind": {"openai"}, "name": {"Lost Key OpenAI"},
+			"key": {"sk-openai-lost-master-key"}, "scope": {"server"}})
+		if created.StatusCode != http.StatusSeeOther {
+			t.Fatalf("create = %d", created.StatusCode)
+		}
+		id := providerIDByName(t, ta, "Lost Key OpenAI")
+		// Well-formed ciphertext this server cannot open for this provider (as after secret.key changed).
+		other := ta.Deps.Secrets.SealString("sk-openai-lost-master-key", "another-aad")
+		if _, err := ta.Deps.DB.Exec(context.Background(), `UPDATE providers SET key_enc = ? WHERE id = ?`, other, id); err != nil {
+			t.Fatal(err)
+		}
+		admin.Header.Set("HX-Request", "true")
+		res := postModelsForm(admin, "/models/providers/"+id+"/test", url.Values{})
+		admin.Header.Del("HX-Request")
+		if res.StatusCode != http.StatusOK || !strings.Contains(string(res.Body), "The saved key can’t be read") {
+			t.Fatalf("unreadable key test = %d: %.1500s", res.StatusCode, res.Body)
+		}
+	})
+}

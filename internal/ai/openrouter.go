@@ -411,6 +411,9 @@ func (s *providerService) TestConnection(ctx context.Context, actor providerActo
 		return zero, errProviderUnavailable
 	}
 	provider, err := s.store.ResolveDispatch(ctx, actor.UserID, id)
+	if errors.Is(err, errProviderKeyUnreadable) {
+		return zero, errProviderKeyUnreadable
+	}
 	if err != nil {
 		return zero, errProviderUnavailable
 	}

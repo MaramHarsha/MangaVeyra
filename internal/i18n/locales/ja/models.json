@@ -71,6 +71,7 @@
   "models.test.action": "接続を確認",
   "models.test.capability": "{name}：{state}",
   "models.test.failed": "接続確認に失敗しました",
+  "models.test.key_unreadable": "保存されたキーを読み取れません。保存後にこのサーバーの暗号鍵（secret.key）が変わりました。この接続を使うにはキーを入れ直してください。",
   "models.test.images": "画像",
   "models.test.ok": "接続を確認済み",
   "models.test.results": "接続確認の結果",

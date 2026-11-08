@@ -28,6 +28,9 @@ var (
 	errProviderForbidden   = errors.New("ai: provider access denied")
 	errProviderInvalid     = errors.New("ai: invalid provider")
 	errProviderUnavailable = errors.New("ai: provider unavailable")
+	// errProviderKeyUnreadable marks a saved key this server cannot decrypt, such
+	// as after secret.key was replaced or lost; the admin must replace the key.
+	errProviderKeyUnreadable = fmt.Errorf("%w: the saved key cannot be read with this server's secret key", errProviderUnavailable)
 )
 
 // instanceReader is deliberately private so tests can prove settings failures
@@ -451,9 +454,11 @@ func (s *providerStore) ResolveDispatch(ctx context.Context, actorID, id string)
 	}
 	key := ""
 	if r.KeyEnc != "" {
-		key, err = s.box.OpenString(r.KeyEnc, providerKeyAAD(r.ID))
+		if key, err = s.box.OpenString(r.KeyEnc, providerKeyAAD(r.ID)); err != nil {
+			return zero, errProviderKeyUnreadable
+		}
 	}
-	if err != nil || (r.Kind != providerKindLocalText && strings.TrimSpace(key) == "") {
+	if r.Kind != providerKindLocalText && strings.TrimSpace(key) == "" {
 		return zero, errProviderUnavailable
 	}
 	owner := ""

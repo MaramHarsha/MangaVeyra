@@ -362,9 +362,12 @@ func (m *Module) testProvider(w http.ResponseWriter, r *http.Request) error {
 		return settingsErr
 	}
 	row := providerRowView{Provider: view, LocalOnly: inst.LocalOnly, Tested: true}
-	if testErr != nil {
+	switch {
+	case errors.Is(testErr, errProviderKeyUnreadable):
+		row.Tone, row.Notice = ui.ToneError, i18n.T(ctx, "models.test.key_unreadable")
+	case testErr != nil:
 		row.Tone, row.Notice = ui.ToneError, i18n.T(ctx, "models.test.failed")
-	} else {
+	default:
 		row.Tone, row.Notice = ui.ToneSuccess, i18n.T(ctx, "models.test.ok")
 	}
 	if core.IsHTMX(r) {
