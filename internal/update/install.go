@@ -193,8 +193,8 @@ func (m *Module) runInstall(ctx context.Context, rec *Record, run Run, plan inst
 	}
 	fail := func(step, code string, err error) {
 		m.fail(ctx, rec, &run, step, code, err, svc, actor, plan.exe)
-		// A restore puts back the archive's copy of the lock row (or none):
-		// hold it again until the deferred release.
+		// A restore keeps the update.* settings, so the lease is still ours;
+		// renew it until the deferred release all the same.
 		_, _ = m.renewLock(ctx, lock)
 	}
 

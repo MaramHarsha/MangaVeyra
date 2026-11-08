@@ -167,8 +167,9 @@ func (e *env) publish(o publishOpts) update.Manifest {
 }
 
 // fakeBackups implements backup.Service against the backups table. Restore
-// puts back the instance settings and update rows as they were at Create,
-// like a real archive would, and removes the fake migration's marker.
+// puts back the instance settings as they were at Create, except those a real
+// restore keeps from the running server (maintenance, backup.* and update.*;
+// the updates table is kept too), and removes the fake migration's marker.
 type fakeBackups struct {
 	d           *db.DB
 	dataDir     string
@@ -183,7 +184,6 @@ type fakeBackups struct {
 
 type snap struct {
 	settings map[string]string
-	updates  map[string][2]string
 }
 
 func (f *fakeBackups) Create(ctx context.Context, req backup.Request) (backup.Backup, error) {
@@ -199,7 +199,7 @@ func (f *fakeBackups) Create(ctx context.Context, req backup.Request) (backup.Ba
 		b.ID, b.Kind, b.Status, b.Bytes, b.AppVersion, b.CreatedAt); err != nil {
 		return backup.Backup{}, err
 	}
-	s := snap{settings: map[string]string{}, updates: map[string][2]string{}}
+	s := snap{settings: map[string]string{}}
 	var rows []struct {
 		Key   string `db:"key"`
 		Value string `db:"value"`
@@ -207,15 +207,6 @@ func (f *fakeBackups) Create(ctx context.Context, req backup.Request) (backup.Ba
 	_ = f.d.Select(ctx, &rows, `SELECT key, value FROM instance_settings`)
 	for _, r := range rows {
 		s.settings[r.Key] = r.Value
-	}
-	var ups []struct {
-		ID     string `db:"id"`
-		Status string `db:"status"`
-		Steps  string `db:"steps"`
-	}
-	_ = f.d.Select(ctx, &ups, `SELECT id, status, steps FROM updates`)
-	for _, u := range ups {
-		s.updates[u.ID] = [2]string{u.Status, u.Steps}
 	}
 	if f.snapshot == nil {
 		f.snapshot = map[string]snap{}
@@ -244,12 +235,10 @@ func (f *fakeBackups) Restore(ctx context.Context, id, actorID string) error {
 		return backup.ErrNotFound
 	}
 	for k, v := range s.settings {
-		if _, err := f.d.Exec(ctx, `UPDATE instance_settings SET value = ? WHERE key = ?`, v, k); err != nil {
-			return err
+		if k == "maintenance" || strings.HasPrefix(k, "backup.") || strings.HasPrefix(k, "update.") {
+			continue
 		}
-	}
-	for idv, st := range s.updates {
-		if _, err := f.d.Exec(ctx, `UPDATE updates SET status = ?, steps = ? WHERE id = ?`, st[0], st[1], idv); err != nil {
+		if _, err := f.d.Exec(ctx, `UPDATE instance_settings SET value = ? WHERE key = ?`, v, k); err != nil {
 			return err
 		}
 	}

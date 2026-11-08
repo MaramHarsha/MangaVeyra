@@ -99,8 +99,8 @@ func decodeLock(raw string) lockValue {
 }
 
 // renewLock moves the lease forward while v is still the holder. A restore
-// may have put back an older copy of the row; the value is identical, so the
-// renewal keeps working.
+// keeps the update.* settings (and moves the lease forward itself), so the
+// row survives a rollback; it is inserted again should it be missing.
 func (m *Module) renewLock(ctx context.Context, v lockValue) (bool, error) {
 	res, err := m.d.DB.Exec(ctx, `UPDATE instance_settings SET updated_at = ? WHERE key = ? AND value = ?`, db.Now(), keyLock, v.encode())
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -52,10 +53,119 @@ type RestoreState struct {
 
 // preservedKeys are instance settings a restore keeps from the running
 // server: maintenance mode stays on until the caller turns it off, and the
-// backup module's own state (lock, schedule, slot, presence) describes this
-// machine, not the archive.
+// backup and update modules' own state (leases, schedule, slot, presence,
+// update settings and checks) describes this machine, not the archive.
 func preservedSetting(key string) bool {
-	return key == "maintenance" || strings.HasPrefix(key, "backup.")
+	return key == "maintenance" || strings.HasPrefix(key, "backup.") || strings.HasPrefix(key, "update.")
+}
+
+// preservedSettingsSQL selects the preserved settings rows.
+const preservedSettingsSQL = `key = 'maintenance' OR key LIKE 'backup.%' OR key LIKE 'update.%'`
+
+// updateLockKey is the update module's install lease (its own key, update.lock).
+const updateLockKey = "update.lock"
+
+// keptTables are tables whose live rows a restore keeps because they record
+// what happened on this server rather than the archive's content:
+//
+//   - updates (like backups) is replaced by the live rows: the update attempts,
+//     including the one whose failure is being rolled back;
+//   - audit_log, spend_ledger and spend_reservations are merged: the archive's
+//     rows plus every live row, the live copy winning, so audit history is never
+//     rolled back and spend caps never count less than was spent.
+//
+// References to rows the archive does not have (members, jobs, backups) are
+// cleared. They are copied into temporary tables inside the restore's
+// transaction, so their size does not matter.
+var keptTables = []struct {
+	name    string
+	replace bool
+}{{"updates", true}, {"audit_log", false}, {"spend_ledger", false}, {"spend_reservations", false}}
+
+func keptTable(name string) (replace, ok bool) {
+	for _, k := range keptTables {
+		if k.name == name {
+			return k.replace, true
+		}
+	}
+	return false, false
+}
+
+func keepName(table string) string { return "mv_keep_" + table }
+
+// copyKept copies the live rows of the kept tables into temporary tables and
+// returns each copy's columns.
+func copyKept(ctx context.Context, tx *db.Tx, cur *catalog) (map[string][]string, error) {
+	cols := map[string][]string{}
+	for _, k := range keptTables {
+		t := cur.Tables[k.name]
+		if t == nil {
+			continue
+		}
+		q := `CREATE TEMP TABLE ` + quote(keepName(k.name)) + ` AS SELECT * FROM ` + quote(k.name)
+		if tx.Dialect() == db.Postgres {
+			q = `CREATE TEMP TABLE ` + quote(keepName(k.name)) + ` ON COMMIT DROP AS SELECT * FROM ` + quote(k.name)
+		}
+		if _, err := tx.Exec(ctx, q); err != nil {
+			return nil, fmt.Errorf("keep %s: %w", k.name, err)
+		}
+		for _, c := range t.Columns {
+			cols[k.name] = append(cols[k.name], c.Name)
+		}
+	}
+	return cols, nil
+}
+
+// putBackKept writes the copied live rows into the restored tables (see
+// keptTables). Only columns both schemas have are copied; a foreign key to a
+// row the restored data lacks becomes NULL.
+func putBackKept(ctx context.Context, tx *db.Tx, target *catalog, live map[string][]string) error {
+	for _, k := range keptTables {
+		t, cols := target.Tables[k.name], live[k.name]
+		if t == nil || cols == nil || len(t.PK) != 1 {
+			continue
+		}
+		pk, src := quote(t.PK[0]), quote(keepName(k.name))
+		del := `DELETE FROM ` + quote(k.name)
+		if !k.replace {
+			del += ` WHERE ` + pk + ` IN (SELECT ` + pk + ` FROM ` + src + `)`
+		}
+		if _, err := tx.Exec(ctx, del); err != nil {
+			return fmt.Errorf("keep %s: %w", k.name, err)
+		}
+		var names, exprs, where []string
+		for _, c := range t.Columns {
+			if !slices.Contains(cols, c.Name) {
+				continue
+			}
+			col := quote(c.Name)
+			expr := `k.` + col
+			if ref, ok := t.Refs[c.Name]; ok {
+				if rt := target.Tables[ref]; rt != nil && len(rt.PK) == 1 {
+					exists := `EXISTS (SELECT 1 FROM ` + quote(ref) + ` r WHERE r.` + quote(rt.PK[0]) + ` = k.` + col + `)`
+					if c.Nullable {
+						expr = `CASE WHEN ` + exists + ` THEN k.` + col + ` END`
+					} else {
+						where = append(where, `(k.`+col+` IS NULL OR `+exists+`)`)
+					}
+				}
+			}
+			names, exprs = append(names, col), append(exprs, expr)
+		}
+		q := `INSERT INTO ` + quote(k.name) + ` (` + strings.Join(names, ", ") + `) SELECT ` + strings.Join(exprs, ", ") + ` FROM ` + src + ` k`
+		if len(where) > 0 {
+			q += ` WHERE ` + strings.Join(where, ` AND `)
+		}
+		if _, err := tx.Exec(ctx, q); err != nil {
+			return fmt.Errorf("keep %s: %w", k.name, err)
+		}
+		if tx.Dialect() == db.SQLite {
+			if _, err := tx.Exec(ctx, `DROP TABLE temp.`+src); err != nil {
+				return fmt.Errorf("keep %s: %w", k.name, err)
+			}
+		}
+	}
+	return nil
 }
 
 // Restore implements Service.
@@ -290,7 +400,11 @@ func (s *service) replace(ctx context.Context, tx *db.Tx, a *archiveReader, curr
 	if keep.backups, err = snapshot(ctx, tx, `SELECT * FROM backups`); err != nil {
 		return err
 	}
-	if keep.settings, err = snapshot(ctx, tx, `SELECT * FROM instance_settings WHERE key = 'maintenance' OR key LIKE 'backup.%'`); err != nil {
+	if keep.settings, err = snapshot(ctx, tx, `SELECT * FROM instance_settings WHERE `+preservedSettingsSQL); err != nil {
+		return err
+	}
+	live, err := copyKept(ctx, tx, cur)
+	if err != nil {
 		return err
 	}
 	if rep.ActorID != "" {
@@ -332,7 +446,7 @@ func (s *service) replace(ctx context.Context, tx *db.Tx, a *archiveReader, curr
 	}
 	var later []pending
 	for i, name := range target.Order {
-		if name == metaTable || name == "backups" {
+		if replace, kept := keptTable(name); name == metaTable || name == "backups" || kept && replace {
 			continue
 		}
 		te, ok := archived[name]
@@ -439,6 +553,9 @@ func (s *service) replace(ctx context.Context, tx *db.Tx, a *archiveReader, curr
 		rep.CanceledJobs = int(n)
 	}
 	if err := restorePreserved(ctx, tx, target, keep, now); err != nil {
+		return err
+	}
+	if err := putBackKept(ctx, tx, target, live); err != nil {
 		return err
 	}
 	rep.Sealed, rep.MasterKeyDiffers = checkSealed(ctx, tx, s.d.Secrets)
@@ -623,15 +740,15 @@ func restorePreserved(ctx context.Context, tx *db.Tx, c *catalog, keep preserved
 			return fmt.Errorf("keep backups: %w", err)
 		}
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM instance_settings WHERE key = 'maintenance' OR key LIKE 'backup.%'`); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM instance_settings WHERE `+preservedSettingsSQL); err != nil {
 		return err
 	}
 	for _, r := range keep.settings {
 		if v, ok := r["updated_by"]; ok && v != nil && !exists(v) {
 			r["updated_by"] = nil
 		}
-		if k, _ := r["key"].(string); k == lockKey {
-			r["updated_at"] = now
+		if k, _ := r["key"].(string); k == lockKey || k == updateLockKey {
+			r["updated_at"] = now // the holders keep their leases through the restore
 		}
 		if err := insertRaw(ctx, tx, c.Tables["instance_settings"], r, false); err != nil {
 			return fmt.Errorf("keep settings: %w", err)

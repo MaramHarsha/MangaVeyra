@@ -322,8 +322,9 @@ func (m *Module) claim(ctx context.Context, id, actor string, run Run) (*Record,
 	return m.record(ctx, id)
 }
 
-// saveRun writes the attempt's progress. After a restore the row may hold the
-// archive's older copy or be missing, so it is inserted again when needed.
+// saveRun writes the attempt's progress. A restore keeps the updates table,
+// so the row survives a rollback; it is inserted again should it be missing
+// (an archive restored by hand from another server).
 func (m *Module) saveRun(ctx context.Context, rec *Record, run Run) error {
 	rec.Steps = mustJSON(run)
 	res, err := m.d.DB.Exec(ctx, `UPDATE updates SET status = ?, backup_id = ?, steps = ?, error = ?, started_by = ?, started_at = ?,
