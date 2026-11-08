@@ -367,4 +367,6 @@ func (m *Module) saveAccessibility(w http.ResponseWriter, r *http.Request) error
 type dataView struct {
 	QuotaMB int
 	Host    string
+	// LastExport is "14 Sep · 6.2 GB" with its download link, empty before the first export.
+	LastExport, LastExportURL string
 }
