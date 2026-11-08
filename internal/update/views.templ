@@ -1,0 +1,435 @@
+package update
+
+import (
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+	"github.com/MaramHarsha/MangaVeyra/internal/web/ui"
+)
+
+// PageView is /admin/update and /admin/update/settings: the G14 window over
+// the dimmed app shell (the artboards' "dashboard behind").
+templ PageView(v view) {
+	<div class="mv-update">
+		<div class="mv-update__scrim" aria-hidden="true"></div>
+		@window(v)
+	</div>
+}
+
+// Overlay is the G14 modal shown to admins over any app-shell page after they
+// log in: the offer (until "Remind me next login") or an unacknowledged result.
+templ Overlay(v view) {
+	<div class="mv-update mv-update--overlay">
+		<div class="mv-update__scrim" aria-hidden="true"></div>
+		@window(v)
+	</div>
+}
+
+templ window(v view) {
+	switch v.State {
+		case stateAvailable:
+			@availableWindow(v)
+		case stateRunning:
+			@RunningWindow(v)
+		case stateDone:
+			@doneWindow(v)
+		case stateFailed:
+			@failedWindow(v)
+		case stateContainer:
+			@containerWindow(v)
+		default:
+			@settingsWindow(v)
+	}
+}
+
+templ heading(v view, title, sub string) {
+	<div class="mv-update__heading">
+		if v.Overlay {
+			<h2 class="mv-update__title" id="mv-update-title">{ title }</h2>
+		} else {
+			<h1 class="mv-update__title" id="mv-update-title">{ title }</h1>
+		}
+		if sub != "" {
+			<p class="mv-update__sub">{ sub }</p>
+		}
+	</div>
+}
+
+// closeLink is the window's X: a link on the page, a form in the overlay.
+templ closeLink(v view, action string) {
+	if v.Overlay {
+		<button class="mv-close mv-update__close" type="submit" formaction={ action } aria-label={ i18n.T(ctx, "ui.close") }>
+			@ui.Icon("x", 20)
+		</button>
+	} else {
+		<a class="mv-close mv-update__close" href={ templ.URL(v.Back) } aria-label={ i18n.T(ctx, "ui.close") }>
+			@ui.Icon("x", 20)
+		</a>
+	}
+}
+
+templ stepList(rows []stepRow) {
+	<ol class="mv-update__steps">
+		for _, s := range rows {
+			<li class={ "mv-update__step mv-update__step--" + s.State }>
+				@stepIcon(s.State)
+				<div class="mv-update__step-text">
+					<strong class="mv-update__step-title">{ s.Title }</strong>
+					<span class="mv-update__step-detail">{ s.Detail }</span>
+				</div>
+				if s.Pct != "" {
+					<span class="mv-update__pct">{ s.Pct }</span>
+				}
+				<span class="mv-sr-only">{ i18n.T(ctx, "update.state." + s.State) }</span>
+			</li>
+		}
+	</ol>
+}
+
+templ stepIcon(state string) {
+	switch state {
+		case StateDone, StateSkipped:
+			<i class="ti ti-circle-check mv-update__icon mv-update__icon--done" aria-hidden="true"></i>
+		case StateRunning:
+			<i class="ti ti-loader-2 mv-update__icon mv-update__icon--running" aria-hidden="true"></i>
+		case StateFailed, "restore_failed":
+			<i class="ti ti-circle-x mv-update__icon mv-update__icon--failed" aria-hidden="true"></i>
+		case "restored":
+			<i class="ti ti-arrow-back-up mv-update__icon mv-update__icon--restored" aria-hidden="true"></i>
+		default:
+			<span class="mv-update__dot" aria-hidden="true"></span>
+	}
+}
+
+templ problem(text string) {
+	if text != "" {
+		@ui.Notice(ui.ToneError, "alert-triangle") {
+			<p>{ text }</p>
+		}
+	}
+}
+
+templ toggleRow(id, name, label string, checked bool) {
+	<div class="mv-update__toggle">
+		<label for={ id }>{ label }</label>
+		@ui.Toggle(ui.ToggleProps{ID: id, Name: name, Checked: checked})
+	</div>
+}
+
+// G14 – Update available.
+templ availableWindow(v view) {
+	<form
+		class="mv-update__window"
+		method="post"
+		action="/admin/update/start"
+		aria-labelledby="mv-update-title"
+		if v.Overlay {
+			role="dialog"
+			aria-modal="true"
+		}
+	>
+		<input type="hidden" name="id" value={ v.idOf(v.Offer) }/>
+		<input type="hidden" name="toggles" value="1"/>
+		if v.Overlay {
+			<input type="hidden" name="next" value={ v.Next }/>
+		}
+		<header class="mv-update__head">
+			@heading(v, i18n.T(ctx, "update.available.title", "version", v.toVersion()), i18n.T(ctx, "update.available.sub", "host", v.Host, "version", v.Running))
+			@closeLink(v, "/admin/update/later")
+		</header>
+		<div class="mv-update__body">
+			<div class="mv-update__badges">
+				{{ tone, icon, label := v.kindBadge(ctx) }}
+				@ui.Badge(ui.Tone(tone), icon, label)
+				@ui.Badge(ui.ToneNeutral, "signature", i18n.T(ctx, "update.badge.signed"))
+				if v.O.Security {
+					@ui.Badge(ui.ToneWarning, "shield-exclamation", i18n.T(ctx, "update.badge.security"))
+				}
+				if v.O.Asset != nil && !v.Container {
+					@ui.Badge(ui.ToneNeutral, "", i18n.T(ctx, "update.badge.download", "size", sizeText(ctx, v.O.Asset.Size)))
+				}
+			</div>
+			if notes := v.notes(); len(notes) > 0 || v.O.NotesURL != "" {
+				<div class="mv-update__notes">
+					<strong>{ i18n.T(ctx, "update.available.whats_new", "versions", v.versions(ctx)) }</strong>
+					if len(notes) > 0 {
+						<ul class="mv-update__notes-list">
+							for _, n := range notes {
+								<li>{ n }</li>
+							}
+						</ul>
+					}
+					if v.O.NotesURL != "" {
+						<a class="mv-update__notes-link" href={ templ.SafeURL(v.O.NotesURL) } rel="noopener noreferrer" target="_blank">{ i18n.T(ctx, "update.available.full_changelog") }</a>
+					}
+				</div>
+			}
+			if v.Container {
+				@ui.Notice(ui.ToneInfo, "brand-docker") {
+					<p>{ i18n.T(ctx, "update.available.container") }</p>
+				}
+			}
+			@stepList(v.availableRows(ctx))
+			<div class="mv-update__toggles">
+				@toggleRow("mv-update-keep", "keep", i18n.T(ctx, "update.toggle.keep"), v.Config.KeepBackup)
+				@toggleRow("mv-update-auto", "auto_patch", i18n.T(ctx, "update.toggle.auto"), v.Config.AutoPatch)
+			</div>
+			if b := v.blocker(ctx); b != "" {
+				@ui.Notice(ui.ToneWarning, "alert-triangle") {
+					<p>{ b }</p>
+				}
+			}
+			@problem(v.Problem)
+		</div>
+		<footer class="mv-update__foot">
+			<span class="mv-update__note">{ i18n.T(ctx, "update.available.members") }</span>
+			<div class="mv-update__actions">
+				@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Type: "submit", Attrs: templ.Attributes{"formaction": "/admin/update/later"}}) {
+					{ i18n.T(ctx, "update.available.later") }
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "download", Disabled: v.blocker(ctx) != ""}) {
+					{ i18n.T(ctx, "update.available.start") }
+				}
+			</div>
+		</footer>
+	</form>
+}
+
+func runningAttrs(v view) templ.Attributes {
+	if v.Run.Phase == PhaseRestarting {
+		return templ.Attributes{}
+	}
+	return templ.Attributes{"hx-get": "/admin/update/progress", "hx-trigger": "every 2s", "hx-swap": "outerHTML"}
+}
+
+// RunningWindow is G14 – Updating. With JavaScript it polls every two
+// seconds; without, the page refreshes itself.
+templ RunningWindow(v view) {
+	<section
+		class="mv-update__window"
+		id="mv-update-running"
+		aria-labelledby="mv-update-title"
+		aria-live="polite"
+		{ runningAttrs(v)... }
+	>
+		if v.Run.Phase == PhaseRestarting {
+			<meta http-equiv="refresh" content="8"/>
+		} else {
+			<noscript><meta http-equiv="refresh" content="3"/></noscript>
+		}
+		<header class="mv-update__head">
+			@heading(v, i18n.T(ctx, "update.running.title", "version", v.toVersion()), i18n.T(ctx, "update.running.sub"))
+			@closeLink(v, "")
+		</header>
+		<div class="mv-update__body mv-update__body--steps">
+			@stepList(v.runRows(ctx))
+			@ui.Bar(v.progress(), "", true, i18n.T(ctx, "update.running.progress"))
+		</div>
+		<footer class="mv-update__foot">
+			<span class="mv-update__note">{ i18n.T(ctx, "update.running.started", "time", v.clock(v.Attempt.StartedAt)) }</span>
+			<div class="mv-update__actions">
+				@ui.LinkButton("/admin/update/log?id="+v.idOf(v.Attempt), ui.ButtonProps{Variant: ui.Quiet, Icon: "terminal-2"}) {
+					{ i18n.T(ctx, "update.running.log") }
+				}
+			</div>
+		</footer>
+	</section>
+}
+
+// G14 – Update done.
+templ doneWindow(v view) {
+	<form
+		class="mv-update__window"
+		method="post"
+		action="/admin/update/ack"
+		aria-labelledby="mv-update-title"
+		if v.Overlay {
+			role="dialog"
+			aria-modal="true"
+		}
+	>
+		<input type="hidden" name="id" value={ v.idOf(v.Attempt) }/>
+		<input type="hidden" name="next" value={ v.Next }/>
+		<div class="mv-update__hero">
+			<div class="mv-tex-speedlines mv-update__lines" aria-hidden="true"></div>
+			@ui.SFX(i18n.T(ctx, "update.done.sfx"), "", "accent", false)
+			if v.Overlay {
+				<h2 class="mv-update__hero-title" id="mv-update-title">{ i18n.T(ctx, "update.done.title", "host", v.Host, "version", v.toVersion()) }</h2>
+			} else {
+				<h1 class="mv-update__hero-title" id="mv-update-title">{ i18n.T(ctx, "update.done.title", "host", v.Host, "version", v.toVersion()) }</h1>
+			}
+			<p class="mv-update__hero-sub">{ v.doneSub(ctx) }</p>
+		</div>
+		<div class="mv-update__body mv-update__body--summary">
+			@stepList(v.doneRows(ctx))
+		</div>
+		<footer class="mv-update__foot">
+			<span class="mv-update__note">
+				<a href={ templ.URL("/admin/update/log?id=" + v.idOf(v.Attempt)) }>{ i18n.T(ctx, "update.done.log") }</a>
+			</span>
+			<div class="mv-update__actions">
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+					{ i18n.T(ctx, "update.done.continue") }
+				}
+			</div>
+		</footer>
+	</form>
+}
+
+// G14 – Update failed, restored.
+templ failedWindow(v view) {
+	<form
+		class="mv-update__window"
+		method="post"
+		action="/admin/update/start"
+		aria-labelledby="mv-update-title"
+		if v.Overlay {
+			role="dialog"
+			aria-modal="true"
+		}
+	>
+		<input type="hidden" name="id" value={ v.idOf(v.Offer) }/>
+		<input type="hidden" name="attempt" value={ v.idOf(v.Attempt) }/>
+		<input type="hidden" name="next" value={ v.Next }/>
+		<header class="mv-update__head">
+			@heading(v, v.failedTitle(ctx), v.failedSub(ctx))
+			<button class="mv-close mv-update__close" type="submit" formaction="/admin/update/ack" aria-label={ i18n.T(ctx, "ui.close") }>
+				@ui.Icon("x", 20)
+			</button>
+		</header>
+		<div class="mv-update__body mv-update__body--steps">
+			@stepList(v.failedRows(ctx))
+			<div class={ "mv-update__advice", templ.KV("mv-update__advice--error", v.Run.RestoreFailed) }>
+				@ui.Icon("alert-triangle", 18)
+				<span>{ v.failedAdvice(ctx) }</span>
+			</div>
+			@problem(v.Problem)
+		</div>
+		<footer class="mv-update__foot">
+			<span class="mv-update__note">
+				if v.Run.Code != "" {
+					{ i18n.T(ctx, "update.failed.code", "code", v.Run.Code) }
+				}
+			</span>
+			<div class="mv-update__actions">
+				@ui.LinkButton("/admin/update/log?id="+v.idOf(v.Attempt), ui.ButtonProps{Variant: ui.Quiet, Attrs: templ.Attributes{"data-copy-url": "/admin/update/log?id=" + v.idOf(v.Attempt), "data-copied": i18n.T(ctx, "update.failed.copied")}}) {
+					{ i18n.T(ctx, "update.failed.copy_log") }
+				}
+				if v.Run.RestoreFailed {
+					if ui.Ready(ctx, "/admin/backup") {
+						@ui.LinkButton("/admin/backup", ui.ButtonProps{Variant: ui.Primary}) {
+							{ i18n.T(ctx, "update.failed.open_backups") }
+						}
+					}
+				} else if v.Offer != nil {
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+						{ i18n.T(ctx, "update.failed.retry") }
+					}
+				}
+			</div>
+		</footer>
+	</form>
+}
+
+// The container state (no artboard, ADR 0004 §12): the backup is taken and
+// the host commands are shown, because a container cannot replace its image.
+templ containerWindow(v view) {
+	<section class="mv-update__window" aria-labelledby="mv-update-title">
+		<header class="mv-update__head">
+			@heading(v, i18n.T(ctx, "update.container.title", "version", v.toVersion()), i18n.T(ctx, "update.container.sub"))
+			@closeLink(v, "")
+		</header>
+		<div class="mv-update__body">
+			@stepList(v.runRows(ctx)[:1])
+			<div class="mv-update__notes">
+				<strong>{ i18n.T(ctx, "update.container.commands") }</strong>
+				<pre class="mv-update__commands"><code>
+					for _, c := range containerCommands {
+						{ c + "\n" }
+					}
+				</code></pre>
+				<span class="mv-update__step-detail">{ i18n.T(ctx, "update.container.after", "version", v.toVersion()) }</span>
+			</div>
+		</div>
+		<footer class="mv-update__foot">
+			<span class="mv-update__note">{ i18n.T(ctx, "update.container.kept") }</span>
+			<div class="mv-update__actions">
+				@ui.LinkButton("/admin/update/log?id="+v.idOf(v.Attempt), ui.ButtonProps{Variant: ui.Quiet, Icon: "terminal-2"}) {
+					{ i18n.T(ctx, "update.running.log") }
+				}
+			</div>
+		</footer>
+	</section>
+}
+
+// The settings state (no artboard, ADR 0004 §12): "Check for updates",
+// the release address and channel, built from G14's window and rows.
+templ settingsWindow(v view) {
+	<form class="mv-update__window" method="post" action="/admin/update/settings" aria-labelledby="mv-update-title" novalidate>
+		<header class="mv-update__head">
+			@heading(v, i18n.T(ctx, "update.settings.title", "host", v.Host, "version", v.Running), v.settingsSub(ctx))
+			@closeLink(v, "")
+		</header>
+		<div class="mv-update__body">
+			if !v.KeyOK {
+				@ui.Notice(ui.ToneWarning, "key-off") {
+					<p>{ i18n.T(ctx, "update.settings.no_key") }</p>
+				}
+			}
+			if v.Container {
+				@ui.Notice(ui.ToneInfo, "brand-docker") {
+					<p>{ i18n.T(ctx, "update.settings.container") }</p>
+				}
+			}
+			<div class="mv-update__toggles">
+				@toggleRow("mv-update-checks", "checks", i18n.T(ctx, "update.settings.checks"), v.Form.Checks)
+				<p class="mv-update__hint">{ i18n.T(ctx, "update.settings.checks_hint") }</p>
+			</div>
+			@ui.Field(ui.FieldProps{ID: "mv-update-url", Label: i18n.T(ctx, "update.settings.url"), Hint: i18n.T(ctx, "update.settings.url_hint")}) {
+				@ui.Input(ui.InputProps{ID: "mv-update-url", Name: "release_url", Type: "url", Value: v.Form.ReleaseURL, Placeholder: "https://", Autocomplete: "off", Described: true, Inputmode: "url", Attrs: templ.Attributes{"spellcheck": "false"}})
+			}
+			@ui.Field(ui.FieldProps{ID: "mv-update-channel", Label: i18n.T(ctx, "update.settings.channel")}) {
+				@ui.Select(ui.SelectProps{ID: "mv-update-channel", Name: "channel", Value: v.Form.Channel, Options: []ui.Option{
+					{Value: ChannelStable, Label: i18n.T(ctx, "update.channel.stable")},
+					{Value: ChannelBeta, Label: i18n.T(ctx, "update.channel.beta")},
+				}})
+			}
+			<div class="mv-update__toggles">
+				@toggleRow("mv-update-keep", "keep", i18n.T(ctx, "update.toggle.keep"), v.Form.KeepBackup)
+				@toggleRow("mv-update-auto", "auto_patch", i18n.T(ctx, "update.toggle.auto"), v.Form.AutoPatch)
+				<p class="mv-update__hint">{ i18n.T(ctx, "update.settings.auto_hint") }</p>
+			</div>
+			if line := v.attemptLine(ctx); line != "" {
+				<p class="mv-update__step-detail">
+					{ line } ·
+					<a href={ templ.URL("/admin/update/log?id=" + v.idOf(v.Attempt)) }>{ i18n.T(ctx, "update.running.log") }</a>
+				</p>
+			}
+			@problem(v.Problem)
+		</div>
+		<footer class="mv-update__foot">
+			<span class="mv-update__note">{ v.lastChecked(ctx) }</span>
+			<div class="mv-update__actions">
+				if v.Offer != nil {
+					@ui.LinkButton("/admin/update", ui.ButtonProps{Variant: ui.Ghost, Icon: "download"}) {
+						{ i18n.T(ctx, "update.settings.view_update", "version", v.Offer.ToVersion) }
+					}
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Quiet, Type: "submit", Icon: "refresh", Disabled: !v.KeyOK, Attrs: templ.Attributes{"formaction": "/admin/update/check"}}) {
+					{ i18n.T(ctx, "update.settings.check_now") }
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+					{ i18n.T(ctx, "update.settings.save") }
+				}
+			</div>
+		</footer>
+	</form>
+}
+
+// MemberBanner is the small notice members see while an update waits for an
+// admin (no actions: only an admin can update the server).
+templ MemberBanner(version, host string) {
+	<div class="mv-update-banner">
+		@ui.Notice(ui.ToneInfo, "download") {
+			<p><strong>{ i18n.T(ctx, "update.banner.title", "version", version) }</strong> { i18n.T(ctx, "update.banner.body", "host", host) }</p>
+		}
+	</div>
+}
