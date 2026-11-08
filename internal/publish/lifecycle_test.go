@@ -1,0 +1,291 @@
+package publish_test
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/assets"
+	"github.com/MaramHarsha/MangaVeyra/internal/auth"
+	"github.com/MaramHarsha/MangaVeyra/internal/db"
+	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
+	"github.com/MaramHarsha/MangaVeyra/internal/notify"
+	"github.com/MaramHarsha/MangaVeyra/internal/publish"
+	"github.com/MaramHarsha/MangaVeyra/internal/publish/publishtest"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
+	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
+)
+
+func count(t *testing.T, ta *testutil.TestApp, q string, args ...any) int {
+	t.Helper()
+	var n int
+	if err := ta.Deps.DB.Get(context.Background(), &n, q, args...); err != nil {
+		t.Fatalf("%s: %v", q, err)
+	}
+	return n
+}
+
+func TestPublishIsAtomicWhenTheChapterChanges(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, pf *publishtest.Fixture) {
+		ctx := context.Background()
+		pf.SetMode(settings.ModePublic)
+		f := newChapter(t, ta, false)
+		frozenAssets := `SELECT COUNT(*) FROM assets WHERE project_id = ? AND kind = 'publication_page'`
+
+		// A page saved while the job renders: nothing is published and no page image is kept.
+		resp := postForm(f.client, f.base+"/publish", f.publishForm("en"))
+		loc, _ := url.Parse(resp.Header.Get("Location"))
+		exec(t, ta, `UPDATE pages SET version = version + 1 WHERE id = ?`, f.pages[1].ID)
+		j := runJob(t, ta, loc.Query().Get("job"))
+		if j.State != jobs.StateFailed || j.Error == nil || j.Error.Code != "conflict" {
+			t.Fatalf("changed chapter job = %s %+v", j.State, j.Error)
+		}
+		if n := count(t, ta, `SELECT COUNT(*) FROM chapter_publications`); n != 0 {
+			t.Fatalf("publications after failure = %d", n)
+		}
+		if n := count(t, ta, frozenAssets, f.project.ID); n != 0 {
+			t.Fatalf("page assets after failure = %d", n)
+		}
+		// E1 shows the failure with its public explanation.
+		page := f.client.Get(f.base + "/publish?lang=en&job=" + j.ID)
+		if page.StatusCode != http.StatusOK || !contains(page.Body, "Publishing stopped") {
+			t.Fatalf("failed job E1 = %d", page.StatusCode)
+		}
+
+		// Publish, then fail an update: readers keep the old frozen copy.
+		if j := f.publish(t, f.publishForm("en")); j.State != jobs.StateDone {
+			t.Fatalf("publish: %+v", j.Error)
+		}
+		sid := seriesID(t, ta, f.project.ID)
+		_, before, err := pf.Service().Publication(ctx, publish.Viewer{}, sid, 1, "en")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp = postForm(f.client, f.base+"/publish", f.publishForm("en", "title", "Renamed"))
+		loc, _ = url.Parse(resp.Header.Get("Location"))
+		exec(t, ta, `UPDATE chapters SET updated_at = ? WHERE id = ?`, db.Now().Add(time.Second), f.chapter.ID)
+		if j := runJob(t, ta, loc.Query().Get("job")); j.State != jobs.StateFailed {
+			t.Fatalf("stale update = %s", j.State)
+		}
+		pub, after, err := pf.Service().Publication(ctx, publish.Viewer{}, sid, 1, "en")
+		if err != nil || pub.Title != "The Lighthouse Debt" || len(after) != len(before) || after[0].ID != before[0].ID || after[0].AssetID != before[0].AssetID {
+			t.Fatalf("failed update changed the publication: %+v %v", pub, err)
+		}
+		if n := count(t, ta, frozenAssets, f.project.ID); n != 2 {
+			t.Fatalf("page assets after failed update = %d", n)
+		}
+	})
+}
+
+func TestUpdateAndUnpublishThroughTheReadSide(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, pf *publishtest.Fixture) {
+		ctx := context.Background()
+		pf.SetMode(settings.ModePublic)
+		svc := pf.Service()
+		f := newChapter(t, ta, false)
+		follower := ta.CreateUser(t, "", auth.RoleReader)
+		fake := &fakeFollowers{users: map[string][]string{}}
+		publish.SetFollowersForTest(svc, fake)
+
+		if j := f.publish(t, f.publishForm("en")); j.State != jobs.StateDone {
+			t.Fatalf("publish: %+v", j.Error)
+		}
+		sid := seriesID(t, ta, f.project.ID)
+		fake.users[sid] = []string{follower.ID}
+		pub, pages, err := svc.Publication(ctx, publish.Viewer{}, sid, 1, "en")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Update re-freezes with the creator's alt-text edit as a new copy; the publication keeps its identity and time.
+		altField := "alt_" + f.pages[0].Panels[0].ID
+		if j := f.publish(t, f.publishForm("en", "title", "The Lighthouse Debt (revised)", altField, "Rin races along the wall.")); j.State != jobs.StateDone {
+			t.Fatalf("update: %+v", j.Error)
+		}
+		upd, newPages, err := svc.Publication(ctx, publish.Viewer{}, sid, 1, "en")
+		if err != nil || upd.ID != pub.ID || upd.Title != "The Lighthouse Debt (revised)" || !upd.PublishedAt.Equal(*pub.PublishedAt) {
+			t.Fatalf("update = %+v %v", upd, err)
+		}
+		if len(newPages) != 2 || newPages[0].ID == pages[0].ID || newPages[0].AssetID == pages[0].AssetID || newPages[0].Panels[0].AltText != "Rin races along the wall." {
+			t.Fatalf("update pages = %+v", newPages)
+		}
+		if _, err := assets.From(ta.Deps).Get(ctx, pages[0].AssetID); err == nil {
+			t.Fatal("old frozen image kept after update")
+		}
+		// E1 prefills the edited alt-text for the next update.
+		if page := f.client.Get(f.base + "/publish"); !contains(page.Body, "Rin races along the wall.") || !contains(page.Body, "Update published chapter") {
+			t.Fatal("E1 does not prefill the frozen alt-text")
+		}
+		if n := notifications(t, ta, notify.KindChapter)[follower.ID]; n != 0 {
+			t.Fatalf("follower notified %d times for an update of a chapter that went live before they followed", n)
+		}
+
+		// Unpublish hides it at once; publishing again never notifies.
+		resp := postForm(f.client, f.base+"/publish/unpublish", f.publishForm("en"))
+		if resp.StatusCode != http.StatusSeeOther {
+			t.Fatalf("unpublish = %d", resp.StatusCode)
+		}
+		if _, _, err := svc.Publication(ctx, publish.Viewer{}, sid, 1, "en"); !errors.Is(err, publish.ErrNotFound) {
+			t.Fatalf("unpublished chapter readable: %v", err)
+		}
+		if svc.CanRead(ctx, publish.Viewer{UserID: f.owner.ID}, publish.Series{ID: sid}, publish.Publication{ID: pub.ID}) {
+			t.Fatal("owner can read an unpublished chapter through the read side")
+		}
+		if s, err := svc.SeriesByID(ctx, publish.Viewer{}, sid); err != nil || len(s.AILabel) != 0 {
+			t.Fatalf("series after unpublish = %+v %v", s, err)
+		}
+		if got := postForm(f.client, f.base+"/publish/unpublish", f.publishForm("en")).StatusCode; got != http.StatusNotFound {
+			t.Fatalf("second unpublish = %d", got)
+		}
+		if j := f.publish(t, f.publishForm("en")); j.State != jobs.StateDone {
+			t.Fatalf("republish: %+v", j.Error)
+		}
+		if _, _, err := svc.Publication(ctx, publish.Viewer{}, sid, 1, "en"); err != nil {
+			t.Fatalf("republished chapter: %v", err)
+		}
+		if n := notifications(t, ta, notify.KindChapter)[follower.ID]; n != 0 {
+			t.Fatalf("republish notified %d times", n)
+		}
+	})
+}
+
+func TestScheduleLoopPublishesOnceAcrossConnections(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, pf *publishtest.Fixture) {
+		ctx := context.Background()
+		pf.SetMode(settings.ModePublic)
+		svc := pf.Service()
+		f := newChapter(t, ta, false)
+		readers := []*auth.User{ta.CreateUser(t, "", auth.RoleReader), ta.CreateUser(t, "", auth.RoleReader)}
+		suspended := ta.CreateUser(t, "", auth.RoleReader)
+		if err := ta.Deps.Auth.SetStatus(ctx, suspended.ID, auth.StatusSuspended, "test"); err != nil {
+			t.Fatal(err)
+		}
+		fake := &fakeFollowers{users: map[string][]string{}}
+		publish.SetFollowersForTest(svc, fake)
+
+		at := time.Now().Add(2 * time.Hour).UTC()
+		form := f.publishForm("en", "when", "schedule", "date", at.Format("2006-01-02"), "time", at.Format("15:04"),
+			"visibility", publish.VisibilityMembers)
+		if j := f.publish(t, form); j.State != jobs.StateDone {
+			t.Fatalf("schedule: %+v", j.Error)
+		}
+		sid := seriesID(t, ta, f.project.ID)
+		fake.users[sid] = []string{readers[0].ID, suspended.ID, f.owner.ID, readers[1].ID}
+		reader := publish.Viewer{UserID: readers[0].ID}
+		if _, _, err := svc.Publication(ctx, reader, sid, 1, "en"); !errors.Is(err, publish.ErrNotFound) {
+			t.Fatalf("scheduled chapter readable early: %v", err)
+		}
+		if live := f.client.Get(f.base + "/published?lang=en"); !contains(live.Body, "Chapter 1 is scheduled") {
+			t.Fatal("published page does not show the schedule")
+		}
+		if n, err := publish.PublishDueForTest(ctx, svc, ta.Deps.DB); err != nil || n != 0 {
+			t.Fatalf("early pass = %d %v", n, err)
+		}
+
+		// Two server processes (two connections) pass at the due time: exactly one publishes.
+		// Time passes: the schedule is now due.
+		exec(t, ta, `UPDATE chapter_publications SET scheduled_at = ?`, db.Now().Add(-time.Minute))
+		dialect, dsn, err := ta.Deps.Cfg.Database()
+		if err != nil {
+			t.Fatal(err)
+		}
+		other, err := db.Open(ctx, dialect, dsn, db.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer other.Close()
+		var wg sync.WaitGroup
+		results := make([]int, 2)
+		errs := make([]error, 2)
+		for i, conn := range []*db.DB{ta.Deps.DB, other} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				results[i], errs[i] = publish.PublishDueForTest(ctx, svc, conn)
+			}()
+		}
+		wg.Wait()
+		if errs[0] != nil || errs[1] != nil || results[0]+results[1] != 1 {
+			t.Fatalf("passes = %v %v", results, errs)
+		}
+		if n, err := publish.PublishDueForTest(ctx, svc, other); err != nil || n != 0 {
+			t.Fatalf("repeat pass = %d %v", n, err)
+		}
+		pub, _, err := svc.Publication(ctx, reader, sid, 1, "en")
+		if err != nil || pub.Status != publish.PublicationPublished {
+			t.Fatalf("after the loop: %+v %v", pub, err)
+		}
+		// Followers who may read it are notified once; suspended accounts and the publisher are not.
+		got := notifications(t, ta, notify.KindChapter)
+		if got[readers[0].ID] != 1 || got[readers[1].ID] != 1 || got[suspended.ID] != 0 || got[f.owner.ID] != 0 {
+			t.Fatalf("notifications = %v", got)
+		}
+		publish.NotifyFollowersForTest(ctx, svc, pub.ID)
+		if again := notifications(t, ta, notify.KindChapter); again[readers[0].ID] != 1 {
+			t.Fatalf("second fan-out sent more: %v", again)
+		}
+		var link string
+		if err := ta.Deps.DB.Get(ctx, &link, `SELECT link FROM notifications WHERE user_id = ?`, readers[0].ID); err != nil || link != "/s/tidebreak-courier/1" {
+			t.Fatalf("notification link %q %v", link, err)
+		}
+		if live := f.client.Get(f.base + "/published?lang=en"); !contains(live.Body, "2 followers notified") {
+			t.Fatal("published page lacks the notified count")
+		}
+	})
+}
+
+func TestNewChapterNotifiesOnceWhenPublishedNow(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, ta *testutil.TestApp, pf *publishtest.Fixture) {
+		pf.SetMode(settings.ModePublic)
+		svc := pf.Service()
+		f := newChapter(t, ta, false)
+		reader := ta.CreateUser(t, "", auth.RoleReader)
+		fake := &fakeFollowers{users: map[string][]string{}}
+		publish.SetFollowersForTest(svc, fake)
+		// The series exists once the creator saves it, so followers can follow before chapter 1.
+		if resp := postForm(f.client, "/studio/p/"+f.project.ID+"/series", seriesForm("tidebreak-courier")); resp.StatusCode != http.StatusSeeOther {
+			t.Fatalf("series save = %d %s", resp.StatusCode, resp.Body)
+		}
+		sid := seriesID(t, ta, f.project.ID)
+		fake.users[sid] = []string{reader.ID}
+		if j := f.publish(t, f.publishForm("en", "notify", "")); j.State != jobs.StateDone {
+			t.Fatalf("publish without notify: %+v", j.Error)
+		}
+		if n := notifications(t, ta, notify.KindChapter)[reader.ID]; n != 0 {
+			t.Fatalf("notified although the creator unticked it: %d", n)
+		}
+		if j := f.publish(t, f.publishForm("ja")); j.State != jobs.StateDone {
+			t.Fatalf("publish ja: %+v", j.Error)
+		}
+		if n := notifications(t, ta, notify.KindChapter)[reader.ID]; n != 1 {
+			t.Fatalf("new language notifications = %d", n)
+		}
+		if j := f.publish(t, f.publishForm("ja", "title", "Update")); j.State != jobs.StateDone {
+			t.Fatalf("update ja: %+v", j.Error)
+		}
+		if n := notifications(t, ta, notify.KindChapter)[reader.ID]; n != 1 {
+			t.Fatalf("update notified again: %d", n)
+		}
+		if fake.calls != 1 {
+			t.Fatalf("follower source called %d times", fake.calls)
+		}
+	})
+}
+
+func seriesForm(slug string, extra ...string) url.Values {
+	v := url.Values{"slug": {slug}, "title": {"Tidebreak Courier"}, "synopsis": {"A courier crosses a flooded city."},
+		"genres": {"Adventure, mystery"}, "tags": {"salt city"}, "format": {"manga_rtl"}, "age_rating": {"teen"},
+		"licence": {"cc-by"}, "visibility": {"public"}, "status": {"ongoing"}, "original_lang": {"en"},
+		"link_label_0": {"Studio site"}, "link_url_0": {"https://example.org/tidebreak"}}
+	for i := 0; i+1 < len(extra); i += 2 {
+		v.Set(extra[i], extra[i+1])
+	}
+	return v
+}
+
+func contains(b []byte, s string) bool { return strings.Contains(string(b), s) }
