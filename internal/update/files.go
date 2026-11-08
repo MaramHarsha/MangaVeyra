@@ -26,6 +26,41 @@ func (m *Module) updatesDir(version string) string {
 	return filepath.Join(m.d.Cfg.DataDir, "updates", version)
 }
 
+// sweepDownloads removes download directories under $MV_DATA_DIR/updates
+// that nothing touched since cutoff: an install the server stopped in the
+// middle of leaves them behind. It runs only while no install is active.
+func (m *Module) sweepDownloads(cutoff time.Time) {
+	root := filepath.Join(m.d.Cfg.DataDir, "updates")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		dir := filepath.Join(root, e.Name())
+		if !e.IsDir() || newestChange(dir).After(cutoff) {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			m.d.Log.Warn("update: remove a leftover download", "dir", dir, "err", err)
+		}
+	}
+}
+
+// newestChange is the latest modification time of dir and its files.
+func newestChange(dir string) time.Time {
+	var newest time.Time
+	_ = filepath.WalkDir(dir, func(_ string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if fi, err := d.Info(); err == nil && fi.ModTime().After(newest) {
+			newest = fi.ModTime()
+		}
+		return nil
+	})
+	return newest
+}
+
 // executable returns the resolved path of the running binary.
 func (m *Module) executable() (string, error) {
 	if m.hooks.Executable != "" {

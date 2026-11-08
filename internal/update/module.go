@@ -118,6 +118,7 @@ func (m *Module) tick(ctx context.Context) {
 		}
 		return
 	}
+	m.sweepDownloads(time.Now().Add(-24 * time.Hour))
 	cfg := m.config(ctx)
 	if !cfg.Checks || cfg.ReleaseURL == "" {
 		return // off by default: no network call at all

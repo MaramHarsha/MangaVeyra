@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -183,6 +185,32 @@ func testInstallGivesUpWaiting(t *testing.T) {
 			t.Fatal("a refused hold must leave the server as it was")
 		}
 	})
+}
+
+// Downloads left behind by an interrupted install are removed after a day
+// while no install runs; a recent one is kept.
+func TestStaleDownloadsAreSwept(t *testing.T) {
+	e := newEnv(t, "sqlite")
+	root := filepath.Join(e.ta.Deps.Cfg.DataDir, "updates")
+	old, fresh := filepath.Join(root, "1.0.1"), filepath.Join(root, "1.0.3")
+	for _, d := range []string{old, fresh} {
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(d, "download.part"), []byte("partial"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	past := time.Now().Add(-25 * time.Hour)
+	_ = os.Chtimes(filepath.Join(old, "download.part"), past, past)
+	_ = os.Chtimes(old, past, past)
+	update.Tick(e.m, e.ctx)
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatalf("a day-old download was kept: %v", err)
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Fatalf("a recent download was removed: %v", err)
+	}
 }
 
 type scheduler interface {
