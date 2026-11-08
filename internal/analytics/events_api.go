@@ -29,9 +29,20 @@ var sessionPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{22,64}$`)
 // SessionCookie (HttpOnly, SameSite=Lax, Secure over HTTPS, no expiry, so it
 // ends with the browser session) when the request has none.
 func ReadingSession(w http.ResponseWriter, r *http.Request) string {
-	if c, err := r.Cookie(SessionCookie); err == nil && sessionPattern.MatchString(c.Value) {
-		return c.Value
+	if id, ok := existingSession(r); ok {
+		return id
 	}
+	return newSession(w, r)
+}
+
+func existingSession(r *http.Request) (string, bool) {
+	if c, err := r.Cookie(SessionCookie); err == nil && sessionPattern.MatchString(c.Value) {
+		return c.Value, true
+	}
+	return "", false
+}
+
+func newSession(w http.ResponseWriter, r *http.Request) string {
 	b := make([]byte, 24)
 	_, _ = rand.Read(b)
 	id := base64.RawURLEncoding.EncodeToString(b)
@@ -68,10 +79,20 @@ func (m *Module) postEvents(w http.ResponseWriter, r *http.Request) error {
 	if len(in.Events) == 0 || len(in.Events) > MaxBatchEvents {
 		return core.ErrBadRequest("send between 1 and 50 events")
 	}
-	session := ReadingSession(w, r)
 	var v publish.Viewer
 	if u := core.UserFrom(r.Context()); u != nil && u.Status == "active" {
 		v = publish.Viewer{UserID: u.ID, Admin: u.IsAdmin()}
+	}
+	session, ok := existingSession(r)
+	if !ok {
+		// A client that drops its cookie would otherwise start a new
+		// anonymous reader (and a new daily read) with every request.
+		if v.UserID == "" {
+			if allowed, wait := m.rec.allowNewSession(core.ClientIP(r)); !allowed {
+				return httpx.ErrRateLimited(wait)
+			}
+		}
+		session = newSession(w, r)
 	}
 	cache := map[readKey]bool{}
 	var res batchResult

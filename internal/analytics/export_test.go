@@ -19,6 +19,11 @@ func SetLimit(r Recorder, rate float64, burst int, now func() time.Time) {
 	r.(*recorder).limiter = l
 }
 
+// SetNewSessionLimit replaces the per-address new-session limiter.
+func SetNewSessionLimit(r Recorder, rate float64, burst int) {
+	r.(*recorder).sessions = core.NewLimiter(rate, burst)
+}
+
 // HashSession is the stored hash of an anonymous session ID on t's UTC day.
 func HashSession(r Recorder, sessionID string, t time.Time) string {
 	return r.(*recorder).sessionHash(sessionID, t)

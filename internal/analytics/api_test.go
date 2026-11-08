@@ -10,6 +10,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish/publishtest"
+	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/testutil"
 )
 
@@ -99,6 +100,40 @@ func TestEventsEndpoint(t *testing.T) {
 		}
 		_ = ctx
 	})
+}
+
+func TestEventsEndpointLimitsNewSessionsPerAddress(t *testing.T) {
+	ta := testutil.NewTestApp(t)
+	f := publishtest.New(t, ta)
+	f.SetMode(settings.ModePublic)
+	analytics.SetNewSessionLimit(recorderOf(ta), 0.001, 3)
+	s := f.Series(publishtest.SeriesSpec{})
+	ch := f.Publish(s, publishtest.PublicationSpec{})
+	open := batch(analytics.ReadEvent{SeriesID: s.ID, PublicationID: ch.ID, Kind: analytics.EventOpen, Page: 1})
+	// A client that never keeps the cookie starts a new reader each time.
+	c := ta.NewClient()
+	c.Client.Jar = nil
+	for i := 1; i <= 3; i++ {
+		if resp := c.PostJSON("/api/v1/analytics/events", open); resp.StatusCode != http.StatusAccepted {
+			t.Fatalf("request %d: %d", i, resp.StatusCode)
+		}
+	}
+	if resp := c.PostJSON("/api/v1/analytics/events", open); resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("4th new session from one address: %d", resp.StatusCode)
+	}
+	got, err := f.Service().SeriesByID(context.Background(), publish.Viewer{}, s.ID)
+	if err != nil || got.ViewCount != 3 {
+		t.Fatalf("view_count = %d, %v; want 3", got.ViewCount, err)
+	}
+	// Another address, and members, are not affected.
+	if resp := ta.NewClient().PostJSON("/api/v1/analytics/events", open); resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("other address: %d", resp.StatusCode)
+	}
+	_, mc := ta.UserClient(t, auth.RoleReader)
+	mc.Header.Set("X-Forwarded-For", c.Header.Get("X-Forwarded-For"))
+	if resp := mc.PostJSON("/api/v1/analytics/events", open); resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("member: %d", resp.StatusCode)
+	}
 }
 
 func TestEventsEndpointRefusesTokens(t *testing.T) {

@@ -29,6 +29,10 @@ const (
 	// 200 (four full batches).
 	SessionRate  = 1.0
 	SessionBurst = 200
+	// NewSessionRate and NewSessionBurst limit how many anonymous reading
+	// sessions one client address may start: 20 at once, then one a minute.
+	NewSessionRate  = 1.0 / 60
+	NewSessionBurst = 20
 )
 
 // Recorder errors. They never reach readers as failures of the page itself.
@@ -58,13 +62,22 @@ type recorder struct {
 	publish publish.Service
 	key     []byte
 	limiter *core.Limiter
-	now     func() time.Time
+	// sessions limits new anonymous sessions per client address. Its keys are
+	// daily HMACs of the address and live only in memory.
+	sessions *core.Limiter
+	now      func() time.Time
 }
 
 var _ Recorder = (*recorder)(nil)
 
 func newRecorder(d *db.DB, key []byte) *recorder {
-	return &recorder{db: d, key: key, limiter: core.NewLimiter(SessionRate, SessionBurst), now: db.Now}
+	return &recorder{db: d, key: key, limiter: core.NewLimiter(SessionRate, SessionBurst),
+		sessions: core.NewLimiter(NewSessionRate, NewSessionBurst), now: db.Now}
+}
+
+// allowNewSession takes one new-session token for a client address.
+func (r *recorder) allowNewSession(addr string) (bool, time.Duration) {
+	return r.sessions.Allow("a:" + r.sessionHash("addr|"+addr, r.now()))
 }
 
 // sessionHash returns the salted hash of a session ID for the UTC day of t.
