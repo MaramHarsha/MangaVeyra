@@ -295,7 +295,9 @@ type ListOptions struct {
 	Limit      int
 }
 
-// List returns a member's notifications, newest first.
+// List returns a member's notifications, newest first by the time they show
+// (a grouped notification moves to the top when it is updated). Before is
+// the id of the last notification of the previous page.
 func (s *Service) List(ctx context.Context, userID string, o ListOptions) ([]Notification, error) {
 	q, args := `SELECT `+cols+` FROM notifications WHERE user_id = ?`, []any{userID}
 	if o.UnreadOnly {
@@ -304,19 +306,23 @@ func (s *Service) List(ctx context.Context, userID string, o ListOptions) ([]Not
 	if o.Kind != "" {
 		q, args = q+` AND kind = ?`, append(args, o.Kind)
 	}
-	if len(o.Kinds) > 0 {
-		q, args = q+` AND kind IN (?)`, append(args, o.Kinds)
-	}
-	if len(o.NotKinds) > 0 {
-		q, args = q+` AND kind NOT IN (?)`, append(args, o.NotKinds)
-	}
+	q, args = kindFilter(q, args, o.Kinds, o.NotKinds)
 	if o.Before != "" {
-		q, args = q+` AND id < ?`, append(args, o.Before)
+		var at time.Time
+		err := s.db.Get(ctx, &at, `SELECT created_at FROM notifications WHERE id = ? AND user_id = ?`, o.Before, userID)
+		switch {
+		case err == nil:
+			q, args = q+` AND (created_at < ? OR (created_at = ? AND id < ?))`, append(args, at, at, o.Before)
+		case db.IsNotFound(err): // pruned meanwhile: continue by id
+			q, args = q+` AND id < ?`, append(args, o.Before)
+		default:
+			return nil, err
+		}
 	}
 	if o.Limit <= 0 || o.Limit > 200 {
 		o.Limit = 50
 	}
-	q, args, err := db.In(q+` ORDER BY id DESC LIMIT ?`, append(args, o.Limit)...)
+	q, args, err := db.In(q+` ORDER BY created_at DESC, id DESC LIMIT ?`, append(args, o.Limit)...)
 	if err != nil {
 		return nil, err
 	}
@@ -342,9 +348,57 @@ func (s *Service) Get(ctx context.Context, userID, id string) (Notification, err
 
 // UnreadCount returns the number of unread notifications.
 func (s *Service) UnreadCount(ctx context.Context, userID string) (int, error) {
+	return s.UnreadCountKinds(ctx, userID, nil, nil)
+}
+
+// UnreadCountKinds counts unread notifications of the given kinds (any when
+// empty), excluding notKinds: one notification category.
+func (s *Service) UnreadCountKinds(ctx context.Context, userID string, kinds, notKinds []string) (int, error) {
+	q, args := kindFilter(`SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL`, []any{userID}, kinds, notKinds)
+	q, args, err := db.In(q, args...)
+	if err != nil {
+		return 0, err
+	}
 	var n int
-	err := s.db.Get(ctx, &n, `SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL`, userID)
+	err = s.db.Get(ctx, &n, q, args...)
 	return n, err
+}
+
+// MarkKindsRead marks the unread notifications of one category read: the
+// given kinds (any when empty), excluding notKinds.
+func (s *Service) MarkKindsRead(ctx context.Context, userID string, kinds, notKinds []string) (int64, error) {
+	q, args := kindFilter(`UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL`, []any{s.now(), userID}, kinds, notKinds)
+	q, args, err := db.In(q, args...)
+	if err != nil {
+		return 0, err
+	}
+	res, err := s.db.Exec(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	s.publishRead(ctx, userID, nil, n)
+	return n, nil
+}
+
+func kindFilter(q string, args []any, kinds, notKinds []string) (string, []any) {
+	if len(kinds) > 0 {
+		q, args = q+` AND kind IN (?)`, append(args, kinds)
+	}
+	if len(notKinds) > 0 {
+		q, args = q+` AND kind NOT IN (?)`, append(args, notKinds)
+	}
+	return q, args
+}
+
+func (s *Service) publishRead(ctx context.Context, userID string, ids []string, n int64) {
+	s.mu.RLock()
+	pub := s.pub
+	s.mu.RUnlock()
+	if pub != nil && n > 0 {
+		unread, _ := s.UnreadCount(ctx, userID)
+		pub.Publish("user:"+userID, "notification.read", map[string]any{"ids": ids, "unread": unread})
+	}
 }
 
 // MarkRead marks the given notifications (or all when ids is empty) as read.
@@ -364,13 +418,7 @@ func (s *Service) MarkRead(ctx context.Context, userID string, ids []string) (in
 		return 0, err
 	}
 	n, _ := res.RowsAffected()
-	s.mu.RLock()
-	pub := s.pub
-	s.mu.RUnlock()
-	if pub != nil && n > 0 {
-		unread, _ := s.UnreadCount(ctx, userID)
-		pub.Publish("user:"+userID, "notification.read", map[string]any{"ids": ids, "unread": unread})
-	}
+	s.publishRead(ctx, userID, ids, n)
 	return n, nil
 }
 
