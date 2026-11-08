@@ -6,6 +6,7 @@
 //	mangaveyra seed --demo               create the original demo content
 //	mangaveyra mcp-stdio                 MCP over stdin/stdout for local agents (bridges to /mcp)
 //	mangaveyra backup ...                create, list or restore backups
+//	mangaveyra release ...               sign and verify update releases (project owner)
 //	mangaveyra version
 //
 // Every command accepts --config <file.yaml>; MV_* environment variables override it.
@@ -31,6 +32,7 @@ import (
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/mcp"
 	"github.com/MaramHarsha/MangaVeyra/internal/seed"
+	"github.com/MaramHarsha/MangaVeyra/internal/update"
 	"github.com/MaramHarsha/MangaVeyra/internal/version"
 )
 
@@ -48,6 +50,7 @@ Commands:
   seed [--demo]                      Create the demo content
   mcp-stdio [--url --token mva_...]  Bridge MCP over stdin/stdout to a server
   backup <create|list|restore> ...   Manage backups
+  release <keygen|asset|sign|verify> Sign and verify update releases (project owner)
   version                            Print version information
 
 Common flags:
@@ -87,6 +90,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return cmdMCPStdio(ctx, rest, stdin, stdout, stderr)
 	case "backup":
 		return cmdBackup(ctx, rest, stderr)
+	case "release":
+		return update.RunReleaseCLI(rest, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, version.Get().String())
 		return nil
@@ -128,11 +133,18 @@ func cmdServe(ctx context.Context, args []string, stderr io.Writer) error {
 	if *dev {
 		cfg.Dev = true
 	}
+	// A finished update stops serve through this context, then starts the new binary.
+	ctx, stopServe := context.WithCancel(ctx)
+	defer stopServe()
+	update.SetLaunch(update.Launch{ConfigPath: *cfgPath, Stop: stopServe})
 	a, err := app.New(ctx, cfg, app.Options{LogOutput: stderr})
 	if err != nil {
 		return err
 	}
-	return a.Run(ctx)
+	if err := a.Run(ctx); err != nil {
+		return err
+	}
+	return update.RestartIfPending()
 }
 
 // withDeps opens the services without the HTTP server for CLI commands.
