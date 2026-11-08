@@ -85,6 +85,10 @@ func testWizard(t *testing.T, dialect string) {
 	models := c.Get("/setup/models")
 	contains(t, models, "Connect at least one image model", "No GPU worker connected yet", "OpenRouter",
 		"One key for 30+ image models and text models", `name="local_only"`)
+	// Pages this server does not serve render as Soon controls, never as 404 links.
+	if body := string(models.Body); strings.Contains(body, `href="/models/workers/new"`) || strings.Contains(body, `href="/models/local`) {
+		t.Fatal("setup models step links to a page the server does not serve")
+	}
 	location(t, post(c, "/setup/models", url.Values{"local_only": {"on"}}), "/setup/finish")
 	inst = ta.Deps.Settings.MustInstance(ctx)
 	if !inst.LocalOnly || inst.RoutingMode != settings.RoutingLocalOnly {
