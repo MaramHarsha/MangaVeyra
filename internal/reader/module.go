@@ -26,8 +26,6 @@ const (
 	// DownloadTTL is how long an offline chapter stays readable on a device
 	// without the server confirming access again (ADR 0012 §7).
 	DownloadTTL = 30 * 24 * time.Hour
-	// MaxEventsPerBatch caps one reading-event batch from the island.
-	MaxEventsPerBatch = 32
 	// maxAsyncRecords bounds server-side "open" recordings in flight.
 	maxAsyncRecords = 16
 )
@@ -86,7 +84,6 @@ func (m *Module) Routes(r *core.Router) {
 	r.API("PUT /api/v1/reader/downloads/{id}", m.apiFinishDownload, core.RequireSession)
 	r.API("DELETE /api/v1/reader/downloads/{id}", m.apiDeleteDownload, core.RequireSession)
 	r.API("DELETE /api/v1/reader/downloads", m.apiClearDownloads, core.RequireSession)
-	r.API("POST /api/v1/reader/events", m.apiEvents)
 }
 
 // viewer is the publish viewer of the request (anonymous when signed out).

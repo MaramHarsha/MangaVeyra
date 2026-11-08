@@ -2,15 +2,11 @@ package reader
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"math"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 
-	"github.com/MaramHarsha/MangaVeyra/internal/analytics"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
@@ -336,52 +332,5 @@ func (m *Module) apiDownloads(w http.ResponseWriter, r *http.Request) error {
 		out = append(out, item)
 	}
 	core.JSON(w, http.StatusOK, map[string]any{"items": out})
-	return nil
-}
-
-// ---- reading events -------------------------------------------------------------
-
-type eventsInput struct {
-	Events []analytics.ReadEvent `json:"events"`
-}
-
-var eventKinds = []string{analytics.EventOpen, analytics.EventPage, analytics.EventComplete, analytics.EventDrop}
-
-// apiEvents records a batch of reading events through analytics.Recorder.
-// It answers 204 at once when no recorder is registered, and never fails the
-// reader: invalid events are skipped and recorder errors are swallowed.
-func (m *Module) apiEvents(w http.ResponseWriter, r *http.Request) error {
-	rec, ok := m.recorder()
-	if !ok {
-		w.WriteHeader(http.StatusNoContent)
-		return nil
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
-	var in eventsInput
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		return core.ErrBadRequest("invalid JSON")
-	}
-	if len(in.Events) > MaxEventsPerBatch {
-		in.Events = in.Events[:MaxEventsPerBatch]
-	}
-	ctx := r.Context()
-	v := viewer(r)
-	sid := sessionID(nil, r)
-	if sid == "" {
-		w.WriteHeader(http.StatusNoContent)
-		return nil
-	}
-	for _, e := range in.Events {
-		if !slices.Contains(eventKinds, e.Kind) || !db.ValidID(e.SeriesID) || !db.ValidID(e.PublicationID) || e.Page < 0 || e.Page > 10000 {
-			continue
-		}
-		if e.MS < 0 {
-			e.MS = 0
-		}
-		if err := rec.Record(ctx, v, sid, e); err != nil && errors.Is(err, context.Canceled) {
-			break
-		}
-	}
-	w.WriteHeader(http.StatusNoContent)
 	return nil
 }

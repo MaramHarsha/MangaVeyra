@@ -2,8 +2,6 @@ package reader
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"math"
@@ -14,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/analytics"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
@@ -284,31 +283,15 @@ func startPosition(r *http.Request, p *Progress, pageCount int) (page, panel int
 	return page, panel
 }
 
-// readerSessionCookie is the anonymous reader's first-party session
-// identifier for analytics; the recorder stores only a salted, daily-rotated
-// hash of it (ADR 0012 §8).
-const readerSessionCookie = "mv_rsid"
-
-// sessionID returns the first-party reading session of the request, creating
-// the anonymous cookie when needed (w may be nil to only read it).
+// sessionID returns the first-party reading session of the request: the
+// browser session for members, and for anonymous visitors the analytics
+// module's reading-session cookie (created when missing), so the server's
+// "open" and the island's batches share one salted daily hash (ADR 0012 §8).
 func sessionID(w http.ResponseWriter, r *http.Request) string {
 	if id := core.IdentityFrom(r.Context()).SessionID; id != "" {
 		return id
 	}
-	if c, err := r.Cookie(readerSessionCookie); err == nil && len(c.Value) >= 16 && len(c.Value) <= 64 {
-		return c.Value
-	}
-	if w == nil {
-		return ""
-	}
-	b := make([]byte, 18)
-	if _, err := rand.Read(b); err != nil {
-		return ""
-	}
-	id := base64.RawURLEncoding.EncodeToString(b)
-	http.SetCookie(w, &http.Cookie{Name: readerSessionCookie, Value: id, Path: "/", HttpOnly: true,
-		SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil || r.Header.Get("X-Mv-Https") == "1"})
-	return id
+	return analytics.ReadingSession(w, r)
 }
 
 // islandProps is the JSON the reader island boots from.
@@ -388,8 +371,12 @@ func toDownloadProps(d *Download) *downloadProps {
 	return out
 }
 
-// commentsAPI is agent S's comment list/create endpoint (ADR 0012 §9).
+// commentsAPI is the social module's comment list/create endpoint (ADR 0012 §9).
 const commentsAPI = "/api/v1/social/comments"
+
+// analyticsEventsAPI is the analytics module's batch endpoint for the island's
+// page, complete and drop events (it records through analytics.Recorder).
+const analyticsEventsAPI = "/api/v1/analytics/events"
 
 func (m *Module) props(ctx context.Context, r *http.Request, v *readerView) string {
 	p := islandProps{
@@ -410,7 +397,7 @@ func (m *Module) props(ctx context.Context, r *http.Request, v *readerView) stri
 			Prefs:     "/api/v1/reader/prefs/" + url.PathEscape(v.Series.ID),
 			Bookmarks: "/api/v1/reader/bookmarks",
 			Downloads: "/api/v1/reader/downloads",
-			Events:    "/api/v1/reader/events",
+			Events:    analyticsEventsAPI,
 			Comments:  commentsAPI,
 		},
 		Comments: ui.Ready(ctx, commentsAPI),
@@ -418,7 +405,7 @@ func (m *Module) props(ctx context.Context, r *http.Request, v *readerView) stri
 		UILang:   i18n.LocaleFrom(ctx),
 		Messages: islandMessages(ctx),
 	}
-	if _, ok := m.recorder(); !ok {
+	if _, ok := m.recorder(); !ok || !ui.ReadyMethod(ctx, http.MethodPost, analyticsEventsAPI) {
 		p.Events = false
 	}
 	if p.Bookmarks == nil {

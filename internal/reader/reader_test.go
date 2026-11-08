@@ -9,7 +9,9 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/analytics"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish"
 	"github.com/MaramHarsha/MangaVeyra/internal/publish/publishtest"
@@ -401,42 +403,67 @@ func TestLibrary(t *testing.T) {
 	})
 }
 
-// Reading events go through analytics.Recorder when one is registered: the
-// server records the open, the island's batches carry page, complete and
-// drop. Without a recorder the endpoint answers 204 and stores nothing.
+// Reading events go through analytics.Recorder: the reader records the open
+// when it renders a chapter (without delaying the page), and the island's
+// page, complete and drop batches go to the analytics module's endpoint with
+// the same first-party reading session. Without a recorder nothing is recorded
+// and the island is told not to send events.
 func TestReadingEvents(t *testing.T) {
 	each(t, func(t *testing.T, e *env) {
 		s := e.f.Series(publishtest.SeriesSpec{})
 		ch := e.f.Publish(s, publishtest.PublicationSpec{Pages: 2})
 		anon := e.ta.NewClient()
-		batch := map[string]any{"events": []map[string]any{{"series_id": s.ID, "publication_id": ch.ID, "kind": "page", "page": 1, "ms": 4000}}}
-		wantStatus(t, "events without recorder", anon.PostJSON("/api/v1/reader/events", batch), http.StatusNoContent)
-
-		rec := e.provideRecorder()
-		wantStatus(t, "open", anon.Get(chapterPath(s, ch)), http.StatusOK)
-		rec.wait(t, 1)
-		batch["events"] = []map[string]any{
+		if _, ok := core.Use[analytics.Recorder](e.ta.Deps); !ok {
+			got := anon.Get(chapterPath(s, ch))
+			if props(t, got.Body)["events"] != false {
+				t.Fatal("island sends events without a recorder")
+			}
+			rec := e.provideRecorder()
+			anon.Get(chapterPath(s, ch))
+			rec.wait(t, 1)
+			if k := rec.kinds(); k[0] != "open" || rec.events[0].session == "" || rec.events[0].viewer.UserID != "" {
+				t.Fatalf("recorded %+v", rec.events)
+			}
+			return
+		}
+		// The analytics module is wired: the open lands in read_events.
+		page := anon.Get(chapterPath(s, ch))
+		p := props(t, page.Body)
+		if p["events"] != true || p["api"].(map[string]any)["events"] != "/api/v1/analytics/events" {
+			t.Fatalf("island events = %v %v", p["events"], p["api"])
+		}
+		count := func(kind string) int {
+			var n int
+			if err := e.ta.Deps.DB.Get(context.Background(), &n, `SELECT COUNT(*) FROM read_events WHERE publication_id = ? AND kind = ?`, ch.ID, kind); err != nil {
+				t.Fatal(err)
+			}
+			return n
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		for count("open") == 0 && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if count("open") != 1 {
+			t.Fatal("the reader did not record the open")
+		}
+		// The island's batch shares the session cookie the page set.
+		batch := map[string]any{"events": []map[string]any{
 			{"series_id": s.ID, "publication_id": ch.ID, "kind": "page", "page": 1, "ms": 4000},
 			{"series_id": s.ID, "publication_id": ch.ID, "kind": "complete", "page": 2},
-			{"series_id": s.ID, "publication_id": ch.ID, "kind": "bogus", "page": 2},
+		}}
+		got := anon.PostJSON("/api/v1/analytics/events", batch)
+		if got.StatusCode >= 300 {
+			t.Fatalf("batch: %d %s", got.StatusCode, got.Body)
 		}
-		wantStatus(t, "batch", anon.PostJSON("/api/v1/reader/events", batch), http.StatusNoContent)
-		rec.wait(t, 3)
-		kinds := rec.kinds()
-		if strings.Join(kinds, ",") != "open,page,complete" {
-			t.Fatalf("recorded %v", kinds)
+		if count("page") != 1 || count("complete") != 1 {
+			t.Fatalf("batch not recorded: page=%d complete=%d", count("page"), count("complete"))
 		}
-		rec.mu.Lock()
-		sessions := map[string]bool{}
-		for _, ev := range rec.events {
-			sessions[ev.session] = true
-			if ev.viewer.UserID != "" {
-				t.Error("anonymous event carried a user")
-			}
+		var sessions int
+		if err := e.ta.Deps.DB.Get(context.Background(), &sessions, `SELECT COUNT(DISTINCT session_hash) FROM read_events WHERE publication_id = ?`, ch.ID); err != nil {
+			t.Fatal(err)
 		}
-		rec.mu.Unlock()
-		if len(sessions) != 1 || sessions[""] {
-			t.Fatalf("anonymous events used sessions %v", sessions)
+		if sessions != 1 {
+			t.Fatalf("open and batch used %d session hashes", sessions)
 		}
 	})
 }
