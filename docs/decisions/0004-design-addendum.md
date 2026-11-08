@@ -516,3 +516,9 @@ the mobile artboards stay deferred (ADR 0012 §11).
   with Explore series. On phones the H1 is hidden because the mobile header already says Library.
 - **E5 downloads.** Members get each readable chapter's download icon as a link that starts the offline download in
   the reader; visitors, who cannot download (ADR 0012 §7), see no icon.
+- **E1 conflict states.** Built from the existing Notice component with the alert-triangle icon: a 409 error notice
+  when the chapter or series changed after E1 was opened ("This chapter or its series changed after you opened this
+  page. Nothing was published: review the details below, then publish again."), and a 409 warning notice while a publish
+  of the same chapter and language is running ("This chapter is already being published in {language}. Nothing was
+  changed: publish again once it finishes."), followed by the job progress notice only for the viewer's own job. A
+  scheduled chapter whose scheduler lost the right to publish reuses the unpublished notice.

@@ -87,3 +87,20 @@ stable while creators keep editing. Tagging v1.0.0 remains an owner action after
   reader's chapter API and writes return 404 until then.
 - Publication IDs stay stable when a published chapter is updated; panel comments and bookmarks anchor to the
   publication plus page and panel order, and anchors that no longer exist after an update are shown at chapter level.
+
+## Review follow-ups (2026-11-08)
+
+- **Series and chapter listing (§1).** A series is shown to readers outside its project only while they can read at
+  least one of its chapters: a private chapter never publishes a series, and unpublishing every chapter hides it again.
+  Unlisted chapters open by their link but are left out of a series' chapter list (except for project members); in
+  listed views a series counts only chapters that are not unlisted. The series aggregates (languages, AI labels, first
+  publish time) come from its chapters that are not private (§4).
+- **Publishing decisions (§3).** Publish jobs cannot be retried through the jobs API, by owners or admins; the creator
+  publishes again from E1. A publish applies only the chapter and series revisions E1 showed; if either changed, or a
+  publish of that chapter and language is already running, nothing is applied. When a scheduled chapter comes due, the
+  user who scheduled it must still be an owner or editor with an active account; otherwise the chapter becomes
+  unpublished and nobody is notified.
+- **Notifications (§10).** No notification is sent for unlisted chapters.
+- **Comments (§9).** Comments on mature and adult series wait for the reader's age confirmation, like the series page
+  and the reader; the owner previews without it.
+- **Search engines.** Series pages and reader pages of anything not public send `X-Robots-Tag: noindex`.
