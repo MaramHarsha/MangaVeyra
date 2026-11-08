@@ -10,12 +10,14 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
@@ -84,6 +86,18 @@ func seedServer(t *testing.T, ta *testutil.TestApp) fixture {
 	}
 	if _, err := d.Exec(ctx, `INSERT INTO comments (id, project_id, target_kind, target_id, body, author_id, parent_id, created_at, updated_at)
 		VALUES (?, ?, 'page', ?, 'Agreed — keep the bell tower', ?, ?, ?, ?)`, f.childID, projectID, pageID, f.member.ID, f.parentID, now, now); err != nil {
+		t.Fatal(err)
+	}
+	// Phase 4 data: a scoped collaborator, an assigned review comment and an agent action.
+	if _, err := d.Exec(ctx, `INSERT INTO project_members (project_id, user_id, role, scope, invited_by, created_at) VALUES (?, ?, 'letterer', ?, ?, ?)`,
+		projectID, f.member.ID, `{"layers":["lettering"],"pages":{"from":1,"to":4}}`, ta.Admin.ID, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(ctx, `UPDATE comments SET visibility = 'internal', status = 'needs_changes', assignee_id = ? WHERE id = ?`, f.member.ID, f.childID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(ctx, `INSERT INTO agent_actions (id, user_id, token_id, token_name, project_id, kind, action, status, detail, created_at, updated_at)
+		VALUES (?, ?, 'tok', 'Script helper', ?, 'script_edit', 'script.edit', 'done', '{"lines":2}', ?, ?)`, db.NewID(), ta.Admin.ID, projectID, now, now); err != nil {
 		t.Fatal(err)
 	}
 	f.blob = []byte{0, 1, 2, 255, 'Y', 'j', 's', 0}
@@ -638,51 +652,110 @@ func TestRestoreRoundTripSameDialect(t *testing.T) {
 	})
 }
 
+// olderRelease is the schema of the last release before Phase 4 (0700 adds
+// agent_actions, 1000 adds comments.assignee_id).
+const olderRelease = "0403_analytics_day_salts"
+
+// TestRestoreFromOlderSchemaRunsMigrations restores an archive written by a
+// server still at an older schema: the schema is rebuilt at that version, the
+// rows are loaded and the newer migrations run, in one transaction.
 func TestRestoreFromOlderSchemaRunsMigrations(t *testing.T) {
 	forEach(t, func(t *testing.T, ta *testutil.TestApp) {
 		ctx := context.Background()
-		seedServer(t, ta)
+		dialect := string(ta.Deps.DB.Dialect())
+		// An older server: its own database migrated only up to olderRelease.
+		target := testdb.NewTarget(t, dialect)
+		old, err := db.Open(ctx, dialect, target.DSN, db.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer old.Close()
+		migs, err := db.LoadMigrations(db.Migrations(), old.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		files := fstest.MapFS{}
+		var newer []string
+		for _, m := range migs {
+			if m.Version > olderRelease {
+				newer = append(newer, m.Version)
+				continue
+			}
+			b, err := fs.ReadFile(db.Migrations(), m.File)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files[m.File] = &fstest.MapFile{Data: b}
+		}
+		if len(newer) == 0 {
+			t.Skip("no migration newer than " + olderRelease)
+		}
+		if _, err := old.MigrateFS(ctx, files); err != nil {
+			t.Fatal(err)
+		}
+		now := db.Now()
+		userID, projectID, parentID, childID := db.NewID(), db.NewID(), db.NewID(), db.NewID()
+		for _, q := range []struct {
+			sql  string
+			args []any
+		}{
+			{`INSERT INTO users (id, username, display_name, password_hash, role, created_at, updated_at) VALUES (?, 'wren', 'Old Wren', 'x', 'admin', ?, ?)`, []any{userID, now, now}},
+			{`INSERT INTO projects (id, owner_id, title, slug, created_at, updated_at) VALUES (?, ?, 'Tidebreak Courier', 'tidebreak-courier', ?, ?)`, []any{projectID, userID, now, now}},
+			{`INSERT INTO comments (id, project_id, target_kind, target_id, body, author_id, created_at, updated_at) VALUES (?, ?, 'chapter', 'c1', 'Bell tower', ?, ?, ?)`, []any{parentID, projectID, userID, now, now}},
+			{`INSERT INTO comments (id, project_id, target_kind, target_id, body, author_id, parent_id, created_at, updated_at) VALUES (?, ?, 'chapter', 'c1', 'Reply', ?, ?, ?, ?)`, []any{childID, projectID, userID, parentID, now, now}},
+		} {
+			if _, err := old.Exec(ctx, q.sql, q.args...); err != nil {
+				t.Fatal(err)
+			}
+		}
+		media, err := storage.NewLocal(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		od := &core.Deps{Cfg: ta.Deps.Cfg, Log: ta.Deps.Log, DB: old, Store: media, Secrets: ta.Deps.Secrets, Settings: settings.New(old), Version: ta.Deps.Version}
+		ob, err := backup.NewTestService(od).Create(ctx, backup.Request{Kind: backup.KindExport})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ob.Schema != olderRelease {
+			t.Fatalf("older archive schema %s", ob.Schema)
+		}
+		var oldPath string
+		if err := old.Get(ctx, &oldPath, `SELECT path FROM backups WHERE id = ?`, ob.ID); err != nil {
+			t.Fatal(err)
+		}
+		// Restore it on the current server.
 		s := svcOf(t, ta)
-		b, err := s.Create(ctx, backup.Request{Kind: backup.KindManual})
-		if err != nil {
-			t.Fatal(err)
-		}
-		migs, err := db.LoadMigrations(db.Migrations(), ta.Deps.DB.Dialect())
-		if err != nil {
-			t.Fatal(err)
-		}
-		last := migs[len(migs)-1]
-		prev := migs[len(migs)-2].Version
-		if last.Version != "0403_analytics_day_salts" {
-			t.Skipf("the newest migration is %s; adjust the older-schema fixture", last.Version)
-		}
-		before := fingerprints(t, ta)
-		// Make the archive look like it came from before 0403 (which only adds a table).
-		older := filepath.Join(t.TempDir(), "older.mvbackup")
-		rewrite(t, pathOf(t, ta, b.ID), older, []string{"db/analytics_day_salts.jsonl"}, nil, func(m *backup.Manifest) {
-			m.Schema = prev
-			m.Tables = slices.DeleteFunc(m.Tables, func(te backup.TableEntry) bool { return te.Name == "analytics_day_salts" })
-		}, true)
-		ob, err := s.Register(ctx, older, "", false)
+		rb, err := s.Register(ctx, oldPath, "", false)
 		if err != nil {
 			t.Fatal(err)
 		}
 		maintenance(t, ta, true)
-		rep, err := s.RestoreArchive(ctx, ob.ID, ta.Admin.ID)
+		rep, err := s.RestoreArchive(ctx, rb.ID, ta.Admin.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !slices.Equal(rep.Migrated, []string{last.Version}) || rep.FromSchema != prev {
-			t.Fatalf("migrated %v from %s", rep.Migrated, rep.FromSchema)
+		if !slices.Equal(rep.Migrated, newer) || rep.FromSchema != olderRelease {
+			t.Fatalf("migrated %v from %s, want %v", rep.Migrated, rep.FromSchema, newer)
 		}
-		if newestSchema(t, ta.Deps.DB) != last.Version {
+		d := ta.Deps.DB
+		if newestSchema(t, d) != newer[len(newer)-1] {
 			t.Fatal("migrations did not run after the restore")
 		}
-		after := fingerprints(t, ta)
-		for table, rows := range before {
-			if !slices.Equal(rows, after[table]) {
-				t.Fatalf("%s differs after an older-schema restore", table)
-			}
+		var username, title, parent string
+		if err := d.QueryRow(ctx, `SELECT username FROM users WHERE id = ?`, userID).Scan(&username); err != nil || username != "wren" {
+			t.Fatalf("user %q %v", username, err)
+		}
+		if err := d.QueryRow(ctx, `SELECT title FROM projects WHERE id = ?`, projectID).Scan(&title); err != nil || title != "Tidebreak Courier" {
+			t.Fatalf("project %q %v", title, err)
+		}
+		if err := d.QueryRow(ctx, `SELECT parent_id FROM comments WHERE id = ?`, childID).Scan(&parent); err != nil || parent != parentID {
+			t.Fatalf("reply parent %q %v", parent, err)
+		}
+		var users, assigned int
+		_ = d.Get(ctx, &users, `SELECT COUNT(*) FROM users`)
+		if err := d.Get(ctx, &assigned, `SELECT COUNT(*) FROM comments WHERE assignee_id IS NOT NULL`); err != nil || assigned != 0 || users != 1 {
+			t.Fatalf("after migrating forward: users=%d assigned=%d %v", users, assigned, err)
 		}
 	})
 }
