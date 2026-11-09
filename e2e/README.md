@@ -64,8 +64,16 @@ non-member reader); a mature series is hidden from visitors and asks the member 
 
 The Phase 4 flow (`run-a-server.spec.ts`) seeds the demo, has the admin create an invite in G5 and a new member sign up
 through it, adds the member as a letterer limited to the lettering layer, posts a panel review comment that the owner
-marks Needs changes (the member's art edit is refused), creates an agent token in G13 and calls `/mcp` over JSON-RPC so
-a publish request waits in G13, backs the server up and restores that archive from G10, and checks that a build without
+marks Needs changes (the member's art edit is refused), creates a project-scoped agent token in G13 and calls `/mcp`
+over JSON-RPC to edit a script panel, checks the saved value and the human Undo action, then verifies that a publish
+request waits in G13, backs the server up and restores that archive from G10, and checks that a build without
 a release key never checks for updates. Signed installs and rollbacks run against a fake release in
 `internal/update`'s integration tests.
+
+The release smoke flow (`release-smoke.spec.ts`) draws two original test PNGs locally and imports them through G10.
+It opens the resulting editor and verifies page dimensions, retained art, human provenance and anonymous access
+refusal. It also checks 27 implemented routes with JavaScript disabled and captures the imported page's server-rendered
+proof. Basic document-overflow checks at 390×844 cover Projects, Models, Notifications and Backup/import; the complete
+phone touch-target pass remains deferred as described above. Templates stays a disabled Soon item and is not an
+implemented route. Run these focused operations checks with `npm test -- tests/release-smoke.spec.ts tests/run-a-server.spec.ts`.
 

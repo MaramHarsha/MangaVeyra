@@ -89,10 +89,6 @@ func TestDownloadVerifiesSizeAndChecksum(t *testing.T) {
 func TestDownloadGivesUpOnStalledServers(t *testing.T) {
 	payload := bytes.Repeat([]byte("mangaveyra-binary "), 4096)
 	stop := make(chan struct{})
-	var serve func(w http.ResponseWriter, r *http.Request)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { serve(w, r) }))
-	defer srv.Close()
-	defer close(stop)
 	wait := func(r *http.Request, d time.Duration) bool {
 		select {
 		case <-stop:
@@ -103,10 +99,7 @@ func TestDownloadGivesUpOnStalledServers(t *testing.T) {
 			return true
 		}
 	}
-	m := testModule(t, srv.Client())
-	m.hooks.Download = downloadLimits{Header: 300 * time.Millisecond, Idle: 300 * time.Millisecond, Base: 1500 * time.Millisecond, MinRate: 1 << 30}
-	a := Asset{URL: srv.URL + "/a", SHA256: sum(payload), Size: int64(len(payload)), Format: FormatBinary}
-	for _, c := range []struct {
+	cases := []struct {
 		name, want string
 		serve      func(w http.ResponseWriter, r *http.Request)
 	}{
@@ -129,9 +122,25 @@ func TestDownloadGivesUpOnStalledServers(t *testing.T) {
 				}
 			}
 		}},
-	} {
+	}
+	// Keep the handler immutable: a timed-out request can still be finishing
+	// when the next subtest starts.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for _, c := range cases {
+			if r.URL.Path == "/"+strings.ReplaceAll(c.name, " ", "-") {
+				c.serve(w, r)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	defer close(stop)
+	m := testModule(t, srv.Client())
+	m.hooks.Download = downloadLimits{Header: 300 * time.Millisecond, Idle: 300 * time.Millisecond, Base: 1500 * time.Millisecond, MinRate: 1 << 30}
+	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			serve = c.serve
+			a := Asset{URL: srv.URL + "/" + strings.ReplaceAll(c.name, " ", "-"), SHA256: sum(payload), Size: int64(len(payload)), Format: FormatBinary}
 			start := time.Now()
 			_, err := m.download(context.Background(), a, t.TempDir(), nil)
 			if err == nil || !strings.Contains(err.Error(), c.want) {

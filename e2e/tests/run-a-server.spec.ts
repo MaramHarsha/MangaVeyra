@@ -70,6 +70,13 @@ async function mcpCall(api: APIRequestContext, token: string, id: number, method
   return JSON.parse(payload);
 }
 
+async function mcpTool(api: APIRequestContext, token: string, id: number, name: string, args: unknown) {
+  const response = await mcpCall(api, token, id, 'tools/call', { name, arguments: args });
+  expect(response.error, `${name} JSON-RPC error`).toBeUndefined();
+  expect(response.result?.isError, `${name} tool error`).not.toBe(true);
+  return response.result.structuredContent;
+}
+
 test('invite → review together → back up and restore → agent within limits → update checks stay off', async ({ page, browser }, info) => {
   test.setTimeout(360_000);
   page.setDefaultTimeout(20_000);
@@ -121,14 +128,20 @@ test('invite → review together → back up and restore → agent within limits
   expect(review).toContain('Bubble 2 crowds the face.');
   expect(review).toContain('needs_changes');
   // The lettering-only member cannot change art: a page save that touches a layer is refused.
-  doc.panels[0].layers[0].opacity = 0.5;
+  const originalOpacity = doc.panels[0].layers[0].opacity;
+  doc.panels[0].layers[0].opacity = originalOpacity === 0.5 ? 0.25 : 0.5;
   const artSave = await member.request.put(`/api/v1/editor/p/${projectID}/chapters/1/pages/${pageID}`, { data: { page: doc, base_version: doc.version } });
-  expect(artSave.status()).toBeGreaterThanOrEqual(400);
+  // Editor authorization failures deliberately conceal the target with 404.
+  expect(artSave.status()).toBe(404);
+  const unchanged = (await json(page.request, 'GET', `/api/v1/editor/p/${projectID}/chapters/1/pages/${pageID}`)).page;
+  expect(unchanged.panels[0].layers[0].opacity).toBe(originalOpacity);
 
   // G13: the owner creates an agent token that may edit; the agent's publish request waits for a person.
   await page.goto('/agents');
   await page.getByRole('link', { name: 'Create token' }).first().click();
   await page.locator('#create-token [name=name]').fill('E2E agent');
+  await page.locator('label').filter({ has: page.locator('input[name=projects][value=some]') }).click();
+  await page.locator(`input[name=project_ids][value="${projectID}"]`).check({ force: true });
   // Edit is on by default for a new token.
   await expect(page.locator('form[action="/agents/tokens"] input[name=edit]')).toBeChecked();
   await page.locator('form[action="/agents/tokens"] button[type=submit]').click();
@@ -139,8 +152,27 @@ test('invite → review together → back up and restore → agent within limits
   const tools = JSON.stringify(await mcpCall(page.request, token, 2, 'tools/list', {}));
   expect(tools).toContain('request_human_action');
   expect(tools).not.toMatch(/"name":"(publish|delete_project|unlock)/);
-  await mcpCall(page.request, token, 3, 'tools/call', {
-    name: 'request_human_action', arguments: { project_id: projectID, action: 'publish', chapter_id: boot.chapter.id, note: 'Chapter 1 is ready.' },
+  const listed = await mcpTool(page.request, token, 3, 'list_projects', {});
+  expect(listed.projects.map((project: { id: string }) => project.id)).toEqual([projectID]);
+  const scriptArgs = { project_id: projectID, chapter_id: boot.chapter.id };
+  const script = await mcpTool(page.request, token, 4, 'get_script', scriptArgs);
+  const scriptPanel = script.scenes[0].panels[0];
+  const note = 'Rin pauses by the harbour rail before delivering the letter.';
+  const edited = await mcpTool(page.request, token, 5, 'edit_script', {
+    ...scriptArgs, revision: script.revision, panels: [{ panel_id: scriptPanel.id, notes: note }],
+  });
+  expect(edited.action_id).toBeTruthy();
+  const savedScript = await mcpTool(page.request, token, 6, 'get_script', scriptArgs);
+  expect(savedScript.scenes[0].panels[0].notes).toBe(note);
+  // A human sees the labelled change in G13 and can undo it.
+  await page.goto('/agents');
+  const undo = page.locator(`form[action="/agents/actions/${edited.action_id}/undo"] button`);
+  await expect(undo).toBeVisible();
+  await undo.click();
+  const restoredScript = await mcpTool(page.request, token, 7, 'get_script', scriptArgs);
+  expect(restoredScript.scenes[0].panels[0].notes).toBe(scriptPanel.notes);
+  await mcpTool(page.request, token, 8, 'request_human_action', {
+    project_id: projectID, action: 'publish', chapter_id: boot.chapter.id, note: 'Chapter 1 is ready.',
   });
   await page.goto('/agents');
   await expect(page.getByText('Blocked · waiting for you').first()).toBeVisible();

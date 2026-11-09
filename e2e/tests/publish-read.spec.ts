@@ -146,7 +146,7 @@ test('publish → follow → notified → guided read with alt-text → offline 
 
   // Guided reading with alt-text.
   await reader.page.goto(`${seriesHref}/1`);
-  await reader.page.getByRole('button', { name: 'Guided', exact: true }).click();
+  await reader.page.getByRole('banner').getByRole('button', { name: 'Guided', exact: true }).click();
   const alt = reader.page.locator('.mv-rd-guided__alt');
   await expect(alt).toBeVisible();
   const altText = (await alt.innerText()).trim();
@@ -202,7 +202,7 @@ test('publish → follow → notified → guided read with alt-text → offline 
   await reader.page.goto(`${seriesHref}/1`);
   await expect(reader.page.getByRole('heading', { name: 'This series is for mature readers' })).toBeVisible();
   await reader.page.getByRole('button', { name: "I'm old enough · Read" }).click();
-  await expect(reader.page.getByRole('button', { name: 'Guided', exact: true })).toBeVisible();
+  await expect(reader.page.getByRole('banner').getByRole('button', { name: 'Guided', exact: true })).toBeVisible();
   await expect.poll(() => mediaImagesLoaded(reader.page)).toBeGreaterThan(0);
 
   await anon.close();
