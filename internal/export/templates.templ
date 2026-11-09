@@ -21,6 +21,8 @@ var exportableFormats = []string{FormatPNG, FormatPDF, FormatCBZ}
 templ exportScreen(c *layout.Chrome, v exportView) {
 	@layout.EditorShell(c) {
 		<div class="mv-exportui">
+			// The editor behind the modal is inert, so the dialog's title is also the page's level-one heading.
+			<h1 class="mv-sr-only">{ i18n.T(ctx, "exportui.title", "number", v.Chapter.Number) }</h1>
 			@editorBackdrop(c, v)
 			<div class="mv-exportui__scrim"></div>
 			@ui.Modal(ui.ModalProps{ID: "chapter-export", Title: i18n.T(ctx, "exportui.title", "number", v.Chapter.Number), Static: true, Class: "mv-exportui__panel"}) {

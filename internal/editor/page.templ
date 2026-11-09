@@ -14,6 +14,7 @@ templ EditorDocument(c *layout.Chrome, data bootstrapData, props string) {
 	@layout.EditorShell(c) {
 		<div class="mv-ed mv-ed--static" data-island="editor" data-props={ props }>
 			<header class="mv-ed__bar">
+				<h1 class="mv-sr-only">{ data.Project.Title } · { chapterLabel(ctx, data.Chapter) }</h1>
 				<a href={ templ.URL("/studio/p/" + data.Project.ID + "/story/" + data.Chapter.ID) } class="mv-ed__back" aria-label={ label(ctx, "back") }>
 					@layout.ThemedImg("", "/static/brand/mark-color-on-dark-gate-blue.svg", "/static/brand/mark-color-on-light-gate-blue.svg", "", 24, 24)
 				</a>
@@ -34,7 +35,7 @@ templ EditorDocument(c *layout.Chrome, data bootstrapData, props string) {
 					}
 				</div>
 			</header>
-			<aside class="mv-ed__left">
+			<aside class="mv-ed__left" aria-label={ label(ctx, "pages") }>
 				<div class="mv-ed__section-head"><strong>{ label(ctx, "pages") }</strong></div>
 				<nav class="mv-ed__filmstrip" aria-label={ label(ctx, "pages") }>
 					for _, page := range data.Pages {

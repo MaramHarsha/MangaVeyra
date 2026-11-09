@@ -5,6 +5,7 @@
   "editor.panel": "コマ",
   "editor.layers": "レイヤー",
   "editor.properties": "プロパティ",
+  "editor.inspector": "インスペクター",
   "editor.canvas": "ページキャンバス",
   "editor.chapter": "第{number}話 · {title}",
   "editor.mode": "編集モード",

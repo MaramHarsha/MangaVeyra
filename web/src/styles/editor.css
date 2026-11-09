@@ -92,6 +92,8 @@
 .mv-ed__layer-row > .ti { color: var(--mv-text-2); font-size: 16px; }
 .mv-ed__layer-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mv-ed__layer-row small, .mv-ed__layer-select small { flex: none; color: var(--mv-text-3); font-family: var(--mv-font-mono); font-size: 10px; letter-spacing: .03em; }
+/* On the selected row's surface-2 fill, text-3 falls under 4.5:1 on Paper; text-2 keeps the meta legible. */
+.mv-ed__layer-row.selected small, .mv-ed__layer-row.selected .mv-ed__layer-select small { color: var(--mv-text-2); }
 .mv-ed__layer-select { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; height: 34px; padding: 0; border: 0; background: transparent; color: inherit; text-align: start; font: inherit; font-size: var(--mv-fs-small); }
 .mv-ed__layer-select > .ti { color: var(--mv-text-2); font-size: 16px; }
 .mv-ed__layer-select > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
