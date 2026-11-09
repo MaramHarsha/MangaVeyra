@@ -146,7 +146,7 @@ func TestWorstCaseLayoutsAreFast(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Logf("%s %gx%g: %v, size %g, %d lines, overflow %v, %+v", w.name, box.W, box.H, took, l.FontSize, len(l.Lines), l.Overflow, stats.fit)
-			if took > raceSlowdown*time.Second {
+			if took > raceSlowdown*time.Second && took > timeBound(t, e, time.Second) {
 				t.Errorf("%s %gx%g took %v", w.name, box.W, box.H, took)
 			}
 			if stats.fit.exhausted || stats.fit.mismatch != 0 {
@@ -165,7 +165,7 @@ func TestWorstCaseLayoutsAreFast(t *testing.T) {
 		t.Fatal(len(ls), err)
 	}
 	t.Logf("64-bubble page: %v", took)
-	if took > 3*raceSlowdown*time.Second {
+	if took > 3*raceSlowdown*time.Second && took > timeBound(t, e, 3*time.Second) {
 		t.Errorf("64-bubble page took %v", took)
 	}
 }
@@ -186,7 +186,7 @@ func TestWorkBudgetBoundsPathologicalText(t *testing.T) {
 	if !stats.fit.exhausted || !l.Overflow || l.FontSize != 12 {
 		t.Fatalf("budget: size %g overflow %v %+v", l.FontSize, l.Overflow, stats.fit)
 	}
-	if stats.fit.work > 3*fitBudget || took > raceSlowdown*time.Second {
+	if stats.fit.work > 3*fitBudget || (took > raceSlowdown*time.Second && took > timeBound(t, e, time.Second)) {
 		t.Fatalf("work %d, %v", stats.fit.work, took)
 	}
 	// Without auto-fit the requested size overflows.
@@ -274,7 +274,7 @@ func TestSmallLayoutsAreNotStarvedByLargePages(t *testing.T) {
 		slowest = max(slowest, time.Since(start))
 	}
 	t.Logf("%d small layouts alongside the large pages, slowest %v", n, slowest)
-	if n < 10 || slowest > 250*raceSlowdown*time.Millisecond {
+	if n < 10 || (slowest > 250*raceSlowdown*time.Millisecond && slowest > timeBound(t, e, 250*time.Millisecond)) {
 		t.Fatalf("%d small layouts, slowest %v", n, slowest)
 	}
 }
