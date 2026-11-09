@@ -691,7 +691,7 @@
   </nav>
   <div class="mv-ed__bar-end">
    <PresenceAvatars shown={people.shown} more={people.more} open={tray === 'review'} {t} onToggle={toggleReview}/>
-   <span class={`mv-meter mv-ed__meter${meter.idle ? ' mv-meter--idle' : ''}${meter.offline ? ' mv-meter--offline' : ''}`} role="status" aria-label={meter.title} title={meter.title}><i class="ti ti-cpu" aria-hidden="true"></i><span class="mv-bar mv-meter__bar" style:--mv-p={`${meter.load}%`} aria-hidden="true"></span><span class="mv-meter__label">{meter.text}</span></span>
+   <span class={`mv-meter mv-ed__meter${meter.idle ? ' mv-meter--idle' : ''}${meter.offline ? ' mv-meter--offline' : ''}`} role="status" aria-label={meter.title.startsWith(meter.text) ? meter.title : `${meter.text}, ${meter.title}`} title={meter.title}><i class="ti ti-cpu" aria-hidden="true"></i><span class="mv-bar mv-meter__bar" style:--mv-p={`${meter.load}%`} aria-hidden="true"></span><span class="mv-meter__label">{meter.text}</span></span>
    <span class="mv-ed__history-shortcut"><Button variant="bare" icon="history" label={t('history.title')} small disabled={!page || busy} onclick={() => void openHistory()}/></span>
    <div class="mv-ed__menu-wrap">
     <button type="button" class="mv-btn mv-btn--sm mv-ed__zoom" aria-haspopup="menu" aria-expanded={menu === 'zoom'} aria-label={t('zoom.level', {value: zoom})} onclick={(e) => toggleMenu('zoom', e)}><i class="ti ti-zoom-in" aria-hidden="true"></i><span>{zoom}%</span></button>

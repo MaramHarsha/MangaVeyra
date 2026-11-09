@@ -79,7 +79,9 @@ templ Base(c *Chrome) {
 			class="mv-body"
 			if c.User != nil {
 				data-user={ c.userID() }
-			} else if c.SignedOut {
+			}
+			// templ v0.3.1100 prints an attribute-position "else if" as text.
+			if c.User == nil && c.SignedOut {
 				data-signed-out
 			}
 		>

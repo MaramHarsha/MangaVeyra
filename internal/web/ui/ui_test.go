@@ -91,7 +91,10 @@ func TestAIAndGateComponents(t *testing.T) {
 	has(t, render(t, GenState(GenProps{State: GenFailed, SFX: "FZZT", RetryLabel: "Retry", Title: "Failed"})), "FZZT", "ti-refresh")
 	has(t, render(t, VariationPicker("Pick a variation", "Keys 1–4", "v", "2", []Variation{{Value: "1", Label: "VAR 1", Lock: -1}, {Value: "2", Label: "VAR 2", Lock: .97}})),
 		`aria-keyshortcuts="2"`, "LOCK 97%", `value="2" checked`)
-	has(t, render(t, ComputeMeter(MeterProps{Href: "/queue", Load: .68, Text: "2 queued", Title: "RTX 4090"})), "mv-p-68", "2 queued")
+	has(t, render(t, ComputeMeter(MeterProps{Href: "/queue", Load: .68, Text: "2 queued", Title: "RTX 4090"})), "mv-p-68", "2 queued", `aria-label="2 queued, RTX 4090"`)
+	if n := (MeterProps{Text: "GPU idle", Title: "GPU idle · RTX 4090"}).Name(); n != "GPU idle · RTX 4090" {
+		t.Errorf("meter name repeats its text: %q", n)
+	}
 	has(t, render(t, RouteChip("Auto", "Qwen-Image Edit · local · ~40 s", "/why", "Why this model?")), "→ Qwen-Image Edit")
 	has(t, render(t, RankBadge("S", false)), "mv-rank--s", `aria-label="Rank S"`)
 	has(t, render(t, XPBar("XP to LV. 24", "7,240 / 10,000", .724)), "mv-p-72", `aria-label="XP to LV. 24"`, `aria-valuetext="7,240 / 10,000"`)
