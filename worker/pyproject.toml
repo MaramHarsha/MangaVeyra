@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "MangaVeyra AI worker: pulls image, vision and training jobs from a MangaVeyra server (diffusers, ComfyUI or a built-in mock)."
 readme = "README.md"
 license = "AGPL-3.0-only"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [{ name = "MangaVeyra contributors" }]
 keywords = ["manga", "comics", "diffusers", "comfyui", "self-hosted", "worker"]
 classifiers = [
@@ -17,54 +17,55 @@ classifiers = [
   "Intended Audience :: End Users/Desktop",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Multimedia :: Graphics",
 ]
 # The core install is deliberately small: the protocol client and the mock backend run with these alone.
 dependencies = [
   "httpx>=0.28.1",
-  "pillow>=12.3.0",
+  "pillow>=13.0.0",
   "pyyaml>=6.0.3",
 ]
 
 [project.optional-dependencies]
 # Local image generation, editing, inpainting, character sheets and LoRA training.
 diffusers = [
-  "torch>=2.14.0",
+  "torch>=2.15.0",
   "diffusers>=0.40.0",
-  "transformers>=5.17.0",
+  "transformers>=5.22.2",
   "accelerate>=1.15.0",
-  "peft>=0.21.0",
+  "peft>=0.21.2",
   "safetensors>=0.8.0",
-  "numpy>=2.5.3",
+  "numpy>=2.5.4",
 ]
 # Run exported ComfyUI workflows (websocket progress; falls back to polling without it).
 comfyui = [
-  "websockets>=17.1",
+  "websockets>=17.4",
 ]
 # Explicit offline learned Character Lock scoring; weights are provisioned separately.
 character-lock = [
-  "torch>=2.14.0",
-  "transformers>=5.17.0",
+  "torch>=2.15.0",
+  "transformers>=5.22.2",
   "safetensors>=0.8.0",
-  "numpy>=2.5.3",
+  "numpy>=2.5.4",
 ]
 # Optional anime-character scorer. ONNX weights are supplied explicitly and
 # retain their separate OpenRAIL terms; installing this extra downloads no model.
 character-lock-ccip = [
-  "onnxruntime>=1.30.0",
-  "numpy>=2.5.3",
+  "onnxruntime>=1.31.1",
+  "numpy>=2.5.4",
 ]
 # Panel/bubble detection and OCR helpers. Learned scoring additionally uses character-lock.
 vision = [
-  "numpy>=2.5.3",
+  "numpy>=2.5.4",
   "opencv-python-headless>=5.0.0.93",
-  "onnxruntime>=1.30.0",
+  "onnxruntime>=1.31.1",
 ]
 test = [
-  "pytest>=9.1.1",
-  "numpy>=2.5.3",
+  "pytest>=9.2.0",
+  "numpy>=2.5.4",
   "opencv-python-headless>=5.0.0.93",
 ]
 all = ["mangaveyra-worker[diffusers,comfyui,vision]"]

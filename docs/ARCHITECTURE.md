@@ -39,7 +39,7 @@ talks to it through the small public World API documented in `sdk/api/`.
 | Server-rendered screens | [templ](https://templ.guide) components + HTMX 2 (vendored, no CDN). Generated `*_templ.go` files are committed so `go build` works without the templ CLI |
 | Rich screens | TypeScript + Svelte 5 islands built by Vite: editor (PixiJS 8 WebGL canvas + SVG lettering layer), reader, pose tool, animate timeline |
 | Realtime | One WebSocket per tab at `/ws` (github.com/coder/websocket): topic subscriptions for jobs, notifications, presence; Yjs updates relayed per page document |
-| AI workers | Python 3.14 package in `worker/` (3.11+ supported) (diffusers / ComfyUI adapter / built-in mock). Workers *pull* jobs from the Go server over HTTP and stream progress back |
+| AI workers | Python 3.14 package in `worker/` (3.12+ supported) (diffusers / ComfyUI adapter / built-in mock). Workers *pull* jobs from the Go server over HTTP and stream progress back |
 | Text models | Any OpenAI-compatible endpoint (Ollama, vLLM, llama.cpp, LM Studio, LiteLLM) or vendor keys (Anthropic, OpenAI, Google, xAI) called from Go |
 | Data | PostgreSQL 18 (16+ works) or SQLite (modernc.org/sqlite, pure Go) through `database/sql` + `sqlx`. Job queue and search live in the database — no Redis, no search server |
 | Files | Local disk or any S3-compatible store (minio-go) behind `storage.Store` |
