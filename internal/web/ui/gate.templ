@@ -1,6 +1,10 @@
 package ui
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
+)
 
 // RankBadge renders an E–S rank diamond. The letter is always shown (never colour alone).
 templ RankBadge(rank string, small bool) {
@@ -10,7 +14,8 @@ templ RankBadge(rank string, small bool) {
 	</span>
 }
 
-// XPBar renders a labelled XP bar ("XP TO LV. 24 · 7,240 / 10,000").
+// XPBar renders a labelled XP bar ("XP TO LV. 24 · 7,240 / 10,000"). Without a
+// visible label the progressbar is still named "XP" for assistive technology.
 templ XPBar(label, value string, progress float64) {
 	<div class="mv-xp">
 		if label != "" || value != "" {
@@ -27,6 +32,11 @@ templ XPBar(label, value string, progress float64) {
 			aria-valuenow={ fmtNum(float64(int(progress*100 + .5))) }
 			if label != "" {
 				aria-label={ label }
+			} else {
+				aria-label={ i18n.T(ctx, "ui.xp") }
+			}
+			if value != "" {
+				aria-valuetext={ value }
 			}
 		></div>
 	</div>

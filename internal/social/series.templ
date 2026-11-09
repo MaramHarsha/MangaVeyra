@@ -328,7 +328,7 @@ templ commentItem(v seriesView, c commentView) {
 templ ageGateStep(v seriesView) {
 	<div class="mv-series mv-series--gate">
 		@seriesBanner(v)
-		@ui.State(ui.StateProps{SFX: "!?", Tone: "warning", Art: "splash", Boxed: true, Class: "mv-series__gate",
+		@ui.State(ui.StateProps{SFX: "!?", Tone: "warning", Art: "splash", Boxed: true, H1: true, Class: "mv-series__gate",
 			Title: i18n.T(ctx, "social.age.title", "title", v.AgeGate.Title, "rating", v.AgeGate.Rating),
 			Body: i18n.T(ctx, "social.age.body")}) {
 			<form method="post" action={ templ.URL(v.AgeGate.Action) }>

@@ -3,6 +3,8 @@ package ui
 import (
 	"math"
 	"strconv"
+
+	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 )
 
 // BadgeSpec is a badge to show on a card.
@@ -41,7 +43,8 @@ templ ProjectCard(p ProjectCardProps) {
 			<div class="mv-pcard__head">
 				<a class="mv-pcard__title" href={ templ.URL(p.Href) }>{ p.Title }</a>
 				if p.MenuLabel != "" {
-					<button type="button" class="mv-iconlink mv-pcard__menu" aria-label={ p.MenuLabel }>
+					// Project actions have no endpoint yet: the designed "…" stays, disabled with the Soon hint (ADR 0004 §7).
+					<button type="button" class="mv-iconlink mv-pcard__menu is-soon" aria-label={ p.MenuLabel + " · " + i18n.T(ctx, "ui.soon") } title={ i18n.T(ctx, "ui.soon_hint") } disabled>
 						@Icon("dots", 18)
 					</button>
 				}
@@ -145,7 +148,7 @@ templ CharacterCard(p CharacterCardProps) {
 			if p.Role != "" {
 				<span class="mv-ccard__role">{ p.Role }</span>
 			}
-			<h3 class="mv-ccard__name">
+			<h2 class="mv-ccard__name">
 				if p.Href != "" {
 					<a href={ templ.URL(p.Href) } class="mv-link--plain">
 						<span>{ p.FirstName }</span>
@@ -155,7 +158,7 @@ templ CharacterCard(p CharacterCardProps) {
 					<span>{ p.FirstName }</span>
 					<span>{ p.LastName }</span>
 				}
-			</h3>
+			</h2>
 			if p.Desc != "" {
 				<p class="mv-ccard__desc">{ p.Desc }</p>
 			}
