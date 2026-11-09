@@ -11,7 +11,7 @@
 <p align="center">
   MangaVeyra is being built as an open-source, self-hosted AI manga studio, reader and community.<br>
   Phase 1 takes an original premise through scripts, characters, layered pages and lettering<br>
-  to PNG, CBZ and print-ready PDF exports. Publishing and reading remain planned.
+  to PNG, CBZ and print-ready PDF exports, then publishes it to readers on your own server.
 </p>
 
 <p align="center">
@@ -326,9 +326,13 @@ manually from the Actions tab.
 - The implemented foundation has no telemetry or usage tracking.
 - Passwords use argon2id; session tokens are stored hashed; 2FA, CSRF protection, strict CSP, rate limits, encrypted
   secrets and signed media URLs are implemented.
-- Providers are explicitly configured; `local_only` is enforced at planning, dispatch and worker claims. World and
-  update integration remain planned and opt-in.
+- Providers are explicitly configured; `local_only` is enforced at planning, dispatch and worker claims. World integration
+  remains planned; update checks are off unless an admin turns them on.
 - To report a vulnerability privately, follow [SECURITY.md](SECURITY.md).
+
+## Contributing
+
+Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
