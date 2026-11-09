@@ -273,3 +273,37 @@ func TestUpdateCandidateStartsNoBackgroundLoops(t *testing.T) {
 		t.Fatalf("candidate started its loops: %s", logs.String())
 	}
 }
+
+// TestServerTimeouts pins the production http.Server limits: a slow client
+// cannot hold a connection open indefinitely while sending headers, idle
+// keep-alive connections are reclaimed, and header size is bounded.
+func TestServerTimeouts(t *testing.T) {
+	dir := t.TempDir()
+	env := map[string]string{"MV_DATA_DIR": dir, "MV_ADDR": "127.0.0.1:0", "MV_LOG_LEVEL": "error"}
+	cfg, err := config.Load("", func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	params := auth.FastHashParams
+	a, err := app.New(context.Background(), cfg, app.Options{HashParams: &params, LogOutput: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = a.Close() })
+	srv := a.Server()
+	if srv.Addr != cfg.Addr || srv.Handler == nil {
+		t.Fatalf("server addr/handler: %q %v", srv.Addr, srv.Handler)
+	}
+	if srv.ReadHeaderTimeout <= 0 || srv.ReadHeaderTimeout > 30*time.Second {
+		t.Fatalf("ReadHeaderTimeout must be set and short, got %v", srv.ReadHeaderTimeout)
+	}
+	if srv.IdleTimeout <= 0 || srv.IdleTimeout > 5*time.Minute {
+		t.Fatalf("IdleTimeout must be set and bounded, got %v", srv.IdleTimeout)
+	}
+	if srv.MaxHeaderBytes <= 0 || srv.MaxHeaderBytes > 1<<20 {
+		t.Fatalf("MaxHeaderBytes must be set and at most 1 MiB, got %d", srv.MaxHeaderBytes)
+	}
+	if srv.ErrorLog == nil {
+		t.Fatal("ErrorLog must route through the app logger")
+	}
+}
