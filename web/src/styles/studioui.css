@@ -487,9 +487,10 @@
 .mv-c1__label { font-family: var(--mv-font-display); font-size: 1.625rem; line-height: 1; }
 .mv-c1__col--panel { gap: 6px; }
 .mv-c1 .mv-c1__addline, .mv-c1__moresum {
-  --mv-btn-h: 22px;
-  width: 22px;
-  height: 22px;
+  /* 24 px keeps the WCAG 2.2 target size (2.5.8) while the icon stays 15 px. */
+  --mv-btn-h: 24px;
+  width: 24px;
+  height: 24px;
   border-color: transparent;
   color: var(--mv-text-3);
 }
@@ -520,11 +521,12 @@
 .mv-c1 .mv-c1__line.is-flowing .mv-c1__cell--line { display: block; width: calc(100% + 2 * var(--mv-space-1)); margin: 0 calc(-1 * var(--mv-space-1)); text-indent: var(--mv-who-w, 0px); }
 
 /* Row disclosure: page, camera angle, notes, line types, SFX notes. */
-.mv-c1__more { grid-column: 1 / -1; }
+.mv-c1__col--more { grid-column: 1 / -1; display: block; }
 .mv-c1__moresum {
   position: absolute;
   top: calc(12px + 26px + 6px);
-  left: calc(14px + 22px);
+  /* Beside the 24 px add-line button with a 4 px gap, so neither target is obscured (WCAG 2.5.8). */
+  left: calc(14px + 24px + 4px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
