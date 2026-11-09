@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 )
 
@@ -62,6 +63,18 @@ func (s *Service) RunDigests(ctx context.Context) (int, error) {
 		if err != nil {
 			continue
 		}
+		if p.inQuietHours(now) {
+			continue
+		}
+		var emailKinds []string
+		for kind, channel := range p.Channels {
+			if channel.Email {
+				emailKinds = append(emailKinds, kind)
+			}
+		}
+		if len(emailKinds) == 0 {
+			continue
+		}
 		period := 24 * time.Hour
 		if p.Digest == DigestWeekly {
 			period = 7 * 24 * time.Hour
@@ -74,11 +87,12 @@ func (s *Service) RunDigests(ctx context.Context) (int, error) {
 			since = *r.LastDigestAt
 		}
 		var items []row
-		if err := s.db.Select(ctx, &items, `SELECT `+cols+` FROM notifications WHERE user_id = ? AND read_at IS NULL AND created_at > ? ORDER BY created_at DESC LIMIT 100`,
-			r.UserID, since); err != nil {
+		query, args, err := db.In(`SELECT `+cols+` FROM notifications WHERE user_id = ? AND read_at IS NULL AND created_at > ? AND kind IN (?) ORDER BY created_at DESC LIMIT 100`,
+			r.UserID, since, emailKinds)
+		if err != nil {
 			return sent, err
 		}
-		if _, err := s.db.Exec(ctx, `UPDATE notification_prefs SET last_digest_at = ? WHERE user_id = ?`, now, r.UserID); err != nil {
+		if err := s.db.Select(ctx, &items, query, args...); err != nil {
 			return sent, err
 		}
 		if len(items) == 0 {
@@ -100,6 +114,9 @@ func (s *Service) RunDigests(ctx context.Context) (int, error) {
 		if err := s.opts.Mailer.Send(ctx, Email{To: *rc.Email, Subject: subject, Text: text}); err != nil {
 			s.log.WarnContext(ctx, "notify: digest", "user", r.UserID, "err", err)
 			continue
+		}
+		if _, err := s.db.Exec(ctx, `UPDATE notification_prefs SET last_digest_at = ? WHERE user_id = ?`, now, r.UserID); err != nil {
+			return sent, err
 		}
 		sent++
 	}

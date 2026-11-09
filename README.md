@@ -328,6 +328,7 @@ manually from the Actions tab.
   secrets and signed media URLs are implemented.
 - Providers are explicitly configured; `local_only` is enforced at planning, dispatch and worker claims. World and
   update integration remain planned and opt-in.
+- To report a vulnerability privately, follow [SECURITY.md](SECURITY.md).
 
 ## License
 

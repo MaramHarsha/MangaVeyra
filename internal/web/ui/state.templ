@@ -18,6 +18,8 @@ type StateProps struct {
 	Foot  string
 	Boxed bool
 	Page  bool
+	// H1 renders the title as the page's level-one heading (a state that is the whole page).
+	H1    bool
 	Class string
 }
 
@@ -37,7 +39,11 @@ templ State(p StateProps) {
 		if p.SFX != "" {
 			@SFX(p.SFX, p.SFXSize, p.Tone, p.JP)
 		}
-		<h2 class={ Cls("mv-state__title", If(p.Page, "mv-state__title--lg")) }>{ p.Title }</h2>
+		if p.H1 {
+			<h1 class={ Cls("mv-state__title", If(p.Page, "mv-state__title--lg")) }>{ p.Title }</h1>
+		} else {
+			<h2 class={ Cls("mv-state__title", If(p.Page, "mv-state__title--lg")) }>{ p.Title }</h2>
+		}
 		if p.Body != "" {
 			<p class={ Cls("mv-state__body", If(p.Page, "mv-state__body--lg")) }>{ p.Body }</p>
 		}

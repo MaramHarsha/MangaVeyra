@@ -124,8 +124,9 @@ const (
 // PlainShell renders a full-screen page without navigation (errors, offline, maintenance).
 templ PlainShell(c *Chrome) {
 	@Base(c) {
+		<a class="mv-skip-link" href="#main">{ i18n.T(ctx, "ui.skip_to_content") }</a>
 		<div class="mv-plain">
-			<main id="main">
+			<main id="main" tabindex="-1">
 				{ children... }
 			</main>
 		</div>

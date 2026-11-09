@@ -346,7 +346,7 @@ templ scriptAssistant() {
 // from unsaved edits when the view switches.
 templ ScriptProse(v storyView) {
 	{{ scene := v.currentScene() }}
-	<article class="mv-c1__prose" data-view-panel="prose" hidden?={ !storyViewIs(v, viewProse) } aria-label={ i18n.T(ctx, "studioui.story.prose") }>
+	<article class="mv-c1__prose" data-view-panel="prose" hidden?={ !storyViewIs(v, viewProse) } aria-label={ i18n.T(ctx, "studioui.story.prose") } tabindex="0">
 		<p class="mv-c1__prose-summary" data-mirror="chapter_summary">{ v.Script.ChapterSummary }</p>
 		<section class="mv-c1__prose-scene" id={ "prose-" + scene.ID } aria-labelledby={ "prose-title-" + scene.ID }>
 			<span class="mv-c1__crumb">
@@ -440,7 +440,7 @@ templ sceneDetails(v storyView, scene studio.ScriptScene) {
 }
 
 templ sceneTable(v storyView, scene studio.ScriptScene) {
-	<section class="mv-c1__scene" id={ "scene-" + scene.ID } aria-labelledby="mv-c1-title">
+	<section class="mv-c1__scene" id={ "scene-" + scene.ID }>
 		<div class="mv-c1__table" role="table" aria-label={ i18n.T(ctx, "studioui.story.panels_table", "number", v.SceneIndex + 1) }>
 			<div class="mv-c1__row mv-c1__row--head" role="row">
 				<span role="columnheader">{ i18n.T(ctx, "studioui.story.col.panel") }</span>
@@ -489,7 +489,9 @@ templ panelRow(v storyView, panel studio.ScriptPanel) {
 				@ui.Input(ui.InputProps{ID: indexID("sfx-", panel.ID, sfxIndex), Name: sfxField(panel.ID, sfxIndex, "text"), Value: effect.Text, ReadOnly: v.ReadOnly, MaxLength: 240, Class: "mv-c1__cell mv-c1__cell--sfx"})
 			}
 		</div>
-		@panelMore(v, panel, panelName)
+		<div class="mv-c1__col mv-c1__col--more" role="cell">
+			@panelMore(v, panel, panelName)
+		</div>
 	</div>
 }
 

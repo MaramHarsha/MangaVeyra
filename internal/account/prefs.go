@@ -8,6 +8,7 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
+	"github.com/MaramHarsha/MangaVeyra/internal/core/httpx"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/notify"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
@@ -56,7 +57,8 @@ func (m *Module) saveAppearance(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if theme != "" {
-		http.SetCookie(w, &http.Cookie{Name: core.ThemeCookie, Value: p.Theme, Path: "/", MaxAge: 365 * 24 * 3600, SameSite: http.SameSiteLaxMode})
+		http.SetCookie(w, &http.Cookie{Name: core.ThemeCookie, Value: p.Theme, Path: "/", MaxAge: 365 * 24 * 3600, SameSite: http.SameSiteLaxMode,
+			HttpOnly: true, Secure: httpx.IsHTTPS(r)})
 	}
 	return m.saved(w, r, SecAppearance, &p)
 }
@@ -180,7 +182,8 @@ func (m *Module) saveLanguage(w http.ResponseWriter, r *http.Request) error {
 	if uiLang != before {
 		// The interface language changes every string: reload the page in it.
 		if uiLang != "" {
-			http.SetCookie(w, &http.Cookie{Name: core.LangCookie, Value: uiLang, Path: "/", MaxAge: 365 * 24 * 3600, SameSite: http.SameSiteLaxMode})
+			http.SetCookie(w, &http.Cookie{Name: core.LangCookie, Value: uiLang, Path: "/", MaxAge: 365 * 24 * 3600, SameSite: http.SameSiteLaxMode,
+				HttpOnly: true, Secure: httpx.IsHTTPS(r)})
 		}
 		if core.IsHTMX(r) {
 			w.Header().Set("HX-Refresh", "true")

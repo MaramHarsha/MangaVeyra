@@ -47,7 +47,9 @@ func (m *Module) catalogueRows(ctx context.Context, actor providerActor, managea
 			row.Use = i18n.T(ctx, "aiimage.use.edits")
 		}
 		if model.ID == PlaceholderArt {
-			// The placeholder is every image task's fallback, not only edits.
+			// The placeholder is every image task's fallback, not only edits;
+			// its name is translated like the text placeholder's.
+			row.Name = m.modelDisplayName(ctx, model.ID)
 			row.Provider = i18n.T(ctx, "aiimage.provider.placeholder")
 			row.Use = i18n.T(ctx, "aiimage.use.placeholder")
 			row.Cost = i18n.T(ctx, "models.cost.none")

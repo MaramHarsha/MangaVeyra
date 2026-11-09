@@ -77,6 +77,11 @@ func TestBadgesAvatarsAndCards(t *testing.T) {
 		"mv-ccard__kanji", "mv-lock--drift", "82%", "mv-bar--warning")
 	has(t, render(t, ChapterRow(ChapterRowProps{Href: "/s/x/8", Number: 8, Title: "The Lighthouse Debt", New: true, NewLabel: "New"})), ">08<", "mv-chrow--new")
 	has(t, render(t, ProjectCard(ProjectCardProps{Href: "/p", Title: "Tidebreak Courier", ThumbLabel: "PAGE THUMBNAIL"})), "mv-pcard__thumb")
+	// The designed "…" has no project actions behind it yet: disabled with the Soon hint, never a dead button (ADR 0004 §7).
+	has(t, render(t, ProjectCard(ProjectCardProps{Href: "/p", Title: "Tidebreak Courier", MenuLabel: "Project actions"})),
+		`aria-label="Project actions · Soon"`, `title="Coming in a later release"`, "disabled")
+	// Card names are level-two headings under the page title (heading order).
+	has(t, render(t, CharacterCard(CharacterCardProps{FirstName: "Rin", LastName: "Asagiri", Lock: -1})), `<h2 class="mv-ccard__name">`)
 	has(t, render(t, SeriesCard(SeriesCardProps{Href: "/s", Title: "Lanterns of Oru", Rank: 1})), "mv-scard__rank", "mv-tone--3x4")
 }
 
@@ -89,7 +94,9 @@ func TestAIAndGateComponents(t *testing.T) {
 	has(t, render(t, ComputeMeter(MeterProps{Href: "/queue", Load: .68, Text: "2 queued", Title: "RTX 4090"})), "mv-p-68", "2 queued")
 	has(t, render(t, RouteChip("Auto", "Qwen-Image Edit · local · ~40 s", "/why", "Why this model?")), "→ Qwen-Image Edit")
 	has(t, render(t, RankBadge("S", false)), "mv-rank--s", `aria-label="Rank S"`)
-	has(t, render(t, XPBar("XP to LV. 24", "7,240 / 10,000", .724)), "mv-p-72")
+	has(t, render(t, XPBar("XP to LV. 24", "7,240 / 10,000", .724)), "mv-p-72", `aria-label="XP to LV. 24"`, `aria-valuetext="7,240 / 10,000"`)
+	// The dashboard draws the bar without a visible label; the progressbar is still named (WCAG 4.1.2).
+	has(t, render(t, XPBar("", "", .5)), `role="progressbar"`, `aria-label="XP"`)
 	has(t, render(t, LevelUpToast("Level 24 · Storyteller", "Unlocked")), "LV UP")
 	has(t, render(t, withText(StatusWindow("Status · Creator", ""), "<b>x</b>")), "mv-status__title")
 }
@@ -111,7 +118,9 @@ func TestOverlaysAndStates(t *testing.T) {
 	has(t, render(t, Toast(ToastProps{Tone: ToneSuccess, Title: "Chapter 8 published", Href: "/s/x", Action: "View"})), "mv-toast--success", "ti-circle-check")
 	has(t, render(t, Menu([]MenuItem{{Href: "/x", Label: "PDF", Current: true}, {Separator: true}, {Href: "/logout", Label: "Log out", Post: true}})),
 		`role="menu"`, `aria-current="true"`, `method="post"`, "mv-menu__sep")
-	has(t, render(t, withText(State(StateProps{SFX: "シーン…", JP: true, Title: "No projects yet", Art: "splash"}), "")), "mv-sfx--jp", "mv-tex-splash")
+	has(t, render(t, withText(State(StateProps{SFX: "シーン…", JP: true, Title: "No projects yet", Art: "splash"}), "")), "mv-sfx--jp", "mv-tex-splash", `<h2 class="mv-state__title">`)
+	// A state that is the whole page (the series age gate) carries the page's level-one heading.
+	has(t, render(t, withText(State(StateProps{Title: "Harbour Ghosts is rated Mature 17+", H1: true, Boxed: true}), "")), `<h1 class="mv-state__title">`)
 	has(t, render(t, Skeleton("Loading")), "mv-skeleton__block")
 	has(t, render(t, Steps("Setup", []Step{{Label: "Admin", Done: true}, {Label: "Instance", Current: true}})), "is-done", `aria-current="step"`)
 }

@@ -13,7 +13,7 @@ import (
 
 func (f *fixture) waitJob(id string) *jobs.Job {
 	f.t.Helper()
-	deadline := time.Now().Add(60 * time.Second)
+	deadline := time.Now().Add(jobWaitTimeout)
 	for {
 		j, err := f.ta.Deps.Jobs.Get(f.ctx, id)
 		if err != nil {

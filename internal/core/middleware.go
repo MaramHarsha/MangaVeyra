@@ -238,7 +238,11 @@ func MaintenanceGate(d *Deps) Middleware {
 			}
 			e := httpx.NewError(http.StatusServiceUnavailable, httpx.CodeMaintenance, inst.Maintenance.Message)
 			e.RetryAfter = 5 * time.Minute
-			httpx.WriteError(w, r, e)
+			// The gate runs before locale resolution; resolve it for the holding
+			// page so a Japanese visitor reads G6 Maintenance in Japanese.
+			Localize(d)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				httpx.WriteError(w, r, e)
+			})).ServeHTTP(w, r)
 		})
 	}
 }

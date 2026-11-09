@@ -16,6 +16,7 @@ import (
 
 	"github.com/MaramHarsha/MangaVeyra/internal/backup"
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
+	"github.com/MaramHarsha/MangaVeyra/internal/core/httpx"
 	"github.com/MaramHarsha/MangaVeyra/internal/i18n"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/web"
@@ -226,7 +227,7 @@ func (m *Module) setTheme(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	http.SetCookie(w, &http.Cookie{Name: core.ThemeCookie, Value: theme, Path: "/", MaxAge: 365 * 24 * 3600, SameSite: http.SameSiteLaxMode,
-		Secure: r.TLS != nil || r.Header.Get("X-Mv-Https") == "1"})
+		HttpOnly: true, Secure: httpx.IsHTTPS(r)})
 	if core.IsHTMX(r) || core.WantsJSON(r) {
 		web.TriggerPrefs(w, web.PrefsEvent{Theme: theme})
 		w.WriteHeader(http.StatusNoContent)

@@ -95,9 +95,10 @@ func TestNotificationsInAppGroupingAndRead(t *testing.T) {
 
 // fakeSMTP is a minimal SMTP server that records one message per connection.
 type fakeSMTP struct {
-	ln   net.Listener
-	mu   sync.Mutex
-	msgs []string
+	ln     net.Listener
+	mu     sync.Mutex
+	msgs   []string
+	reject bool
 }
 
 func newFakeSMTP(t *testing.T) *fakeSMTP {
@@ -150,6 +151,13 @@ func (s *fakeSMTP) serve(c net.Conn) {
 		case strings.HasPrefix(cmd, "MAIL"), strings.HasPrefix(cmd, "RCPT"), strings.HasPrefix(cmd, "RSET"), strings.HasPrefix(cmd, "NOOP"):
 			w("250 ok")
 		case cmd == "DATA":
+			s.mu.Lock()
+			reject := s.reject
+			s.mu.Unlock()
+			if reject {
+				w("451 temporarily unavailable")
+				continue
+			}
 			inData = true
 			w("354 go ahead")
 		case cmd == "QUIT":
@@ -165,6 +173,12 @@ func (s *fakeSMTP) messages() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]string{}, s.msgs...)
+}
+
+func (s *fakeSMTP) rejectMessages(reject bool) {
+	s.mu.Lock()
+	s.reject = reject
+	s.mu.Unlock()
 }
 
 func (s *fakeSMTP) port() string {
@@ -190,6 +204,9 @@ func TestEmailDeliveryResetAndDigest(t *testing.T) {
 		"MV_SMTP_FROM", "Tidebreak Studio <noreply@example.org>", "MV_PUBLIC_URL", "https://manga.example.org"))
 	ctx := context.Background()
 	n := ta.Deps.Notify
+	// The quiet-hours window below excludes 23:59 UTC; keep the test independent
+	// of the wall clock so that it also works during that minute.
+	n.Now = func() time.Time { return time.Date(2026, time.November, 9, 12, 0, 0, 0, time.UTC) }
 	if !n.EmailEnabled() || !ta.Deps.Auth.EmailEnabled() {
 		t.Fatal("email should be enabled")
 	}
@@ -254,6 +271,125 @@ func TestEmailDeliveryResetAndDigest(t *testing.T) {
 	}
 	if sent, _ := n.RunDigests(ctx); sent != 0 {
 		t.Fatal("digest sent twice in one day")
+	}
+}
+
+func TestDigestDeliveryRespectsQuietHours(t *testing.T) {
+	for _, dialect := range testdb.Dialects() {
+		t.Run(dialect, func(t *testing.T) {
+			smtpd := newFakeSMTP(t)
+			ta := testutil.NewTestApp(t, testutil.WithDialect(dialect), testutil.WithEnv(
+				"MV_SMTP_HOST", "127.0.0.1", "MV_SMTP_PORT", smtpd.port(), "MV_SMTP_TLS", "none"))
+			ctx := context.Background()
+			n := ta.Deps.Notify
+			clock := time.Date(2026, time.November, 8, 22, 0, 0, 0, time.UTC) // 07:00 in Tokyo.
+			n.Now = func() time.Time { return clock }
+			u := ta.CreateUser(t, "rin", auth.RoleCreator)
+			prefs := notify.DefaultPrefs()
+			prefs.Digest = notify.DigestDaily
+			prefs.QuietHours = notify.QuietHours{Enabled: true, Start: "22:00", End: "08:00", Timezone: "Asia/Tokyo"}
+			if err := n.SetPrefs(ctx, u.ID, prefs); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := n.Notify(ctx, notify.Input{UserID: u.ID, Kind: notify.KindMention, Title: "Rin has a page to review"}); err != nil {
+				t.Fatal(err)
+			}
+			n.Wait()
+			if sent, err := n.RunDigests(ctx); err != nil || sent != 0 || len(smtpd.messages()) != 0 {
+				t.Fatalf("digest during quiet hours: sent=%d err=%v messages=%d", sent, err, len(smtpd.messages()))
+			}
+			clock = clock.Add(2 * time.Hour)
+			if sent, err := n.RunDigests(ctx); err != nil || sent != 1 || len(smtpd.messages()) != 1 {
+				t.Fatalf("digest after quiet hours: sent=%d err=%v messages=%d", sent, err, len(smtpd.messages()))
+			}
+			if sent, err := n.RunDigests(ctx); err != nil || sent != 0 {
+				t.Fatalf("duplicate daily digest: sent=%d err=%v", sent, err)
+			}
+		})
+	}
+}
+
+func TestDigestRetriesAfterSMTPFailure(t *testing.T) {
+	for _, dialect := range testdb.Dialects() {
+		t.Run(dialect, func(t *testing.T) {
+			smtpd := newFakeSMTP(t)
+			ta := testutil.NewTestApp(t, testutil.WithDialect(dialect), testutil.WithEnv(
+				"MV_SMTP_HOST", "127.0.0.1", "MV_SMTP_PORT", smtpd.port(), "MV_SMTP_TLS", "none"))
+			ctx := context.Background()
+			n := ta.Deps.Notify
+			n.Now = func() time.Time { return time.Date(2026, time.November, 9, 12, 0, 0, 0, time.UTC) }
+			u := ta.CreateUser(t, "rin", auth.RoleCreator)
+			prefs := notify.DefaultPrefs()
+			prefs.Digest = notify.DigestDaily
+			if err := n.SetPrefs(ctx, u.ID, prefs); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := n.Notify(ctx, notify.Input{UserID: u.ID, Kind: notify.KindMention, Title: "Kaito left a review"}); err != nil {
+				t.Fatal(err)
+			}
+			n.Wait()
+			smtpd.rejectMessages(true)
+			if sent, err := n.RunDigests(ctx); err != nil || sent != 0 || len(smtpd.messages()) != 0 {
+				t.Fatalf("rejected digest: sent=%d err=%v messages=%d", sent, err, len(smtpd.messages()))
+			}
+			smtpd.rejectMessages(false)
+			if sent, err := n.RunDigests(ctx); err != nil || sent != 1 || len(smtpd.messages()) != 1 {
+				t.Fatalf("digest after SMTP recovery: sent=%d err=%v messages=%d", sent, err, len(smtpd.messages()))
+			}
+			if sent, err := n.RunDigests(ctx); err != nil || sent != 0 {
+				t.Fatalf("duplicate recovered digest: sent=%d err=%v", sent, err)
+			}
+		})
+	}
+}
+
+func TestDigestHonorsEmailChannelPreferences(t *testing.T) {
+	for _, dialect := range testdb.Dialects() {
+		t.Run(dialect, func(t *testing.T) {
+			smtpd := newFakeSMTP(t)
+			ta := testutil.NewTestApp(t, testutil.WithDialect(dialect), testutil.WithEnv(
+				"MV_SMTP_HOST", "127.0.0.1", "MV_SMTP_PORT", smtpd.port(), "MV_SMTP_TLS", "none"))
+			ctx := context.Background()
+			n := ta.Deps.Notify
+			clock := time.Date(2026, time.November, 9, 12, 0, 0, 0, time.UTC)
+			n.Now = func() time.Time { return clock }
+			u := ta.CreateUser(t, "rin", auth.RoleCreator)
+			prefs := notify.DefaultPrefs()
+			prefs.Digest = notify.DigestDaily
+			prefs.Channels[notify.KindMention] = notify.Channels{InApp: true}
+			if err := n.SetPrefs(ctx, u.ID, prefs); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := n.Notify(ctx, notify.Input{UserID: u.ID, Kind: notify.KindMention, Title: "Email disabled for this mention"}); err != nil {
+				t.Fatal(err)
+			}
+			if sent, err := n.RunDigests(ctx); err != nil || sent != 0 || len(smtpd.messages()) != 0 {
+				t.Fatalf("opted-out email: sent=%d err=%v messages=%d", sent, err, len(smtpd.messages()))
+			}
+			if _, err := n.Notify(ctx, notify.Input{UserID: u.ID, Kind: notify.KindReview, Title: "Kaito requested a page review"}); err != nil {
+				t.Fatal(err)
+			}
+			// More than the digest's item limit of newer, non-email notifications
+			// must not hide the eligible review from its query.
+			for range 101 {
+				n.Wait()
+				clock = clock.Add(time.Second)
+				if _, err := n.Notify(ctx, notify.Input{UserID: u.ID, Kind: notify.KindJobDone, Title: "Background art is ready"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			n.Wait()
+			if sent, err := n.RunDigests(ctx); err != nil || sent != 1 || len(smtpd.messages()) != 1 {
+				t.Fatalf("eligible digest: sent=%d err=%v messages=%d", sent, err, len(smtpd.messages()))
+			}
+			decoded, err := io.ReadAll(quotedprintable.NewReader(strings.NewReader(smtpd.messages()[0])))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if body := string(decoded); !strings.Contains(body, "Kaito requested a page review") || strings.Contains(body, "Email disabled") || strings.Contains(body, "Background art is ready") {
+				t.Fatalf("digest ignored email channel preferences: %q", body)
+			}
+		})
 	}
 }
 

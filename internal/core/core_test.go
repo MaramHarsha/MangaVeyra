@@ -37,6 +37,9 @@ func TestRegistry(t *testing.T) {
 }
 
 func TestRouterGroupsAndErrors(t *testing.T) {
+	// NewTestApp in other tests installs the web layer's hooks process-wide;
+	// start from none so the plain-text fallback is what is checked.
+	core.SetHooks(core.Hooks{})
 	r := core.NewRouter()
 	calls := []string{}
 	mw := func(name string) core.Middleware {
@@ -195,6 +198,12 @@ func TestStackHeadersGatesAndLocale(t *testing.T) {
 	_, member := ta.UserClient(t, auth.RoleCreator)
 	if r := member.Get("/api/v1/jobs"); r.StatusCode != 503 || r.ErrorCode() != "maintenance" || !strings.Contains(string(r.Body), "GARA") || r.Header.Get("Retry-After") == "" {
 		t.Fatalf("maintenance for members: %d %s", r.StatusCode, r.Body)
+	}
+	// The holding page follows the visitor's language although the gate runs before locale resolution.
+	ja := ta.NewClient()
+	ja.Header.Set("Accept-Language", "ja")
+	if r := ja.Get("/explore"); r.StatusCode != 503 || !strings.Contains(string(r.Body), `lang="ja"`) || !strings.Contains(string(r.Body), "を更新中") {
+		t.Fatalf("maintenance page for a Japanese visitor: %d %.300s", r.StatusCode, r.Body)
 	}
 	if r := cs.Get("/api/v1/jobs"); r.StatusCode != 200 {
 		t.Fatalf("admin during maintenance: %d %s", r.StatusCode, r.Body)

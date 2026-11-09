@@ -2054,7 +2054,7 @@ func ageGateStep(v seriesView) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.State(ui.StateProps{SFX: "!?", Tone: "warning", Art: "splash", Boxed: true, Class: "mv-series__gate",
+		templ_7745c5c3_Err = ui.State(ui.StateProps{SFX: "!?", Tone: "warning", Art: "splash", Boxed: true, H1: true, Class: "mv-series__gate",
 			Title: i18n.T(ctx, "social.age.title", "title", v.AgeGate.Title, "rating", v.AgeGate.Rating),
 			Body:  i18n.T(ctx, "social.age.body")}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var102), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {

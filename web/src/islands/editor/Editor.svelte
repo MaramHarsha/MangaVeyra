@@ -659,6 +659,7 @@
 <svelte:window onkeydown={key} onpointerdown={outside}/>
 <div bind:this={owner} class={`mv-ed${tray === 'layouts' ? ' mv-ed--layouts' : ''}${tool === 'region' ? ' mv-ed--region' : ''}${mode === 'lettering' ? ' mv-ed--lettering' : ''}${controlMode ? ' mv-ed--control' : ''}${controlMode==='history'?' mv-ed--history':''}${tray === 'review' ? ' mv-ed--review' : ''}`} aria-busy={busy}>
  <header class="mv-ed__bar">
+  <h1 class="mv-sr-only">{initial.project.title} · {t('chapter', {number: initial.chapter.number, title: initial.chapter.title})}</h1>
   <a class="mv-ed__back" href={`/studio/p/${initial.project.id}/story/${initial.chapter.id}`} aria-label={t('back')} onclick={(e) => followLink(e, `/studio/p/${initial.project.id}/story/${initial.chapter.id}`)}><img class="mv-only-dark" src="/static/brand/mark-color-on-dark-gate-blue.svg" width="24" height="24" alt=""/><img class="mv-only-light" src="/static/brand/mark-color-on-light-gate-blue.svg" width="24" height="24" alt=""/></a>
   <div class="mv-ed__crumbs">
    <span class="mv-ed__project" title={initial.project.title}>{initial.project.title}</span>
@@ -710,7 +711,7 @@
   </div>
  </header>
 
- <aside class="mv-ed__left">
+ <aside class="mv-ed__left" aria-label={t('pages')}>
   <div class="mv-ed__section-head mv-ed__rail-head">
    <strong>{t('pages')}</strong>
    <span class="mv-ed__head-actions">
@@ -815,7 +816,7 @@
   {/if}
  </section>
 
- <aside class="mv-ed__right">
+ <aside class="mv-ed__right" aria-label={t('inspector')}>
   {#if tray === 'review' && page}
    <ReviewDrawer store={review} pageNumber={page.number} pageVersion={page.version} panelID={panel?.id || ''} panelLabel={panelName} compose={reviewCompose} focus={reviewFocus} lang={initial.lang} {t} onClose={closeReview} onFocus={(id) => reviewFocus = id} onConfirm={(title, body, action, label) => confirm(title, body, action, label, 'danger')}/>
   {:else if tray === 'layouts'}

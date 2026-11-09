@@ -155,8 +155,14 @@ func (s *S3) List(ctx context.Context, prefix string) ([]Info, error) {
 
 // Ping checks the bucket is reachable (used by /readyz).
 func (s *S3) Ping(ctx context.Context) error {
-	_, err := s.client.BucketExists(ctx, s.bucket)
-	return err
+	exists, err := s.client.BucketExists(ctx, s.bucket)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("storage: s3 bucket does not exist")
+	}
+	return nil
 }
 
 func mapS3Err(err error) error {

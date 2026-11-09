@@ -142,6 +142,14 @@ func TestImageCatalogueAndRoutingScreensAreCompleteWithoutJavaScript(t *testing.
 			assertEveryTargetIsServed(t, ta, body)
 			mustNotContain(t, body, "aiimage.", "@ui.")
 		}
+		// The built-in placeholder row is translated like every other label.
+		admin.Header.Set("Accept-Language", "ja")
+		if r := admin.Do(http.MethodPatch, "/api/v1/auth/me", strings.NewReader(`{"locale":"ja"}`), "application/json"); r.StatusCode != http.StatusOK {
+			t.Fatalf("set locale: %d %s", r.StatusCode, r.Body)
+		}
+		ja := mainOf(t, admin.Get("/models?cap=image"))
+		mustContain(t, ja, "プレースホルダーアート")
+		mustNotContain(t, ja, "Placeholder art")
 	})
 }
 

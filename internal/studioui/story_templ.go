@@ -1385,7 +1385,7 @@ func ScriptProse(v storyView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "\"><p class=\"mv-c1__prose-summary\" data-mirror=\"chapter_summary\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "\" tabindex=\"0\"><p class=\"mv-c1__prose-summary\" data-mirror=\"chapter_summary\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2145,7 +2145,7 @@ func sceneTable(v storyView, scene studio.ScriptScene) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "\" aria-labelledby=\"mv-c1-title\"><div class=\"mv-c1__table\" role=\"table\" aria-label=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "\"><div class=\"mv-c1__table\" role=\"table\" aria-label=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2481,7 +2481,7 @@ func panelRow(v storyView, panel studio.ScriptPanel) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "</div><div class=\"mv-c1__col mv-c1__col--more\" role=\"cell\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2489,7 +2489,7 @@ func panelRow(v storyView, panel studio.ScriptPanel) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 179, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 179, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2526,7 +2526,7 @@ func dialogueLine(v storyView, panel studio.ScriptPanel, panelName string, index
 		var templ_7745c5c3_Var128 string
 		templ_7745c5c3_Var128, templ_7745c5c3_Err = templ.ResolveAttributeValue(lineKey(panel.ID, index))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 498, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 500, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var128)
 		if templ_7745c5c3_Err != nil {
@@ -2539,7 +2539,7 @@ func dialogueLine(v storyView, panel studio.ScriptPanel, panelName string, index
 		var templ_7745c5c3_Var129 string
 		templ_7745c5c3_Var129, templ_7745c5c3_Err = templ.ResolveAttributeValue(dialogueKind(line.Kind))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 498, Col: 100}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 500, Col: 100}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var129)
 		if templ_7745c5c3_Err != nil {
@@ -2552,7 +2552,7 @@ func dialogueLine(v storyView, panel studio.ScriptPanel, panelName string, index
 		var templ_7745c5c3_Var130 string
 		templ_7745c5c3_Var130, templ_7745c5c3_Err = templ.ResolveAttributeValue(indexID("speaker-", panel.ID, index))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 500, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 502, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var130)
 		if templ_7745c5c3_Err != nil {
@@ -2565,7 +2565,7 @@ func dialogueLine(v storyView, panel studio.ScriptPanel, panelName string, index
 		var templ_7745c5c3_Var131 string
 		templ_7745c5c3_Var131, templ_7745c5c3_Err = templ.JoinStringErrs(cellLabel(lineName, i18n.T(ctx, "studioui.script.speaker")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 500, Col: 135}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 502, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var131))
 		if templ_7745c5c3_Err != nil {
@@ -2586,7 +2586,7 @@ func dialogueLine(v storyView, panel studio.ScriptPanel, panelName string, index
 		var templ_7745c5c3_Var132 string
 		templ_7745c5c3_Var132, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "studioui.dialogue.caption"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 502, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 504, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var132))
 		if templ_7745c5c3_Err != nil {
@@ -2599,7 +2599,7 @@ func dialogueLine(v storyView, panel studio.ScriptPanel, panelName string, index
 		var templ_7745c5c3_Var133 string
 		templ_7745c5c3_Var133, templ_7745c5c3_Err = templ.ResolveAttributeValue(indexID("line-", panel.ID, index))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 505, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 507, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var133)
 		if templ_7745c5c3_Err != nil {
@@ -2612,7 +2612,7 @@ func dialogueLine(v storyView, panel studio.ScriptPanel, panelName string, index
 		var templ_7745c5c3_Var134 string
 		templ_7745c5c3_Var134, templ_7745c5c3_Err = templ.JoinStringErrs(cellLabel(lineName, i18n.T(ctx, "studioui.script.line")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 505, Col: 128}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 507, Col: 128}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var134))
 		if templ_7745c5c3_Err != nil {
@@ -2674,7 +2674,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var136 string
 		templ_7745c5c3_Var136, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "studioui.script.more", "label", panel.Label))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 514, Col: 104}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 516, Col: 104}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var136)
 		if templ_7745c5c3_Err != nil {
@@ -2687,7 +2687,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var137 string
 		templ_7745c5c3_Var137, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "studioui.script.more_hint"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 514, Col: 155}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 516, Col: 155}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var137)
 		if templ_7745c5c3_Err != nil {
@@ -2708,7 +2708,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var138 string
 		templ_7745c5c3_Var138, templ_7745c5c3_Err = templ.ResolveAttributeValue("page-" + panel.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 519, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 521, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var138)
 		if templ_7745c5c3_Err != nil {
@@ -2721,7 +2721,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var139 string
 		templ_7745c5c3_Var139, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "studioui.script.page"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 519, Col: 100}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 521, Col: 100}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var139))
 		if templ_7745c5c3_Err != nil {
@@ -2734,7 +2734,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var140 string
 		templ_7745c5c3_Var140, templ_7745c5c3_Err = templ.JoinStringErrs(panelName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 519, Col: 142}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 521, Col: 142}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var140))
 		if templ_7745c5c3_Err != nil {
@@ -2755,7 +2755,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var141 string
 		templ_7745c5c3_Var141, templ_7745c5c3_Err = templ.ResolveAttributeValue("camera-" + panel.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 523, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 525, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var141)
 		if templ_7745c5c3_Err != nil {
@@ -2768,7 +2768,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var142 string
 		templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "studioui.script.camera"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 523, Col: 104}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 525, Col: 104}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
 		if templ_7745c5c3_Err != nil {
@@ -2781,7 +2781,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var143 string
 		templ_7745c5c3_Var143, templ_7745c5c3_Err = templ.JoinStringErrs(panelName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 523, Col: 146}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 525, Col: 146}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var143))
 		if templ_7745c5c3_Err != nil {
@@ -2802,7 +2802,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var144 string
 		templ_7745c5c3_Var144, templ_7745c5c3_Err = templ.ResolveAttributeValue("notes-" + panel.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 527, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 529, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var144)
 		if templ_7745c5c3_Err != nil {
@@ -2815,7 +2815,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var145 string
 		templ_7745c5c3_Var145, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "studioui.script.notes"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 527, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 529, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var145))
 		if templ_7745c5c3_Err != nil {
@@ -2828,7 +2828,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var146 string
 		templ_7745c5c3_Var146, templ_7745c5c3_Err = templ.JoinStringErrs(panelName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 527, Col: 144}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 529, Col: 144}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var146))
 		if templ_7745c5c3_Err != nil {
@@ -2849,7 +2849,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var147 string
 		templ_7745c5c3_Var147, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "studioui.script.lines"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 531, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 533, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var147))
 		if templ_7745c5c3_Err != nil {
@@ -2862,7 +2862,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 		var templ_7745c5c3_Var148 string
 		templ_7745c5c3_Var148, templ_7745c5c3_Err = templ.ResolveAttributeValue(panel.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 532, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 534, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var148)
 		if templ_7745c5c3_Err != nil {
@@ -2898,7 +2898,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 				var templ_7745c5c3_Var150 string
 				templ_7745c5c3_Var150, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "studioui.script.add_line"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 539, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 541, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var150))
 				if templ_7745c5c3_Err != nil {
@@ -2923,7 +2923,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 			var templ_7745c5c3_Var151 string
 			templ_7745c5c3_Var151, templ_7745c5c3_Err = templ.ResolveAttributeValue(indexID("sfx-note-", panel.ID, sfxIndex))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 545, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 547, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var151)
 			if templ_7745c5c3_Err != nil {
@@ -2936,7 +2936,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 			var templ_7745c5c3_Var152 string
 			templ_7745c5c3_Var152, templ_7745c5c3_Err = templ.JoinStringErrs(cellLabel(i18n.T(ctx, "studioui.script.sfx", "number", sfxIndex+1), i18n.T(ctx, "studioui.script.sfx_note")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 545, Col: 196}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 547, Col: 196}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var152))
 			if templ_7745c5c3_Err != nil {
@@ -2949,7 +2949,7 @@ func panelMore(v storyView, panel studio.ScriptPanel, panelName string) templ.Co
 			var templ_7745c5c3_Var153 string
 			templ_7745c5c3_Var153, templ_7745c5c3_Err = templ.JoinStringErrs(panelName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 545, Col: 238}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 547, Col: 238}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var153))
 			if templ_7745c5c3_Err != nil {
@@ -3005,7 +3005,7 @@ func lineControl(v storyView, panel studio.ScriptPanel, panelName string, index 
 		var templ_7745c5c3_Var155 string
 		templ_7745c5c3_Var155, templ_7745c5c3_Err = templ.ResolveAttributeValue(lineKey(panel.ID, index))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 555, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 557, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var155)
 		if templ_7745c5c3_Err != nil {
@@ -3018,7 +3018,7 @@ func lineControl(v storyView, panel studio.ScriptPanel, panelName string, index 
 		var templ_7745c5c3_Var156 string
 		templ_7745c5c3_Var156, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(index + 1))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 556, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 558, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var156))
 		if templ_7745c5c3_Err != nil {
@@ -3031,7 +3031,7 @@ func lineControl(v storyView, panel studio.ScriptPanel, panelName string, index 
 		var templ_7745c5c3_Var157 string
 		templ_7745c5c3_Var157, templ_7745c5c3_Err = templ.ResolveAttributeValue(indexID("kind-", panel.ID, index))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 557, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 559, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var157)
 		if templ_7745c5c3_Err != nil {
@@ -3044,7 +3044,7 @@ func lineControl(v storyView, panel studio.ScriptPanel, panelName string, index 
 		var templ_7745c5c3_Var158 string
 		templ_7745c5c3_Var158, templ_7745c5c3_Err = templ.JoinStringErrs(cellLabel(lineName, i18n.T(ctx, "studioui.script.kind")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 557, Col: 128}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 559, Col: 128}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var158))
 		if templ_7745c5c3_Err != nil {
@@ -3066,7 +3066,7 @@ func lineControl(v storyView, panel studio.ScriptPanel, panelName string, index 
 			var templ_7745c5c3_Var159 string
 			templ_7745c5c3_Var159, templ_7745c5c3_Err = templ.ResolveAttributeValue(dialogueField(panel.ID, index, "kind"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 560, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 562, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var159)
 			if templ_7745c5c3_Err != nil {
@@ -3079,7 +3079,7 @@ func lineControl(v storyView, panel studio.ScriptPanel, panelName string, index 
 			var templ_7745c5c3_Var160 string
 			templ_7745c5c3_Var160, templ_7745c5c3_Err = templ.ResolveAttributeValue(dialogueKind(line.Kind))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 560, Col: 103}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 562, Col: 103}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var160)
 			if templ_7745c5c3_Err != nil {
@@ -3177,7 +3177,7 @@ func dialogueLineTemplate(v storyView, panel studio.ScriptPanel, panelName strin
 		var templ_7745c5c3_Var163 string
 		templ_7745c5c3_Var163, templ_7745c5c3_Err = templ.JoinStringErrs(cellLabel(lineName, i18n.T(ctx, "studioui.script.speaker")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 582, Col: 124}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 584, Col: 124}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var163))
 		if templ_7745c5c3_Err != nil {
@@ -3190,7 +3190,7 @@ func dialogueLineTemplate(v storyView, panel studio.ScriptPanel, panelName strin
 		var templ_7745c5c3_Var164 string
 		templ_7745c5c3_Var164, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "studioui.script.speaker"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 583, Col: 216}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 585, Col: 216}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var164)
 		if templ_7745c5c3_Err != nil {
@@ -3203,7 +3203,7 @@ func dialogueLineTemplate(v storyView, panel studio.ScriptPanel, panelName strin
 		var templ_7745c5c3_Var165 string
 		templ_7745c5c3_Var165, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "studioui.dialogue.caption"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 584, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 586, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var165))
 		if templ_7745c5c3_Err != nil {
@@ -3216,7 +3216,7 @@ func dialogueLineTemplate(v storyView, panel studio.ScriptPanel, panelName strin
 		var templ_7745c5c3_Var166 string
 		templ_7745c5c3_Var166, templ_7745c5c3_Err = templ.JoinStringErrs(cellLabel(lineName, i18n.T(ctx, "studioui.script.line")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 587, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 589, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var166))
 		if templ_7745c5c3_Err != nil {
@@ -3229,7 +3229,7 @@ func dialogueLineTemplate(v storyView, panel studio.ScriptPanel, panelName strin
 		var templ_7745c5c3_Var167 string
 		templ_7745c5c3_Var167, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "studioui.script.line"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 588, Col: 188}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 590, Col: 188}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var167)
 		if templ_7745c5c3_Err != nil {
@@ -3272,7 +3272,7 @@ func lineControlTemplate(v storyView, panel studio.ScriptPanel, panelName string
 		var templ_7745c5c3_Var169 string
 		templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.JoinStringErrs(cellLabel(lineName, i18n.T(ctx, "studioui.script.kind")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 596, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/studioui/story.templ`, Line: 598, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var169))
 		if templ_7745c5c3_Err != nil {

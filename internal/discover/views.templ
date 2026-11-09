@@ -326,8 +326,15 @@ templ resultList(v searchView) {
 		<ol class="mv-list-plain mv-searchpage__list" aria-label={ i18n.T(ctx, "discover.tab.series") }>
 			for _, r := range v.Results {
 				<li class="mv-result">
-					@maybeLink(r.Card.Href, "mv-result__cover") {
-						@coverArt(r.Card.CoverURL, "", "")
+					// The cover repeats the title link, so it stays out of the tab order and the accessibility tree.
+					if ui.Ready(ctx, r.Card.Href) {
+						<a class="mv-result__cover" href={ templ.URL(r.Card.Href) } tabindex="-1" aria-hidden="true">
+							@coverArt(r.Card.CoverURL, "", "")
+						</a>
+					} else {
+						<span class="mv-result__cover" aria-hidden="true">
+							@coverArt(r.Card.CoverURL, "", "")
+						</span>
 					}
 					<div class="mv-result__text">
 						@maybeLink(r.Card.Href, "mv-result__title") {

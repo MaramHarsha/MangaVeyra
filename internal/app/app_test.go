@@ -6,13 +6,18 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+
 	"github.com/MaramHarsha/MangaVeyra/internal/app"
 	"github.com/MaramHarsha/MangaVeyra/internal/auth"
 	"github.com/MaramHarsha/MangaVeyra/internal/config"
+	"github.com/MaramHarsha/MangaVeyra/internal/db"
 	"github.com/MaramHarsha/MangaVeyra/internal/jobs"
 	"github.com/MaramHarsha/MangaVeyra/internal/settings"
 	"github.com/MaramHarsha/MangaVeyra/internal/storage"
@@ -56,6 +61,54 @@ func TestHealthReadyVersionAndModules(t *testing.T) {
 				if !names[want] {
 					t.Errorf("module %s missing from the app", want)
 				}
+			}
+		})
+	}
+}
+
+func TestReadinessTracksS3BucketAvailability(t *testing.T) {
+	endpoint := os.Getenv("MV_TEST_S3_ENDPOINT")
+	if endpoint == "" {
+		t.Skip("MV_TEST_S3_ENDPOINT not set")
+	}
+	for _, dialect := range testdb.Dialects() {
+		t.Run(dialect, func(t *testing.T) {
+			ctx := context.Background()
+			access, secret := os.Getenv("MV_TEST_S3_ACCESS_KEY"), os.Getenv("MV_TEST_S3_SECRET_KEY")
+			bucket := "mvtest-readyz-" + db.NewID()
+			admin, err := minio.New(endpoint, &minio.Options{Creds: credentials.NewStaticV4(access, secret, ""), Region: "us-east-1", BucketLookup: minio.BucketLookupPath})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := admin.MakeBucket(ctx, bucket, minio.MakeBucketOptions{Region: "us-east-1"}); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = admin.RemoveBucket(context.Background(), bucket) })
+			ta := testutil.NewTestApp(t, testutil.WithDialect(dialect), testutil.WithEnv(
+				"MV_STORAGE", "s3", "MV_S3_ENDPOINT", endpoint, "MV_S3_REGION", "us-east-1", "MV_S3_BUCKET", bucket,
+				"MV_S3_ACCESS_KEY", access, "MV_S3_SECRET_KEY", secret, "MV_S3_USE_SSL", "false", "MV_S3_PATH_STYLE", "true"))
+			browser := ta.NewClient()
+			r := browser.Get("/readyz")
+			body := r.Map(t)
+			if r.StatusCode != http.StatusOK || body["ready"] != true || body["checks"].(map[string]any)["storage"].(map[string]any)["detail"] != "s3" {
+				t.Fatalf("existing bucket: %d %s", r.StatusCode, r.Body)
+			}
+			if err := admin.RemoveBucket(ctx, bucket); err != nil {
+				t.Fatal(err)
+			}
+			r = browser.Get("/readyz")
+			body = r.Map(t)
+			if r.StatusCode != http.StatusServiceUnavailable || body["ready"] != false || body["checks"].(map[string]any)["storage"].(map[string]any)["ok"] != false {
+				t.Fatalf("missing bucket still ready: %d %s", r.StatusCode, r.Body)
+			}
+			if r := browser.Get("/healthz"); r.StatusCode != http.StatusOK {
+				t.Fatalf("storage failure affected liveness: %d", r.StatusCode)
+			}
+			if err := admin.MakeBucket(ctx, bucket, minio.MakeBucketOptions{Region: "us-east-1"}); err != nil {
+				t.Fatal(err)
+			}
+			if r := browser.Get("/readyz"); r.StatusCode != http.StatusOK || r.Map(t)["ready"] != true {
+				t.Fatalf("recreated bucket not ready: %d %s", r.StatusCode, r.Body)
 			}
 		})
 	}
@@ -218,5 +271,39 @@ func TestUpdateCandidateStartsNoBackgroundLoops(t *testing.T) {
 	a.Start(ctx)
 	if !strings.Contains(logs.String(), "update candidate: background loops are off") {
 		t.Fatalf("candidate started its loops: %s", logs.String())
+	}
+}
+
+// TestServerTimeouts pins the production http.Server limits: a slow client
+// cannot hold a connection open indefinitely while sending headers, idle
+// keep-alive connections are reclaimed, and header size is bounded.
+func TestServerTimeouts(t *testing.T) {
+	dir := t.TempDir()
+	env := map[string]string{"MV_DATA_DIR": dir, "MV_ADDR": "127.0.0.1:0", "MV_LOG_LEVEL": "error"}
+	cfg, err := config.Load("", func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	params := auth.FastHashParams
+	a, err := app.New(context.Background(), cfg, app.Options{HashParams: &params, LogOutput: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = a.Close() })
+	srv := a.Server()
+	if srv.Addr != cfg.Addr || srv.Handler == nil {
+		t.Fatalf("server addr/handler: %q %v", srv.Addr, srv.Handler)
+	}
+	if srv.ReadHeaderTimeout <= 0 || srv.ReadHeaderTimeout > 30*time.Second {
+		t.Fatalf("ReadHeaderTimeout must be set and short, got %v", srv.ReadHeaderTimeout)
+	}
+	if srv.IdleTimeout <= 0 || srv.IdleTimeout > 5*time.Minute {
+		t.Fatalf("IdleTimeout must be set and bounded, got %v", srv.IdleTimeout)
+	}
+	if srv.MaxHeaderBytes <= 0 || srv.MaxHeaderBytes > 1<<20 {
+		t.Fatalf("MaxHeaderBytes must be set and at most 1 MiB, got %d", srv.MaxHeaderBytes)
+	}
+	if srv.ErrorLog == nil {
+		t.Fatal("ErrorLog must route through the app logger")
 	}
 }

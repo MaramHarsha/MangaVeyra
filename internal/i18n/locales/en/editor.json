@@ -5,6 +5,7 @@
   "editor.panel": "Panel",
   "editor.layers": "Layers",
   "editor.properties": "Properties",
+  "editor.inspector": "Inspector",
   "editor.canvas": "Page canvas",
   "editor.chapter": "Ch. {number} · {title}",
   "editor.mode": "Editor mode",
