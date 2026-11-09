@@ -243,8 +243,9 @@ templ TwoFactorSection(v twoFactorView) {
 				<li>{ i18n.T(ctx, "settings.account.2fa_step2") }</li>
 			</ol>
 			<div class="mv-row mv-row--wrap mv-row--start">
+				// QR is a PNG data URL built by qrDataURL; templ v0.3.1100 drops data: URLs not marked safe.
 				if v.QR != "" {
-					<img class="mv-qr" src={ v.QR } width="200" height="200" alt={ i18n.T(ctx, "settings.account.qr_alt") }/>
+					<img class="mv-qr" src={ templ.SafeURL(v.QR) } width="200" height="200" alt={ i18n.T(ctx, "settings.account.qr_alt") }/>
 				}
 				<div class="mv-stack mv-grow">
 					<span class="mv-field__label">{ i18n.T(ctx, "settings.account.secret") }</span>
