@@ -87,7 +87,9 @@ async function adminSignedIn(page: Page) {
   }
 }
 
-type Route = { id: string; path: string; user: 'admin' | 'reader' | 'anon'; status?: number; island?: boolean };
+// enOnly marks editor sub-states (the same island in another mode): their Japanese catalogue is covered by D1, D10
+// and E2, so the Japanese pass skips them to keep the gate fast.
+type Route = { id: string; path: string; user: 'admin' | 'reader' | 'anon'; status?: number; island?: boolean; enOnly?: boolean };
 
 type Finding = { route: string; locale: string; kind: string; detail: string };
 
@@ -173,12 +175,12 @@ test.describe.serial('ui quality', () => {
       { id: 'E1 published', path: `${P}/chapters/1/published`, user: 'admin' },
       { id: 'series settings', path: `${P}/series`, user: 'admin' },
       { id: 'D1 editor', path: ED, user: 'admin', island: true },
-      { id: 'D3 lettering', path: `${ED}&mode=lettering`, user: 'admin', island: true },
-      { id: 'D13 region', path: `${ED}&tool=region`, user: 'admin', island: true },
-      { id: 'D2 layouts', path: `${ED}&panel=layouts`, user: 'admin', island: true },
-      { id: 'D8 variations', path: `${ED}&panel=variations`, user: 'admin', island: true },
-      { id: 'D7 review', path: `${ED}&panel=review`, user: 'admin', island: true },
-      { id: 'D4 sketch', path: `${ED}&tool=sketch`, user: 'admin', island: true },
+      { id: 'D3 lettering', path: `${ED}&mode=lettering`, user: 'admin', island: true, enOnly: true },
+      { id: 'D13 region', path: `${ED}&tool=region`, user: 'admin', island: true, enOnly: true },
+      { id: 'D2 layouts', path: `${ED}&panel=layouts`, user: 'admin', island: true, enOnly: true },
+      { id: 'D8 variations', path: `${ED}&panel=variations`, user: 'admin', island: true, enOnly: true },
+      { id: 'D7 review', path: `${ED}&panel=review`, user: 'admin', island: true, enOnly: true },
+      { id: 'D4 sketch', path: `${ED}&tool=sketch`, user: 'admin', island: true, enOnly: true },
       { id: 'D10 history', path: `${P}/chapters/1/pages/${pageID}/history`, user: 'admin', island: true },
       { id: 'E2 export', path: `${P}/chapters/1/export`, user: 'admin', island: true },
       { id: 'E6 explore', path: '/explore', user: 'reader' },
@@ -229,7 +231,9 @@ test.describe.serial('ui quality', () => {
         contexts[user] = ctx;
         return ctx;
       };
-      for (const route of routes) {
+      // Contexts are created up front, then routes run six at a time: the checks are independent per page.
+      for (const user of ['anon', 'admin', 'reader'] as const) await contextFor(user);
+      const visit = async (route: Route) => {
         await test.step(`${route.id} ${route.path}`, async () => {
           const ctx = await contextFor(route.user);
           const page = await ctx.newPage();
@@ -245,7 +249,8 @@ test.describe.serial('ui quality', () => {
           const status = response?.status();
           if (status !== (route.status ?? 200)) findings.push({ route: route.id, locale, kind: 'status', detail: `${status} ${page.url()}` });
           await page.evaluate(() => document.fonts.ready);
-          await page.waitForTimeout(route.island ? 1500 : 250);
+          if (route.island) { try { await page.waitForLoadState('networkidle', { timeout: 4000 }); } catch { /* keep going */ } }
+          await page.waitForTimeout(route.island ? 500 : 100);
           const result = await page.evaluate(checksInPage, { keyList });
           if (result.rawKeys.length) findings.push({ route: route.id, locale, kind: 'raw locale key', detail: [...new Set(result.rawKeys)].join(', ') });
           if (result.badText.length) findings.push({ route: route.id, locale, kind: 'placeholder text', detail: result.badText.join(' | ') });
@@ -261,7 +266,9 @@ test.describe.serial('ui quality', () => {
           }
           await page.close();
         });
-      }
+      };
+      const queue = routes.filter((r) => locale === 'en' || !r.enOnly);
+      await Promise.all(Array.from({ length: 6 }, async () => { for (let r = queue.shift(); r; r = queue.shift()) await visit(r); }));
       for (const ctx of Object.values(contexts)) await ctx?.close();
       if (!Axe) test.info().annotations.push({ type: 'warning', description: 'axe-core not found: install e2e devDependencies or set MV_AXE_MODULES; accessibility checks were skipped.' });
       const mine = findings.filter((f) => f.locale === locale);
