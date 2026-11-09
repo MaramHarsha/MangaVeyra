@@ -25,7 +25,7 @@ templ exportScreen(c *layout.Chrome, v exportView) {
 			<h1 class="mv-sr-only">{ i18n.T(ctx, "exportui.title", "number", v.Chapter.Number) }</h1>
 			@editorBackdrop(c, v)
 			<div class="mv-exportui__scrim"></div>
-			@ui.Modal(ui.ModalProps{ID: "chapter-export", Title: i18n.T(ctx, "exportui.title", "number", v.Chapter.Number), Static: true, Class: "mv-exportui__panel"}) {
+			@ui.Modal(ui.ModalProps{ID: "chapter-export", Title: i18n.T(ctx, "exportui.title", "number", v.Chapter.Number), Static: true, CloseHref: v.Back, Class: "mv-exportui__panel"}) {
 				<a class="mv-exportui__close mv-close" href={ templ.URL(v.Back) } aria-label={ i18n.T(ctx, "ui.close") }>
 					@ui.Icon("x", 20)
 				</a>

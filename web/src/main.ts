@@ -19,6 +19,7 @@ import { installForms } from './lib/forms';
 import { installCounters } from './lib/counter';
 import { installAutoSubmit } from './lib/filters';
 import { installCopyLinks } from './lib/copylink';
+import { menuArrowKey, upgradeStaticDialogs } from './lib/dialogs';
 import { installPageTurns } from './lib/transitions';
 import { installQueueRefresh } from './lib/queue';
 import { updateUnread } from './lib/unread';
@@ -137,7 +138,12 @@ document.addEventListener(
 
 // ---- keyboard --------------------------------------------------------------
 
+// Static dialogs (E2 Export) render open for no-JS; with JS they become real modals.
+upgradeStaticDialogs();
+document.addEventListener('htmx:afterSettle', () => upgradeStaticDialogs());
+
 document.addEventListener('keydown', (e) => {
+  if (menuArrowKey(e)) return;
   if (e.key === 'Escape') {
     const open = document.querySelector<HTMLDetailsElement>('details.mv-dropdown[open]');
     if (open) {

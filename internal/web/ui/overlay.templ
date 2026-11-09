@@ -9,7 +9,11 @@ type ModalProps struct {
 	Wide  bool
 	// Static renders the dialog open and inline (style guide, no-JS fallbacks).
 	Static bool
-	Class  string
+	// CloseHref, with Static, makes JavaScript re-open the dialog as a real
+	// modal (focus trap, Escape) and go to CloseHref when it closes — for a
+	// dialog over an inert page such as E2 Export.
+	CloseHref string
+	Class     string
 }
 
 // Modal renders a <dialog>; open it with any element carrying data-dialog-open="<ID>".
@@ -21,6 +25,10 @@ templ Modal(p ModalProps) {
 		aria-labelledby={ p.ID + "-title" }
 		if p.Static {
 			open
+		}
+		if p.Static && p.CloseHref != "" {
+			data-modal-upgrade
+			data-close-href={ p.CloseHref }
 		}
 	>
 		<div class="mv-modal__head">

@@ -653,7 +653,7 @@ func exportScreen(c *layout.Chrome, v exportView) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Modal(ui.ModalProps{ID: "chapter-export", Title: i18n.T(ctx, "exportui.title", "number", v.Chapter.Number), Static: true, Class: "mv-exportui__panel"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Modal(ui.ModalProps{ID: "chapter-export", Title: i18n.T(ctx, "exportui.title", "number", v.Chapter.Number), Static: true, CloseHref: v.Back, Class: "mv-exportui__panel"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
