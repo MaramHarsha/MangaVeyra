@@ -37,6 +37,9 @@ func TestRegistry(t *testing.T) {
 }
 
 func TestRouterGroupsAndErrors(t *testing.T) {
+	// NewTestApp in other tests installs the web layer's hooks process-wide;
+	// start from none so the plain-text fallback is what is checked.
+	core.SetHooks(core.Hooks{})
 	r := core.NewRouter()
 	calls := []string{}
 	mw := func(name string) core.Middleware {
