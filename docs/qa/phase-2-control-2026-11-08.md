@@ -74,7 +74,7 @@ The GPU integration skip belongs to the existing unit-test environment. Actual D
 run in the explicitly approved temporary environment and exercised through the real worker/server protocol.
 No optional diffusion or training weights were downloaded. Existing demo-island initial-state and HTMX dependency
 `eval` build warnings remain; runtime HTMX eval remains disabled under CSP. No missing local tool remains unresolved;
-the existing templ binary was invoked from `/Users/harsha/go/bin/templ`.
+the existing templ binary was invoked from the Go bin directory.
 
 ## Real provider and scoring acceptance
 

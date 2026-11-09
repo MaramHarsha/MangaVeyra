@@ -30,8 +30,8 @@ runtime path and tests exist.
 The product already has an approved, high-fidelity design. Build to it; do not
 create a new design.
 
-- The design is the HTML handoff in `../MangaVeyra_All_Pages/` (on the owner's
-  machine: `/Users/harsha/Desktop/Project-Ideas/MangaVeyra_All_Pages/`). It stays
+- The design is the HTML handoff in `../MangaVeyra_All_Pages/` (a sibling folder
+  on the maintainer's machine). It stays
   outside this repository on purpose: it also contains World platform screens with
   payment UI that must never enter this repo. Each screen is a
   `div[data-screen-label="ID – Name – Platform"]` in a `.dc.html` file;

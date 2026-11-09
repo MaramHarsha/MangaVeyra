@@ -48,7 +48,7 @@ publishing a release are outside this run.
 - `go test -count=1 ./internal/editioncheck/...`.
 - `npm run check`, `npm test`, `npm run build` in `web/`.
 - `python -m pytest -q` in `worker/` using an existing compatible virtualenv.
-- `/Users/harsha/go/bin/templ generate`; generated Go files have no unintended drift.
+- `templ generate`; generated Go files have no unintended drift.
 - `go mod tidy`; `go.mod` and `go.sum` have no unintended drift.
 - `npm test` in `e2e/` against a freshly built 1.0.0 binary; inspect retained
   screenshots/traces and actual export contents.

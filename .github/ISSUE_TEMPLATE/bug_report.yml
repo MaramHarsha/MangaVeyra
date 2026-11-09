@@ -1,0 +1,29 @@
+name: Bug report
+description: Something in MangaVeyra does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Security problems go through private reporting (see SECURITY.md), not here. Never paste provider keys, tokens or `secret.key`.
+  - type: input
+    id: version
+    attributes: { label: Version, description: "Output of `mangaveyra version`." }
+    validations: { required: true }
+  - type: dropdown
+    id: database
+    attributes: { label: Database, options: [SQLite, PostgreSQL] }
+    validations: { required: true }
+  - type: dropdown
+    id: deploy
+    attributes: { label: Deployment, options: [Single binary, systemd, Docker Compose, Other] }
+  - type: textarea
+    id: steps
+    attributes: { label: Steps to reproduce, placeholder: "1. Open …\n2. Click …" }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: "What you expected and what happened" }
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes: { label: Logs or screenshots, description: "Remove personal data and secrets first.", render: text }
