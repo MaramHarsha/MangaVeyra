@@ -114,7 +114,3 @@ func CheckPasswordPolicy(password string) error {
 	}
 	return nil
 }
-
-// dummyHash is verified when a login names an unknown account, so response
-// time does not reveal whether the account exists.
-var dummyHash, _ = HashPassword("mangaveyra-dummy-password", FastHashParams)
