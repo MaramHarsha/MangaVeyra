@@ -34,9 +34,23 @@ ProtectHome=true
 ReadWritePaths=/var/lib/mangaveyra /opt/mangaveyra/bin
 ProtectKernelTunables=true
 ProtectKernelModules=true
+ProtectKernelLogs=true
 ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
 RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+# TCP/UDP for HTTP, SMTP, S3 and providers; AF_UNIX for a local PostgreSQL socket.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 LockPersonality=true
+SystemCallArchitectures=native
+# The service listens on an unprivileged port as its own user, so it needs no
+# capability at all; to bind :80/:443 directly, put a reverse proxy in front
+# (deploy/Caddyfile.example) rather than granting CAP_NET_BIND_SERVICE here.
+CapabilityBoundingSet=
+AmbientCapabilities=
 UMask=0027
 
 [Install]

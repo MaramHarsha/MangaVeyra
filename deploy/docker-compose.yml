@@ -19,7 +19,9 @@ services:
       - path: ../.env
         required: false
     environment:
-      MV_DB: postgres://mangaveyra:${POSTGRES_PASSWORD:-change-me}@postgres:5432/mangaveyra?sslmode=disable
+      # POSTGRES_PASSWORD has no default on purpose: Compose refuses to start
+      # instead of bringing the database up with a well-known password.
+      MV_DB: postgres://mangaveyra:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/mangaveyra?sslmode=disable
       MV_DATA_DIR: /data
       MV_ADDR: ":8080"
       MV_WORKER_TOKEN: ${MV_WORKER_TOKEN:-}
@@ -27,6 +29,12 @@ services:
       - "${MV_PORT:-8080}:8080"
     volumes:
       - mangaveyra-data:/data
+    # The server runs as uid 10001 and only needs /data; drop every capability
+    # and forbid privilege escalation (ffmpeg and pdftoppm need neither).
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,7 +50,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: mangaveyra
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: mangaveyra
     volumes:
       - postgres-data:/var/lib/postgresql
@@ -68,6 +76,10 @@ services:
       MV_WORKER_BACKEND: ${MV_WORKER_BACKEND:-diffusers}
     # Let running jobs drain on `docker compose stop` (worker MV_DRAIN_TIMEOUT_S defaults to 120 s).
     stop_grace_period: 130s
+    # Capabilities stay at Docker's default here because the NVIDIA runtime hook
+    # needs them; privilege escalation inside the container is still refused.
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - worker-models:/models
     depends_on:
@@ -96,6 +108,10 @@ services:
       MV_WORKER_BACKEND: mock
     # Let running jobs drain on `docker compose stop` (worker MV_DRAIN_TIMEOUT_S defaults to 120 s).
     stop_grace_period: 130s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     depends_on:
       app:
         condition: service_healthy
