@@ -2,6 +2,9 @@
 /data/
 /dist/
 node_modules/
+# Symlinked node_modules in worktrees (a trailing slash never matches a symlink)
+web/node_modules
+e2e/node_modules
 /internal/web/static/dist/
 *.log
 .env
@@ -20,3 +23,8 @@ __pycache__/
 
 # Local Compose overrides (docs/install)
 compose.override.yaml
+
+# Never commit server secrets or archives, wherever a data directory lives
+secret.key
+release.key
+*.mvbackup
