@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/MaramHarsha/MangaVeyra/internal/core/httpx"
 	"github.com/MaramHarsha/MangaVeyra/internal/secrets"
 )
 
@@ -28,7 +29,7 @@ type pendingLogin struct {
 func setPending(w http.ResponseWriter, r *http.Request, box *secrets.Box, p pendingLogin) {
 	b, _ := json.Marshal(p)
 	http.SetCookie(w, &http.Cookie{Name: pendingCookie, Value: box.Seal(b, []byte(pendingAAD)), Path: "/login",
-		MaxAge: int(pendingTTL.Seconds()), HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil || r.Header.Get("X-Mv-Https") == "1"})
+		MaxAge: int(pendingTTL.Seconds()), HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: httpx.IsHTTPS(r)})
 }
 
 func readPending(r *http.Request, box *secrets.Box) (pendingLogin, bool) {
@@ -45,5 +46,6 @@ func readPending(r *http.Request, box *secrets.Box) (pendingLogin, bool) {
 }
 
 func clearPending(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{Name: pendingCookie, Value: "", Path: "/login", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode})
+	http.SetCookie(w, &http.Cookie{Name: pendingCookie, Value: "", Path: "/login", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode,
+		Secure: httpx.IsHTTPS(r)})
 }

@@ -98,6 +98,25 @@ func TestThemeToggle(t *testing.T) {
 		t.Fatalf("visitor toggle: %d", r.StatusCode)
 	}
 	contains(t, anon.Get("/login"), `data-theme="light"`)
+	themeCookie := func(r *testutil.Response) *http.Cookie {
+		for _, ck := range (&http.Response{Header: r.Header}).Cookies() {
+			if ck.Name == core.ThemeCookie {
+				return ck
+			}
+		}
+		t.Fatalf("no %s cookie in %v", core.ThemeCookie, r.Header)
+		return nil
+	}
+	// Nothing reads the theme cookie from JavaScript, so it stays HttpOnly; it is
+	// Secure only when the connection (or a trusted proxy) is HTTPS.
+	if ck := themeCookie(r); !ck.HttpOnly || ck.Secure {
+		t.Fatalf("plain HTTP theme cookie: %s", ck.Raw)
+	}
+	anon.Header.Set("X-Forwarded-Proto", "https")
+	if ck := themeCookie(htmx(anon, "/settings/theme", url.Values{"theme": {"dark"}})); !ck.HttpOnly || !ck.Secure {
+		t.Fatalf("proxied HTTPS theme cookie: %s", ck.Raw)
+	}
+	anon.Header.Del("X-Forwarded-Proto")
 	if r := htmx(anon, "/settings/theme", url.Values{"theme": {"neon"}}); r.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("bad theme: %d", r.StatusCode)
 	}

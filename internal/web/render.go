@@ -12,6 +12,7 @@ import (
 	"github.com/a-h/templ"
 
 	"github.com/MaramHarsha/MangaVeyra/internal/core"
+	"github.com/MaramHarsha/MangaVeyra/internal/core/httpx"
 	"github.com/MaramHarsha/MangaVeyra/internal/web/layout"
 )
 
@@ -87,7 +88,7 @@ func Flash(w http.ResponseWriter, r *http.Request, kind, title, body string) {
 	}
 	b, _ := json.Marshal(list)
 	http.SetCookie(w, &http.Cookie{Name: flashCookie, Value: base64.RawURLEncoding.EncodeToString(b), Path: "/",
-		MaxAge: 60, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil})
+		MaxAge: 60, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: httpx.IsHTTPS(r)})
 }
 
 func readFlash(r *http.Request) []layout.Flash {
@@ -110,7 +111,8 @@ func readFlash(r *http.Request) []layout.Flash {
 func takeFlash(w http.ResponseWriter, r *http.Request) []layout.Flash {
 	list := readFlash(r)
 	if list != nil && w != nil {
-		http.SetCookie(w, &http.Cookie{Name: flashCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		http.SetCookie(w, &http.Cookie{Name: flashCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode,
+			Secure: httpx.IsHTTPS(r)})
 	}
 	return list
 }

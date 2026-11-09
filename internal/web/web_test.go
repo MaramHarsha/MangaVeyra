@@ -205,6 +205,37 @@ func TestFlashSurvivesRedirectOnce(t *testing.T) {
 	}
 }
 
+// TestCookiesBehindHTTPSProxyAreSecure checks that every cookie written while
+// logging out and reading the flash (session clear, flash, flash clear) carries
+// HttpOnly and, when a trusted proxy reports HTTPS, Secure.
+func TestCookiesBehindHTTPSProxyAreSecure(t *testing.T) {
+	ta := testutil.NewTestApp(t)
+	c := ta.Login(t, "admin")
+	c.Header.Set("X-Forwarded-Proto", "https")
+	logout := c.Do(http.MethodPost, "/logout", strings.NewReader(url.Values{}.Encode()), "application/x-www-form-urlencoded")
+	login := c.Get("/login")
+	var seen int
+	for name, r := range map[string]*testutil.Response{"logout": logout, "login": login} {
+		for _, ck := range (&http.Response{Header: r.Header}).Cookies() {
+			seen++
+			if !ck.HttpOnly || !ck.Secure {
+				t.Errorf("%s: cookie %s must be HttpOnly and Secure over proxied HTTPS: %s", name, ck.Name, ck.Raw)
+			}
+		}
+	}
+	if seen < 3 {
+		t.Fatalf("expected the session clear, flash and flash clear cookies, saw %d", seen)
+	}
+	c.Header.Del("X-Forwarded-Proto")
+	c = ta.Login(t, "admin")
+	plain := c.Do(http.MethodPost, "/logout", strings.NewReader(url.Values{}.Encode()), "application/x-www-form-urlencoded")
+	for _, ck := range (&http.Response{Header: plain.Header}).Cookies() {
+		if ck.Secure {
+			t.Errorf("plain HTTP: cookie %s must not be Secure or the browser would drop it: %s", ck.Name, ck.Raw)
+		}
+	}
+}
+
 func TestHTMXRequestsGetFragments(t *testing.T) {
 	ta := testutil.NewTestApp(t)
 	c := ta.Login(t, "admin")
