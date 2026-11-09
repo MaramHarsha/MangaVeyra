@@ -546,7 +546,8 @@
   {modes} {mode} onmode={setMode} onchange={change} onclose={toggleSettings} />
 {/if}
 
-<footer class={['mv-rd__progress', mode === 'webtoon' && 'mv-rd__progress--strip']}>
+<!-- The progress strip sits over the stage, so it takes the stage's theme (ink/grey → dark, paper → light), not the app's. -->
+<footer class={['mv-rd__progress', mode === 'webtoon' && 'mv-rd__progress--strip']} data-theme={settings.background === 'paper' ? 'light' : 'dark'}>
  <span class="mv-rd__count">{progressLabel}</span>
  <span class="mv-rd__track" dir={settings.direction === 'rtl' && mode !== 'webtoon' ? 'rtl' : 'ltr'} role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(fraction * 100)} aria-label={progressLabel}>
   <span class="mv-rd__fill" style={`width:${Math.round(fraction * 1000) / 10}%`}></span>
