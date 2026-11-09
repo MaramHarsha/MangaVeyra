@@ -25,20 +25,44 @@ This product includes the following third-party components. Each remains
 under its own licence; full licence texts ship with the respective modules
 and packages. Extend this list whenever a dependency is added.
 
-Go modules
+Go modules (linked into the server binary; `go list -deps ./cmd/mangaveyra`)
   github.com/a-h/templ                 MIT
   github.com/coder/websocket           ISC
-  github.com/jackc/pgx/v5              MIT
+  github.com/jackc/pgx/v5 (pgpassfile, pgservicefile, puddle)   MIT
   github.com/jmoiron/sqlx              MIT
-  github.com/minio/minio-go/v7         Apache-2.0
+  github.com/minio/minio-go/v7 (crc64nvme, md5-simd)            Apache-2.0
+  github.com/modelcontextprotocol/go-sdk                        MIT
+  github.com/google/jsonschema-go, yosida95/uritemplate         MIT / BSD-3-Clause
+  github.com/nwaples/rardecode/v2      BSD-2-Clause
   github.com/oklog/ulid/v2             Apache-2.0
-  github.com/pquerna/otp               Apache-2.0
+  github.com/pquerna/otp (boombuler/barcode)                    Apache-2.0 / MIT
+  github.com/tdewolff/canvas, font, minify, parse               MIT
+    github.com/go-text/typesetting(-utils)                      BSD-3-Clause / Unlicense
+    github.com/benoitkugler/textlayout                          MIT
+    github.com/benoitkugler/textprocessing (fribidi port)       LGPL-2.1-or-later
+    github.com/golang/freetype, BurntSushi/freetype-go,
+      srwiley/scanx (no LICENSE file; per-file headers)         FreeType License or GPL-2.0-or-later
+    github.com/srwiley/rasterx                                  BSD-3-Clause
+    github.com/BurntSushi/graphics-go, xgb                      BSD-3-Clause
+    github.com/BurntSushi/xgbutil                               WTFPL
+    github.com/ByteArena/poly2tri-go                            BSD-3-Clause
+    codeberg.org/go-pdf/fpdf, yuin/goldmark, dustin/go-humanize MIT
+    github.com/go-fonts/latin-modern, star-tex.org/x/tex        BSD-3-Clause
+  github.com/andybalholm/brotli        MIT
+  github.com/klauspost/compress (cpuid, crc32)                  Apache-2.0, MIT and BSD-3-Clause
+  github.com/segmentio/encoding, asm; tinylib/msgp; philhofer/fwd; rs/xid; zeebo/xxh3; cespare/xxhash   MIT / BSD-2-Clause
   go.yaml.in/yaml/v3                   MIT and Apache-2.0
   golang.org/x/crypto                  BSD-3-Clause
   golang.org/x/image                   BSD-3-Clause
-  golang.org/x/net, x/sys, x/text      BSD-3-Clause
-  modernc.org/sqlite (and modernc.org/libc, mathutil, memory)   BSD-3-Clause
+  golang.org/x/net, x/oauth2, x/sync, x/sys, x/text, x/time     BSD-3-Clause
+  gopkg.in/ini.v1                      Apache-2.0
+  modernc.org/sqlite (and modernc.org/libc, mathutil, memory, knuth, token, remyoudompheng/bigfft)   BSD-3-Clause / BSD-2-Clause
   SQLite                               Public domain
+
+  The LGPL-2.1 and FreeType/GPL-2.0-or-later modules above are reached only
+  through github.com/tdewolff/canvas (lettering and page composition). Both
+  licences permit combination with AGPL-3.0 (LGPL-2.1 section 3; GPL-2.0-or-later
+  via GPL-3.0 section 13); their notices must stay with redistributed binaries.
 
 Web assets (bundled by the web build, self-hosted, never loaded from a CDN)
   HTMX 2                               0BSD
