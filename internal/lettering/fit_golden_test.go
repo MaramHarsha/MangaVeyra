@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -39,8 +40,11 @@ type fitGolden struct {
 	Size     float64 `json:"size"`
 	Overflow bool    `json:"overflow"`
 	Lines    int     `json:"lines"`
-	// Text hashes the line texts and their positions rounded to 0.01 px:
-	// identical on every architecture.
+	// Text hashes the overflow flag and the line texts, ruby and direction,
+	// with no positions or sizes: identical on every architecture. Rounding positions is not
+	// enough, because a one-ulp fused multiply-add difference at a rounding
+	// boundary flips the digit (122 of 3578 cases on linux/amd64). Positions
+	// are covered by Layout; Size is compared within 1e-9 off goldenArch.
 	Text string `json:"text"`
 	// Layout hashes the whole BubbleLayout JSON with every number rounded to
 	// ten significant digits, and every number of TextPath and ShapePath
@@ -270,9 +274,9 @@ func goldenOf(t *testing.T, name string, raw []byte) fitGolden {
 	}
 	sum := sha256.Sum256(canonical)
 	var text strings.Builder
-	fmt.Fprintf(&text, "%.6f %v\n", l.FontSize, l.Overflow)
+	fmt.Fprintf(&text, "%v\n", l.Overflow)
 	for _, line := range l.Lines {
-		fmt.Fprintf(&text, "%q %v %v %.2f %.2f %.4f\n", line.Text, line.Ruby, line.Vertical, line.X, line.Y, line.FontSize)
+		fmt.Fprintf(&text, "%q %v %v\n", line.Text, line.Ruby, line.Vertical)
 	}
 	textSum := sha256.Sum256([]byte(text.String()))
 	return fitGolden{Name: name, Size: l.FontSize, Overflow: l.Overflow, Lines: len(linesOf(l)),
@@ -376,6 +380,9 @@ func TestFitMatchesGoldenCorpus(t *testing.T) {
 		g, w := got[i], want[i]
 		if runtime.GOARCH != goldenArch {
 			g.Layout, w.Layout = "", ""
+			if math.Abs(g.Size-w.Size) < 1e-9 {
+				g.Size = w.Size
+			}
 		}
 		if g != w {
 			bad++
