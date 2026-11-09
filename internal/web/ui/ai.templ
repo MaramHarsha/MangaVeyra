@@ -1,6 +1,9 @@
 package ui
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
 
 // MeterProps drive the compact compute meter in the top bar (self-host
 // replaces credits with GPU/queue load; design 04 §11 and §13).
@@ -16,6 +19,18 @@ type MeterProps struct {
 	Offline bool
 }
 
+// Name is the meter's accessible name: the visible text first, then the
+// tooltip, so speech users can say what they see (WCAG 2.5.3 Label in Name).
+func (p MeterProps) Name() string {
+	if p.Title == "" {
+		return p.Text
+	}
+	if strings.HasPrefix(p.Title, p.Text) {
+		return p.Title
+	}
+	return p.Text + ", " + p.Title
+}
+
 // ComputeMeter renders the top-bar meter: CPU icon, mini bar and queue text.
 // The meter always shows live status; it links to the queue only once the
 // queue page exists (ADR 0004 §7).
@@ -24,7 +39,7 @@ templ ComputeMeter(p MeterProps) {
 		<a
 			class={ Cls("mv-meter", If(p.Idle, "mv-meter--idle"), If(p.Offline, "mv-meter--offline")) }
 			href={ templ.URL(p.Href) }
-			aria-label={ p.Title }
+			aria-label={ p.Name() }
 			data-tip={ p.Title }
 			data-tip-pos="below"
 			id="mv-meter"
@@ -37,7 +52,7 @@ templ ComputeMeter(p MeterProps) {
 		<span
 			class={ Cls("mv-meter", If(p.Idle, "mv-meter--idle"), If(p.Offline, "mv-meter--offline")) }
 			role="status"
-			aria-label={ p.Title }
+			aria-label={ p.Name() }
 			data-tip={ p.Title }
 			data-tip-pos="below"
 			id="mv-meter"
